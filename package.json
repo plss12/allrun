@@ -1,7 +1,31 @@
 {
   "name": "allrun",
   "version": "1.0.0",
+  "description": "Overlay your Strava runs and weekly, monthly or yearly summaries on your own photos with full design freedom.",
+  "author": "Pedro Luis Soto Santos <pepoluis712@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/plss12/allrun.git"
+  },
+  "private": true,
   "main": "expo-router/entry",
+  "engines": {
+    "node": "^22.13.0 || ^24.3.0 || >=26.0.0"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "doctor": "npx expo-doctor"
+  },
+  "jest": {
+    "preset": "jest-expo"
+  },
   "dependencies": {
     "@expo/ui": "~58.0.19",
     "expo": "~58.0.12",
@@ -28,16 +52,20 @@
     "react-native-worklets": "0.13.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
+    "jest": "^30.5.2",
+    "jest-expo": "~58.0.11",
     "typescript": "~6.0.3"
   },
-  "scripts": {
-    "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "lint": "expo lint"
-  },
-  "private": true
+  "expo": {
+    "install": {
+      "exclude": [
+        "jest",
+        "@types/jest"
+      ]
+    }
+  }
 }
