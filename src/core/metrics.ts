@@ -218,7 +218,8 @@ export type DisplayMetric =
       readonly kind: 'number';
       readonly amount: number;
       readonly fractionDigits: number;
-      readonly unit: MetricUnit;
+      /** `null` for plain counts (number of activities). */
+      readonly unit: MetricUnit | null;
     }
   | { readonly kind: 'time'; readonly text: string; readonly unit: MetricUnit | null };
 

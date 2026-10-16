@@ -1,0 +1,108 @@
+import type { Activity } from '@/core/activity';
+import { type MetricId, type MetricUnit, metricValue, toDisplayMetric } from '@/core/metrics';
+import type { PeriodKind } from '@/core/periods';
+import type { PeriodSummary, SummaryBucket } from '@/core/summary';
+import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
+import type { Layer, SummaryMetricId } from '@/core/template';
+import type { DistanceUnit } from '@/core/units';
+import { formatActivityDate, formatMetric, formatPeriodName } from '@/ui/format';
+
+/** What the editor fills the template with: one activity, or a period summary. */
+export type EditorData =
+  | { readonly mode: 'activity'; readonly activity: Activity }
+  | {
+      readonly mode: 'summary';
+      readonly kind: PeriodKind;
+      readonly summary: PeriodSummary;
+      readonly buckets: readonly SummaryBucket[];
+    };
+
+/** Translation key of a data widget's label. */
+export type LabelKey = `metrics.${MetricId}` | `summaryMetrics.${SummaryMetricId}`;
+
+/** Text content of a text-like layer, before translation and styling. */
+export interface LayerText {
+  readonly label: LabelKey | null;
+  readonly value: string;
+  readonly unit: MetricUnit | null;
+}
+
+export interface TextContext {
+  readonly unit: DistanceUnit;
+  readonly locale: string;
+}
+
+/** Shown in place of a value the activity or period doesn't have. */
+export const MISSING_VALUE = '—';
+
+/**
+ * Text a layer displays for the given data, or `null` for layers that aren't text (route,
+ * chart, logo) or that don't fit the data mode.
+ */
+export function layerText(layer: Layer, data: EditorData, context: TextContext): LayerText | null {
+  switch (layer.kind) {
+    case 'text':
+      return { label: null, value: layer.content, unit: null };
+    case 'metric': {
+      if (data.mode !== 'activity') {
+        return null;
+      }
+      const value = metricValue(data.activity, layer.metric);
+      const label = layer.showLabel ? (`metrics.${layer.metric}` as const) : null;
+      if (value === null || value <= 0) {
+        return { label, value: MISSING_VALUE, unit: null };
+      }
+      const display = toDisplayMetric(layer.metric, value, {
+        unit: context.unit,
+        sportFamily: data.activity.sportFamily,
+      });
+      const formatted = formatMetric(display, context.locale);
+      return { label, value: formatted.value, unit: layer.showUnit ? formatted.unit : null };
+    }
+    case 'summaryMetric': {
+      if (data.mode !== 'summary') {
+        return null;
+      }
+      const value = summaryMetricValue(data.summary, layer.metric);
+      const label = layer.showLabel ? (`summaryMetrics.${layer.metric}` as const) : null;
+      if (value === null) {
+        return { label, value: MISSING_VALUE, unit: null };
+      }
+      const formatted = formatMetric(
+        toDisplaySummaryMetric(layer.metric, value, context.unit),
+        context.locale,
+      );
+      return { label, value: formatted.value, unit: layer.showUnit ? formatted.unit : null };
+    }
+    case 'info':
+      switch (layer.field) {
+        case 'activityName':
+          return data.mode === 'activity'
+            ? { label: null, value: data.activity.name, unit: null }
+            : null;
+        case 'activityDate':
+          return data.mode === 'activity'
+            ? {
+                label: null,
+                value: formatActivityDate(data.activity.startLocal, context.locale),
+                unit: null,
+              }
+            : null;
+        case 'periodName':
+          return data.mode === 'summary'
+            ? {
+                label: null,
+                value: formatPeriodName(data.kind, data.summary.range, context.locale),
+                unit: null,
+              }
+            : null;
+      }
+      break;
+    case 'route':
+    case 'summaryRoutes':
+    case 'summaryChart':
+    case 'logo':
+      return null;
+  }
+  return null;
+}

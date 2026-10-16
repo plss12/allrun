@@ -69,6 +69,12 @@ describe('FixtureActivitySource', () => {
     await expect(small.listRecent(-1)).rejects.toThrow(RangeError);
   });
 
+  it('finds an activity by id, or null', async () => {
+    const [latest] = await source.listRecent(1);
+    expect(await source.getActivity(latest.id)).toEqual(latest);
+    expect(await source.getActivity('strava:0')).toBeNull();
+  });
+
   it('lists a period oldest first', async () => {
     const october = await source.listInRange(customRange('2026-10-01', '2026-10-18'));
     expect(october.length).toBeGreaterThan(5);

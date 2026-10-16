@@ -31,4 +31,8 @@ export class FixtureActivitySource implements ActivitySource {
   async listInRange(range: DateRange): Promise<Activity[]> {
     return selectActivities(this.activities, range);
   }
+
+  async getActivity(id: string): Promise<Activity | null> {
+    return this.activities.find((activity) => activity.id === id) ?? null;
+  }
 }

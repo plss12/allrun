@@ -11,4 +11,6 @@ export interface ActivitySource {
   listRecent(limit: number): Promise<Activity[]>;
   /** Every activity whose local start date falls within `range`, oldest first. */
   listInRange(range: DateRange): Promise<Activity[]>;
+  /** The activity with this `Activity.id`, or `null` if the source has none. */
+  getActivity(id: string): Promise<Activity | null>;
 }
