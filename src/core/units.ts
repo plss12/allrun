@@ -48,8 +48,19 @@ export function formatDuration(totalSeconds: number): string {
  *   (e.g. activities without distance), since no pace can be shown.
  */
 export function formatPace(metersPerSecond: number, unit: DistanceUnit): string | null {
+  return formatPaceOver(metersPerSecond, METERS_PER_UNIT[unit]);
+}
+
+/**
+ * Formats an average speed as the time needed to cover `meters`, e.g. pace per 100 m swimming.
+ *
+ * @param metersPerSecond - Average speed in m/s.
+ * @param meters - Reference distance of the pace.
+ * @returns The formatted pace, or `null` when the speed is zero or invalid.
+ */
+export function formatPaceOver(metersPerSecond: number, meters: number): string | null {
   if (!Number.isFinite(metersPerSecond) || metersPerSecond <= 0) {
     return null;
   }
-  return formatDuration(METERS_PER_UNIT[unit] / metersPerSecond);
+  return formatDuration(meters / metersPerSecond);
 }
