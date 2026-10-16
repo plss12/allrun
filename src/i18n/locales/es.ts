@@ -39,7 +39,6 @@ export const es: Translations = {
     notFound: 'Esta actividad ya no existe',
     error: 'No se han podido cargar los datos de esta imagen',
     photoError: 'No se ha podido abrir esta foto. Prueba con otra.',
-    preparingPhoto: 'Preparando la foto…',
   },
   metrics: {
     distance: 'Distancia',

@@ -16,6 +16,7 @@ import {
   TextAlign,
 } from '@shopify/react-native-skia';
 
+import { framePhoto, type PhotoFraming } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
@@ -33,10 +34,17 @@ import { FONT_FAMILIES } from './fonts';
 export interface TemplateSceneProps {
   readonly template: Template;
   readonly data: EditorData;
-  /** Background photo; `null` draws the placeholder (editor) or nothing (`transparent`). */
-  readonly photo: SkImage | null;
-  /** `true` for the sticker export: no photo and no placeholder. */
-  readonly transparent?: boolean;
+  /**
+   * What goes under the layers:
+   * - `photo`: the photo, following `framing`;
+   * - `placeholder`: a dark fill, while no photo is chosen;
+   * - `none`: nothing, for the transparent sticker export and while the system viewer shows the
+   *   photo underneath the canvas (see the editor).
+   */
+  readonly background:
+    | { readonly kind: 'photo'; readonly image: SkImage; readonly framing: PhotoFraming }
+    | { readonly kind: 'placeholder' }
+    | { readonly kind: 'none' };
   readonly fonts: SkTypefaceFontProvider;
   readonly textContext: TextContext;
   readonly translate: (key: LabelKey) => string;
@@ -53,28 +61,31 @@ const PHOTO_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear } 
 export function TemplateScene({
   template,
   data,
-  photo,
-  transparent = false,
+  background,
   fonts,
   textContext,
   translate,
 }: TemplateSceneProps) {
-  const { width, height } = CANVAS_FORMATS[template.format];
+  const canvas = CANVAS_FORMATS[template.format];
+  const { width, height } = canvas;
   return (
     <Group>
-      {transparent ? null : photo === null ? (
+      {background.kind === 'placeholder' ? (
         <Rect x={0} y={0} width={width} height={height} color={PLACEHOLDER_COLOR} />
-      ) : (
-        <Image
-          image={photo}
-          x={0}
-          y={0}
-          width={width}
-          height={height}
-          fit="cover"
-          sampling={PHOTO_SAMPLING}
-        />
-      )}
+      ) : background.kind === 'photo' ? (
+        <Group clip={{ x: 0, y: 0, width, height }}>
+          <Image
+            image={background.image}
+            {...framePhoto(
+              { width: background.image.width(), height: background.image.height() },
+              canvas,
+              background.framing,
+            )}
+            fit="fill"
+            sampling={PHOTO_SAMPLING}
+          />
+        </Group>
+      ) : null}
       {template.layers.map((layer) => {
         const { x, y, scale, rotation } = layer.transform;
         return (

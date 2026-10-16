@@ -6,11 +6,12 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { z } from 'zod';
 
 import { customRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from '@/core/default-layout';
+import { DEFAULT_FRAMING, type PhotoFraming, type Size } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
 import { bucketize, summarize } from '@/core/summary';
 import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
@@ -19,6 +20,7 @@ import { EditorCanvas } from '@/editor/editor-canvas';
 import type { EditorData } from '@/editor/editor-data';
 import { useEditorFonts } from '@/editor/fonts';
 import type { PickedPhoto } from '@/editor/photo-plan';
+import { PhotoPreview } from '@/editor/photo-preview';
 import { preparePhoto } from '@/editor/prepare-photo';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
@@ -43,10 +45,13 @@ const paramsSchema = z.discriminatedUnion('mode', [
 
 class ActivityNotFoundError extends Error {}
 
-/** The photo on the canvas: what was picked, the URI drawn and whether it was re-encoded. */
-interface LoadedPhoto {
+/** The chosen photo and the state of the copy Skia draws. */
+interface EditorPhoto {
+  /** Increases with every pick, so a slow preparation of a replaced photo is ignored. */
+  readonly id: number;
   readonly picked: PickedPhoto;
-  readonly uri: string;
+  /** URI Skia decodes; `null` while it is being prepared (the system viewer shows the photo). */
+  readonly canvasUri: string | null;
   readonly reencoded: boolean;
 }
 
@@ -115,30 +120,37 @@ function EditorWorkspace({
   const { t } = useTranslation();
   const { unit, locale } = useDisplaySettings();
   const [format, setFormat] = useState<CanvasFormat>('story');
-  const [photo, setPhoto] = useState<LoadedPhoto | null>(null);
-  const [preparingPhoto, setPreparingPhoto] = useState(false);
+  const [photo, setPhoto] = useState<EditorPhoto | null>(null);
+  const [previewSize, setPreviewSize] = useState<Size | null>(null);
+  const [framing] = useState<PhotoFraming>(DEFAULT_FRAMING);
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
+  const [nextPhotoId, setNextPhotoId] = useState(1);
 
-  const showPhoto = async (picked: PickedPhoto, force: boolean) => {
-    setPreparingPhoto(true);
+  /** Prepares a photo for Skia in the background; results for a replaced photo are dropped. */
+  const prepareForCanvas = async (id: number, picked: PickedPhoto, force: boolean) => {
     try {
-      setPhoto({ picked, uri: await preparePhoto(picked, force), reencoded: force });
+      const uri = await preparePhoto(picked, force);
+      setPhoto((current) =>
+        current?.id === id ? { ...current, canvasUri: uri, reencoded: force } : current,
+      );
     } catch (error) {
       logError('Could not prepare the photo', error);
+      setPhoto((current) => (current?.id === id ? null : current));
       setPhotoError(true);
-    } finally {
-      setPreparingPhoto(false);
     }
   };
 
-  const photoImage = useImage(photo?.uri, (error) => {
+  const canvasImage = useImage(photo?.canvasUri, (error) => {
     if (photo !== null && !photo.reencoded) {
-      // Skia could not decode the file as picked: re-encode it once and try again.
+      // Skia could not decode the file as picked: re-encode it once and try again, while the
+      // system viewer keeps showing the photo.
       logError('Could not decode the photo, re-encoding it', error);
-      void showPhoto(photo.picked, true);
+      setPhoto({ ...photo, canvasUri: null });
+      void prepareForCanvas(photo.id, photo.picked, true);
     } else {
       logError('Could not decode the re-encoded photo', error);
+      setPhoto(null);
       setPhotoError(true);
     }
   });
@@ -162,7 +174,14 @@ function EditorWorkspace({
         preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Current,
       });
       if (!result.canceled && result.assets.length > 0) {
-        await showPhoto(result.assets[0], false);
+        const picked = result.assets[0];
+        const id = nextPhotoId;
+        setNextPhotoId(id + 1);
+        // Shown at once by the system viewer, which reads every format (HEIC included); Skia
+        // takes over as soon as its copy is ready, with the same framing.
+        setPreviewSize(null);
+        setPhoto({ id, picked, canvasUri: null, reencoded: false });
+        void prepareForCanvas(id, picked, false);
       }
     } catch (error) {
       logError('Could not open the photo library', error);
@@ -188,11 +207,27 @@ function EditorWorkspace({
               boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
             }}
           >
+            {photo !== null && canvasImage === null ? (
+              <PhotoPreview
+                uri={photo.picked.uri}
+                size={previewSize}
+                onSize={setPreviewSize}
+                canvas={size}
+                ratio={displayWidth / size.width}
+                framing={framing}
+              />
+            ) : null}
             <EditorCanvas
               displayWidth={displayWidth}
               template={template}
               data={data}
-              photo={photoImage}
+              background={
+                canvasImage !== null
+                  ? { kind: 'photo', image: canvasImage, framing }
+                  : photo !== null
+                    ? { kind: 'none' }
+                    : { kind: 'placeholder' }
+              }
               fonts={fonts}
               textContext={{ unit, locale }}
               translate={(key) => t(key)}
@@ -243,8 +278,6 @@ function EditorWorkspace({
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ busy: preparingPhoto, disabled: preparingPhoto }}
-          disabled={preparingPhoto}
           onPress={pickPhoto}
           style={({ pressed }) => ({
             backgroundColor: colors.tint,
@@ -252,19 +285,12 @@ function EditorWorkspace({
             borderCurve: 'continuous',
             padding: 14,
             alignItems: 'center',
-            opacity: preparingPhoto ? 0.6 : pressed ? 0.8 : 1,
+            opacity: pressed ? 0.8 : 1,
           })}
         >
-          {preparingPhoto ? (
-            <ActivityIndicator
-              color={colors.onTint}
-              accessibilityLabel={t('editor.preparingPhoto')}
-            />
-          ) : (
-            <Text style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}>
-              {photo === null ? t('editor.choosePhoto') : t('editor.changePhoto')}
-            </Text>
-          )}
+          <Text style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}>
+            {photo === null ? t('editor.choosePhoto') : t('editor.changePhoto')}
+          </Text>
         </Pressable>
       </View>
     </View>
