@@ -1,7 +1,9 @@
 import {
+  FilterMode,
   FontWeight,
   Group,
   Image,
+  MipmapMode,
   Paragraph,
   Path,
   Rect,
@@ -21,10 +23,8 @@ import { CANVAS_FORMATS, type Layer, type Template } from '@/core/template';
 import { formatBucketLabels } from '@/ui/format';
 
 import { type EditorData, type LabelKey, layerText, type TextContext } from './editor-data';
+import { Watermark } from './brand/brand-art';
 import { FONT_FAMILIES } from './fonts';
-
-/** AllRun watermark images, one per logo tone; `null` while loading. */
-export type BrandLogos = Readonly<Record<'light' | 'dark' | 'color', SkImage | null>>;
 
 /**
  * Draws a template filled with data at its export size (1080 px wide). The editor scales it to
@@ -38,12 +38,17 @@ export interface TemplateSceneProps {
   /** `true` for the sticker export: no photo and no placeholder. */
   readonly transparent?: boolean;
   readonly fonts: SkTypefaceFontProvider;
-  readonly logos: BrandLogos;
   readonly textContext: TextContext;
   readonly translate: (key: LabelKey) => string;
 }
 
 const PLACEHOLDER_COLOR = '#1C1C1E';
+
+/**
+ * Photos are usually much larger than the canvas; trilinear filtering (linear + mipmaps) keeps
+ * them smooth when scaled down instead of aliased.
+ */
+const PHOTO_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear } as const;
 
 export function TemplateScene({
   template,
@@ -51,7 +56,6 @@ export function TemplateScene({
   photo,
   transparent = false,
   fonts,
-  logos,
   textContext,
   translate,
 }: TemplateSceneProps) {
@@ -61,7 +65,15 @@ export function TemplateScene({
       {transparent ? null : photo === null ? (
         <Rect x={0} y={0} width={width} height={height} color={PLACEHOLDER_COLOR} />
       ) : (
-        <Image image={photo} x={0} y={0} width={width} height={height} fit="cover" />
+        <Image
+          image={photo}
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fit="cover"
+          sampling={PHOTO_SAMPLING}
+        />
       )}
       {template.layers.map((layer) => {
         const { x, y, scale, rotation } = layer.transform;
@@ -81,7 +93,6 @@ export function TemplateScene({
               data={data}
               canvasWidth={width}
               fonts={fonts}
-              logos={logos}
               textContext={textContext}
               translate={translate}
             />
@@ -97,7 +108,6 @@ interface LayerContentProps {
   readonly data: EditorData;
   readonly canvasWidth: number;
   readonly fonts: SkTypefaceFontProvider;
-  readonly logos: BrandLogos;
   readonly textContext: TextContext;
   readonly translate: (key: LabelKey) => string;
 }
@@ -108,7 +118,6 @@ function LayerContent({
   data,
   canvasWidth,
   fonts,
-  logos,
   textContext,
   translate,
 }: LayerContentProps) {
@@ -180,21 +189,7 @@ function LayerContent({
     }
     case 'logo': {
       if (layer.brand === 'allrun') {
-        const image = logos[layer.tone];
-        if (image === null) {
-          return null;
-        }
-        const height = (LOGO_WIDTH * image.height()) / image.width();
-        return (
-          <Image
-            image={image}
-            x={-LOGO_WIDTH / 2}
-            y={-height / 2}
-            width={LOGO_WIDTH}
-            height={height}
-            fit="contain"
-          />
-        );
+        return <Watermark variant={layer.variant} tone={layer.tone} />;
       }
       // Placeholder until the official Strava artwork lands; its guidelines allow this exact text.
       const paragraph = buildParagraph(
@@ -223,7 +218,6 @@ const CHART_WIDTH = 880;
 const CHART_HEIGHT = 240;
 /** Room under the bars for the axis labels. */
 const LABEL_BAND = 44;
-const LOGO_WIDTH = 300;
 const MAX_TEXT_WIDTH = 1000;
 
 type TextStyle = Extract<Layer, { kind: 'text' }>['style'];

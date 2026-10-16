@@ -14,7 +14,6 @@ import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
 import { useActivitySource } from '@/data/activity-source';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import type { EditorData } from '@/editor/editor-data';
-import { useBrandLogos } from '@/editor/brand-logos';
 import { useEditorFonts } from '@/editor/fonts';
 import { colors } from '@/theme/colors';
 import { useDisplaySettings } from '@/ui/settings';
@@ -103,7 +102,6 @@ function EditorWorkspace({
   const [photoError, setPhotoError] = useState<Error | null>(null);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const photo = useImage(photoUri, (error) => setPhotoError(error));
-  const logos = useBrandLogos();
 
   const template =
     data.mode === 'activity'
@@ -149,7 +147,6 @@ function EditorWorkspace({
               data={data}
               photo={photo}
               fonts={fonts}
-              logos={logos}
               textContext={{ unit, locale }}
               translate={(key) => t(key)}
             />

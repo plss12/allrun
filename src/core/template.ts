@@ -169,6 +169,11 @@ export const layerSchema = z.discriminatedUnion('kind', [
     brand: z.enum(['allrun', 'poweredByStrava']),
     /** `light` (white) for dark photos, `dark` (black) for light ones, `color` on plain light. */
     tone: z.enum(['light', 'dark', 'color']),
+    /**
+     * AllRun artwork: the name alone (default, it is what people can search for), the monogram
+     * alone, or both side by side. Ignored for other brands.
+     */
+    variant: z.enum(['wordmark', 'mark', 'lockup']).default('wordmark'),
   }),
 ]);
 

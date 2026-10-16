@@ -79,13 +79,20 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
   },
 };
 
+/**
+ * The watermark is the free publicity of the app: it shrinks less than the other widgets on
+ * shorter canvases so the name stays readable.
+ */
+const MIN_LOGO_SCALE = 0.85;
+
 const logo = (layout: FormatLayout): Layer => ({
   id: 'logo',
   kind: 'logo',
   brand: 'allrun',
   tone: 'light',
-  transform: at(0.5, layout.logo, layout.scale),
-  opacity: 0.9,
+  variant: 'wordmark',
+  transform: at(0.5, layout.logo, Math.max(layout.scale, MIN_LOGO_SCALE)),
+  opacity: 0.95,
 });
 
 /**
