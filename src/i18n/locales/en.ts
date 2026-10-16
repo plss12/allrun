@@ -38,6 +38,7 @@ export const en = {
     notFound: 'This activity no longer exists',
     error: 'Could not load the data for this image',
     photoError: "Couldn't open this photo. Try another one.",
+    loadingPhoto: 'Loading photo',
   },
   metrics: {
     distance: 'Distance',

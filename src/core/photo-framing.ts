@@ -3,9 +3,8 @@
  *
  * The framing is stored as proportions of the photo, not pixels: the point of the photo shown at
  * the center of the canvas, and a zoom over the "cover" fit. The same framing therefore gives the
- * same result whatever resolution of the photo is drawn (the original shown by the system viewer
- * while the photo is being prepared, or the re-encoded copy Skia draws), so switching between
- * them never moves the picture.
+ * same result whatever resolution of the photo is drawn (the reduced editor copy on screen or the
+ * full-quality export copy), so exports match exactly what the user framed.
  */
 export interface PhotoFraming {
   /** Point of the photo (0..1 of its width) at the center of the canvas. */

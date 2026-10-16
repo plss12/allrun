@@ -38,8 +38,7 @@ export interface TemplateSceneProps {
    * What goes under the layers:
    * - `photo`: the photo, following `framing`;
    * - `placeholder`: a dark fill, while no photo is chosen;
-   * - `none`: nothing, for the transparent sticker export and while the system viewer shows the
-   *   photo underneath the canvas (see the editor).
+   * - `none`: nothing, for the transparent sticker export.
    */
   readonly background:
     | { readonly kind: 'photo'; readonly image: SkImage; readonly framing: PhotoFraming }

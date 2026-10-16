@@ -6,12 +6,12 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { z } from 'zod';
 
 import { customRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from '@/core/default-layout';
-import { DEFAULT_FRAMING, type PhotoFraming, type Size } from '@/core/photo-framing';
+import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
 import { bucketize, summarize } from '@/core/summary';
 import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
@@ -20,7 +20,6 @@ import { EditorCanvas } from '@/editor/editor-canvas';
 import type { EditorData } from '@/editor/editor-data';
 import { useEditorFonts } from '@/editor/fonts';
 import type { PickedPhoto } from '@/editor/photo-plan';
-import { PhotoPreview } from '@/editor/photo-preview';
 import { preparePhoto } from '@/editor/prepare-photo';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
@@ -45,14 +44,17 @@ const paramsSchema = z.discriminatedUnion('mode', [
 
 class ActivityNotFoundError extends Error {}
 
-/** The chosen photo and the state of the copy Skia draws. */
+/** The chosen photo and its two copies (see `photo-plan.ts`). */
 interface EditorPhoto {
   /** Increases with every pick, so a slow preparation of a replaced photo is ignored. */
   readonly id: number;
   readonly picked: PickedPhoto;
-  /** URI Skia decodes; `null` while it is being prepared (the system viewer shows the photo). */
-  readonly canvasUri: string | null;
-  readonly reencoded: boolean;
+  /** Editor copy Skia draws on screen; `null` while it is being prepared. */
+  readonly editorUri: string | null;
+  /** Whether the editor copy was re-encoded (a failed decode of the original retries once). */
+  readonly editorReencoded: boolean;
+  /** Full-quality copy for exporting; `null` until prepared in the background. */
+  readonly exportUri: string | null;
 }
 
 const FORMATS: readonly CanvasFormat[] = ['story', 'tall', 'portrait', 'square', 'landscape'];
@@ -121,37 +123,52 @@ function EditorWorkspace({
   const { unit, locale } = useDisplaySettings();
   const [format, setFormat] = useState<CanvasFormat>('story');
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
-  const [previewSize, setPreviewSize] = useState<Size | null>(null);
   const [framing] = useState<PhotoFraming>(DEFAULT_FRAMING);
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const [nextPhotoId, setNextPhotoId] = useState(1);
 
-  /** Prepares a photo for Skia in the background; results for a replaced photo are dropped. */
-  const prepareForCanvas = async (id: number, picked: PickedPhoto, force: boolean) => {
+  /** Applies a change only if `id` is still the current photo. */
+  const updatePhoto = (id: number, change: Partial<EditorPhoto>) =>
+    setPhoto((current) => (current?.id === id ? { ...current, ...change } : current));
+
+  const failPhoto = (id: number, context: string, error: unknown) => {
+    logError(context, error);
+    setPhoto((current) => (current?.id === id ? null : current));
+    setPhotoError(true);
+  };
+
+  /**
+   * Prepares the editor copy first (fast, so the photo appears quickly), then the full-quality
+   * export copy in the background while the user edits.
+   */
+  const preparePhotoCopies = async (id: number, picked: PickedPhoto, forceEditor: boolean) => {
     try {
-      const uri = await preparePhoto(picked, force);
-      setPhoto((current) =>
-        current?.id === id ? { ...current, canvasUri: uri, reencoded: force } : current,
-      );
+      const editorUri = await preparePhoto(picked, 'editor', forceEditor);
+      updatePhoto(id, { editorUri, editorReencoded: forceEditor });
     } catch (error) {
-      logError('Could not prepare the photo', error);
-      setPhoto((current) => (current?.id === id ? null : current));
-      setPhotoError(true);
+      failPhoto(id, 'Could not prepare the editor copy of the photo', error);
+      return;
+    }
+    try {
+      updatePhoto(id, { exportUri: await preparePhoto(picked, 'export') });
+    } catch (error) {
+      // The editor keeps working; exporting will retry the full-quality copy.
+      logError('Could not prepare the export copy of the photo', error);
     }
   };
 
-  const canvasImage = useImage(photo?.canvasUri, (error) => {
-    if (photo !== null && !photo.reencoded) {
-      // Skia could not decode the file as picked: re-encode it once and try again, while the
-      // system viewer keeps showing the photo.
+  const canvasImage = useImage(photo?.editorUri, (error) => {
+    if (photo === null) {
+      return;
+    }
+    if (!photo.editorReencoded) {
+      // Skia could not decode the file as picked: re-encode it once and try again.
       logError('Could not decode the photo, re-encoding it', error);
-      setPhoto({ ...photo, canvasUri: null });
-      void prepareForCanvas(photo.id, photo.picked, true);
+      updatePhoto(photo.id, { editorUri: null });
+      void preparePhotoCopies(photo.id, photo.picked, true);
     } else {
-      logError('Could not decode the re-encoded photo', error);
-      setPhoto(null);
-      setPhotoError(true);
+      failPhoto(photo.id, 'Could not decode the re-encoded photo', error);
     }
   });
 
@@ -177,11 +194,8 @@ function EditorWorkspace({
         const picked = result.assets[0];
         const id = nextPhotoId;
         setNextPhotoId(id + 1);
-        // Shown at once by the system viewer, which reads every format (HEIC included); Skia
-        // takes over as soon as its copy is ready, with the same framing.
-        setPreviewSize(null);
-        setPhoto({ id, picked, canvasUri: null, reencoded: false });
-        void prepareForCanvas(id, picked, false);
+        setPhoto({ id, picked, editorUri: null, editorReencoded: false, exportUri: null });
+        void preparePhotoCopies(id, picked, false);
       }
     } catch (error) {
       logError('Could not open the photo library', error);
@@ -207,16 +221,6 @@ function EditorWorkspace({
               boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
             }}
           >
-            {photo !== null && canvasImage === null ? (
-              <PhotoPreview
-                uri={photo.picked.uri}
-                size={previewSize}
-                onSize={setPreviewSize}
-                canvas={size}
-                ratio={displayWidth / size.width}
-                framing={framing}
-              />
-            ) : null}
             <EditorCanvas
               displayWidth={displayWidth}
               template={template}
@@ -224,14 +228,32 @@ function EditorWorkspace({
               background={
                 canvasImage !== null
                   ? { kind: 'photo', image: canvasImage, framing }
-                  : photo !== null
-                    ? { kind: 'none' }
-                    : { kind: 'placeholder' }
+                  : { kind: 'placeholder' }
               }
               fonts={fonts}
               textContext={{ unit, locale }}
               translate={(key) => t(key)}
             />
+            {photo !== null && canvasImage === null ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <ActivityIndicator
+                  size="large"
+                  color="#FFFFFF"
+                  accessibilityLabel={t('editor.loadingPhoto')}
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
