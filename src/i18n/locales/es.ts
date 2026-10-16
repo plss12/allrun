@@ -1,0 +1,60 @@
+import type { Translations } from './en';
+
+export const es: Translations = {
+  app: {
+    name: 'AllRun',
+  },
+  home: {
+    title: 'Tus actividades',
+  },
+  metrics: {
+    distance: 'Distancia',
+    movingTime: 'Tiempo',
+    elapsedTime: 'Tiempo total',
+    pace: 'Ritmo',
+    swimPace: 'Ritmo',
+    speed: 'Velocidad',
+    elevationGain: 'Desnivel',
+    maxElevation: 'Altitud máx.',
+    averageHeartRate: 'FC media',
+    maxHeartRate: 'FC máx.',
+    averagePower: 'Potencia media',
+    weightedAveragePower: 'Potencia normalizada',
+    averageCadence: 'Cadencia',
+    calories: 'Calorías',
+  },
+  summaryMetrics: {
+    totalDistance: 'Distancia',
+    totalMovingTime: 'Tiempo',
+    activityCount: 'Actividades',
+    totalElevationGain: 'Desnivel',
+    averagePace: 'Ritmo medio',
+    longestDistance: 'La más larga',
+  },
+  modalities: {
+    roadRun: 'Carrera',
+    trailRun: 'Trail',
+    treadmillRun: 'Cinta',
+    walk: 'Caminata',
+    hike: 'Senderismo',
+    roadRide: 'Bici de carretera',
+    mountainBikeRide: 'Bici de montaña',
+    gravelRide: 'Gravel',
+    eBikeRide: 'Bici eléctrica',
+    indoorRide: 'Rodillo',
+    swim: 'Natación',
+    other: 'Entrenamiento',
+  },
+  families: {
+    run: 'Correr',
+    ride: 'Ciclismo',
+    walk: 'Caminar y senderismo',
+    swim: 'Natación',
+    other: 'Otros',
+  },
+  formats: {
+    story: 'Historia 9:16',
+    portrait: 'Vertical 4:5',
+    square: 'Cuadrado 1:1',
+  },
+};

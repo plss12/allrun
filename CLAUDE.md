@@ -18,6 +18,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/app/`: solo pantallas y layouts (Expo Router).
 - `src/core/`: dominio puro y testeado (unidades, perfiles por deporte, métricas, resúmenes, recorte de privacidad de la ruta, esquema de plantillas). Sin imports de React Native ni de E/S.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/schema.ts` valida con Zod y mapea al modelo `Activity`; `fixtures/` genera un historial sintético con el formato de Strava que pasa por ese mismo esquema.
+- `src/i18n/`: i18next con textos en `locales/en.ts` (fuente de las claves) y `locales/es.ts`, que el compilador obliga a tener las mismas claves; las claves de `t()` están tipadas.
 - `src/test-utils/`: helpers de tests (`makeActivity`).
 - `src/editor/`: lienzo Skia, widgets, gestos y exportación.
 - `supabase/functions/`: canje y renovación de tokens de Strava.
@@ -33,7 +34,9 @@ Las carpetas que aún no existen se crean en su hito.
 - Strava: datos bajo demanda y caché local de menos de 7 días; el trazado llega completo al dueño, así que el recorte de privacidad del inicio y del final viene activado por defecto; solo se pueden usar los logos oficiales «Powered by Strava» / «Compatible with Strava».
 - Datos de ejemplo siempre sintéticos (`generateStravaFixtures`, con semilla fija): el repo es público y las actividades reales revelarían dónde vive el usuario.
 - Fechas: los periodos se agrupan por fecha local (`LocalDate`, `YYYY-MM-DD`) con aritmética de días en `core/dates.ts`; sin librerías de fechas ni `Date` local.
-- Cualquier `sport_type` de Strava tiene que funcionar: perfiles por grupo de deporte más un perfil genérico de respaldo.
+- Cualquier `sport_type` de Strava tiene que funcionar. Deporte en dos niveles (`core/sports.ts`): la modalidad decide las métricas (`core/metrics.ts`), la familia agrupa para los resúmenes; lo desconocido cae en `other`, el perfil genérico.
+- Plantillas (`core/template.ts`): formato + capas ligadas a datos, con posiciones relativas (0..1). Hay capas solo de actividad y solo de resumen; añadir tipos de capa es compatible, cambiar los existentes exige subir `version` con migración.
+- Ningún texto visible escrito a mano en los componentes: todo pasa por `t()`, en inglés y en español.
 - Plantillas: JSON validado con Zod y guardado en local; cuando llegue el login real, se sincronizan con Supabase (requisito firme, ver `docs/decisions/003-accounts-and-templates.md`).
 - Hitos: 1 esqueleto · 2 núcleo con fixtures · 3 editor · 4 Strava real + Supabase · 5 profundidad (módulo nativo, _development build_) + Sentry + TestFlight. El vídeo resumen va después del MVP.
 
