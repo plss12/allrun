@@ -17,8 +17,12 @@ jobs:
           node-version: '22.13'
           cache: npm
 
+      # Use the npm pinned in "packageManager": older npm versions disagree on the lockfile
+      - run: npm install -g "$(node -p "require('./package.json').packageManager")"
+
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm test -- --ci
       # Bundle the JS for both platforms to catch build errors (native builds run on EAS)

@@ -1,0 +1,11 @@
+# Third-party agent skills, kept as published upstream
+.claude/skills/
+
+# Generated
+package-lock.json
+skills-lock.json
+dist/
+.expo/
+ios/
+android/
+coverage/

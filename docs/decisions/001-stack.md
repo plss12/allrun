@@ -35,6 +35,18 @@ API (used by `expo install` and `expo-doctor`) still lists Jest 29.7. We follow 
 exclude `jest` and `@types/jest` from Expo's dependency validation (`expo.install.exclude` in
 `package.json`).
 
+### npm version and formatting
+
+npm versions disagree on `package-lock.json`: npm 11.6 omits optional peer dependencies
+(`@emnapi/core`, `@emnapi/runtime` of `@napi-rs/wasm-runtime`) that npm 10.9, 11.4 and 11.19
+require, so `npm ci` fails. A lockfile written by npm 11.19.1 is accepted by all of them. We pin
+`"packageManager": "npm@11.19.1"` and CI installs that version before `npm ci`; developers use it
+(or newer) to change dependencies. Raising the minimum Node to 24 would not help: Node 24.3 ships
+npm 11.4, which also rejects the incomplete lockfile.
+
+Prettier (print width 100, single quotes) formats the code, enforced through ESLint
+(`eslint-plugin-prettier`, as recommended by Expo) and checked in CI.
+
 ## Alternatives discarded
 
 - **Web app first (Next.js):** faster to share, but the use case is mobile (photos and Instagram
