@@ -18,9 +18,13 @@ import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
 import { CANVAS_FORMATS, type Layer, type Template } from '@/core/template';
+import { formatBucketLabels } from '@/ui/format';
 
 import { type EditorData, type LabelKey, layerText, type TextContext } from './editor-data';
 import { FONT_FAMILIES } from './fonts';
+
+/** AllRun watermark images, one per logo tone; `null` while loading. */
+export type BrandLogos = Readonly<Record<'light' | 'dark' | 'color', SkImage | null>>;
 
 /**
  * Draws a template filled with data at its export size (1080 px wide). The editor scales it to
@@ -34,6 +38,7 @@ export interface TemplateSceneProps {
   /** `true` for the sticker export: no photo and no placeholder. */
   readonly transparent?: boolean;
   readonly fonts: SkTypefaceFontProvider;
+  readonly logos: BrandLogos;
   readonly textContext: TextContext;
   readonly translate: (key: LabelKey) => string;
 }
@@ -46,6 +51,7 @@ export function TemplateScene({
   photo,
   transparent = false,
   fonts,
+  logos,
   textContext,
   translate,
 }: TemplateSceneProps) {
@@ -73,7 +79,9 @@ export function TemplateScene({
             <LayerContent
               layer={layer}
               data={data}
+              canvasWidth={width}
               fonts={fonts}
+              logos={logos}
               textContext={textContext}
               translate={translate}
             />
@@ -87,13 +95,23 @@ export function TemplateScene({
 interface LayerContentProps {
   readonly layer: Layer;
   readonly data: EditorData;
+  readonly canvasWidth: number;
   readonly fonts: SkTypefaceFontProvider;
+  readonly logos: BrandLogos;
   readonly textContext: TextContext;
   readonly translate: (key: LabelKey) => string;
 }
 
 /** Draws one layer centered on (0, 0); the parent group positions, rotates and scales it. */
-function LayerContent({ layer, data, fonts, textContext, translate }: LayerContentProps) {
+function LayerContent({
+  layer,
+  data,
+  canvasWidth,
+  fonts,
+  logos,
+  textContext,
+  translate,
+}: LayerContentProps) {
   switch (layer.kind) {
     case 'metric':
     case 'summaryMetric':
@@ -104,12 +122,17 @@ function LayerContent({ layer, data, fonts, textContext, translate }: LayerConte
         return null;
       }
       const isData = layer.kind === 'metric' || layer.kind === 'summaryMetric';
-      const paragraph = buildParagraph(fonts, layer.style, {
-        label: text.label === null ? null : translate(text.label),
-        value: text.value,
-        unit: text.unit,
-        valueSize: isData ? VALUE_SIZE : layer.kind === 'info' ? INFO_SIZE : TEXT_SIZE,
-      });
+      const paragraph = buildFittedParagraph(
+        fonts,
+        layer.style,
+        {
+          label: text.label === null ? null : translate(text.label),
+          value: text.value,
+          unit: text.unit,
+          valueSize: isData ? VALUE_SIZE : layer.kind === 'info' ? INFO_SIZE : TEXT_SIZE,
+        },
+        layer.maxWidth === undefined ? null : layer.maxWidth * canvasWidth,
+      );
       return <CenteredParagraph paragraph={paragraph} />;
     }
     case 'route': {
@@ -142,26 +165,46 @@ function LayerContent({ layer, data, fonts, textContext, translate }: LayerConte
       const values = data.buckets.map((bucket) =>
         layer.value === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds,
       );
-      return <BarChart values={values} color={layer.color} />;
+      const labels = layer.axisLabels
+        ? formatBucketLabels(data.buckets, data.bucketSize, textContext.locale).map((label) =>
+            label === ''
+              ? null
+              : buildParagraph(
+                  fonts,
+                  { ...LABEL_STYLE, color: layer.color },
+                  { label: null, value: label, unit: null, valueSize: AXIS_LABEL_SIZE },
+                ),
+          )
+        : null;
+      return <BarChart values={values} color={layer.color} labels={labels} />;
     }
     case 'logo': {
+      if (layer.brand === 'allrun') {
+        const image = logos[layer.tone];
+        if (image === null) {
+          return null;
+        }
+        const height = (LOGO_WIDTH * image.height()) / image.width();
+        return (
+          <Image
+            image={image}
+            x={-LOGO_WIDTH / 2}
+            y={-height / 2}
+            width={LOGO_WIDTH}
+            height={height}
+            fit="contain"
+          />
+        );
+      }
+      // Placeholder until the official Strava artwork lands; its guidelines allow this exact text.
       const paragraph = buildParagraph(
         fonts,
         {
-          font: layer.brand === 'allrun' ? 'bebasNeue' : 'inter',
-          color: layer.tone === 'light' ? '#FFFFFF' : '#111111',
-          bold: layer.brand === 'poweredByStrava',
-          uppercase: false,
-          align: 'center',
+          ...LABEL_STYLE,
+          color: layer.tone === 'light' ? '#FFFFFF' : layer.tone === 'dark' ? '#000000' : '#141B2D',
           shadow: layer.tone === 'light',
         },
-        {
-          label: null,
-          // Placeholder until the real logos land: Strava's guidelines allow this exact text.
-          value: layer.brand === 'allrun' ? 'AllRun' : 'Powered by Strava',
-          unit: null,
-          valueSize: layer.brand === 'allrun' ? 64 : 30,
-        },
+        { label: null, value: 'Powered by Strava', unit: null, valueSize: 30 },
       );
       return <CenteredParagraph paragraph={paragraph} />;
     }
@@ -172,14 +215,27 @@ function LayerContent({ layer, data, fonts, textContext, translate }: LayerConte
 const VALUE_SIZE = 96;
 const INFO_SIZE = 52;
 const TEXT_SIZE = 60;
+const AXIS_LABEL_SIZE = 26;
 const ROUTE_BOX = 640;
 const ROUTES_WIDTH = 800;
 const ROUTES_HEIGHT = 560;
 const CHART_WIDTH = 880;
 const CHART_HEIGHT = 240;
+/** Room under the bars for the axis labels. */
+const LABEL_BAND = 44;
+const LOGO_WIDTH = 300;
 const MAX_TEXT_WIDTH = 1000;
 
 type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
+
+const LABEL_STYLE: TextStyle = {
+  font: 'inter',
+  color: '#FFFFFF',
+  bold: true,
+  uppercase: false,
+  align: 'center',
+  shadow: true,
+};
 
 interface ParagraphContent {
   readonly label: string | null;
@@ -225,6 +281,27 @@ function buildParagraph(
   paragraph.layout(MAX_TEXT_WIDTH);
   paragraph.layout(Math.ceil(paragraph.getLongestLine()) + 1);
   return paragraph;
+}
+
+/**
+ * Like {@link buildParagraph}, but when the text is wider than `maxWidth` it is rebuilt with all
+ * its font sizes reduced in proportion, so long values ("4178,08 km") never overlap neighbours.
+ */
+function buildFittedParagraph(
+  fonts: SkTypefaceFontProvider,
+  style: TextStyle,
+  content: ParagraphContent,
+  maxWidth: number | null,
+): SkParagraph {
+  const paragraph = buildParagraph(fonts, style, content);
+  const width = paragraph.getLongestLine();
+  if (maxWidth === null || width <= maxWidth) {
+    return paragraph;
+  }
+  return buildParagraph(fonts, style, {
+    ...content,
+    valueSize: content.valueSize * (maxWidth / width),
+  });
 }
 
 function CenteredParagraph({ paragraph }: { readonly paragraph: SkParagraph }) {
@@ -277,9 +354,12 @@ function RouteLines({ routes, box, boxHeight, stroke }: RouteLinesProps) {
 function BarChart({
   values,
   color,
+  labels,
 }: {
   readonly values: readonly number[];
   readonly color: string;
+  /** One paragraph per bar (`null` for unlabelled bars), or `null` for no axis labels. */
+  readonly labels: readonly (SkParagraph | null)[] | null;
 }) {
   if (values.length === 0) {
     return null;
@@ -289,8 +369,9 @@ function BarChart({
   const barWidth = slot * 0.7;
   // Empty days still get a small mark so the time axis stays readable.
   const minHeight = Math.min(8, barWidth);
+  const totalHeight = CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND);
   return (
-    <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -CHART_HEIGHT / 2 }]}>
+    <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
       {values.map((value, i) => {
         const height = max > 0 ? Math.max(minHeight, (value / max) * CHART_HEIGHT) : minHeight;
         return (
@@ -303,6 +384,21 @@ function BarChart({
             r={Math.min(barWidth / 2, 12)}
             color={color}
             opacity={value > 0 ? 1 : 0.4}
+          />
+        );
+      })}
+      {labels?.map((label, i) => {
+        if (label === null) {
+          return null;
+        }
+        const width = Math.ceil(label.getLongestLine()) + 1;
+        return (
+          <Paragraph
+            key={`label-${i}`}
+            paragraph={label}
+            x={i * slot + slot / 2 - width / 2}
+            y={CHART_HEIGHT + (LABEL_BAND - label.getHeight()) / 2 + 4}
+            width={width}
           />
         );
       })}

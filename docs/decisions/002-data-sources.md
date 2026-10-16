@@ -31,8 +31,9 @@ streams for charts). As of October 2026:
   - **Modality** (road, trail and treadmill run; walk and hike; road, mountain, gravel, e-bike
     and indoor ride; swim) decides which metrics are offered and in which order: trail runs,
     hikes and mountain bike rides lead with elevation, treadmill runs have no route or elevation.
-  - **Family** (run, ride, walk, swim) groups modalities for summaries, which can filter by
-    family, by modality or by both.
+  - **Family** (run, ride, swim, other) groups modalities for summaries, which can filter by
+    family, by modality or by both. Summaries put the triathlon sports first; walks and hikes
+    count as `other` (changed on 2026-10-16 after user testing).
   - Any other `sport_type` falls back to a generic profile showing whatever fields are present.
 - Route privacy: "hide start/end of route" is on by default (~200 m) and adjustable, because the
   API returns the full trace to the owner.

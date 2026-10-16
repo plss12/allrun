@@ -104,6 +104,15 @@ const layerBase = {
   opacity: z.number().min(0).max(1),
 };
 
+/**
+ * Widest a text block may be, as a fraction of the canvas width (before the layer's `scale`).
+ * Longer text shrinks to fit instead of running into its neighbours. Optional: without it the
+ * text keeps its size.
+ */
+const textFit = {
+  maxWidth: z.number().min(0.05).max(1).optional(),
+};
+
 const dataLabels = {
   /** Show the metric name above the value ("Distance"). */
   showLabel: z.boolean(),
@@ -117,6 +126,7 @@ export const layerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('metric'),
     metric: z.enum(METRIC_IDS),
     ...dataLabels,
+    ...textFit,
     style: textStyleSchema,
   }),
   z.object({
@@ -124,6 +134,7 @@ export const layerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('summaryMetric'),
     metric: z.enum(SUMMARY_METRIC_IDS),
     ...dataLabels,
+    ...textFit,
     style: textStyleSchema,
   }),
   z.object({
@@ -131,12 +142,14 @@ export const layerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('info'),
     /** Activity name or date, or the period name ("October 2026"). */
     field: z.enum(['activityName', 'activityDate', 'periodName']),
+    ...textFit,
     style: textStyleSchema,
   }),
   z.object({
     ...layerBase,
     kind: z.literal('text'),
     content: z.string().min(1).max(200),
+    ...textFit,
     style: textStyleSchema,
   }),
   z.object({ ...layerBase, kind: z.literal('route'), stroke: strokeStyleSchema }),
@@ -147,12 +160,15 @@ export const layerSchema = z.discriminatedUnion('kind', [
     bucket: z.enum(['day', 'week', 'month']),
     value: z.enum(['distance', 'movingTime']),
     color: colorSchema,
+    /** Day, date or month initial under each bar. */
+    axisLabels: z.boolean().default(false),
   }),
   z.object({
     ...layerBase,
     kind: z.literal('logo'),
     brand: z.enum(['allrun', 'poweredByStrava']),
-    tone: z.enum(['light', 'dark']),
+    /** `light` (white) for dark photos, `dark` (black) for light ones, `color` on plain light. */
+    tone: z.enum(['light', 'dark', 'color']),
   }),
 ]);
 

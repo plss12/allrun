@@ -28,11 +28,8 @@ export const colors = {
     android: Color.android.dynamic.surfaceVariant,
     default: '#f2f2f7',
   }),
-  tint: Platform.select({
-    ios: Color.ios.systemBlue,
-    android: Color.android.dynamic.primary,
-    default: '#007aff',
-  }),
+  // Brand: Track Red. White text on it has a 4.7:1 contrast (WCAG AA for text and buttons).
+  tint: '#C94A2E',
   onTint: '#ffffff',
   error: Platform.select({
     ios: Color.ios.systemRed,

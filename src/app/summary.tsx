@@ -20,7 +20,7 @@ import { useAsync } from '@/ui/use-async';
 type CalendarKind = Exclude<PeriodKind, 'custom'>;
 
 const KINDS: readonly CalendarKind[] = ['week', 'month', 'year'];
-const FAMILIES: readonly SportFamily[] = ['run', 'ride', 'walk', 'swim', 'other'];
+const FAMILIES: readonly SportFamily[] = ['run', 'ride', 'swim', 'other'];
 const PREVIEW_METRICS: readonly SummaryMetricId[] = [
   'totalDistance',
   'totalMovingTime',

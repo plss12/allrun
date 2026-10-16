@@ -67,6 +67,7 @@ describe('layerText for a summary', () => {
     kind: 'week',
     summary: summarize(activities, range),
     buckets: bucketize(activities, range, 'day'),
+    bucketSize: 'day',
   };
   const { layers } = defaultSummaryTemplate('day');
 

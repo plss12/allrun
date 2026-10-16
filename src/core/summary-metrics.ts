@@ -29,7 +29,8 @@ export function summaryMetricValue(summary: PeriodSummary, metric: SummaryMetric
  * Converts a summary total into display units, reusing the single-activity formatting (a total
  * distance looks like any distance). Activity counts are plain integers.
  *
- * Time totals use hours and minutes (`h:mm:ss`), which reads well up to several hundred hours.
+ * Time totals drop the seconds and read as hours (`272:14 h`): a year of training runs into the
+ * hundreds of hours, and `272:13:57` is both too long for the canvas and needlessly precise.
  */
 export function toDisplaySummaryMetric(
   metric: SummaryMetricId,
@@ -41,8 +42,11 @@ export function toDisplaySummaryMetric(
     case 'totalDistance':
     case 'longestDistance':
       return toDisplayMetric('distance', value, context);
-    case 'totalMovingTime':
-      return toDisplayMetric('movingTime', value, context);
+    case 'totalMovingTime': {
+      const minutes = Math.round(value / 60);
+      const text = `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+      return { kind: 'time', text, unit: 'h' };
+    }
     case 'totalElevationGain':
       return toDisplayMetric('elevationGain', value, context);
     case 'averagePace':

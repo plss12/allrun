@@ -38,14 +38,24 @@ describe('toDisplaySummaryMetric', () => {
       amount: 31.1,
       unit: 'km',
     });
-    expect(toDisplaySummaryMetric('totalMovingTime', 9600, 'km')).toEqual({
-      kind: 'time',
-      text: '2:40:00',
-      unit: null,
-    });
     expect(toDisplaySummaryMetric('averagePace', 1000 / 300, 'km')).toMatchObject({
       text: '5:00',
       unit: 'min/km',
+    });
+  });
+
+  it('shows time totals as hours and minutes, without seconds', () => {
+    expect(toDisplaySummaryMetric('totalMovingTime', 9600, 'km')).toEqual({
+      kind: 'time',
+      text: '2:40',
+      unit: 'h',
+    });
+    // A year of training: 272 h 13 min 57 s rounds to 272:14.
+    expect(
+      toDisplaySummaryMetric('totalMovingTime', 272 * 3600 + 13 * 60 + 57, 'km'),
+    ).toMatchObject({ text: '272:14' });
+    expect(toDisplaySummaryMetric('totalMovingTime', 45 * 60, 'km')).toMatchObject({
+      text: '0:45',
     });
   });
 

@@ -1,7 +1,7 @@
 import type { Activity } from '@/core/activity';
 import { type MetricId, type MetricUnit, metricValue, toDisplayMetric } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
-import type { PeriodSummary, SummaryBucket } from '@/core/summary';
+import type { BucketSize, PeriodSummary, SummaryBucket } from '@/core/summary';
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type { Layer, SummaryMetricId } from '@/core/template';
 import type { DistanceUnit } from '@/core/units';
@@ -15,6 +15,8 @@ export type EditorData =
       readonly kind: PeriodKind;
       readonly summary: PeriodSummary;
       readonly buckets: readonly SummaryBucket[];
+      /** Size the buckets were made with, for the chart labels. */
+      readonly bucketSize: BucketSize;
     };
 
 /** Translation key of a data widget's label. */

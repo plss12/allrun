@@ -35,7 +35,7 @@ describe('defaultActivityTemplate', () => {
     const xs = defaultActivityTemplate(gym).layers.flatMap((layer) =>
       layer.kind === 'metric' ? [layer.transform.x] : [],
     );
-    expect(xs.map((x) => Number(x.toFixed(3)))).toEqual([0.333, 0.667]);
+    expect(xs.map((x) => Number(x.toFixed(3)))).toEqual([0.25, 0.75]);
   });
 
   it('uses the requested format', () => {
@@ -50,5 +50,38 @@ describe('defaultSummaryTemplate', () => {
     expect(template.layers.find((layer) => layer.kind === 'summaryChart')).toMatchObject({
       bucket: 'month',
     });
+  });
+});
+
+describe('default layouts in every format', () => {
+  const formats = ['story', 'portrait', 'square'] as const;
+
+  it('keeps each widget of a metrics row within its own column', () => {
+    for (const format of formats) {
+      for (const template of [
+        defaultActivityTemplate(makeActivity(), format),
+        defaultSummaryTemplate('day', format),
+      ]) {
+        const row = template.layers
+          .flatMap((layer) =>
+            layer.kind === 'metric' || layer.kind === 'summaryMetric' ? [layer] : [],
+          )
+          .sort((a, b) => a.transform.x - b.transform.x);
+        expect(row).toHaveLength(3);
+        row.slice(1).forEach((layer, i) => {
+          const previous = row[i];
+          const halfWidths = ((layer.maxWidth ?? 1) + (previous.maxWidth ?? 1)) / 2;
+          expect(layer.transform.x - previous.transform.x).toBeGreaterThanOrEqual(halfWidths);
+        });
+      }
+    }
+  });
+
+  it('shrinks the widgets on shorter canvases', () => {
+    const scaleOf = (format: (typeof formats)[number]) =>
+      defaultSummaryTemplate('day', format).layers.find((layer) => layer.id === 'chart')?.transform
+        .scale;
+    expect(scaleOf('story')).toBeGreaterThan(scaleOf('portrait') ?? 0);
+    expect(scaleOf('portrait')).toBeGreaterThan(scaleOf('square') ?? 0);
   });
 });

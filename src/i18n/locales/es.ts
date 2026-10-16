@@ -81,7 +81,6 @@ export const es: Translations = {
   families: {
     run: 'Correr',
     ride: 'Ciclismo',
-    walk: 'Caminar y senderismo',
     swim: 'Natación',
     other: 'Otros',
   },

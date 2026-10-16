@@ -207,7 +207,8 @@ export type MetricUnit =
   | 'W'
   | 'spm'
   | 'rpm'
-  | 'kcal';
+  | 'kcal'
+  | 'h';
 
 /**
  * A metric ready to render. Numbers stay numeric so the UI can format them for the user's

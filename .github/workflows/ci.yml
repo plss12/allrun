@@ -26,5 +26,6 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm test -- --ci
+      - run: npx expo-doctor
       # Bundle the JS for both platforms to catch build errors (native builds run on EAS)
       - run: npx expo export --platform ios --platform android

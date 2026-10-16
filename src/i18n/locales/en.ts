@@ -80,7 +80,6 @@ export const en = {
   families: {
     run: 'Running',
     ride: 'Cycling',
-    walk: 'Walking and hiking',
     swim: 'Swimming',
     other: 'Other',
   },

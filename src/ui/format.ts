@@ -1,6 +1,7 @@
 import type { DateRange, LocalDate } from '@/core/dates';
 import type { DisplayMetric, MetricUnit } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
+import type { BucketSize, SummaryBucket } from '@/core/summary';
 
 /** A metric as text: the value and its unit label. */
 export interface FormattedMetric {
@@ -76,6 +77,43 @@ export function formatPeriodName(kind: PeriodKind, range: DateRange, locale: str
         asUtc(`${range.end}T00:00:00`),
       );
       return `${start} – ${end}`;
+    }
+  }
+}
+
+/** Above this many day bars, only the 1st and every 5th day keep their number. */
+const MAX_DAY_NUMBERS = 16;
+
+/**
+ * Labels under the bars of a summary chart, one per bucket ("" for an unlabelled bar):
+ * - a week of days: weekday initials ("L M X J V S D" in Spanish);
+ * - longer runs of days: the day of the month, thinned to 1, 5, 10… when there are many;
+ * - weeks (custom training blocks): the week number within the block, from 1;
+ * - months: the month initial ("E F M A…").
+ */
+export function formatBucketLabels(
+  buckets: readonly SummaryBucket[],
+  size: BucketSize,
+  locale: string,
+): string[] {
+  const format = (date: LocalDate, options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' })
+      .format(asUtc(`${date}T00:00:00`))
+      .toLocaleUpperCase(locale);
+  switch (size) {
+    case 'week':
+      return buckets.map((_, i) => String(i + 1));
+    case 'month':
+      return buckets.map((bucket) => format(bucket.range.start, { month: 'narrow' }));
+    case 'day': {
+      if (buckets.length <= 7) {
+        return buckets.map((bucket) => format(bucket.range.start, { weekday: 'narrow' }));
+      }
+      return buckets.map((bucket) => {
+        const day = Number(bucket.range.start.slice(8, 10));
+        const shown = buckets.length <= MAX_DAY_NUMBERS || day === 1 || day % 5 === 0;
+        return shown ? String(day) : '';
+      });
     }
   }
 }

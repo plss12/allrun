@@ -7,6 +7,9 @@ import type { CanvasFormat, Layer, SummaryMetricId, Template } from './template'
  * Starting compositions for the editor: something good-looking on screen the moment a photo is
  * picked, which the user then rearranges. Starter templates (milestone 3d) will replace these as
  * the default choice.
+ *
+ * Every canvas is 1080 px wide but only the story format is 1920 px tall, so each format gets its
+ * own vertical rhythm and a scale that shrinks the widgets to fit the shorter canvases.
  */
 
 const WHITE = '#FFFFFF';
@@ -25,16 +28,63 @@ const textStyle = (overrides: Partial<TextStyle> = {}): TextStyle => ({
 
 const at = (x: number, y: number, scale = 1) => ({ x, y, scale, rotation: 0 });
 
-/** Horizontal centers for a row of `count` evenly spaced widgets. */
+/** Horizontal centers of a row of `count` widgets: the canvas split into equal columns. */
 const rowPositions = (count: number): number[] =>
-  Array.from({ length: count }, (_, i) => (i + 1) / (count + 1));
+  Array.from({ length: count }, (_, i) => (i + 0.5) / count);
 
-const logo = (): Layer => ({
+/** Widest each widget of a row of `count` may be: its column minus a gap to its neighbours. */
+const rowMaxWidth = (count: number) => 0.9 / count;
+
+/** Widest a full-width title may be. */
+const TITLE_MAX_WIDTH = 0.86;
+
+/** Vertical position (0..1) of each band of the composition, and the widget scale. */
+interface FormatLayout {
+  readonly scale: number;
+  readonly title: number;
+  readonly subtitle: number;
+  readonly graphic: number;
+  readonly chart: number;
+  readonly metrics: number;
+  readonly logo: number;
+}
+
+const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
+  story: {
+    scale: 1,
+    title: 0.1,
+    subtitle: 0.15,
+    graphic: 0.39,
+    chart: 0.64,
+    metrics: 0.81,
+    logo: 0.94,
+  },
+  portrait: {
+    scale: 0.75,
+    title: 0.08,
+    subtitle: 0.135,
+    graphic: 0.37,
+    chart: 0.63,
+    metrics: 0.8,
+    logo: 0.935,
+  },
+  square: {
+    scale: 0.6,
+    title: 0.08,
+    subtitle: 0.14,
+    graphic: 0.36,
+    chart: 0.61,
+    metrics: 0.79,
+    logo: 0.93,
+  },
+};
+
+const logo = (layout: FormatLayout): Layer => ({
   id: 'logo',
   kind: 'logo',
   brand: 'allrun',
   tone: 'light',
-  transform: at(0.5, 0.94),
+  transform: at(0.5, layout.logo, layout.scale),
   opacity: 0.9,
 });
 
@@ -46,6 +96,7 @@ export function defaultActivityTemplate(
   activity: Activity,
   format: CanvasFormat = 'story',
 ): Template {
+  const layout = LAYOUTS[format];
   const metrics = availableMetrics(activity).slice(0, 3);
   const layers: Layer[] = [];
   if (activity.routePolyline !== null) {
@@ -53,7 +104,8 @@ export function defaultActivityTemplate(
       id: 'route',
       kind: 'route',
       stroke: { color: WHITE, width: 8 },
-      transform: at(0.5, 0.42),
+      // Without a chart band the route can take more room.
+      transform: at(0.5, (layout.graphic + layout.chart) / 2, layout.scale * 1.15),
       opacity: 0.95,
     });
   }
@@ -62,16 +114,18 @@ export function defaultActivityTemplate(
       id: 'name',
       kind: 'info',
       field: 'activityName',
+      maxWidth: TITLE_MAX_WIDTH,
       style: textStyle({ bold: true }),
-      transform: at(0.5, 0.1),
+      transform: at(0.5, layout.title, layout.scale),
       opacity: 1,
     },
     {
       id: 'date',
       kind: 'info',
       field: 'activityDate',
+      maxWidth: TITLE_MAX_WIDTH,
       style: textStyle(),
-      transform: at(0.5, 0.15, 0.7),
+      transform: at(0.5, layout.subtitle, layout.scale * 0.7),
       opacity: 0.9,
     },
     ...metrics.map((metric, i): Layer => ({
@@ -80,11 +134,12 @@ export function defaultActivityTemplate(
       metric,
       showLabel: true,
       showUnit: true,
+      maxWidth: rowMaxWidth(metrics.length),
       style: textStyle({ font: 'bebasNeue' }),
-      transform: at(rowPositions(metrics.length)[i], 0.8),
+      transform: at(rowPositions(metrics.length)[i], layout.metrics, layout.scale),
       opacity: 1,
     })),
-    logo(),
+    logo(layout),
   );
   return { version: 1, id: 'default-activity', name: 'AllRun', mode: 'activity', format, layers };
 }
@@ -103,20 +158,22 @@ export function defaultSummaryTemplate(
   bucket: BucketSize,
   format: CanvasFormat = 'story',
 ): Template {
+  const layout = LAYOUTS[format];
   const layers: Layer[] = [
     {
       id: 'period',
       kind: 'info',
       field: 'periodName',
+      maxWidth: TITLE_MAX_WIDTH,
       style: textStyle({ bold: true, uppercase: true }),
-      transform: at(0.5, 0.1),
+      transform: at(0.5, layout.title, layout.scale),
       opacity: 1,
     },
     {
       id: 'routes',
       kind: 'summaryRoutes',
       stroke: { color: WHITE, width: 4 },
-      transform: at(0.5, 0.38),
+      transform: at(0.5, layout.graphic, layout.scale),
       opacity: 0.85,
     },
     {
@@ -125,7 +182,8 @@ export function defaultSummaryTemplate(
       bucket,
       value: 'distance',
       color: WHITE,
-      transform: at(0.5, 0.64),
+      axisLabels: true,
+      transform: at(0.5, layout.chart, layout.scale),
       opacity: 0.9,
     },
     ...SUMMARY_METRICS.map((metric, i): Layer => ({
@@ -134,11 +192,12 @@ export function defaultSummaryTemplate(
       metric,
       showLabel: true,
       showUnit: true,
+      maxWidth: rowMaxWidth(SUMMARY_METRICS.length),
       style: textStyle({ font: 'bebasNeue' }),
-      transform: at(rowPositions(SUMMARY_METRICS.length)[i], 0.82),
+      transform: at(rowPositions(SUMMARY_METRICS.length)[i], layout.metrics, layout.scale),
       opacity: 1,
     })),
-    logo(),
+    logo(layout),
   ];
   return { version: 1, id: 'default-summary', name: 'AllRun', mode: 'summary', format, layers };
 }

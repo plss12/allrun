@@ -14,6 +14,7 @@ import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
 import { useActivitySource } from '@/data/activity-source';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import type { EditorData } from '@/editor/editor-data';
+import { useBrandLogos } from '@/editor/brand-logos';
 import { useEditorFonts } from '@/editor/fonts';
 import { colors } from '@/theme/colors';
 import { useDisplaySettings } from '@/ui/settings';
@@ -31,7 +32,7 @@ const paramsSchema = z.discriminatedUnion('mode', [
     families: z
       .string()
       .transform((value) => (value === '' ? [] : value.split(',')))
-      .pipe(z.array(z.enum(['run', 'ride', 'walk', 'swim', 'other']))),
+      .pipe(z.array(z.enum(['run', 'ride', 'swim', 'other']))),
   }),
 ]);
 
@@ -65,11 +66,13 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
     const range = customRange(params.start, params.end);
     const activities = await source.listInRange(range);
     const filter = params.families.length === 0 ? {} : { families: params.families };
+    const bucketSize = bucketForPeriod(params.kind, range);
     return {
       mode: 'summary',
       kind: params.kind,
       summary: summarize(activities, range, filter),
-      buckets: bucketize(activities, range, bucketForPeriod(params.kind, range), filter),
+      buckets: bucketize(activities, range, bucketSize, filter),
+      bucketSize,
     };
   }, JSON.stringify(params));
 
@@ -100,6 +103,7 @@ function EditorWorkspace({
   const [photoError, setPhotoError] = useState<Error | null>(null);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const photo = useImage(photoUri, (error) => setPhotoError(error));
+  const logos = useBrandLogos();
 
   const template =
     data.mode === 'activity'
@@ -145,6 +149,7 @@ function EditorWorkspace({
               data={data}
               photo={photo}
               fonts={fonts}
+              logos={logos}
               textContext={{ unit, locale }}
               translate={(key) => t(key)}
             />
