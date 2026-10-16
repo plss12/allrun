@@ -8,7 +8,7 @@ App móvil (iOS + Android) para poner datos de Strava sobre tus fotos con libert
 
 ## Stack y comandos
 
-- Stack: Expo SDK 58 + Expo Router + TypeScript `strict`; editor con `@shopify/react-native-skia` + gesture-handler + reanimated; Supabase (Edge Functions para el OAuth de Strava, usuario anónimo); Zod; i18next (es/en); Sentry.
+- Stack: Expo SDK 57 + Expo Router + TypeScript `strict`; editor con `@shopify/react-native-skia` + gesture-handler + reanimated; Supabase (Edge Functions para el OAuth de Strava, usuario anónimo); Zod; i18next (es/en); Sentry.
 - `npm start`: dev (Expo Go en el iPhone) · `npm test`: tests · `npm run lint`: lint (incluye Prettier) · `npm run format`: formatear · `npm run typecheck`: tipos · `npx expo export --platform ios --platform android`: build del bundle (lo mismo que la CI).
 
 ## Estructura
@@ -30,7 +30,8 @@ Las carpetas que aún no existen se crean en su hito.
 - npm fijado en `packageManager` (11.19.1); la CI instala esa versión. Las npm anteriores escriben un lockfile incompleto (faltan peers opcionales como `@emnapi/*`) que rompe `npm ci`. Si `npm --version` es menor, cambia dependencias con `npx npm@11.19.1 install …`.
 - Estilo: Prettier (ancho 100, comillas simples), aplicado por ESLint y comprobado en la CI.
 - Tests junto al código (`*.test.ts`); el dominio de `src/core/` siempre con tests.
-- Jest 30 aunque `expo-doctor` pida 29.7: lo exige la guía oficial del SDK 58 (detalle en `docs/decisions/001-stack.md`). `expo-doctor` también marca `ios.icon` como error; es un falso positivo con la carpeta de Icon Composer, por eso no está en la CI.
+- SDK 57 y no 58 porque el Expo Go de la App Store aún no soporta el 58: cuando lo haga, hay que subir (notas en `docs/decisions/001-stack.md`). Mientras, usa la API de las librerías del SDK 57 (p. ej. gesture-handler 2.x, no 3.x).
+- `expo-doctor` marca `ios.icon` como error: es un falso positivo con la carpeta de Icon Composer, por eso no está en la CI.
 - Strava: datos bajo demanda y caché local de menos de 7 días; el trazado llega completo al dueño, así que el recorte de privacidad del inicio y del final viene activado por defecto; solo se pueden usar los logos oficiales «Powered by Strava» / «Compatible with Strava».
 - Datos de ejemplo siempre sintéticos (`generateStravaFixtures`, con semilla fija): el repo es público y las actividades reales revelarían dónde vive el usuario.
 - Fechas: los periodos se agrupan por fecha local (`LocalDate`, `YYYY-MM-DD`) con aritmética de días en `core/dates.ts`; sin librerías de fechas ni `Date` local.

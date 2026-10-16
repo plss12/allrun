@@ -11,8 +11,8 @@ calendar). The developer works on Windows with an iPhone and no Mac.
 
 ## Decision
 
-- **App:** React Native + Expo (SDK 58) + TypeScript `strict`, with Expo Router. iOS and Android
-  ship at the same time from one codebase.
+- **App:** React Native + Expo (SDK 57, see below) + TypeScript `strict`, with Expo Router. iOS
+  and Android ship at the same time from one codebase.
 - **Editor:** `@shopify/react-native-skia` for the canvas, with `react-native-gesture-handler` and
   `react-native-reanimated` for gestures. Skia renders on the GPU, draws route traces and charts,
   and exports the canvas both as a composite image and as a transparent PNG sticker.
@@ -22,18 +22,25 @@ calendar). The developer works on Windows with an iPhone and no Mac.
 - **Validation:** Zod for Strava responses, configuration and stored templates.
 - **i18n:** `i18next` + `expo-localization`, Spanish and English, km and miles.
 - **Error reporting:** Sentry.
-- **Quality:** ESLint (`expo lint`), `tsc --noEmit`, Jest 30 with `jest-expo`, GitHub Actions CI.
+- **Quality:** ESLint (`expo lint`), `tsc --noEmit`, Jest with `jest-expo`, GitHub Actions CI.
 - **Development workflow:** Expo Go on the iPhone until a native module is needed (depth effect,
   milestone 5); then EAS development builds, which require the paid Apple Developer account.
 - **Depth effect:** on-device subject segmentation (iOS 17+ Vision, Android ML Kit) through a
   native module, as the last MVP milestone.
 
-### Jest version
+### Expo SDK version
 
-The SDK 58 unit-testing guide states that `jest-expo` requires Jest 30, while the Expo versions
-API (used by `expo install` and `expo-doctor`) still lists Jest 29.7. We follow the guide and
-exclude `jest` and `@types/jest` from Expo's dependency validation (`expo.install.exclude` in
-`package.json`).
+The project started on SDK 58 (released 2026-10-15), but the App Store Expo Go only supports up
+to SDK 57, and Expo said the SDK 58 build would follow "within a few weeks". Since development
+relies on Expo Go on an iPhone, we moved to SDK 57 on 2026-10-16. Upgrade to SDK 58 once the App
+Store Expo Go supports it (`expo-upgrade` skill). Notes for that upgrade:
+
+- SDK 58's `jest-expo` requires Jest 30, while Expo's versions API still lists Jest 29.7; follow
+  the unit-testing guide and exclude `jest` and `@types/jest` from `expo.install.exclude`.
+- `react-native-gesture-handler` jumps from 2.x to 3.x.
+
+Alternatives discarded: a development build or `eas go` (both require the paid Apple Developer
+account before it is otherwise needed), or pausing device testing for weeks.
 
 ### npm version and formatting
 
