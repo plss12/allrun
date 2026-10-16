@@ -1,5 +1,5 @@
 import type { Activity } from './activity';
-import type { SportGroup } from './sports';
+import type { SportFamily, SportModality } from './sports';
 import { type DistanceUnit, formatDuration, formatPaceOver } from './units';
 
 /** Every metric a data widget can show for a single activity. */
@@ -19,67 +19,124 @@ export type MetricId =
   | 'averageCadence'
   | 'calories';
 
+const HEART_RATE: readonly MetricId[] = ['averageHeartRate', 'maxHeartRate'];
+const POWER: readonly MetricId[] = ['averagePower', 'weightedAveragePower'];
+
 /**
- * Metrics offered for each sport group, in the order the editor lists them.
+ * Metrics offered for each modality, in the order the editor lists them.
  *
- * Each sport shows what matters for it (pace for running, speed and power for cycling, pace per
- * 100 m for swimming); `other` is the generic profile and only shows what the activity has.
+ * Each modality leads with what matters for it: pace on the road, elevation on trails and hikes,
+ * speed and power on the bike, pace per 100 m in the pool. Indoor modalities skip what they
+ * can't measure. `other` is the generic profile and only shows what the activity has.
  */
-const PROFILES: Readonly<Record<SportGroup, readonly MetricId[]>> = {
-  run: [
+const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
+  roadRun: [
     'distance',
     'movingTime',
     'pace',
     'elevationGain',
     'maxElevation',
-    'averageHeartRate',
-    'maxHeartRate',
+    ...HEART_RATE,
     'averageCadence',
     'calories',
     'elapsedTime',
   ],
-  ride: [
+  trailRun: [
     'distance',
-    'movingTime',
-    'speed',
     'elevationGain',
+    'movingTime',
     'maxElevation',
-    'averagePower',
-    'weightedAveragePower',
-    'averageHeartRate',
-    'maxHeartRate',
+    'pace',
+    ...HEART_RATE,
     'averageCadence',
     'calories',
     'elapsedTime',
   ],
+  treadmillRun: ['distance', 'movingTime', 'pace', ...HEART_RATE, 'averageCadence', 'calories'],
   walk: [
     'distance',
     'movingTime',
     'pace',
     'elevationGain',
-    'maxElevation',
-    'averageHeartRate',
-    'maxHeartRate',
+    ...HEART_RATE,
     'calories',
     'elapsedTime',
   ],
-  swim: [
+  hike: [
+    'distance',
+    'elevationGain',
+    'maxElevation',
+    'movingTime',
+    'elapsedTime',
+    'pace',
+    ...HEART_RATE,
+    'calories',
+  ],
+  roadRide: [
     'distance',
     'movingTime',
-    'swimPace',
-    'averageHeartRate',
-    'maxHeartRate',
+    'speed',
+    'elevationGain',
+    ...POWER,
+    ...HEART_RATE,
+    'averageCadence',
+    'maxElevation',
     'calories',
     'elapsedTime',
   ],
+  mountainBikeRide: [
+    'distance',
+    'elevationGain',
+    'movingTime',
+    'maxElevation',
+    'speed',
+    ...HEART_RATE,
+    ...POWER,
+    'averageCadence',
+    'calories',
+    'elapsedTime',
+  ],
+  gravelRide: [
+    'distance',
+    'movingTime',
+    'speed',
+    'elevationGain',
+    'maxElevation',
+    ...POWER,
+    ...HEART_RATE,
+    'averageCadence',
+    'calories',
+    'elapsedTime',
+  ],
+  eBikeRide: [
+    'distance',
+    'movingTime',
+    'speed',
+    'elevationGain',
+    'maxElevation',
+    ...HEART_RATE,
+    'calories',
+    'elapsedTime',
+  ],
+  // Virtual platforms (Zwift and similar) simulate elevation, so it stays.
+  indoorRide: [
+    'movingTime',
+    'distance',
+    'speed',
+    ...POWER,
+    'elevationGain',
+    ...HEART_RATE,
+    'averageCadence',
+    'calories',
+  ],
+  swim: ['distance', 'movingTime', 'swimPace', ...HEART_RATE, 'calories', 'elapsedTime'],
   other: [
     'movingTime',
     'elapsedTime',
     'distance',
     'speed',
     'elevationGain',
-    'averageHeartRate',
-    'maxHeartRate',
+    ...HEART_RATE,
     'averagePower',
     'calories',
   ],
@@ -128,7 +185,7 @@ export function metricValue(activity: Activity, metric: MetricId): number | null
  * (distance of a gym session, elevation of a treadmill run).
  */
 export function availableMetrics(activity: Activity): MetricId[] {
-  return PROFILES[activity.sportGroup].filter((metric) => {
+  return PROFILES[activity.sportModality].filter((metric) => {
     const value = metricValue(activity, metric);
     return value !== null && Number.isFinite(value) && value > 0;
   });
@@ -168,7 +225,7 @@ export type DisplayMetric =
 /** Context that changes how a metric is displayed. */
 export interface DisplayContext {
   readonly unit: DistanceUnit;
-  readonly sportGroup: SportGroup;
+  readonly sportFamily: SportFamily;
 }
 
 const METERS_PER_MILE = 1609.344;
@@ -228,7 +285,7 @@ export function toDisplayMetric(
       return { kind: 'number', amount: value, fractionDigits: 0, unit: 'W' };
     case 'averageCadence':
       // Strava reports running cadence for one leg; runners think in steps per minute.
-      return context.sportGroup === 'run'
+      return context.sportFamily === 'run'
         ? { kind: 'number', amount: value * 2, fractionDigits: 0, unit: 'spm' }
         : { kind: 'number', amount: value, fractionDigits: 0, unit: 'rpm' };
     case 'calories':

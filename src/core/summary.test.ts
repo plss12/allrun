@@ -59,15 +59,36 @@ describe('summarize', () => {
     expect(summary.averageSpeed).toBeNull();
   });
 
-  it('filters by sport group', () => {
+  describe('sport filter', () => {
     const activities = [
       makeActivity({ sportType: 'Run' }),
-      makeActivity({ sportType: 'TrailRun' }),
+      makeActivity({ sportType: 'TrailRun', distanceMeters: 15_000 }),
+      makeActivity({ sportType: 'VirtualRun', distanceMeters: 8000 }),
+      makeActivity({ sportType: 'Hike', distanceMeters: 12_000 }),
       makeActivity({ sportType: 'Ride', distanceMeters: 60_000 }),
     ];
-    const summary = summarize(activities, week, { sportGroups: ['run'] });
-    expect(summary.activityCount).toBe(2);
-    expect(summary.totalDistanceMeters).toBe(20_000);
+
+    it('includes a whole family, trail and treadmill runs included', () => {
+      const summary = summarize(activities, week, { families: ['run'] });
+      expect(summary.activityCount).toBe(3);
+      expect(summary.totalDistanceMeters).toBe(33_000);
+    });
+
+    it('includes a single modality', () => {
+      const summary = summarize(activities, week, { modalities: ['trailRun'] });
+      expect(summary.totalDistanceMeters).toBe(15_000);
+    });
+
+    it('combines families and modalities', () => {
+      const summary = summarize(activities, week, { families: ['run'], modalities: ['hike'] });
+      expect(summary.activityCount).toBe(4);
+      expect(summary.totalDistanceMeters).toBe(45_000);
+    });
+
+    it('includes everything without a filter and nothing with empty lists', () => {
+      expect(summarize(activities, week).activityCount).toBe(5);
+      expect(summarize(activities, week, { families: [], modalities: [] }).activityCount).toBe(0);
+    });
   });
 
   it('lists routes oldest first and skips activities without GPS', () => {

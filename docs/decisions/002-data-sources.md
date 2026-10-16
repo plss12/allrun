@@ -27,9 +27,13 @@ streams for charts). As of October 2026:
   subscription.
 - Data is fetched on demand: the recent activities list first; month/year data only when the user
   builds a summary. Local cache shorter than 7 days.
-- All Strava sport types are supported: curated metric profiles per sport group (run/trail,
-  cycling, walk/hike, swim) plus a generic profile for any other `sport_type`, showing whatever
-  fields are present.
+- All Strava sport types are supported, classified on two levels:
+  - **Modality** (road, trail and treadmill run; walk and hike; road, mountain, gravel, e-bike
+    and indoor ride; swim) decides which metrics are offered and in which order: trail runs,
+    hikes and mountain bike rides lead with elevation, treadmill runs have no route or elevation.
+  - **Family** (run, ride, walk, swim) groups modalities for summaries, which can filter by
+    family, by modality or by both.
+  - Any other `sport_type` falls back to a generic profile showing whatever fields are present.
 - Route privacy: "hide start/end of route" is on by default (~200 m) and adjustable, because the
   API returns the full trace to the owner.
 - Request Strava's review as soon as there is a usable version, before the public launch.

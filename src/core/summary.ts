@@ -1,11 +1,15 @@
 import type { Activity } from './activity';
 import { addDays, type DateRange, isInRange, monthRange, toEpochDay } from './dates';
-import type { SportGroup } from './sports';
+import type { SportFamily, SportModality } from './sports';
 
-/** Which activities a summary includes. */
+/**
+ * Which sports a summary includes: an activity passes when its family or its modality is listed,
+ * so "all running" and "running plus hikes" are both expressible. Without either list, every
+ * activity is included.
+ */
 export interface SummaryFilter {
-  /** Sport groups to include; all when omitted. */
-  readonly sportGroups?: readonly SportGroup[];
+  readonly families?: readonly SportFamily[];
+  readonly modalities?: readonly SportModality[];
 }
 
 /** Aggregated totals for a period: what a weekly, monthly or yearly summary widget shows. */
@@ -49,11 +53,19 @@ export function selectActivities(
   range: DateRange,
   filter: SummaryFilter = {},
 ): Activity[] {
-  const groups = filter.sportGroups;
   return activities
-    .filter((activity) => isInRange(activity.localDate, range))
-    .filter((activity) => groups === undefined || groups.includes(activity.sportGroup))
+    .filter((activity) => isInRange(activity.localDate, range) && matchesSport(activity, filter))
     .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+}
+
+function matchesSport(activity: Activity, { families, modalities }: SummaryFilter): boolean {
+  if (families === undefined && modalities === undefined) {
+    return true;
+  }
+  return (
+    (families?.includes(activity.sportFamily) ?? false) ||
+    (modalities?.includes(activity.sportModality) ?? false)
+  );
 }
 
 /**

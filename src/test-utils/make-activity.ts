@@ -1,11 +1,11 @@
 import type { Activity } from '@/core/activity';
-import { sportGroupOf } from '@/core/sports';
+import { FAMILY_OF_MODALITY, modalityOfStravaType } from '@/core/sports';
 
 let nextId = 1;
 
 /**
  * Builds a test activity: a 10 km run at 5:00/km on the given local date, at 08:00 UTC.
- * Override any field; `sportGroup` follows `sportType` unless set explicitly.
+ * Override any field; the sport modality and family follow `sportType` unless set explicitly.
  */
 export function makeActivity(overrides: Partial<Activity> = {}): Activity {
   const localDate = overrides.localDate ?? '2026-10-14';
@@ -14,7 +14,8 @@ export function makeActivity(overrides: Partial<Activity> = {}): Activity {
     id: `test:${nextId++}`,
     name: 'Morning Run',
     sportType,
-    sportGroup: sportGroupOf(sportType),
+    sportModality: modalityOfStravaType(sportType),
+    sportFamily: FAMILY_OF_MODALITY[modalityOfStravaType(sportType)],
     startUtc: `${localDate}T08:00:00Z`,
     startLocal: `${localDate}T10:00:00`,
     localDate,

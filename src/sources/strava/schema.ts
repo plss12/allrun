@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { Activity } from '@/core/activity';
-import { sportGroupOf } from '@/core/sports';
+import { FAMILY_OF_MODALITY, modalityOfStravaType } from '@/core/sports';
 
 /**
  * The fields AllRun uses from Strava's `SummaryActivity` (`GET /athlete/activities`), plus
@@ -38,11 +38,13 @@ export type StravaActivity = z.infer<typeof stravaActivitySchema>;
 /** Maps a validated Strava activity to the source-independent {@link Activity}. */
 export function stravaToActivity(strava: StravaActivity): Activity {
   const polyline = strava.map?.summary_polyline;
+  const modality = modalityOfStravaType(strava.sport_type);
   return {
     id: `strava:${strava.id}`,
     name: strava.name,
     sportType: strava.sport_type,
-    sportGroup: sportGroupOf(strava.sport_type),
+    sportModality: modality,
+    sportFamily: FAMILY_OF_MODALITY[modality],
     startUtc: strava.start_date,
     startLocal: strava.start_date_local.slice(0, 19),
     localDate: strava.start_date_local.slice(0, 10),

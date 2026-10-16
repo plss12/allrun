@@ -1,5 +1,5 @@
 import type { LocalDate } from './dates';
-import type { SportGroup } from './sports';
+import type { SportFamily, SportModality } from './sports';
 
 /**
  * Source-independent activity. Sources (Strava today, watch brands later) map their own format
@@ -14,7 +14,10 @@ export interface Activity {
   readonly name: string;
   /** Raw sport type from the source (Strava `sport_type`), e.g. `TrailRun`. */
   readonly sportType: string;
-  readonly sportGroup: SportGroup;
+  /** Decides the metrics the activity offers. */
+  readonly sportModality: SportModality;
+  /** Groups modalities for summaries; always `FAMILY_OF_MODALITY[sportModality]`. */
+  readonly sportFamily: SportFamily;
   /** Start instant as an ISO 8601 UTC string. */
   readonly startUtc: string;
   /** Wall-clock start in the athlete's time zone, `YYYY-MM-DDTHH:mm:ss`. */

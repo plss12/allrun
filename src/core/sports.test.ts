@@ -1,23 +1,27 @@
-import { sportGroupOf } from './sports';
+import { FAMILY_OF_MODALITY, modalityOfStravaType } from './sports';
 
-describe('sportGroupOf', () => {
+describe('modalityOfStravaType', () => {
   it.each([
-    ['Run', 'run'],
-    ['TrailRun', 'run'],
-    ['VirtualRun', 'run'],
-    ['Ride', 'ride'],
-    ['GravelRide', 'ride'],
-    ['VirtualRide', 'ride'],
-    ['Hike', 'walk'],
-    ['Walk', 'walk'],
-    ['Swim', 'swim'],
-  ])('maps %s to %s', (sportType, group) => {
-    expect(sportGroupOf(sportType)).toBe(group);
+    ['Run', 'roadRun', 'run'],
+    ['TrailRun', 'trailRun', 'run'],
+    ['VirtualRun', 'treadmillRun', 'run'],
+    ['Walk', 'walk', 'walk'],
+    ['Hike', 'hike', 'walk'],
+    ['Ride', 'roadRide', 'ride'],
+    ['MountainBikeRide', 'mountainBikeRide', 'ride'],
+    ['GravelRide', 'gravelRide', 'ride'],
+    ['EBikeRide', 'eBikeRide', 'ride'],
+    ['EMountainBikeRide', 'eBikeRide', 'ride'],
+    ['VirtualRide', 'indoorRide', 'ride'],
+    ['Swim', 'swim', 'swim'],
+  ] as const)('maps %s to the %s modality in the %s family', (sportType, modality, family) => {
+    expect(modalityOfStravaType(sportType)).toBe(modality);
+    expect(FAMILY_OF_MODALITY[modalityOfStravaType(sportType)]).toBe(family);
   });
 
-  it('falls back to the generic group for other or unknown sport types', () => {
-    expect(sportGroupOf('WeightTraining')).toBe('other');
-    expect(sportGroupOf('Crossfit')).toBe('other');
-    expect(sportGroupOf('SomethingStravaAddsTomorrow')).toBe('other');
+  it('falls back to the generic modality for other or unknown sport types', () => {
+    expect(modalityOfStravaType('WeightTraining')).toBe('other');
+    expect(modalityOfStravaType('Crossfit')).toBe('other');
+    expect(modalityOfStravaType('SomethingStravaAddsTomorrow')).toBe('other');
   });
 });

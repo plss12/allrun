@@ -34,7 +34,8 @@ describe('parseStravaActivities', () => {
       id: 'strava:15234567890',
       name: 'Evening Run',
       sportType: 'Run',
-      sportGroup: 'run',
+      sportModality: 'roadRun',
+      sportFamily: 'run',
       startUtc: '2026-10-14T17:31:05Z',
       startLocal: '2026-10-14T19:31:05',
       localDate: '2026-10-14',
@@ -82,7 +83,8 @@ describe('parseStravaActivities', () => {
       },
     ]);
     expect(gym).toMatchObject({
-      sportGroup: 'other',
+      sportModality: 'other',
+      sportFamily: 'other',
       routePolyline: null,
       averageSpeed: null,
       averageHeartRate: null,

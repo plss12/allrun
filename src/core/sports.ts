@@ -1,30 +1,65 @@
 /**
- * Families of sports that share the same metrics and formatting.
+ * Sports are classified on two levels:
  *
- * `other` is the generic fallback: any sport type without a curated group (gym, yoga, a type
- * Strava adds tomorrow) still works and shows whatever data it has.
+ * - **Modality** decides which metrics an activity offers and in which order (a trail run puts
+ *   elevation before pace; a treadmill run has no route or elevation).
+ * - **Family** groups modalities for summaries ("everything I ran this month" includes trail and
+ *   treadmill runs).
+ *
+ * `other` is the generic fallback on both levels: any sport type without a curated modality
+ * (gym, yoga, a type Strava adds tomorrow) still works and shows whatever data it has.
  */
-export type SportGroup = 'run' | 'ride' | 'walk' | 'swim' | 'other';
+export type SportFamily = 'run' | 'ride' | 'walk' | 'swim' | 'other';
 
-/** Strava `sport_type` values with a curated group; everything else is `other`. */
-const SPORT_GROUPS = new Map<string, SportGroup>([
-  ['Run', 'run'],
-  ['TrailRun', 'run'],
-  ['VirtualRun', 'run'],
-  ['Ride', 'ride'],
-  ['MountainBikeRide', 'ride'],
-  ['GravelRide', 'ride'],
-  ['EBikeRide', 'ride'],
-  ['EMountainBikeRide', 'ride'],
-  ['VirtualRide', 'ride'],
-  ['Velomobile', 'ride'],
-  ['Handcycle', 'ride'],
+export type SportModality =
+  | 'roadRun'
+  | 'trailRun'
+  | 'treadmillRun'
+  | 'walk'
+  | 'hike'
+  | 'roadRide'
+  | 'mountainBikeRide'
+  | 'gravelRide'
+  | 'eBikeRide'
+  | 'indoorRide'
+  | 'swim'
+  | 'other';
+
+/** Family of each modality. */
+export const FAMILY_OF_MODALITY: Readonly<Record<SportModality, SportFamily>> = {
+  roadRun: 'run',
+  trailRun: 'run',
+  treadmillRun: 'run',
+  walk: 'walk',
+  hike: 'walk',
+  roadRide: 'ride',
+  mountainBikeRide: 'ride',
+  gravelRide: 'ride',
+  eBikeRide: 'ride',
+  indoorRide: 'ride',
+  swim: 'swim',
+  other: 'other',
+};
+
+/** Strava `sport_type` values with a curated modality; everything else is `other`. */
+const MODALITY_OF_STRAVA_TYPE = new Map<string, SportModality>([
+  ['Run', 'roadRun'],
+  ['TrailRun', 'trailRun'],
+  ['VirtualRun', 'treadmillRun'],
   ['Walk', 'walk'],
-  ['Hike', 'walk'],
+  ['Hike', 'hike'],
+  ['Ride', 'roadRide'],
+  ['Velomobile', 'roadRide'],
+  ['Handcycle', 'roadRide'],
+  ['MountainBikeRide', 'mountainBikeRide'],
+  ['GravelRide', 'gravelRide'],
+  ['EBikeRide', 'eBikeRide'],
+  ['EMountainBikeRide', 'eBikeRide'],
+  ['VirtualRide', 'indoorRide'],
   ['Swim', 'swim'],
 ]);
 
-/** Group of a Strava `sport_type`; unknown types fall back to `other`. */
-export function sportGroupOf(sportType: string): SportGroup {
-  return SPORT_GROUPS.get(sportType) ?? 'other';
+/** Modality of a Strava `sport_type`; unknown types fall back to `other`. */
+export function modalityOfStravaType(sportType: string): SportModality {
+  return MODALITY_OF_STRAVA_TYPE.get(sportType) ?? 'other';
 }

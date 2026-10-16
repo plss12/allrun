@@ -3,11 +3,32 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { availableMetrics, metricValue, toDisplayMetric } from './metrics';
 
 describe('availableMetrics', () => {
-  it('offers pace, not speed, for runs', () => {
-    const metrics = availableMetrics(makeActivity({ sportType: 'TrailRun' }));
-    expect(metrics).toContain('pace');
+  it('offers pace, not speed, for road runs, leading with distance, time and pace', () => {
+    const metrics = availableMetrics(makeActivity({ sportType: 'Run' }));
+    expect(metrics.slice(0, 3)).toEqual(['distance', 'movingTime', 'pace']);
     expect(metrics).not.toContain('speed');
-    expect(metrics[0]).toBe('distance');
+  });
+
+  it('puts elevation before pace on trails and hikes', () => {
+    for (const sportType of ['TrailRun', 'Hike']) {
+      const metrics = availableMetrics(makeActivity({ sportType }));
+      expect(metrics[1]).toBe('elevationGain');
+      expect(metrics.indexOf('elevationGain')).toBeLessThan(metrics.indexOf('pace'));
+    }
+  });
+
+  it('leaves elevation out of treadmill runs even if the source reports some', () => {
+    const metrics = availableMetrics(
+      makeActivity({ sportType: 'VirtualRun', routePolyline: null, elevationGainMeters: 12 }),
+    );
+    expect(metrics).not.toContain('elevationGain');
+    expect(metrics).not.toContain('maxElevation');
+  });
+
+  it('leads mountain bike rides with elevation', () => {
+    expect(availableMetrics(makeActivity({ sportType: 'MountainBikeRide' }))[1]).toBe(
+      'elevationGain',
+    );
   });
 
   it('offers speed and power for rides with a power meter', () => {
@@ -66,8 +87,8 @@ describe('metricValue', () => {
 });
 
 describe('toDisplayMetric', () => {
-  const metric = { unit: 'km', sportGroup: 'run' } as const;
-  const imperial = { unit: 'mi', sportGroup: 'run' } as const;
+  const metric = { unit: 'km', sportFamily: 'run' } as const;
+  const imperial = { unit: 'mi', sportFamily: 'run' } as const;
 
   it('converts distance', () => {
     expect(toDisplayMetric('distance', 21_097.5, metric)).toEqual({
@@ -88,7 +109,7 @@ describe('toDisplayMetric', () => {
       text: '4:35',
       unit: 'min/km',
     });
-    expect(toDisplayMetric('swimPace', 100 / 105, { unit: 'km', sportGroup: 'swim' })).toEqual({
+    expect(toDisplayMetric('swimPace', 100 / 105, { unit: 'km', sportFamily: 'swim' })).toEqual({
       kind: 'time',
       text: '1:45',
       unit: 'min/100m',
@@ -100,12 +121,12 @@ describe('toDisplayMetric', () => {
   });
 
   it('converts speed and elevation to imperial units', () => {
-    expect(toDisplayMetric('speed', 10, { unit: 'km', sportGroup: 'ride' })).toMatchObject({
+    expect(toDisplayMetric('speed', 10, { unit: 'km', sportFamily: 'ride' })).toMatchObject({
       amount: 36,
       unit: 'km/h',
     });
     expect(
-      toDisplayMetric('speed', 1609.344 / 3600, { unit: 'mi', sportGroup: 'ride' }),
+      toDisplayMetric('speed', 1609.344 / 3600, { unit: 'mi', sportFamily: 'ride' }),
     ).toMatchObject({ amount: 1, unit: 'mph' });
     expect(toDisplayMetric('elevationGain', 100, imperial)).toMatchObject({ unit: 'ft' });
   });
@@ -115,12 +136,12 @@ describe('toDisplayMetric', () => {
       amount: 172,
       unit: 'spm',
     });
-    expect(toDisplayMetric('averageCadence', 88, { unit: 'km', sportGroup: 'ride' })).toMatchObject(
-      {
-        amount: 88,
-        unit: 'rpm',
-      },
-    );
+    expect(
+      toDisplayMetric('averageCadence', 88, { unit: 'km', sportFamily: 'ride' }),
+    ).toMatchObject({
+      amount: 88,
+      unit: 'rpm',
+    });
   });
 
   it('formats durations without a unit', () => {
