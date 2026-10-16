@@ -24,7 +24,15 @@ calendar). The developer works on Windows with an iPhone and no Mac.
 - **Error reporting:** Sentry.
 - **Quality:** ESLint (`expo lint`), `tsc --noEmit`, Jest with `jest-expo`, GitHub Actions CI.
 - **Development workflow:** Expo Go on the iPhone until a native module is needed (depth effect,
-  milestone 5); then EAS development builds, which require the paid Apple Developer account.
+  milestone 5). To avoid paying the Apple Developer Program (99 €/year) before deciding to publish,
+  native work goes **Android first**: development builds install for free on the Android emulator
+  or a device, so every native feature is built and tested there. The iOS side is then written and
+  tried on the iPhone for free a few times: the public repo gets free macOS runners on GitHub
+  Actions to build an unsigned app, sideloaded with AltStore/SideStore and a free Apple ID (apps
+  expire after 7 days, at most 3 at once). The paid account is only needed for TestFlight and the
+  App Store. Discarded: a macOS virtual machine (Apple's license only allows macOS on Apple
+  hardware) and rented cloud Macs (they cost money and cannot install on the phone with a free
+  account).
 - **Depth effect:** on-device subject segmentation (iOS 17+ Vision, Android ML Kit) through a
   native module, as the last MVP milestone.
 

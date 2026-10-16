@@ -43,6 +43,7 @@ Las carpetas que aún no existen se crean en su hito.
 - Plantillas: JSON validado con Zod y guardado en local; cuando llegue el login real, se sincronizan con Supabase (requisito firme, ver `docs/decisions/003-accounts-and-templates.md`).
 - Fotos: Skia dibuja una copia de editor (≤ 2048 px) y se prepara en segundo plano una de exportación (≤ 4096 px, calidad máxima); el encuadre va en proporciones. Detalle y alternativas en `docs/decisions/004-photo-loading.md`.
 - Hitos: 1 esqueleto · 2 núcleo con fixtures · 3 editor · 4 Strava real + Supabase · 5 profundidad (módulo nativo, _development build_) + Sentry + TestFlight, y probar ahí la decodificación nativa de fotos directa a la GPU (ADR 004). El vídeo resumen va después del MVP.
+- Lo nativo (hito 5), primero en Android: allí la _development build_ es gratis. Después se escribe la parte de iOS y se prueba unas pocas veces en el iPhone sin pagar (compilación en GitHub Actions macOS + AltStore/SideStore con Apple ID gratuito). Los 99 €/año de Apple solo cuando se decida publicar o usar TestFlight (ADR 001).
 
 ## Skills
 
