@@ -19,7 +19,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `docs/decisions/`: ADRs. Léelos antes de tocar fuentes de datos, cuentas o plantillas.
 
 ## Convenciones
-- Versión mínima: Node 22.13 (la de `engines` y la CI).
+- Versión mínima: Node 22.13 (la de `engines` y la CI), que trae npm 10. Un lockfile escrito con npm 11 puede romper `npm ci` en npm 10 (faltan peers opcionales como `@emnapi/*`): tras cambiar dependencias, valida con `npx npm@10 ci --dry-run` y, si falla, regenera con `npx npm@10 install`.
 - Tests junto al código (`*.test.ts`); el dominio de `src/core/` siempre con tests.
 - Jest 30 aunque `expo-doctor` pida 29.7: lo exige la guía oficial del SDK 58 (detalle en `docs/decisions/001-stack.md`). `expo-doctor` también marca `ios.icon` como error; es un falso positivo con la carpeta de Icon Composer, por eso no está en la CI.
 - Strava: datos bajo demanda y caché local de menos de 7 días; el trazado llega completo al dueño, así que el recorte de privacidad del inicio y del final viene activado por defecto; solo se pueden usar los logos oficiales «Powered by Strava» / «Compatible with Strava».
