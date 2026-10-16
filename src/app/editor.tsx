@@ -1,9 +1,12 @@
 import { useImage } from '@shopify/react-native-skia';
-import { launchImageLibraryAsync } from 'expo-image-picker';
+import {
+  launchImageLibraryAsync,
+  UIImagePickerPreferredAssetRepresentationMode,
+} from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { z } from 'zod';
 
 import { customRange } from '@/core/dates';
@@ -15,7 +18,10 @@ import { useActivitySource } from '@/data/activity-source';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import type { EditorData } from '@/editor/editor-data';
 import { useEditorFonts } from '@/editor/fonts';
+import type { PickedPhoto } from '@/editor/photo-plan';
+import { preparePhoto } from '@/editor/prepare-photo';
 import { colors } from '@/theme/colors';
+import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
 import { ErrorView, LoadingView } from '@/ui/state-views';
 import { useAsync } from '@/ui/use-async';
@@ -37,15 +43,26 @@ const paramsSchema = z.discriminatedUnion('mode', [
 
 class ActivityNotFoundError extends Error {}
 
+/** The photo on the canvas: what was picked, the URI drawn and whether it was re-encoded. */
+interface LoadedPhoto {
+  readonly picked: PickedPhoto;
+  readonly uri: string;
+  readonly reencoded: boolean;
+}
+
 const FORMATS: readonly CanvasFormat[] = ['story', 'tall', 'portrait', 'square', 'landscape'];
 
 export default function Editor() {
   const { t } = useTranslation();
   const params = paramsSchema.safeParse(useLocalSearchParams());
+  const paramsError = params.success ? null : z.prettifyError(params.error);
+  useEffect(() => {
+    if (paramsError !== null) {
+      logError('Invalid editor route params', paramsError);
+    }
+  }, [paramsError]);
   if (!params.success) {
-    return (
-      <ErrorView message={t('editor.error')} error={new Error(z.prettifyError(params.error))} />
-    );
+    return <ErrorView message={t('editor.error')} />;
   }
   return <EditorScreen params={params.data} />;
 }
@@ -82,7 +99,7 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
     return data.error instanceof ActivityNotFoundError ? (
       <ErrorView message={t('editor.notFound')} />
     ) : (
-      <ErrorView message={t('editor.error')} error={data.error} onRetry={data.retry} />
+      <ErrorView message={t('editor.error')} onRetry={data.retry} />
     );
   }
   return <EditorWorkspace data={data.data} fonts={fonts} />;
@@ -98,10 +115,33 @@ function EditorWorkspace({
   const { t } = useTranslation();
   const { unit, locale } = useDisplaySettings();
   const [format, setFormat] = useState<CanvasFormat>('story');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [photoError, setPhotoError] = useState<Error | null>(null);
+  const [photo, setPhoto] = useState<LoadedPhoto | null>(null);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
-  const photo = useImage(photoUri, (error) => setPhotoError(error));
+
+  const showPhoto = async (picked: PickedPhoto, force: boolean) => {
+    setPreparingPhoto(true);
+    try {
+      setPhoto({ picked, uri: await preparePhoto(picked, force), reencoded: force });
+    } catch (error) {
+      logError('Could not prepare the photo', error);
+      setPhotoError(true);
+    } finally {
+      setPreparingPhoto(false);
+    }
+  };
+
+  const photoImage = useImage(photo?.uri, (error) => {
+    if (photo !== null && !photo.reencoded) {
+      // Skia could not decode the file as picked: re-encode it once and try again.
+      logError('Could not decode the photo, re-encoding it', error);
+      void showPhoto(photo.picked, true);
+    } else {
+      logError('Could not decode the re-encoded photo', error);
+      setPhotoError(true);
+    }
+  });
 
   const template =
     data.mode === 'activity'
@@ -112,14 +152,21 @@ function EditorWorkspace({
     area === null ? 0 : Math.min(area.width, (area.height * size.width) / size.height);
 
   const pickPhoto = async () => {
-    setPhotoError(null);
+    setPhotoError(false);
     try {
-      const result = await launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      const result = await launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+        // Keep the original file (HEIC included); preparePhoto re-encodes it once if needed,
+        // instead of the picker transcoding every photo.
+        preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Current,
+      });
       if (!result.canceled && result.assets.length > 0) {
-        setPhotoUri(result.assets[0].uri);
+        await showPhoto(result.assets[0], false);
       }
     } catch (error) {
-      setPhotoError(error instanceof Error ? error : new Error(String(error)));
+      logError('Could not open the photo library', error);
+      setPhotoError(true);
     }
   };
 
@@ -145,7 +192,7 @@ function EditorWorkspace({
               displayWidth={displayWidth}
               template={template}
               data={data}
-              photo={photo}
+              photo={photoImage}
               fonts={fonts}
               textContext={{ unit, locale }}
               translate={(key) => t(key)}
@@ -155,11 +202,14 @@ function EditorWorkspace({
       </View>
 
       <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 32, paddingTop: 8 }}>
-        {photoError === null ? null : (
-          <Text selectable style={{ color: colors.error, fontSize: 13, textAlign: 'center' }}>
-            {`${t('editor.photoError')}: ${photoError.message}`}
+        {photoError ? (
+          <Text
+            accessibilityRole="alert"
+            style={{ color: colors.error, fontSize: 13, textAlign: 'center' }}
+          >
+            {t('editor.photoError')}
           </Text>
-        )}
+        ) : null}
         <View
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}
           accessibilityRole="tablist"
@@ -193,6 +243,8 @@ function EditorWorkspace({
         </View>
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ busy: preparingPhoto, disabled: preparingPhoto }}
+          disabled={preparingPhoto}
           onPress={pickPhoto}
           style={({ pressed }) => ({
             backgroundColor: colors.tint,
@@ -200,12 +252,19 @@ function EditorWorkspace({
             borderCurve: 'continuous',
             padding: 14,
             alignItems: 'center',
-            opacity: pressed ? 0.8 : 1,
+            opacity: preparingPhoto ? 0.6 : pressed ? 0.8 : 1,
           })}
         >
-          <Text style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}>
-            {photoUri === null ? t('editor.choosePhoto') : t('editor.changePhoto')}
-          </Text>
+          {preparingPhoto ? (
+            <ActivityIndicator
+              color={colors.onTint}
+              accessibilityLabel={t('editor.preparingPhoto')}
+            />
+          ) : (
+            <Text style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}>
+              {photo === null ? t('editor.choosePhoto') : t('editor.changePhoto')}
+            </Text>
+          )}
         </Pressable>
       </View>
     </View>

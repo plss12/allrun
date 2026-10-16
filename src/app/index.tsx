@@ -22,7 +22,7 @@ export default function Home() {
     return <LoadingView />;
   }
   if (recent.status === 'error') {
-    return <ErrorView message={t('home.error')} error={recent.error} onRetry={recent.retry} />;
+    return <ErrorView message={t('home.error')} onRetry={recent.retry} />;
   }
   return (
     <FlatList

@@ -13,30 +13,27 @@ export function LoadingView() {
   );
 }
 
-/** Error message with a retry button; the technical detail stays selectable for bug reports. */
+/**
+ * Translated error message with an optional retry button. Technical details never reach the
+ * screen (they are in English and mean nothing to users): callers record them with `logError`.
+ */
 export function ErrorView({
   message,
-  error,
   onRetry,
 }: {
   readonly message: string;
-  readonly error?: Error;
   readonly onRetry?: () => void;
 }) {
   const { t } = useTranslation();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
-      <Text selectable style={{ color: colors.label, fontSize: 17, textAlign: 'center' }}>
+      <Text
+        selectable
+        accessibilityRole="alert"
+        style={{ color: colors.label, fontSize: 17, textAlign: 'center' }}
+      >
         {message}
       </Text>
-      {error === undefined ? null : (
-        <Text
-          selectable
-          style={{ color: colors.secondaryLabel, fontSize: 13, textAlign: 'center' }}
-        >
-          {error.message}
-        </Text>
-      )}
       {onRetry === undefined ? null : (
         <Pressable
           accessibilityRole="button"

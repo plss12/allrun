@@ -116,11 +116,7 @@ export default function Summary() {
       {activities.status === 'loading' ? (
         <LoadingView />
       ) : activities.status === 'error' ? (
-        <ErrorView
-          message={t('summary.error')}
-          error={activities.error}
-          onRetry={activities.retry}
-        />
+        <ErrorView message={t('summary.error')} onRetry={activities.retry} />
       ) : (
         (() => {
           const summary = summarize(

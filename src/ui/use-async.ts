@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { logError } from './log';
+
 /** State of an async load: every screen that loads data renders all three. */
 export type AsyncState<T> =
   | { readonly status: 'loading' }
@@ -38,6 +40,7 @@ export function useAsync<T>(
       (error: unknown) => {
         if (current) {
           const asError = error instanceof Error ? error : new Error(String(error));
+          logError(`Load failed (${key})`, asError);
           setResult({ request, state: { status: 'error', error: asError } });
         }
       },
