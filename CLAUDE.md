@@ -41,7 +41,8 @@ Las carpetas que aún no existen se crean en su hito.
 - Plantillas (`core/template.ts`): formato + capas ligadas a datos, con posiciones relativas (0..1). Hay capas solo de actividad y solo de resumen; añadir tipos de capa es compatible, cambiar los existentes exige subir `version` con migración.
 - Ningún texto visible escrito a mano en los componentes: todo pasa por `t()`, en inglés y en español.
 - Plantillas: JSON validado con Zod y guardado en local; cuando llegue el login real, se sincronizan con Supabase (requisito firme, ver `docs/decisions/003-accounts-and-templates.md`).
-- Hitos: 1 esqueleto · 2 núcleo con fixtures · 3 editor · 4 Strava real + Supabase · 5 profundidad (módulo nativo, _development build_) + Sentry + TestFlight. El vídeo resumen va después del MVP.
+- Fotos: Skia dibuja una copia de editor (≤ 2048 px) y se prepara en segundo plano una de exportación (≤ 4096 px, calidad máxima); el encuadre va en proporciones. Detalle y alternativas en `docs/decisions/004-photo-loading.md`.
+- Hitos: 1 esqueleto · 2 núcleo con fixtures · 3 editor · 4 Strava real + Supabase · 5 profundidad (módulo nativo, _development build_) + Sentry + TestFlight, y probar ahí la decodificación nativa de fotos directa a la GPU (ADR 004). El vídeo resumen va después del MVP.
 
 ## Skills
 
