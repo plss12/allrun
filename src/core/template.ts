@@ -15,6 +15,8 @@ import type { MetricId } from './metrics';
 /** Export size of each canvas format, in pixels. */
 export const CANVAS_FORMATS = {
   story: { width: 1080, height: 1920 },
+  // Instagram profile grid and tall feed posts: 3:4.
+  tall: { width: 1080, height: 1440 },
   portrait: { width: 1080, height: 1350 },
   square: { width: 1080, height: 1080 },
   // Instagram landscape posts: 1.91:1.
@@ -205,7 +207,7 @@ export const templateSchema = z
     id: z.string().min(1),
     name: z.string().trim().min(1).max(60),
     mode: z.enum(['activity', 'summary']),
-    format: z.enum(['story', 'portrait', 'square', 'landscape']),
+    format: z.enum(['story', 'tall', 'portrait', 'square', 'landscape']),
     layers: z.array(layerSchema).max(50),
   })
   .superRefine((template, context) => {

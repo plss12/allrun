@@ -85,6 +85,7 @@ export const en = {
   },
   formats: {
     story: 'Story 9:16',
+    tall: 'Portrait 3:4',
     portrait: 'Portrait 4:5',
     square: 'Square 1:1',
     landscape: 'Landscape 1.91:1',

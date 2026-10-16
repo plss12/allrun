@@ -65,6 +65,17 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     scale: 1,
     logo: slot(0.5, 0.94, 1),
   },
+  tall: {
+    title: slot(0.5, 0.075, 0.8),
+    subtitle: slot(0.5, 0.125, 0.56),
+    titleMaxWidth: 0.86,
+    route: slot(0.5, 0.5, 0.92),
+    routes: slot(0.5, 0.37, 0.8),
+    chart: slot(0.5, 0.63, 0.8),
+    metrics: { y: 0.8, from: 0, to: 1 },
+    scale: 0.8,
+    logo: slot(0.5, 0.935, 0.9),
+  },
   portrait: {
     title: slot(0.5, 0.08, 0.75),
     subtitle: slot(0.5, 0.135, 0.525),

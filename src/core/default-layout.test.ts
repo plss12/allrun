@@ -54,7 +54,7 @@ describe('defaultSummaryTemplate', () => {
 });
 
 describe('default layouts in every format', () => {
-  const formats = ['story', 'portrait', 'square', 'landscape'] as const;
+  const formats = ['story', 'tall', 'portrait', 'square', 'landscape'] as const;
 
   it('keeps each widget of a metrics row within its own column', () => {
     for (const format of formats) {
@@ -81,7 +81,8 @@ describe('default layouts in every format', () => {
     const scaleOf = (format: (typeof formats)[number]) =>
       defaultSummaryTemplate('day', format).layers.find((layer) => layer.id === 'chart')?.transform
         .scale;
-    expect(scaleOf('story')).toBeGreaterThan(scaleOf('portrait') ?? 0);
+    expect(scaleOf('story')).toBeGreaterThan(scaleOf('tall') ?? 0);
+    expect(scaleOf('tall')).toBeGreaterThan(scaleOf('portrait') ?? 0);
     expect(scaleOf('portrait')).toBeGreaterThan(scaleOf('square') ?? 0);
   });
 });

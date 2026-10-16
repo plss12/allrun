@@ -37,7 +37,7 @@ const paramsSchema = z.discriminatedUnion('mode', [
 
 class ActivityNotFoundError extends Error {}
 
-const FORMATS: readonly CanvasFormat[] = ['story', 'portrait', 'square', 'landscape'];
+const FORMATS: readonly CanvasFormat[] = ['story', 'tall', 'portrait', 'square', 'landscape'];
 
 export default function Editor() {
   const { t } = useTranslation();

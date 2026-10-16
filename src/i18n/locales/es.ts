@@ -86,6 +86,7 @@ export const es: Translations = {
   },
   formats: {
     story: 'Historia 9:16',
+    tall: 'Vertical 3:4',
     portrait: 'Vertical 4:5',
     square: 'Cuadrado 1:1',
     landscape: 'Horizontal 1,91:1',
