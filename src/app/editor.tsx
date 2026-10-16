@@ -37,7 +37,7 @@ const paramsSchema = z.discriminatedUnion('mode', [
 
 class ActivityNotFoundError extends Error {}
 
-const FORMATS: readonly CanvasFormat[] = ['story', 'portrait', 'square'];
+const FORMATS: readonly CanvasFormat[] = ['story', 'portrait', 'square', 'landscape'];
 
 export default function Editor() {
   const { t } = useTranslation();
@@ -161,7 +161,7 @@ function EditorWorkspace({
           </Text>
         )}
         <View
-          style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}
           accessibilityRole="tablist"
           accessibilityLabel={t('editor.format')}
         >

@@ -54,7 +54,7 @@ describe('defaultSummaryTemplate', () => {
 });
 
 describe('default layouts in every format', () => {
-  const formats = ['story', 'portrait', 'square'] as const;
+  const formats = ['story', 'portrait', 'square', 'landscape'] as const;
 
   it('keeps each widget of a metrics row within its own column', () => {
     for (const format of formats) {
@@ -83,5 +83,27 @@ describe('default layouts in every format', () => {
         .scale;
     expect(scaleOf('story')).toBeGreaterThan(scaleOf('portrait') ?? 0);
     expect(scaleOf('portrait')).toBeGreaterThan(scaleOf('square') ?? 0);
+  });
+});
+
+describe('landscape layout', () => {
+  const byId = (template: ReturnType<typeof defaultSummaryTemplate>, id: string) => {
+    const found = template.layers.find((layer) => layer.id === id);
+    if (found === undefined) {
+      throw new Error(`No layer ${id}`);
+    }
+    return found;
+  };
+
+  it('puts graphics in the left column and text in the right one', () => {
+    const summary = defaultSummaryTemplate('day', 'landscape');
+    expect(byId(summary, 'routes').transform.x).toBeLessThan(0.5);
+    expect(byId(summary, 'chart').transform.x).toBeLessThan(0.5);
+    for (const id of ['period', 'total-totalDistance', 'total-activityCount', 'logo']) {
+      expect(byId(summary, id).transform.x).toBeGreaterThan(0.44);
+    }
+    const activity = defaultActivityTemplate(makeActivity(), 'landscape');
+    expect(byId(activity, 'route').transform.x).toBeLessThan(0.5);
+    expect(byId(activity, 'name').transform.x).toBeGreaterThan(0.5);
   });
 });

@@ -8,8 +8,9 @@ import type { CanvasFormat, Layer, SummaryMetricId, Template } from './template'
  * picked, which the user then rearranges. Starter templates (milestone 3d) will replace these as
  * the default choice.
  *
- * Every canvas is 1080 px wide but only the story format is 1920 px tall, so each format gets its
- * own vertical rhythm and a scale that shrinks the widgets to fit the shorter canvases.
+ * Every canvas is 1080 px wide but their heights differ (1920 for stories down to 566 for
+ * landscape posts), so each format places every element explicitly: tall formats stack them,
+ * the landscape format splits the canvas into a graphic column and a text column.
  */
 
 const WHITE = '#FFFFFF';
@@ -26,64 +27,96 @@ const textStyle = (overrides: Partial<TextStyle> = {}): TextStyle => ({
   ...overrides,
 });
 
-const at = (x: number, y: number, scale = 1) => ({ x, y, scale, rotation: 0 });
-
-/** Horizontal centers of a row of `count` widgets: the canvas split into equal columns. */
-const rowPositions = (count: number): number[] =>
-  Array.from({ length: count }, (_, i) => (i + 0.5) / count);
-
-/** Widest each widget of a row of `count` may be: its column minus a gap to its neighbours. */
-const rowMaxWidth = (count: number) => 0.9 / count;
-
-/** Widest a full-width title may be. */
-const TITLE_MAX_WIDTH = 0.86;
-
-/** Vertical position (0..1) of each band of the composition, and the widget scale. */
-interface FormatLayout {
+/** Where an element goes: its center (0..1 of the canvas) and its scale. */
+interface Slot {
+  readonly x: number;
+  readonly y: number;
   readonly scale: number;
-  readonly title: number;
-  readonly subtitle: number;
-  readonly graphic: number;
-  readonly chart: number;
-  readonly metrics: number;
-  readonly logo: number;
 }
+
+interface FormatLayout {
+  readonly title: Slot;
+  readonly subtitle: Slot;
+  /** Widest the title and subtitle may be (fraction of the canvas width). */
+  readonly titleMaxWidth: number;
+  /** The route of an activity; it has no chart beside it, so it takes more room. */
+  readonly route: Slot;
+  /** The overlaid routes of a summary. */
+  readonly routes: Slot;
+  readonly chart: Slot;
+  /** Row of metrics: its vertical center, horizontal span (0..1) and scale. */
+  readonly metrics: { readonly y: number; readonly from: number; readonly to: number };
+  /** Scale of the metrics and other text widgets. */
+  readonly scale: number;
+  readonly logo: Slot;
+}
+
+const slot = (x: number, y: number, scale: number): Slot => ({ x, y, scale });
 
 const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
   story: {
+    title: slot(0.5, 0.1, 1),
+    subtitle: slot(0.5, 0.15, 0.7),
+    titleMaxWidth: 0.86,
+    route: slot(0.5, 0.515, 1.15),
+    routes: slot(0.5, 0.39, 1),
+    chart: slot(0.5, 0.64, 1),
+    metrics: { y: 0.81, from: 0, to: 1 },
     scale: 1,
-    title: 0.1,
-    subtitle: 0.15,
-    graphic: 0.39,
-    chart: 0.64,
-    metrics: 0.81,
-    logo: 0.94,
+    logo: slot(0.5, 0.94, 1),
   },
   portrait: {
+    title: slot(0.5, 0.08, 0.75),
+    subtitle: slot(0.5, 0.135, 0.525),
+    titleMaxWidth: 0.86,
+    route: slot(0.5, 0.5, 0.8625),
+    routes: slot(0.5, 0.37, 0.75),
+    chart: slot(0.5, 0.63, 0.75),
+    metrics: { y: 0.8, from: 0, to: 1 },
     scale: 0.75,
-    title: 0.08,
-    subtitle: 0.135,
-    graphic: 0.37,
-    chart: 0.63,
-    metrics: 0.8,
-    logo: 0.935,
+    logo: slot(0.5, 0.935, 0.85),
   },
   square: {
+    title: slot(0.5, 0.08, 0.6),
+    subtitle: slot(0.5, 0.14, 0.42),
+    titleMaxWidth: 0.86,
+    route: slot(0.5, 0.485, 0.69),
+    routes: slot(0.5, 0.36, 0.6),
+    chart: slot(0.5, 0.61, 0.6),
+    metrics: { y: 0.79, from: 0, to: 1 },
     scale: 0.6,
-    title: 0.08,
-    subtitle: 0.14,
-    graphic: 0.36,
-    chart: 0.61,
-    metrics: 0.79,
-    logo: 0.93,
+    logo: slot(0.5, 0.93, 0.85),
+  },
+  // Two columns: graphics on the left, text on the right.
+  landscape: {
+    title: slot(0.71, 0.15, 0.6),
+    subtitle: slot(0.71, 0.25, 0.42),
+    titleMaxWidth: 0.5,
+    route: slot(0.25, 0.5, 0.75),
+    routes: slot(0.25, 0.38, 0.5),
+    chart: slot(0.25, 0.8, 0.42),
+    metrics: { y: 0.56, from: 0.44, to: 0.98 },
+    scale: 0.55,
+    logo: slot(0.71, 0.86, 0.75),
   },
 };
 
+const at = ({ x, y, scale }: Slot) => ({ x, y, scale, rotation: 0 });
+
 /**
- * The watermark is the free publicity of the app: it shrinks less than the other widgets on
- * shorter canvases so the name stays readable.
+ * Centers and maximum width of a row of `count` widgets across `from`..`to`: the span split into
+ * equal columns, each widget a little narrower than its column so neighbours never touch.
  */
-const MIN_LOGO_SCALE = 0.85;
+function metricsRow(layout: FormatLayout, count: number) {
+  const { from, to, y } = layout.metrics;
+  const column = (to - from) / count;
+  return {
+    maxWidth: column * 0.9,
+    slots: Array.from({ length: count }, (_, i) =>
+      slot(from + column * (i + 0.5), y, layout.scale),
+    ),
+  };
+}
 
 const logo = (layout: FormatLayout): Layer => ({
   id: 'logo',
@@ -91,13 +124,14 @@ const logo = (layout: FormatLayout): Layer => ({
   brand: 'allrun',
   tone: 'light',
   variant: 'wordmark',
-  transform: at(0.5, layout.logo, Math.max(layout.scale, MIN_LOGO_SCALE)),
+  // The watermark is the free publicity of the app: its slot shrinks less than other widgets.
+  transform: at(layout.logo),
   opacity: 0.95,
 });
 
 /**
- * Default composition for one activity: name and date on top, the route in the middle, the three
- * most relevant metrics of its sport below and the AllRun logo at the bottom.
+ * Default composition for one activity: name and date, the route, the three most relevant
+ * metrics of its sport and the AllRun logo.
  */
 export function defaultActivityTemplate(
   activity: Activity,
@@ -105,14 +139,14 @@ export function defaultActivityTemplate(
 ): Template {
   const layout = LAYOUTS[format];
   const metrics = availableMetrics(activity).slice(0, 3);
+  const row = metricsRow(layout, metrics.length);
   const layers: Layer[] = [];
   if (activity.routePolyline !== null) {
     layers.push({
       id: 'route',
       kind: 'route',
       stroke: { color: WHITE, width: 8 },
-      // Without a chart band the route can take more room.
-      transform: at(0.5, (layout.graphic + layout.chart) / 2, layout.scale * 1.15),
+      transform: at(layout.route),
       opacity: 0.95,
     });
   }
@@ -121,18 +155,18 @@ export function defaultActivityTemplate(
       id: 'name',
       kind: 'info',
       field: 'activityName',
-      maxWidth: TITLE_MAX_WIDTH,
+      maxWidth: layout.titleMaxWidth,
       style: textStyle({ bold: true }),
-      transform: at(0.5, layout.title, layout.scale),
+      transform: at(layout.title),
       opacity: 1,
     },
     {
       id: 'date',
       kind: 'info',
       field: 'activityDate',
-      maxWidth: TITLE_MAX_WIDTH,
+      maxWidth: layout.titleMaxWidth,
       style: textStyle(),
-      transform: at(0.5, layout.subtitle, layout.scale * 0.7),
+      transform: at(layout.subtitle),
       opacity: 0.9,
     },
     ...metrics.map((metric, i): Layer => ({
@@ -141,9 +175,9 @@ export function defaultActivityTemplate(
       metric,
       showLabel: true,
       showUnit: true,
-      maxWidth: rowMaxWidth(metrics.length),
+      maxWidth: row.maxWidth,
       style: textStyle({ font: 'bebasNeue' }),
-      transform: at(rowPositions(metrics.length)[i], layout.metrics, layout.scale),
+      transform: at(row.slots[i]),
       opacity: 1,
     })),
     logo(layout),
@@ -158,7 +192,7 @@ const SUMMARY_METRICS: readonly SummaryMetricId[] = [
 ];
 
 /**
- * Default composition for a period summary: the period name on top, every route of the period
+ * Default composition for a period summary: the period name, every route of the period
  * overlaid, a bar chart of the distance per `bucket`, the main totals and the logo.
  */
 export function defaultSummaryTemplate(
@@ -166,21 +200,22 @@ export function defaultSummaryTemplate(
   format: CanvasFormat = 'story',
 ): Template {
   const layout = LAYOUTS[format];
+  const row = metricsRow(layout, SUMMARY_METRICS.length);
   const layers: Layer[] = [
     {
       id: 'period',
       kind: 'info',
       field: 'periodName',
-      maxWidth: TITLE_MAX_WIDTH,
+      maxWidth: layout.titleMaxWidth,
       style: textStyle({ bold: true, uppercase: true }),
-      transform: at(0.5, layout.title, layout.scale),
+      transform: at(layout.title),
       opacity: 1,
     },
     {
       id: 'routes',
       kind: 'summaryRoutes',
       stroke: { color: WHITE, width: 4 },
-      transform: at(0.5, layout.graphic, layout.scale),
+      transform: at(layout.routes),
       opacity: 0.85,
     },
     {
@@ -190,7 +225,7 @@ export function defaultSummaryTemplate(
       value: 'distance',
       color: WHITE,
       axisLabels: true,
-      transform: at(0.5, layout.chart, layout.scale),
+      transform: at(layout.chart),
       opacity: 0.9,
     },
     ...SUMMARY_METRICS.map((metric, i): Layer => ({
@@ -199,9 +234,9 @@ export function defaultSummaryTemplate(
       metric,
       showLabel: true,
       showUnit: true,
-      maxWidth: rowMaxWidth(SUMMARY_METRICS.length),
+      maxWidth: row.maxWidth,
       style: textStyle({ font: 'bebasNeue' }),
-      transform: at(rowPositions(SUMMARY_METRICS.length)[i], layout.metrics, layout.scale),
+      transform: at(row.slots[i]),
       opacity: 1,
     })),
     logo(layout),
