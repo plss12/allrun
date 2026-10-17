@@ -1,3 +1,4 @@
+import type { LayerTransform } from './layer-transform';
 import { DEFAULT_FRAMING, type PhotoFraming } from './photo-framing';
 import type { CanvasFormat, Template } from './template';
 
@@ -46,6 +47,45 @@ export function setFormat(
   return { ...document, template };
 }
 
+/**
+ * Moves, scales or rotates one layer; the layout becomes the user's own. Returns `document`
+ * itself when the layer is missing or already there, so no empty undo step is recorded.
+ */
+export function setLayerTransform(
+  document: EditorDocument,
+  id: string,
+  transform: LayerTransform,
+): EditorDocument {
+  const current = document.template.layers.find((layer) => layer.id === id);
+  if (current === undefined || sameTransform(current.transform, transform)) {
+    return document;
+  }
+  const layers = document.template.layers.map((layer) =>
+    layer.id === id ? { ...layer, transform } : layer,
+  );
+  return { ...document, template: { ...document.template, layers }, customLayout: true };
+}
+
+/** Removes one layer; the layout becomes the user's own. `document` itself if it is missing. */
+export function removeLayer(document: EditorDocument, id: string): EditorDocument {
+  const layers = document.template.layers.filter((layer) => layer.id !== id);
+  if (layers.length === document.template.layers.length) {
+    return document;
+  }
+  return { ...document, template: { ...document.template, layers }, customLayout: true };
+}
+
+/** Puts back the default layout of the current format, discarding the user's layer changes. */
+export function resetLayout(
+  document: EditorDocument,
+  defaultTemplate: DefaultTemplate,
+): EditorDocument {
+  if (!document.customLayout) {
+    return document;
+  }
+  return { ...document, template: defaultTemplate(document.template.format), customLayout: false };
+}
+
 /** Sets the photo framing; returns `document` itself when it is the same framing. */
 export function setFraming(document: EditorDocument, framing: PhotoFraming): EditorDocument {
   return sameFraming(framing, document.framing) ? document : { ...document, framing };
@@ -69,5 +109,14 @@ export function sameDocument(a: EditorDocument, b: EditorDocument): boolean {
 }
 
 function sameFraming(a: PhotoFraming, b: PhotoFraming): boolean {
-  return a.centerX === b.centerX && a.centerY === b.centerY && a.zoom === b.zoom;
+  return (
+    a.centerX === b.centerX &&
+    a.centerY === b.centerY &&
+    a.zoom === b.zoom &&
+    a.rotation === b.rotation
+  );
+}
+
+function sameTransform(a: LayerTransform, b: LayerTransform): boolean {
+  return a.x === b.x && a.y === b.y && a.scale === b.scale && a.rotation === b.rotation;
 }

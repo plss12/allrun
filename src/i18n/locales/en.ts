@@ -41,6 +41,8 @@ export const en = {
     loadingPhoto: 'Loading photo',
     undo: 'Undo',
     redo: 'Redo',
+    restoreLayout: 'Restore layout',
+    removeLayer: 'Drop here to remove',
   },
   metrics: {
     distance: 'Distance',

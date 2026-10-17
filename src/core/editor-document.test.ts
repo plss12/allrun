@@ -4,10 +4,13 @@ import { defaultActivityTemplate } from './default-layout';
 import {
   createDocument,
   type DefaultTemplate,
+  removeLayer,
   resetFraming,
+  resetLayout,
   sameDocument,
   setFormat,
   setFraming,
+  setLayerTransform,
 } from './editor-document';
 import { DEFAULT_FRAMING } from './photo-framing';
 
@@ -38,7 +41,7 @@ describe('setFormat', () => {
   });
 
   it('keeps the photo framing', () => {
-    const framing = { centerX: 0.3, centerY: 0.6, zoom: 2 };
+    const framing = { centerX: 0.3, centerY: 0.6, zoom: 2, rotation: 0 };
     const document = createDocument(defaultTemplate, 'story', framing);
     expect(setFormat(document, 'landscape', defaultTemplate).framing).toBe(framing);
   });
@@ -52,7 +55,7 @@ describe('setFormat', () => {
 describe('setFraming', () => {
   it('sets a new framing', () => {
     const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
-    const framing = { centerX: 0.4, centerY: 0.5, zoom: 1.5 };
+    const framing = { centerX: 0.4, centerY: 0.5, zoom: 1.5, rotation: 0.2 };
     expect(setFraming(document, framing).framing).toBe(framing);
   });
 
@@ -68,6 +71,7 @@ describe('resetFraming and sameDocument', () => {
       centerX: 0.2,
       centerY: 0.7,
       zoom: 3,
+      rotation: -0.5,
     });
     expect(resetFraming(document).framing).toEqual(DEFAULT_FRAMING);
   });
@@ -79,5 +83,54 @@ describe('resetFraming and sameDocument', () => {
     expect(sameDocument(document, setFraming(document, { ...DEFAULT_FRAMING, zoom: 2 }))).toBe(
       false,
     );
+  });
+});
+
+describe('setLayerTransform and resetLayout', () => {
+  const moved = { x: 0.3, y: 0.4, scale: 1.5, rotation: 0.2 };
+
+  it('changes only that layer and makes the layout custom', () => {
+    const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
+    const [first, second] = document.template.layers;
+    const edited = setLayerTransform(document, second.id, moved);
+    expect(edited.template.layers[1].transform).toEqual(moved);
+    expect(edited.template.layers[0]).toBe(first);
+    expect(edited.customLayout).toBe(true);
+  });
+
+  it('returns the same document for a missing layer or an unchanged transform', () => {
+    const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
+    const [first] = document.template.layers;
+    expect(setLayerTransform(document, 'missing', moved)).toBe(document);
+    expect(setLayerTransform(document, first.id, { ...first.transform })).toBe(document);
+  });
+
+  it('restores the default layout of the current format', () => {
+    const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
+    const edited = setFormat(
+      setLayerTransform(document, document.template.layers[0].id, moved),
+      'square',
+      defaultTemplate,
+    );
+    const restored = resetLayout(edited, defaultTemplate);
+    expect(restored.template).toEqual(defaultTemplate('square'));
+    expect(restored.customLayout).toBe(false);
+    expect(resetLayout(restored, defaultTemplate)).toBe(restored);
+  });
+});
+
+describe('removeLayer', () => {
+  it('removes the layer and makes the layout custom, undone by restoring it', () => {
+    const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
+    const [first, ...rest] = document.template.layers;
+    const removed = removeLayer(document, first.id);
+    expect(removed.template.layers).toEqual(rest);
+    expect(removed.customLayout).toBe(true);
+    expect(resetLayout(removed, defaultTemplate).template.layers[0]).toEqual(first);
+  });
+
+  it('returns the same document for a missing layer', () => {
+    const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
+    expect(removeLayer(document, 'missing')).toBe(document);
   });
 });

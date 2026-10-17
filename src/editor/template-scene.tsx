@@ -14,31 +14,107 @@ import {
   type SkTextStyle,
   type SkTypefaceFontProvider,
   TextAlign,
+  type Transforms3d,
 } from '@shopify/react-native-skia';
+import type { ReactElement } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type { Rect as PhotoRect } from '@/core/photo-framing';
+import type { LayerTransform } from '@/core/layer-transform';
+import type { PhotoPlacement, Size } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
-import { CANVAS_FORMATS, type Layer, type Template } from '@/core/template';
+import { CANVAS_FORMATS, type CanvasFormat, type Layer, type Template } from '@/core/template';
 import { formatBucketLabels } from '@/ui/format';
 
 import { type EditorData, type LabelKey, layerText, type TextContext } from './editor-data';
+import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
 import { FONT_FAMILIES } from './fonts';
 
 /**
- * Draws a template filled with data at its export size (1080 px wide). The editor scales it to
- * the screen; exporting renders it off-screen at full size, so both always match.
+ * A layer filled with data and measured, ready to draw. Its content is centered on (0, 0); the
+ * layer's transform then positions, rotates and scales it. The editor uses the size to find the
+ * layer under a finger and to frame the selected one.
+ */
+export interface PreparedLayer {
+  readonly layer: Layer;
+  /** Size of the content before the layer's scale, in canvas pixels. */
+  readonly width: number;
+  readonly height: number;
+  readonly content: ReactElement;
+}
+
+/** What layers need to be filled in and measured. */
+export interface LayerContext {
+  readonly data: EditorData;
+  readonly fonts: SkTypefaceFontProvider;
+  readonly textContext: TextContext;
+  readonly translate: (key: LabelKey) => string;
+}
+
+/**
+ * Fills in and measures every layer of `template`, bottom to top. Layers with nothing to show
+ * for this data (a route-less activity, a value of the other mode) are left out.
+ */
+export function prepareLayers(template: Template, context: LayerContext): PreparedLayer[] {
+  const canvasWidth = CANVAS_FORMATS[template.format].width;
+  return template.layers.flatMap((layer) => {
+    const prepared = prepareLayer(layer, context, canvasWidth);
+    return prepared === null ? [] : [prepared];
+  });
+}
+
+/**
+ * Transform of a layer's group on a canvas, as Skia takes it. A worklet, so the editor can
+ * apply it from a shared value while the layer is being moved.
+ */
+export function layerMatrix(transform: LayerTransform, canvas: Size): Transforms3d {
+  'worklet';
+  return [
+    { translateX: transform.x * canvas.width },
+    { translateY: transform.y * canvas.height },
+    { rotate: transform.rotation },
+    { scale: transform.scale },
+  ];
+}
+
+/** Rectangle of a drawing, in the coordinates of its group. */
+export interface DrawRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Group transform that places a photo: rotated around the canvas center (see `framePhoto`). */
+export function photoMatrix(placement: PhotoPlacement, canvas: Size): Transforms3d {
+  'worklet';
+  return [
+    { translateX: canvas.width / 2 },
+    { translateY: canvas.height / 2 },
+    { rotate: placement.rotation },
+  ];
+}
+
+/** Where the photo goes inside its {@link photoMatrix} group. */
+export function photoRect(placement: PhotoPlacement): DrawRect {
+  'worklet';
+  return { x: placement.x, y: placement.y, width: placement.width, height: placement.height };
+}
+
+/**
+ * Draws prepared layers over the background at the export size (1080 px wide). The editor scales
+ * it to the screen; exporting renders it off-screen at full size, so both always match.
  */
 export interface TemplateSceneProps {
-  readonly template: Template;
-  readonly data: EditorData;
+  readonly format: CanvasFormat;
+  readonly layers: readonly PreparedLayer[];
   /**
    * What goes under the layers:
-   * - `photo`: the photo, drawn in `rect` (see `framePhoto`); the editor passes a shared value so
-   *   gestures move it without re-rendering the layers;
+   * - `photo`: the photo, drawn in `rect` inside a group transformed by `matrix` (see
+   *   {@link photoMatrix} and {@link photoRect}); the editor passes shared values so gestures move
+   *   it without re-rendering the layers;
    * - `placeholder`: a dark fill, while no photo is chosen;
    * - `none`: nothing, for the transparent sticker export.
    */
@@ -46,13 +122,20 @@ export interface TemplateSceneProps {
     | {
         readonly kind: 'photo';
         readonly image: SkImage;
-        readonly rect: PhotoRect | SharedValue<PhotoRect>;
+        readonly matrix: Transforms3d | SharedValue<Transforms3d>;
+        readonly rect: DrawRect | SharedValue<DrawRect>;
       }
     | { readonly kind: 'placeholder' }
     | { readonly kind: 'none' };
-  readonly fonts: SkTypefaceFontProvider;
-  readonly textContext: TextContext;
-  readonly translate: (key: LabelKey) => string;
+  /**
+   * The layer being moved, drawn from a shared transform so gestures don't re-render, with a
+   * shared opacity (it fades over the trash).
+   */
+  readonly live?: {
+    readonly id: string;
+    readonly matrix: SharedValue<Transforms3d>;
+    readonly opacity: SharedValue<number>;
+  } | null;
 }
 
 const PLACEHOLDER_COLOR = '#1C1C1E';
@@ -63,75 +146,50 @@ const PLACEHOLDER_COLOR = '#1C1C1E';
  */
 const PHOTO_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear } as const;
 
-export function TemplateScene({
-  template,
-  data,
-  background,
-  fonts,
-  textContext,
-  translate,
-}: TemplateSceneProps) {
-  const { width, height } = CANVAS_FORMATS[template.format];
+export function TemplateScene({ format, layers, background, live = null }: TemplateSceneProps) {
+  const canvas = CANVAS_FORMATS[format];
+  const { width, height } = canvas;
   return (
     <Group>
       {background.kind === 'placeholder' ? (
         <Rect x={0} y={0} width={width} height={height} color={PLACEHOLDER_COLOR} />
       ) : background.kind === 'photo' ? (
         <Group clip={{ x: 0, y: 0, width, height }}>
-          <Image
-            image={background.image}
-            rect={background.rect}
-            fit="fill"
-            sampling={PHOTO_SAMPLING}
-          />
-        </Group>
-      ) : null}
-      {template.layers.map((layer) => {
-        const { x, y, scale, rotation } = layer.transform;
-        return (
-          <Group
-            key={layer.id}
-            transform={[
-              { translateX: x * width },
-              { translateY: y * height },
-              { rotate: rotation },
-              { scale },
-            ]}
-            opacity={layer.opacity}
-          >
-            <LayerContent
-              layer={layer}
-              data={data}
-              canvasWidth={width}
-              fonts={fonts}
-              textContext={textContext}
-              translate={translate}
+          <Group transform={background.matrix}>
+            <Image
+              image={background.image}
+              rect={background.rect}
+              fit="fill"
+              sampling={PHOTO_SAMPLING}
             />
           </Group>
-        );
-      })}
+        </Group>
+      ) : null}
+      {layers.map(({ layer, content }) =>
+        live !== null && live.id === layer.id ? (
+          <Group key={layer.id} transform={live.matrix} opacity={live.opacity}>
+            {content}
+          </Group>
+        ) : (
+          <Group
+            key={layer.id}
+            transform={layerMatrix(layer.transform, canvas)}
+            opacity={layer.opacity}
+          >
+            {content}
+          </Group>
+        ),
+      )}
     </Group>
   );
 }
 
-interface LayerContentProps {
-  readonly layer: Layer;
-  readonly data: EditorData;
-  readonly canvasWidth: number;
-  readonly fonts: SkTypefaceFontProvider;
-  readonly textContext: TextContext;
-  readonly translate: (key: LabelKey) => string;
-}
-
-/** Draws one layer centered on (0, 0); the parent group positions, rotates and scales it. */
-function LayerContent({
-  layer,
-  data,
-  canvasWidth,
-  fonts,
-  textContext,
-  translate,
-}: LayerContentProps) {
+/** Fills in and measures one layer, or `null` when it has nothing to show for this data. */
+function prepareLayer(
+  layer: Layer,
+  { data, fonts, textContext, translate }: LayerContext,
+  canvasWidth: number,
+): PreparedLayer | null {
   switch (layer.kind) {
     case 'metric':
     case 'summaryMetric':
@@ -153,33 +211,24 @@ function LayerContent({
         },
         layer.maxWidth === undefined ? null : layer.maxWidth * canvasWidth,
       );
-      return <CenteredParagraph paragraph={paragraph} />;
+      return preparedParagraph(layer, paragraph);
     }
     case 'route': {
       if (data.mode !== 'activity' || data.activity.routePolyline === null) {
         return null;
       }
-      const [route] = projectedRoutes([data.activity.routePolyline], ROUTE_BOX, ROUTE_BOX);
-      return (
-        <RouteLines routes={[route]} box={ROUTE_BOX} boxHeight={ROUTE_BOX} stroke={layer.stroke} />
-      );
+      const routes = projectedRoutes([data.activity.routePolyline], ROUTE_BOX, ROUTE_BOX);
+      return preparedRoutes(layer, routes, ROUTE_BOX, ROUTE_BOX);
     }
     case 'summaryRoutes': {
       if (data.mode !== 'summary') {
         return null;
       }
       const routes = projectedRoutes(data.summary.routes, ROUTES_WIDTH, ROUTES_HEIGHT);
-      return (
-        <RouteLines
-          routes={routes}
-          box={ROUTES_WIDTH}
-          boxHeight={ROUTES_HEIGHT}
-          stroke={layer.stroke}
-        />
-      );
+      return preparedRoutes(layer, routes, ROUTES_WIDTH, ROUTES_HEIGHT);
     }
     case 'summaryChart': {
-      if (data.mode !== 'summary') {
+      if (data.mode !== 'summary' || data.buckets.length === 0) {
         return null;
       }
       const values = data.buckets.map((bucket) =>
@@ -196,11 +245,22 @@ function LayerContent({
                 ),
           )
         : null;
-      return <BarChart values={values} color={layer.color} labels={labels} />;
+      return {
+        layer,
+        width: CHART_WIDTH,
+        height: CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND),
+        content: <BarChart values={values} color={layer.color} labels={labels} />,
+      };
     }
     case 'logo': {
       if (layer.brand === 'allrun') {
-        return <Watermark variant={layer.variant} tone={layer.tone} />;
+        const { width, height } = watermarkLayout(layer.variant);
+        return {
+          layer,
+          width,
+          height,
+          content: <Watermark variant={layer.variant} tone={layer.tone} />,
+        };
       }
       // Placeholder until the official Strava artwork lands; its guidelines allow this exact text.
       const paragraph = buildParagraph(
@@ -212,9 +272,42 @@ function LayerContent({
         },
         { label: null, value: 'Powered by Strava', unit: null, valueSize: 30 },
       );
-      return <CenteredParagraph paragraph={paragraph} />;
+      return preparedParagraph(layer, paragraph);
     }
   }
+}
+
+function preparedParagraph(layer: Layer, paragraph: SkParagraph): PreparedLayer {
+  return {
+    layer,
+    width: Math.ceil(paragraph.getLongestLine()) + 1,
+    height: paragraph.getHeight(),
+    content: <CenteredParagraph paragraph={paragraph} />,
+  };
+}
+
+/**
+ * Routes projected into a `box` × `boxHeight` box. They are centered in it, so their own extent
+ * (plus the stroke) is what a finger can grab, not the whole box. `null` without any point.
+ */
+function preparedRoutes(
+  layer: Extract<Layer, { kind: 'route' | 'summaryRoutes' }>,
+  routes: readonly Point[][],
+  box: number,
+  boxHeight: number,
+): PreparedLayer | null {
+  const points = routes.flat();
+  if (points.length === 0) {
+    return null;
+  }
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  return {
+    layer,
+    width: Math.max(...xs) - Math.min(...xs) + layer.stroke.width,
+    height: Math.max(...ys) - Math.min(...ys) + layer.stroke.width,
+    content: <RouteLines routes={routes} box={box} boxHeight={boxHeight} stroke={layer.stroke} />,
+  };
 }
 
 // Base sizes in canvas pixels (1080 px wide); each layer's `scale` multiplies them.

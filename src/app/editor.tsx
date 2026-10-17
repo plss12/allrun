@@ -16,9 +16,12 @@ import {
   type DefaultTemplate,
   type EditorDocument,
   resetFraming,
+  removeLayer,
+  resetLayout,
   sameDocument,
   setFormat,
   setFraming,
+  setLayerTransform,
 } from '@/core/editor-document';
 import { canRedo, canUndo, commit, createHistory, mapHistory, redo, undo } from '@/core/history';
 import { DEFAULT_FRAMING } from '@/core/photo-framing';
@@ -142,6 +145,7 @@ function EditorWorkspace({
   /** Applies an edit as one undo step (none when it changes nothing). */
   const edit = (change: (document: EditorDocument) => EditorDocument) =>
     setHistory((current) => commit(current, change(current.present)));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
@@ -259,13 +263,22 @@ function EditorWorkspace({
             <EditorCanvas
               displayWidth={displayWidth}
               template={template}
-              data={data}
+              layerContext={{
+                data,
+                fonts,
+                textContext: { unit, locale },
+                translate: (key) => t(key),
+              }}
               photo={canvasImage}
               framing={framing}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
               onFramingChange={(next) => edit((document) => setFraming(document, next))}
-              fonts={fonts}
-              textContext={{ unit, locale }}
-              translate={(key) => t(key)}
+              onLayerTransform={(id, transform) =>
+                edit((document) => setLayerTransform(document, id, transform))
+              }
+              onLayerRemove={(id) => edit((document) => removeLayer(document, id))}
+              trashLabel={t('editor.removeLayer')}
             />
             {photo !== null && canvasImage === null ? (
               <View
@@ -332,6 +345,18 @@ function EditorWorkspace({
             </Pressable>
           ))}
         </View>
+        {history.present.customLayout ? (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={12}
+            onPress={() => edit((document) => resetLayout(document, defaultTemplate))}
+            style={({ pressed }) => ({ alignSelf: 'center', opacity: pressed ? 0.6 : 1 })}
+          >
+            <Text style={{ color: colors.tint, fontSize: 15, fontWeight: '600' }}>
+              {t('editor.restoreLayout')}
+            </Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           onPress={pickPhoto}

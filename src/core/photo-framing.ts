@@ -1,10 +1,22 @@
+import { normalizeAngle } from './angles';
+
 /**
  * How the background photo is framed on the canvas.
  *
  * The framing is stored as proportions of the photo, not pixels: the point of the photo shown at
- * the center of the canvas, and a zoom over the "cover" fit. The same framing therefore gives the
- * same result whatever resolution of the photo is drawn (the reduced editor copy on screen or the
- * full-quality export copy), so exports match exactly what the user framed.
+ * the center of the canvas, a zoom over the "cover" fit and a rotation around the canvas center.
+ * The same framing therefore gives the same result whatever resolution of the photo is drawn
+ * (the reduced editor copy on screen or the full-quality export copy), so exports match exactly
+ * what the user framed.
+ *
+ * The photo always covers the whole canvas, rotated or not: "cover" is measured against the
+ * canvas as the rotated photo sees it, so tilting the photo zooms it in just enough to leave no
+ * empty corner, and straightening it again gives back the same framing.
+ *
+ * Idea: a rotated rectangle (the canvas, seen from the photo) lies inside an axis-aligned one
+ * (the photo) exactly when its bounding box does. That box has half-extents
+ * (w·|cos θ| + h·|sin θ|) / 2 and (w·|sin θ| + h·|cos θ|) / 2, so both the cover scale and the
+ * allowed centers stay as simple as without rotation.
  *
  * The functions are marked as worklets so the editor's gestures can run them on the UI thread,
  * frame by frame; the directive is a plain string, so they stay ordinary pure functions here.
@@ -16,6 +28,8 @@ export interface PhotoFraming {
   readonly centerY: number;
   /** 1 = the photo just covers the canvas; larger values zoom in. */
   readonly zoom: number;
+  /** Clockwise rotation of the photo around the canvas center, in radians, in (-π, π]. */
+  readonly rotation: number;
 }
 
 export interface Size {
@@ -23,12 +37,16 @@ export interface Size {
   readonly height: number;
 }
 
-/** Where to draw the whole photo, in canvas pixels. */
-export interface Rect {
+/**
+ * Where to draw the photo: rotate by `rotation` around the canvas center, then draw the whole
+ * photo in this rectangle, relative to the canvas center.
+ */
+export interface PhotoPlacement {
   readonly x: number;
   readonly y: number;
   readonly width: number;
   readonly height: number;
+  readonly rotation: number;
 }
 
 /** A point on the canvas, in canvas pixels. */
@@ -37,8 +55,8 @@ export interface CanvasPoint {
   readonly y: number;
 }
 
-/** Centered, covering the canvas: how a photo starts. */
-export const DEFAULT_FRAMING: PhotoFraming = { centerX: 0.5, centerY: 0.5, zoom: 1 };
+/** Centered, straight, covering the canvas: how a photo starts. */
+export const DEFAULT_FRAMING: PhotoFraming = { centerX: 0.5, centerY: 0.5, zoom: 1, rotation: 0 };
 
 /**
  * Largest zoom over the cover fit. Beyond it the full-quality copy (at most 4096 px) has fewer
@@ -49,12 +67,28 @@ export const MAX_ZOOM = 4;
 // Helpers go first: the worklets Babel plugin turns worklet functions into variables, so they are
 // not hoisted and must be defined before the functions that use them.
 
+function clamp(value: number, min: number, max: number): number {
+  'worklet';
+  return Math.min(max, Math.max(min, value));
+}
+
+/** Half-size of the canvas's bounding box as seen from a photo rotated by `rotation`. */
+function canvasHalfExtents(canvas: Size, rotation: number): Size {
+  'worklet';
+  const cos = Math.abs(Math.cos(rotation));
+  const sin = Math.abs(Math.sin(rotation));
+  return {
+    width: (canvas.width * cos + canvas.height * sin) / 2,
+    height: (canvas.width * sin + canvas.height * cos) / 2,
+  };
+}
+
 /**
- * Canvas pixels per photo pixel: the cover fit times `zoom`.
+ * Canvas pixels per photo pixel: the cover fit at this rotation, times `zoom`.
  *
  * @throws RangeError for photos or canvases without area, or a zoom below 1.
  */
-function photoScale(photo: Size, canvas: Size, zoom: number): number {
+function photoScale(photo: Size, canvas: Size, zoom: number, rotation: number): number {
   'worklet';
   if (photo.width <= 0 || photo.height <= 0 || canvas.width <= 0 || canvas.height <= 0) {
     throw new RangeError('Photo and canvas need a positive size');
@@ -62,60 +96,59 @@ function photoScale(photo: Size, canvas: Size, zoom: number): number {
   if (!(zoom >= 1)) {
     throw new RangeError(`Zoom must be at least 1, got ${zoom}`);
   }
-  return Math.max(canvas.width / photo.width, canvas.height / photo.height) * zoom;
+  const half = canvasHalfExtents(canvas, rotation);
+  return Math.max((2 * half.width) / photo.width, (2 * half.height) / photo.height) * zoom;
 }
 
-function clamp(value: number, min: number, max: number): number {
+/** A canvas offset (pixels) turned into the photo's own axes, undoing its rotation. */
+function toPhotoAxes(dx: number, dy: number, rotation: number): CanvasPoint {
   'worklet';
-  return Math.min(max, Math.max(min, value));
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  return { x: dx * cos + dy * sin, y: -dx * sin + dy * cos };
 }
 
 /**
- * Rectangle to draw the photo in so that it follows `framing`.
+ * The closest framing to `framing` that the canvas can actually show: zoom within 1..`MAX_ZOOM`,
+ * rotation in (-π, π] and a center that keeps the photo covering the canvas.
  *
- * The photo is scaled to cover the canvas (like CSS `object-fit: cover`) times `zoom`, placed so
- * the framing center lands on the canvas center, then clamped so it always covers the canvas: no
- * empty band can appear at an edge. Time and space O(1).
+ * Gestures clamp after every step, so a drag past an edge never builds up an overshoot that the
+ * next drag would have to undo before the photo moves again. Time and space O(1).
  *
- * @throws RangeError for photos or canvases without area, or a zoom below 1.
- */
-export function framePhoto(photo: Size, canvas: Size, framing: PhotoFraming): Rect {
-  'worklet';
-  const scale = photoScale(photo, canvas, framing.zoom);
-  const width = photo.width * scale;
-  const height = photo.height * scale;
-  const x = canvas.width / 2 - framing.centerX * width;
-  const y = canvas.height / 2 - framing.centerY * height;
-  return {
-    x: clamp(x, canvas.width - width, 0),
-    y: clamp(y, canvas.height - height, 0),
-    width,
-    height,
-  };
-}
-
-/**
- * The closest framing to `framing` that the canvas can actually show: zoom within 1..`MAX_ZOOM`
- * and a center that keeps the photo covering the canvas.
- *
- * {@link framePhoto} already draws any framing without empty bands, but a framing left outside
- * these bounds would make the next drag feel stuck until it travels back inside them. Time and
- * space O(1).
- *
- * @throws RangeError for photos or canvases without area.
+ * @throws RangeError for photos or canvases without area, or a zoom that is not a number.
  */
 export function clampFraming(photo: Size, canvas: Size, framing: PhotoFraming): PhotoFraming {
   'worklet';
   const zoom = clamp(framing.zoom, 1, MAX_ZOOM);
-  const scale = photoScale(photo, canvas, zoom);
-  // Half of the visible part of the photo, as a fraction of the whole photo.
-  const halfX = canvas.width / (2 * photo.width * scale);
-  const halfY = canvas.height / (2 * photo.height * scale);
+  const rotation = normalizeAngle(framing.rotation);
+  const scale = photoScale(photo, canvas, zoom, rotation);
+  const half = canvasHalfExtents(canvas, rotation);
+  // Half of the visible box, as a fraction of the whole photo.
+  const halfX = half.width / (photo.width * scale);
+  const halfY = half.height / (photo.height * scale);
   return {
     centerX: clamp(framing.centerX, halfX, 1 - halfX),
     centerY: clamp(framing.centerY, halfY, 1 - halfY),
     zoom,
+    rotation,
   };
+}
+
+/**
+ * Where to draw the photo so that it follows `framing`, clamped to keep it covering the canvas.
+ * Time and space O(1).
+ *
+ * @throws RangeError for photos or canvases without area, or a zoom below 1.
+ */
+export function framePhoto(photo: Size, canvas: Size, framing: PhotoFraming): PhotoPlacement {
+  'worklet';
+  // Validates sizes and zoom first: clamping would quietly turn a zoom below 1 into 1.
+  photoScale(photo, canvas, framing.zoom, framing.rotation);
+  const { centerX, centerY, zoom, rotation } = clampFraming(photo, canvas, framing);
+  const scale = photoScale(photo, canvas, zoom, rotation);
+  const width = photo.width * scale;
+  const height = photo.height * scale;
+  return { x: -centerX * width, y: -centerY * height, width, height, rotation };
 }
 
 /**
@@ -132,11 +165,12 @@ export function panFraming(
   dy: number,
 ): PhotoFraming {
   'worklet';
-  const scale = photoScale(photo, canvas, framing.zoom);
+  const scale = photoScale(photo, canvas, framing.zoom, framing.rotation);
+  const move = toPhotoAxes(dx, dy, framing.rotation);
   return clampFraming(photo, canvas, {
-    centerX: framing.centerX - dx / (photo.width * scale),
-    centerY: framing.centerY - dy / (photo.height * scale),
-    zoom: framing.zoom,
+    ...framing,
+    centerX: framing.centerX - move.x / (photo.width * scale),
+    centerY: framing.centerY - move.y / (photo.height * scale),
   });
 }
 
@@ -159,17 +193,37 @@ export function zoomFraming(
     throw new RangeError(`Zoom factor must be positive, got ${factor}`);
   }
   const zoom = clamp(framing.zoom * factor, 1, MAX_ZOOM);
-  const before = photoScale(photo, canvas, framing.zoom);
-  const after = photoScale(photo, canvas, zoom);
-  // Offset of the focal point from the canvas center, in canvas pixels.
-  const offsetX = focal.x - canvas.width / 2;
-  const offsetY = focal.y - canvas.height / 2;
+  const before = photoScale(photo, canvas, framing.zoom, framing.rotation);
+  const after = photoScale(photo, canvas, zoom, framing.rotation);
+  // Offset of the focal point from the canvas center, along the photo's axes.
+  const offset = toPhotoAxes(
+    focal.x - canvas.width / 2,
+    focal.y - canvas.height / 2,
+    framing.rotation,
+  );
   // The photo point (0..1) under the focal point before zooming must stay under it after.
-  const pointX = framing.centerX + offsetX / (photo.width * before);
-  const pointY = framing.centerY + offsetY / (photo.height * before);
+  const pointX = framing.centerX + offset.x / (photo.width * before);
+  const pointY = framing.centerY + offset.y / (photo.height * before);
   return clampFraming(photo, canvas, {
-    centerX: pointX - offsetX / (photo.width * after),
-    centerY: pointY - offsetY / (photo.height * after),
+    ...framing,
+    centerX: pointX - offset.x / (photo.width * after),
+    centerY: pointY - offset.y / (photo.height * after),
     zoom,
   });
+}
+
+/**
+ * Turns the photo to `rotation` (radians, clockwise) around the canvas center, zooming it in as
+ * much as needed to keep covering the canvas. Time and space O(1).
+ *
+ * @throws RangeError for photos or canvases without area.
+ */
+export function rotateFraming(
+  photo: Size,
+  canvas: Size,
+  framing: PhotoFraming,
+  rotation: number,
+): PhotoFraming {
+  'worklet';
+  return clampFraming(photo, canvas, { ...framing, rotation });
 }

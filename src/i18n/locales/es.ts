@@ -42,6 +42,8 @@ export const es: Translations = {
     loadingPhoto: 'Cargando la foto',
     undo: 'Deshacer',
     redo: 'Rehacer',
+    restoreLayout: 'Restaurar diseño',
+    removeLayer: 'Suelta aquí para eliminar',
   },
   metrics: {
     distance: 'Distancia',
