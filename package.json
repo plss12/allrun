@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Overlay your Strava runs and weekly, monthly or yearly summaries on your own photos with full design freedom.",
   "author": "Pedro Luis Soto Santos <pepoluis712@gmail.com>",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
     "url": "https://github.com/plss12/allrun.git"
