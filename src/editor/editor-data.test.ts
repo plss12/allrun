@@ -7,9 +7,11 @@ import { makeActivity } from '@/test-utils/make-activity';
 import {
   chartBuckets,
   type EditorData,
+  hasUnit,
   layerText,
   MISSING_VALUE,
   type SummaryData,
+  textRuns,
 } from './editor-data';
 
 const context = { unit: 'km', locale: 'es' } as const;
@@ -115,5 +117,57 @@ describe('chartBuckets', () => {
     expect(size).toBe('week');
     expect(buckets).toHaveLength(1);
     expect(buckets[0].distanceMeters).toBe(20_000);
+  });
+});
+
+describe('textRuns', () => {
+  const content = { label: 'Elevation gain', value: '120', unit: 'm', valueSize: 100 };
+
+  it('makes the label, value and unit bold together', () => {
+    const runs = textRuns({ bold: true, uppercase: false }, content);
+    expect(runs.map((run) => run.bold)).toEqual([true, true, true]);
+    expect(textRuns({ bold: false, uppercase: false }, content).some((run) => run.bold)).toBe(
+      false,
+    );
+  });
+
+  it('uppercases the unit too', () => {
+    const runs = textRuns({ bold: false, uppercase: true }, content);
+    expect(runs.map((run) => run.text)).toEqual(['ELEVATION GAIN\n', '120', ' M']);
+  });
+
+  it('sizes the label and unit after the value, and skips the missing ones', () => {
+    const runs = textRuns({ bold: false, uppercase: false }, content);
+    expect(runs.map((run) => run.fontSize)).toEqual([34, 100, 45]);
+    const valueOnly = textRuns(
+      { bold: false, uppercase: false },
+      { ...content, label: null, unit: null },
+    );
+    expect(valueOnly).toEqual([{ text: '120', fontSize: 100, bold: false }]);
+  });
+});
+
+describe('hasUnit', () => {
+  const metric = (id: string) => {
+    const found = layer(id, defaultActivityTemplate(activity).layers);
+    if (found.kind !== 'metric') {
+      throw new Error(`${id} is not a metric`);
+    }
+    return found;
+  };
+
+  it('is false for times and counts, which show no unit', () => {
+    const distance = metric('metric-distance');
+    expect(hasUnit(distance)).toBe(true);
+    expect(hasUnit({ ...distance, metric: 'elevationGain' })).toBe(true);
+    expect(hasUnit({ ...distance, metric: 'movingTime' })).toBe(false);
+    expect(hasUnit({ ...distance, metric: 'elapsedTime' })).toBe(false);
+    const total = layer('total-totalDistance', defaultSummaryTemplate().layers);
+    if (total.kind !== 'summaryMetric') {
+      throw new Error('Not a summary metric');
+    }
+    expect(hasUnit(total)).toBe(true);
+    expect(hasUnit({ ...total, metric: 'totalMovingTime' })).toBe(true);
+    expect(hasUnit({ ...total, metric: 'activityCount' })).toBe(false);
   });
 });

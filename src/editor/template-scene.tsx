@@ -21,6 +21,7 @@ import {
 import type { ReactElement } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
+import { castsShadow } from '@/core/layer-style';
 import type { LayerTransform } from '@/core/layer-transform';
 import type { PhotoPlacement, Size } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
@@ -34,7 +35,9 @@ import {
   type EditorData,
   type LabelKey,
   layerText,
+  type ParagraphContent,
   type TextContext,
+  textRuns,
 } from './editor-data';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
@@ -315,7 +318,8 @@ function preparedRoutes(
 // Base sizes in canvas pixels (1080 px wide); each layer's `scale` multiplies them.
 const VALUE_SIZE = 96;
 const INFO_SIZE = 52;
-const TEXT_SIZE = 60;
+/** Base size of free text, in canvas pixels; the layer's scale multiplies it. */
+export const TEXT_SIZE = 60;
 const AXIS_LABEL_SIZE = 26;
 const ROUTE_BOX = 640;
 const ROUTES_WIDTH = 800;
@@ -331,7 +335,8 @@ type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
 /**
  * The soft shadow under texts, routes and bars. It keeps white widgets readable on bright
  * photos and lifts the top one off the layers below it: without it, a white route over white
- * text would merge with it.
+ * text would merge with it. It has no setting: only light and bright colors cast it (see
+ * `castsShadow`), since under black it would just blur the edges.
  */
 const SHADOW_COLOR = 'rgba(0, 0, 0, 0.45)';
 const SHADOW_OFFSET_Y = 3;
@@ -352,13 +357,6 @@ const LABEL_STYLE: TextStyle = {
   shadow: true,
 };
 
-interface ParagraphContent {
-  readonly label: string | null;
-  readonly value: string;
-  readonly unit: string | null;
-  readonly valueSize: number;
-}
-
 const ALIGN = { left: TextAlign.Left, center: TextAlign.Center, right: TextAlign.Right } as const;
 
 function buildParagraph(
@@ -371,31 +369,20 @@ function buildParagraph(
     fontFamilies: [FONT_FAMILIES[style.font]],
     fontSize,
     fontStyle: { weight: bold ? FontWeight.Bold : FontWeight.Normal },
-    shadows: style.shadow
-      ? [
-          {
-            color: Skia.Color(SHADOW_COLOR),
-            offset: { x: 0, y: SHADOW_OFFSET_Y },
-            blurRadius: SHADOW_BLUR_RADIUS,
-          },
-        ]
-      : [],
+    shadows:
+      style.shadow && castsShadow(style.color)
+        ? [
+            {
+              color: Skia.Color(SHADOW_COLOR),
+              offset: { x: 0, y: SHADOW_OFFSET_Y },
+              blurRadius: SHADOW_BLUR_RADIUS,
+            },
+          ]
+        : [],
   });
-  const caseOf = (text: string) => (style.uppercase ? text.toLocaleUpperCase() : text);
-
   const builder = Skia.ParagraphBuilder.Make({ textAlign: ALIGN[style.align] }, fonts);
-  if (content.label !== null) {
-    builder
-      .pushStyle(textStyle(content.valueSize * 0.34, false))
-      .addText(`${caseOf(content.label)}\n`)
-      .pop();
-  }
-  builder.pushStyle(textStyle(content.valueSize, style.bold)).addText(caseOf(content.value)).pop();
-  if (content.unit !== null) {
-    builder
-      .pushStyle(textStyle(content.valueSize * 0.45, false))
-      .addText(` ${content.unit}`)
-      .pop();
+  for (const run of textRuns(style, content)) {
+    builder.pushStyle(textStyle(run.fontSize, run.bold)).addText(run.text).pop();
   }
   const paragraph = builder.build();
   // Lay out once to measure, then shrink to the longest line so the block centers on (0, 0).
@@ -469,7 +456,7 @@ function RouteLines({ routes, box, boxHeight, stroke }: RouteLinesProps) {
       strokeJoin="round"
       color={stroke.color}
     >
-      <DropShadow />
+      {castsShadow(stroke.color) ? <DropShadow /> : null}
     </Path>
   );
 }
@@ -498,9 +485,11 @@ function BarChart({
       {/* One shadow for all the bars, drawn as a layer, instead of one blur per bar. */}
       <Group
         layer={
-          <Paint>
-            <DropShadow />
-          </Paint>
+          castsShadow(color) ? (
+            <Paint>
+              <DropShadow />
+            </Paint>
+          ) : undefined
         }
       >
         {values.map((value, i) => {

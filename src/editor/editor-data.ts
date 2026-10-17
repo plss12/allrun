@@ -122,3 +122,54 @@ export function layerText(layer: Layer, data: EditorData, context: TextContext):
   }
   return null;
 }
+
+/** What a text widget's paragraph says, before fonts and colors. */
+export interface ParagraphContent {
+  readonly label: string | null;
+  readonly value: string;
+  readonly unit: string | null;
+  /** Font size of the value; the label and unit are smaller. */
+  readonly valueSize: number;
+}
+
+/** One stretch of a paragraph with its own size. */
+export interface TextRun {
+  readonly text: string;
+  readonly fontSize: number;
+  readonly bold: boolean;
+}
+
+/** Sizes of the label (above the value) and the unit (after it), relative to the value. */
+const LABEL_SCALE = 0.34;
+const UNIT_SCALE = 0.45;
+
+/**
+ * Splits a text widget into its label line, value and unit. Bold and uppercase apply to all of
+ * them, so the widget reads as one block. Time and space O(length of the text).
+ */
+export function textRuns(
+  style: { readonly bold: boolean; readonly uppercase: boolean },
+  content: ParagraphContent,
+): TextRun[] {
+  const caseOf = (text: string) => (style.uppercase ? text.toLocaleUpperCase() : text);
+  const run = (text: string, fontSize: number): TextRun => ({
+    text: caseOf(text),
+    fontSize,
+    bold: style.bold,
+  });
+  return [
+    ...(content.label === null ? [] : [run(`${content.label}\n`, content.valueSize * LABEL_SCALE)]),
+    run(content.value, content.valueSize),
+    ...(content.unit === null ? [] : [run(` ${content.unit}`, content.valueSize * UNIT_SCALE)]),
+  ];
+}
+
+/**
+ * Whether a data widget can show a unit: times read "1:23:45" and counts are plain numbers, so
+ * hiding their unit would do nothing. Asks the same conversion the widget displays with.
+ */
+export function hasUnit(layer: Extract<Layer, { kind: 'metric' | 'summaryMetric' }>): boolean {
+  return layer.kind === 'metric'
+    ? toDisplayMetric(layer.metric, 1, { unit: 'km', sportFamily: 'run' }).unit !== null
+    : toDisplaySummaryMetric(layer.metric, 1, 'km').unit !== null;
+}
