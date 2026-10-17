@@ -173,16 +173,19 @@ export function TemplateScene({ format, layers, background, live = null }: Templ
           </Group>
         </Group>
       ) : null}
+      {/* A layer's opacity fades it as a whole, drawn on its own Skia layer: a group's `opacity`
+          only reaches shapes (paragraphs ignore it) and fades each shape and its shadow apart,
+          letting the shadow show through. Opaque layers skip the extra layer. */}
       {layers.map(({ layer, content }) =>
         live !== null && live.id === layer.id ? (
-          <Group key={layer.id} transform={live.matrix} opacity={live.opacity}>
+          <Group key={layer.id} transform={live.matrix} layer={<Paint opacity={live.opacity} />}>
             {content}
           </Group>
         ) : (
           <Group
             key={layer.id}
             transform={layerMatrix(layer.transform, canvas)}
-            opacity={layer.opacity}
+            layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
           >
             {content}
           </Group>
