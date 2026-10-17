@@ -39,6 +39,8 @@ export const en = {
     error: 'Could not load the data for this image',
     photoError: "Couldn't open this photo. Try another one.",
     loadingPhoto: 'Loading photo',
+    undo: 'Undo',
+    redo: 'Redo',
   },
   metrics: {
     distance: 'Distance',

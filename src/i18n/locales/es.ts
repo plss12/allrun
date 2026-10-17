@@ -40,6 +40,8 @@ export const es: Translations = {
     error: 'No se han podido cargar los datos de esta imagen',
     photoError: 'No se ha podido abrir esta foto. Prueba con otra.',
     loadingPhoto: 'Cargando la foto',
+    undo: 'Deshacer',
+    redo: 'Rehacer',
   },
   metrics: {
     distance: 'Distancia',

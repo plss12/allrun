@@ -3,7 +3,7 @@ import {
   launchImageLibraryAsync,
   UIImagePickerPreferredAssetRepresentationMode,
 } from 'expo-image-picker';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
@@ -11,7 +11,17 @@ import { z } from 'zod';
 
 import { customRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from '@/core/default-layout';
-import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
+import {
+  createDocument,
+  type DefaultTemplate,
+  type EditorDocument,
+  resetFraming,
+  sameDocument,
+  setFormat,
+  setFraming,
+} from '@/core/editor-document';
+import { canRedo, canUndo, commit, createHistory, mapHistory, redo, undo } from '@/core/history';
+import { DEFAULT_FRAMING } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
 import { bucketize, summarize } from '@/core/summary';
 import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
@@ -121,9 +131,18 @@ function EditorWorkspace({
 }) {
   const { t } = useTranslation();
   const { unit, locale } = useDisplaySettings();
-  const [format, setFormat] = useState<CanvasFormat>('story');
+  const defaultTemplate: DefaultTemplate = (format) =>
+    data.mode === 'activity'
+      ? defaultActivityTemplate(data.activity, format)
+      : defaultSummaryTemplate(bucketForPeriod(data.kind, data.summary.range), format);
+  const [history, setHistory] = useState(() =>
+    createHistory(createDocument(defaultTemplate, 'story', DEFAULT_FRAMING)),
+  );
+  const { template, framing } = history.present;
+  /** Applies an edit as one undo step (none when it changes nothing). */
+  const edit = (change: (document: EditorDocument) => EditorDocument) =>
+    setHistory((current) => commit(current, change(current.present)));
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
-  const [framing] = useState<PhotoFraming>(DEFAULT_FRAMING);
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const [nextPhotoId, setNextPhotoId] = useState(1);
@@ -172,11 +191,7 @@ function EditorWorkspace({
     }
   });
 
-  const template =
-    data.mode === 'activity'
-      ? defaultActivityTemplate(data.activity, format)
-      : defaultSummaryTemplate(bucketForPeriod(data.kind, data.summary.range), format);
-  const size = CANVAS_FORMATS[format];
+  const size = CANVAS_FORMATS[template.format];
   const displayWidth =
     area === null ? 0 : Math.min(area.width, (area.height * size.width) / size.height);
 
@@ -195,6 +210,8 @@ function EditorWorkspace({
         const id = nextPhotoId;
         setNextPhotoId(id + 1);
         setPhoto({ id, picked, editorUri: null, editorReencoded: false, exportUri: null });
+        // Changing the photo can't be undone: the framing of the old one goes away entirely.
+        setHistory((current) => mapHistory(current, resetFraming, sameDocument));
         void preparePhotoCopies(id, picked, false);
       }
     } catch (error) {
@@ -205,6 +222,24 @@ function EditorWorkspace({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.systemBackground }}>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon="arrow.uturn.backward"
+          accessibilityLabel={t('editor.undo')}
+          disabled={!canUndo(history)}
+          onPress={() => setHistory(undo)}
+        >
+          {t('editor.undo')}
+        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon="arrow.uturn.forward"
+          accessibilityLabel={t('editor.redo')}
+          disabled={!canRedo(history)}
+          onPress={() => setHistory(redo)}
+        >
+          {t('editor.redo')}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
       <View
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}
         onLayout={(event) => {
@@ -225,11 +260,9 @@ function EditorWorkspace({
               displayWidth={displayWidth}
               template={template}
               data={data}
-              background={
-                canvasImage !== null
-                  ? { kind: 'photo', image: canvasImage, framing }
-                  : { kind: 'placeholder' }
-              }
+              photo={canvasImage}
+              framing={framing}
+              onFramingChange={(next) => edit((document) => setFraming(document, next))}
               fonts={fonts}
               textContext={{ unit, locale }}
               translate={(key) => t(key)}
@@ -276,19 +309,20 @@ function EditorWorkspace({
             <Pressable
               key={option}
               accessibilityRole="tab"
-              accessibilityState={{ selected: format === option }}
-              onPress={() => setFormat(option)}
+              accessibilityState={{ selected: template.format === option }}
+              onPress={() => edit((document) => setFormat(document, option, defaultTemplate))}
               style={({ pressed }) => ({
                 paddingVertical: 8,
                 paddingHorizontal: 12,
                 borderRadius: 999,
-                backgroundColor: format === option ? colors.tint : colors.secondarySystemBackground,
+                backgroundColor:
+                  template.format === option ? colors.tint : colors.secondarySystemBackground,
                 opacity: pressed ? 0.7 : 1,
               })}
             >
               <Text
                 style={{
-                  color: format === option ? colors.onTint : colors.label,
+                  color: template.format === option ? colors.onTint : colors.label,
                   fontSize: 14,
                   fontWeight: '600',
                 }}

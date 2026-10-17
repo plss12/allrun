@@ -15,8 +15,9 @@ import {
   type SkTypefaceFontProvider,
   TextAlign,
 } from '@shopify/react-native-skia';
+import type { SharedValue } from 'react-native-reanimated';
 
-import { framePhoto, type PhotoFraming } from '@/core/photo-framing';
+import type { Rect as PhotoRect } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
@@ -36,12 +37,17 @@ export interface TemplateSceneProps {
   readonly data: EditorData;
   /**
    * What goes under the layers:
-   * - `photo`: the photo, following `framing`;
+   * - `photo`: the photo, drawn in `rect` (see `framePhoto`); the editor passes a shared value so
+   *   gestures move it without re-rendering the layers;
    * - `placeholder`: a dark fill, while no photo is chosen;
    * - `none`: nothing, for the transparent sticker export.
    */
   readonly background:
-    | { readonly kind: 'photo'; readonly image: SkImage; readonly framing: PhotoFraming }
+    | {
+        readonly kind: 'photo';
+        readonly image: SkImage;
+        readonly rect: PhotoRect | SharedValue<PhotoRect>;
+      }
     | { readonly kind: 'placeholder' }
     | { readonly kind: 'none' };
   readonly fonts: SkTypefaceFontProvider;
@@ -65,8 +71,7 @@ export function TemplateScene({
   textContext,
   translate,
 }: TemplateSceneProps) {
-  const canvas = CANVAS_FORMATS[template.format];
-  const { width, height } = canvas;
+  const { width, height } = CANVAS_FORMATS[template.format];
   return (
     <Group>
       {background.kind === 'placeholder' ? (
@@ -75,11 +80,7 @@ export function TemplateScene({
         <Group clip={{ x: 0, y: 0, width, height }}>
           <Image
             image={background.image}
-            {...framePhoto(
-              { width: background.image.width(), height: background.image.height() },
-              canvas,
-              background.framing,
-            )}
+            rect={background.rect}
             fit="fill"
             sampling={PHOTO_SAMPLING}
           />
