@@ -1,10 +1,12 @@
 import { makeActivity } from '@/test-utils/make-activity';
+import { makeSummary } from '@/test-utils/make-summary';
 
 import { customRange, monthRange, weekRange, yearRange } from './dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
 import {
   castsShadow,
   chartBucketOptions,
+  chartValueOptions,
   colorPageOf,
   layerColor,
   relativeLuminance,
@@ -20,7 +22,7 @@ import {
 import { type Layer, parseTemplate, type Template } from './template';
 
 const activity = defaultActivityTemplate(makeActivity(), 'story');
-const summary = defaultSummaryTemplate('story');
+const summary = defaultSummaryTemplate(makeSummary(), 'story');
 const find = (template: Template, id: string): Layer => {
   const layer = template.layers.find((candidate) => candidate.id === id);
   if (layer === undefined) {
@@ -158,8 +160,21 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
       bucket: 'week',
       axisLabels: false,
       title: false,
+      font: 'oswald',
+      bold: false,
+      uppercase: false,
+      align: 'left',
     });
-    expect(find(chart, 'chart')).toMatchObject({ bucket: 'week', axisLabels: false, title: false });
+    expect(find(chart, 'chart')).toMatchObject({
+      align: 'left',
+      bucket: 'week',
+      axisLabels: false,
+      title: false,
+      font: 'oswald',
+      bold: false,
+      uppercase: false,
+    });
+    expect(parseTemplate(chart)).toEqual(chart);
     expect(setChartOptions(summary, 'chart', { value: 'distance' })).toBe(summary);
     const logo = setLogoOptions(activity, 'logo', { tone: 'color', variant: 'lockup' });
     expect(find(logo, 'logo')).toMatchObject({ tone: 'color', variant: 'lockup' });
@@ -167,21 +182,29 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
   });
 });
 
+describe('chartValueOptions', () => {
+  it('offers distance only when the period has some', () => {
+    expect(chartValueOptions(makeSummary())).toEqual(['distance', 'movingTime']);
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      routePolyline: null,
+    });
+    expect(chartValueOptions(makeSummary([gym]))).toEqual(['movingTime']);
+  });
+});
+
 describe('chartBucketOptions', () => {
   it('offers the bar sizes that give a readable number of bars', () => {
     // A week that spans two months: two monthly bars are not worth a chart.
-    expect(chartBucketOptions(weekRange('2026-09-30'))).toEqual(['auto', 'day']);
-    expect(chartBucketOptions(monthRange('2026-10-14'))).toEqual(['auto', 'day', 'week']);
-    expect(chartBucketOptions(yearRange('2026-10-14'))).toEqual(['auto', 'week', 'month']);
+    expect(chartBucketOptions(weekRange('2026-09-30'))).toEqual(['day']);
+    expect(chartBucketOptions(monthRange('2026-10-14'))).toEqual(['day', 'week']);
+    expect(chartBucketOptions(yearRange('2026-10-14'))).toEqual(['week', 'month']);
     // A 10-week training block.
-    expect(chartBucketOptions(customRange('2026-08-10', '2026-10-18'))).toEqual([
-      'auto',
-      'week',
-      'month',
-    ]);
+    expect(chartBucketOptions(customRange('2026-08-10', '2026-10-18'))).toEqual(['week', 'month']);
   });
 
-  it('offers only auto for a range too short for any chart', () => {
-    expect(chartBucketOptions(customRange('2026-10-14', '2026-10-15'))).toEqual(['auto']);
+  it('offers nothing for a range too short for any chart', () => {
+    expect(chartBucketOptions(customRange('2026-10-14', '2026-10-15'))).toEqual([]);
   });
 });

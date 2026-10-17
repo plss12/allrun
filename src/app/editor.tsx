@@ -79,7 +79,7 @@ const paramsSchema = z.discriminatedUnion('mode', [
     families: z
       .string()
       .transform((value) => (value === '' ? [] : value.split(',')))
-      .pipe(z.array(z.enum(['run', 'ride', 'swim', 'other']))),
+      .pipe(z.array(z.enum(['run', 'ride', 'swim', 'training', 'other']))),
   }),
 ]);
 
@@ -180,7 +180,7 @@ function EditorWorkspace({
   const defaultTemplate: DefaultTemplate = (format) =>
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
-      : defaultSummaryTemplate(format);
+      : defaultSummaryTemplate(data.summary, format);
   const [history, setHistory] = useState(() =>
     createHistory(createDocument(defaultTemplate, INITIAL_FORMAT, DEFAULT_FRAMING)),
   );
@@ -491,7 +491,8 @@ function EditorWorkspace({
         {styled !== null ? (
           <StylePanel
             layer={styled}
-            range={data.mode === 'summary' ? data.summary.range : null}
+            summary={data.mode === 'summary' ? data.summary : null}
+            autoBucket={data.mode === 'summary' ? data.bucketSize : null}
             locale={locale}
             onChange={(change) => edit((document) => editLayers(document, change))}
           />

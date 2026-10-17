@@ -4,13 +4,14 @@
  * - **Modality** decides which metrics an activity offers and in which order (a trail run puts
  *   elevation before pace; a treadmill run has no route or elevation).
  * - **Family** groups modalities for summaries ("everything I ran this month" includes trail and
- *   treadmill runs). Summaries put the triathlon sports first (run, ride, swim); walks, hikes and
- *   everything else count as `other`.
+ *   treadmill runs). Summaries put the triathlon sports first (run, ride, swim), then training
+ *   (gym, yoga, cardio machines: time and heart rate, no distance); walks, hikes and everything
+ *   else count as `other`.
  *
  * `other` is the generic fallback on both levels: any sport type without a curated modality
- * (gym, yoga, a type Strava adds tomorrow) still works and shows whatever data it has.
+ * (climbing, golf, a type Strava adds tomorrow) still works and shows whatever data it has.
  */
-export type SportFamily = 'run' | 'ride' | 'swim' | 'other';
+export type SportFamily = 'run' | 'ride' | 'swim' | 'training' | 'other';
 
 export type SportModality =
   | 'roadRun'
@@ -24,6 +25,7 @@ export type SportModality =
   | 'eBikeRide'
   | 'indoorRide'
   | 'swim'
+  | 'workout'
   | 'other';
 
 /** Family of each modality. */
@@ -39,6 +41,7 @@ export const FAMILY_OF_MODALITY: Readonly<Record<SportModality, SportFamily>> = 
   eBikeRide: 'ride',
   indoorRide: 'ride',
   swim: 'swim',
+  workout: 'training',
   other: 'other',
 };
 
@@ -58,6 +61,15 @@ const MODALITY_OF_STRAVA_TYPE = new Map<string, SportModality>([
   ['EMountainBikeRide', 'eBikeRide'],
   ['VirtualRide', 'indoorRide'],
   ['Swim', 'swim'],
+  // Training: gym and strength, yoga and pilates, cardio machines.
+  ['WeightTraining', 'workout'],
+  ['Crossfit', 'workout'],
+  ['Workout', 'workout'],
+  ['HighIntensityIntervalTraining', 'workout'],
+  ['Yoga', 'workout'],
+  ['Pilates', 'workout'],
+  ['Elliptical', 'workout'],
+  ['StairStepper', 'workout'],
 ]);
 
 /** Modality of a Strava `sport_type`; unknown types fall back to `other`. */

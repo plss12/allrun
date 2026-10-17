@@ -20,7 +20,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/schema.ts` valida con Zod y mapea al modelo `Activity`; `fixtures/` genera un historial sintético con el formato de Strava que pasa por ese mismo esquema.
 - `scripts/brand/`: generador de variantes de marca e iconos.
 - `src/i18n/`: i18next con textos en `locales/en.ts` (fuente de las claves) y `locales/es.ts`, que el compilador obliga a tener las mismas claves; las claves de `t()` están tipadas.
-- `src/test-utils/`: helpers de tests (`makeActivity`).
+- `src/test-utils/`: helpers de tests (`makeActivity`, `makeSummary`).
 - `src/editor/`: lienzo Skia, widgets, gestos y exportación.
 - `supabase/functions/`: canje y renovación de tokens de Strava.
 - `docs/decisions/`: ADRs. Léelos antes de tocar fuentes de datos, cuentas o plantillas.

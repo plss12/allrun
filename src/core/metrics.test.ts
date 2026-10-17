@@ -56,18 +56,30 @@ describe('availableMetrics', () => {
     expect(metrics).not.toContain('elevationGain');
   });
 
-  it('shows only what a generic activity has (gym session without distance)', () => {
-    const gym = makeActivity({
-      sportType: 'WeightTraining',
-      distanceMeters: 0,
-      averageSpeed: 0,
-      maxSpeed: 0,
-      elevationGainMeters: 0,
-      maxElevationMeters: null,
-      averageCadence: null,
-      routePolyline: null,
-    });
+  const withoutDistance = {
+    distanceMeters: 0,
+    averageSpeed: 0,
+    maxSpeed: 0,
+    elevationGainMeters: 0,
+    maxElevationMeters: null,
+    averageCadence: null,
+    routePolyline: null,
+  };
+
+  it('shows time and effort for a training session', () => {
+    const gym = makeActivity({ sportType: 'WeightTraining', ...withoutDistance });
     expect(availableMetrics(gym)).toEqual([
+      'movingTime',
+      'averageHeartRate',
+      'maxHeartRate',
+      'calories',
+      'elapsedTime',
+    ]);
+  });
+
+  it('shows only what a generic activity has (climbing without distance)', () => {
+    const climb = makeActivity({ sportType: 'RockClimbing', ...withoutDistance });
+    expect(availableMetrics(climb)).toEqual([
       'movingTime',
       'elapsedTime',
       'averageHeartRate',

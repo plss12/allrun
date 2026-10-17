@@ -1,7 +1,7 @@
 import type { DisplayMetric } from './metrics';
 import { toDisplayMetric } from './metrics';
 import type { PeriodSummary } from './summary';
-import type { SummaryMetricId } from './template';
+import { SUMMARY_METRIC_IDS, type SummaryMetricId } from './template';
 import type { DistanceUnit } from './units';
 
 /**
@@ -54,4 +54,42 @@ export function toDisplaySummaryMetric(
     case 'activityCount':
       return { kind: 'number', amount: value, fractionDigits: 0, unit: null };
   }
+}
+
+/** Totals measured over distance, meaningless when no activity of the period has any. */
+const DISTANCE_METRICS: ReadonlySet<SummaryMetricId> = new Set([
+  'totalDistance',
+  'averagePace',
+  'longestDistance',
+]);
+
+/**
+ * Whether any activity of the period covered a distance. A month of gym sessions has none, and
+ * showing "0.00 km" for it would only be noise. Time and space O(1).
+ */
+export function summaryHasDistance(summary: PeriodSummary): boolean {
+  return summary.totalDistanceMeters > 0;
+}
+
+/**
+ * The headline totals of a period: distance (when there is any), time and number of activities.
+ * Both the summary preview and its default design show these. Time and space O(1).
+ */
+export function defaultSummaryMetrics(summary: PeriodSummary): SummaryMetricId[] {
+  return summaryHasDistance(summary)
+    ? ['totalDistance', 'totalMovingTime', 'activityCount']
+    : ['totalMovingTime', 'activityCount'];
+}
+
+/**
+ * Totals worth offering for a period, in the editor's order: distance-based ones only when it
+ * has distance, elevation only when it climbed. Time and space O(1).
+ */
+export function availableSummaryMetrics(summary: PeriodSummary): SummaryMetricId[] {
+  return SUMMARY_METRIC_IDS.filter((metric) => {
+    if (DISTANCE_METRICS.has(metric)) {
+      return summaryHasDistance(summary);
+    }
+    return metric !== 'totalElevationGain' || summary.totalElevationGainMeters > 0;
+  });
 }

@@ -4,6 +4,7 @@ import { summarize } from '@/core/summary';
 import type { Layer } from '@/core/template';
 import { en } from '@/i18n/locales/en';
 import { makeActivity } from '@/test-utils/make-activity';
+import { makeSummary } from '@/test-utils/make-summary';
 
 import {
   chartBuckets,
@@ -63,7 +64,7 @@ describe('layerText for an activity', () => {
   });
 
   it('returns nothing for summary layers and non-text layers', () => {
-    const summaryLayers = defaultSummaryTemplate().layers;
+    const summaryLayers = defaultSummaryTemplate(makeSummary()).layers;
     expect(layerText(layer('period', summaryLayers), activityData, context)).toBeNull();
     expect(layerText(layer('logo', layers), activityData, context)).toBeNull();
   });
@@ -79,7 +80,7 @@ describe('layerText for a summary', () => {
     activities,
     bucketSize: 'day',
   };
-  const { layers } = defaultSummaryTemplate();
+  const { layers } = defaultSummaryTemplate(makeSummary());
 
   it('shows totals and the period name', () => {
     expect(layerText(layer('total-totalDistance', layers), data, context)).toEqual({
@@ -102,7 +103,7 @@ describe('chartBuckets', () => {
     activities,
     bucketSize: 'day',
   };
-  const found = layer('chart', defaultSummaryTemplate('story').layers);
+  const found = layer('chart', defaultSummaryTemplate(makeSummary(), 'story').layers);
   if (found.kind !== 'summaryChart') {
     throw new Error('The default summary has no chart');
   }
@@ -164,7 +165,7 @@ describe('hasUnit', () => {
     expect(hasUnit({ ...distance, metric: 'elevationGain' })).toBe(true);
     expect(hasUnit({ ...distance, metric: 'movingTime' })).toBe(false);
     expect(hasUnit({ ...distance, metric: 'elapsedTime' })).toBe(false);
-    const total = layer('total-totalDistance', defaultSummaryTemplate().layers);
+    const total = layer('total-totalDistance', defaultSummaryTemplate(makeSummary()).layers);
     if (total.kind !== 'summaryMetric') {
       throw new Error('Not a summary metric');
     }

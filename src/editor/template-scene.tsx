@@ -254,26 +254,32 @@ function prepareLayer(
       const values = buckets.map((bucket) =>
         layer.value === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds,
       );
+      // Axis labels are already initials and numbers: capitals only apply to the title.
+      const chartText = {
+        ...LABEL_STYLE,
+        color: layer.color,
+        font: layer.font,
+        bold: layer.bold,
+      };
       const labels = layer.axisLabels
         ? formatBucketLabels(buckets, size, textContext.locale).map((label) =>
             label === ''
               ? null
-              : buildParagraph(
-                  fonts,
-                  { ...LABEL_STYLE, color: layer.color },
-                  { label: null, value: label, unit: null, valueSize: AXIS_LABEL_SIZE },
-                ),
+              : buildParagraph(fonts, chartText, {
+                  label: null,
+                  value: label,
+                  unit: null,
+                  valueSize: AXIS_LABEL_SIZE,
+                }),
           )
         : null;
       const title = layer.title
         ? buildParagraph(
             fonts,
-            { ...LABEL_STYLE, color: layer.color },
+            { ...chartText, uppercase: layer.uppercase },
             {
               label: null,
-              value: translate(chartTitleKey(layer.value, size), {
-                unit: textContext.unit,
-              }).toLocaleUpperCase(textContext.locale),
+              value: translate(chartTitleKey(layer.value, size), { unit: textContext.unit }),
               unit: null,
               valueSize: AXIS_LABEL_SIZE,
             },
@@ -283,7 +289,15 @@ function prepareLayer(
         layer,
         width: CHART_WIDTH,
         height: chartHeight(labels !== null, title !== null),
-        content: <BarChart values={values} color={layer.color} labels={labels} title={title} />,
+        content: (
+          <BarChart
+            values={values}
+            color={layer.color}
+            labels={labels}
+            title={title}
+            titleAlign={layer.align}
+          />
+        ),
       };
     }
     case 'logo': {
@@ -345,6 +359,11 @@ const CHART_HEIGHT = 240;
 /** Room under the bars for the axis labels, and under those for the title. */
 const LABEL_BAND = 44;
 const TITLE_BAND = 48;
+
+/** Left edge of a block of `width` aligned within `span`, both starting at 0. */
+function alignedX(align: 'left' | 'center' | 'right', width: number, span: number): number {
+  return align === 'left' ? 0 : align === 'right' ? span - width : (span - width) / 2;
+}
 
 /** Height of a chart with or without its axis labels and title. */
 function chartHeight(labels: boolean, title: boolean): number {
@@ -488,13 +507,16 @@ function BarChart({
   color,
   labels,
   title,
+  titleAlign,
 }: {
   readonly values: readonly number[];
   readonly color: string;
   /** One paragraph per bar (`null` for unlabelled bars), or `null` for no axis labels. */
   readonly labels: readonly (SkParagraph | null)[] | null;
-  /** What the bars measure, centered under them, or `null` for no title. */
+  /** What the bars measure, under them, or `null` for no title. */
   readonly title: SkParagraph | null;
+  /** Where the title sits: under the first bar, centered, or under the last bar. */
+  readonly titleAlign: 'left' | 'center' | 'right';
 }) {
   if (values.length === 0) {
     return null;
@@ -552,7 +574,7 @@ function BarChart({
       {title === null ? null : (
         <Paragraph
           paragraph={title}
-          x={CHART_WIDTH / 2 - (Math.ceil(title.getLongestLine()) + 1) / 2}
+          x={alignedX(titleAlign, Math.ceil(title.getLongestLine()) + 1, CHART_WIDTH)}
           y={titleTop + (TITLE_BAND - title.getHeight()) / 2 + 4}
           width={Math.ceil(title.getLongestLine()) + 1}
         />

@@ -83,8 +83,8 @@ describe('parseStravaActivities', () => {
       },
     ]);
     expect(gym).toMatchObject({
-      sportModality: 'other',
-      sportFamily: 'other',
+      sportModality: 'workout',
+      sportFamily: 'training',
       routePolyline: null,
       averageSpeed: null,
       averageHeartRate: null,

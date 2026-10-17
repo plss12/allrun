@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -7,8 +8,11 @@ import type { DateRange } from '@/core/dates';
 import { type PeriodKind, periodContaining, shiftPeriod } from '@/core/periods';
 import type { SportFamily } from '@/core/sports';
 import { summarize } from '@/core/summary';
-import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
-import type { SummaryMetricId } from '@/core/template';
+import {
+  defaultSummaryMetrics,
+  summaryMetricValue,
+  toDisplaySummaryMetric,
+} from '@/core/summary-metrics';
 import { useActivitySource } from '@/data/activity-source';
 import { colors } from '@/theme/colors';
 import { formatMetric, formatPeriodName } from '@/ui/format';
@@ -20,11 +24,10 @@ import { useAsync } from '@/ui/use-async';
 type CalendarKind = Exclude<PeriodKind, 'custom'>;
 
 const KINDS: readonly CalendarKind[] = ['week', 'month', 'year'];
-const FAMILIES: readonly SportFamily[] = ['run', 'ride', 'swim', 'other'];
-const PREVIEW_METRICS: readonly SummaryMetricId[] = [
-  'totalDistance',
-  'totalMovingTime',
-  'totalElevationGain',
+/** "All sports" and the five families, in two rows of three. */
+const SPORT_ROWS: readonly (readonly (SportFamily | 'all')[])[] = [
+  ['all', 'run', 'ride'],
+  ['swim', 'training', 'other'],
 ];
 
 export default function Summary() {
@@ -69,7 +72,7 @@ export default function Summary() {
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <StepButton
-          label="‹"
+          icon={{ ios: 'chevron.left', android: 'chevron_left' }}
           accessibilityLabel={t('summary.previous')}
           onPress={() => setRange(shiftPeriod(kind, range, -1))}
         />
@@ -85,7 +88,7 @@ export default function Summary() {
           {formatPeriodName(kind, range, locale)}
         </Text>
         <StepButton
-          label="›"
+          icon={{ ios: 'chevron.right', android: 'chevron_right' }}
           accessibilityLabel={t('summary.next')}
           disabled={isCurrentOrFuture}
           onPress={() => setRange(shiftPeriod(kind, range, 1))}
@@ -96,19 +99,27 @@ export default function Summary() {
         <Text style={{ color: colors.secondaryLabel, fontSize: 13, fontWeight: '600' }}>
           {t('summary.sports').toLocaleUpperCase()}
         </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <Chip
-            label={t('summary.allSports')}
-            selected={families.length === 0}
-            onPress={() => setFamilies([])}
-          />
-          {FAMILIES.map((family) => (
-            <Chip
-              key={family}
-              label={t(`families.${family}`)}
-              selected={families.includes(family)}
-              onPress={() => toggleFamily(family)}
-            />
+        <View style={{ gap: 8 }}>
+          {SPORT_ROWS.map((row) => (
+            <View key={row.join()} style={{ flexDirection: 'row', gap: 8 }}>
+              {row.map((family) =>
+                family === 'all' ? (
+                  <Chip
+                    key={family}
+                    label={t('summary.allSports')}
+                    selected={families.length === 0}
+                    onPress={() => setFamilies([])}
+                  />
+                ) : (
+                  <Chip
+                    key={family}
+                    label={t(`families.${family}`)}
+                    selected={families.includes(family)}
+                    onPress={() => toggleFamily(family)}
+                  />
+                ),
+              )}
+            </View>
           ))}
         </View>
       </View>
@@ -135,43 +146,46 @@ export default function Summary() {
                   gap: 12,
                 }}
               >
-                <Text style={{ color: colors.secondaryLabel, fontSize: 15 }}>
-                  {summary.activityCount === 0
-                    ? t('summary.empty')
-                    : t('summary.activities', { count: summary.activityCount })}
-                </Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  {PREVIEW_METRICS.map((metric) => {
-                    const value = summaryMetricValue(summary, metric);
-                    const formatted =
-                      value === null
-                        ? null
-                        : formatMetric(toDisplaySummaryMetric(metric, value, unit), locale);
-                    return (
-                      <View key={metric} style={{ gap: 2 }}>
-                        <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>
-                          {t(`summaryMetrics.${metric}`)}
-                        </Text>
-                        <Text
-                          selectable
-                          style={{
-                            color: colors.label,
-                            fontSize: 22,
-                            fontWeight: '700',
-                            fontVariant: ['tabular-nums'],
-                          }}
-                        >
-                          {formatted === null ? '—' : formatted.value}
-                          {formatted?.unit ? (
-                            <Text style={{ fontSize: 15, fontWeight: '400' }}>
-                              {` ${formatted.unit}`}
-                            </Text>
-                          ) : null}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
+                {/* The totals the image starts with: distance (when there is any), time and
+                    number of activities. */}
+                {summary.activityCount === 0 ? (
+                  <Text style={{ color: colors.secondaryLabel, fontSize: 15 }}>
+                    {t('summary.empty')}
+                  </Text>
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    {defaultSummaryMetrics(summary).map((metric) => {
+                      const value = summaryMetricValue(summary, metric);
+                      const formatted =
+                        value === null
+                          ? null
+                          : formatMetric(toDisplaySummaryMetric(metric, value, unit), locale);
+                      return (
+                        <View key={metric} style={{ flex: 1, gap: 2 }}>
+                          <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>
+                            {t(`summaryMetrics.${metric}`)}
+                          </Text>
+                          <Text
+                            selectable
+                            style={{
+                              color: colors.label,
+                              fontSize: 22,
+                              fontWeight: '700',
+                              fontVariant: ['tabular-nums'],
+                            }}
+                          >
+                            {formatted === null ? '—' : formatted.value}
+                            {formatted?.unit ? (
+                              <Text style={{ fontSize: 15, fontWeight: '400' }}>
+                                {` ${formatted.unit}`}
+                              </Text>
+                            ) : null}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -225,16 +239,28 @@ function Chip({
       accessibilityRole={role}
       accessibilityState={{ selected }}
       onPress={onPress}
+      // Chips share their row evenly, so rows line up whatever the labels.
       style={({ pressed }) => ({
-        paddingVertical: 8,
-        paddingHorizontal: 14,
+        flex: 1,
+        height: 40,
+        paddingHorizontal: 8,
         borderRadius: 999,
+        justifyContent: 'center',
         backgroundColor: selected ? colors.tint : colors.secondarySystemBackground,
         opacity: pressed ? 0.7 : 1,
       })}
     >
       <Text
-        style={{ color: selected ? colors.onTint : colors.label, fontSize: 15, fontWeight: '600' }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        maxFontSizeMultiplier={1.4}
+        style={{
+          color: selected ? colors.onTint : colors.label,
+          fontSize: 15,
+          fontWeight: '600',
+          textAlign: 'center',
+        }}
       >
         {label}
       </Text>
@@ -243,12 +269,12 @@ function Chip({
 }
 
 function StepButton({
-  label,
+  icon,
   accessibilityLabel,
   onPress,
   disabled = false,
 }: {
-  readonly label: string;
+  readonly icon: SymbolViewProps['name'];
   readonly accessibilityLabel: string;
   readonly onPress: () => void;
   readonly disabled?: boolean;
@@ -271,9 +297,7 @@ function StepButton({
         opacity: disabled ? 0.3 : pressed ? 0.7 : 1,
       })}
     >
-      <Text style={{ color: colors.label, fontSize: 26, fontWeight: '600', marginTop: -2 }}>
-        {label}
-      </Text>
+      <SymbolView name={icon} size={18} weight="semibold" tintColor={colors.label} />
     </Pressable>
   );
 }

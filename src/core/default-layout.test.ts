@@ -1,4 +1,5 @@
 import { makeActivity } from '@/test-utils/make-activity';
+import { makeSummary } from '@/test-utils/make-summary';
 
 import { defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
 import { parseTemplate } from './template';
@@ -45,10 +46,28 @@ describe('defaultActivityTemplate', () => {
 
 describe('defaultSummaryTemplate', () => {
   it('is a valid summary template whose chart bars follow the period', () => {
-    const template = parseTemplate(defaultSummaryTemplate());
+    const template = parseTemplate(defaultSummaryTemplate(makeSummary()));
     expect(template.mode).toBe('summary');
     expect(template.layers.find((layer) => layer.kind === 'summaryChart')).toMatchObject({
       bucket: 'auto',
+      value: 'distance',
+    });
+  });
+
+  it('totals and charts the time of a period without distance', () => {
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      elevationGainMeters: 0,
+      routePolyline: null,
+    });
+    const template = parseTemplate(defaultSummaryTemplate(makeSummary([gym])));
+    const totals = template.layers.flatMap((layer) =>
+      layer.kind === 'summaryMetric' ? [layer.metric] : [],
+    );
+    expect(totals).toEqual(['totalMovingTime', 'activityCount']);
+    expect(template.layers.find((layer) => layer.kind === 'summaryChart')).toMatchObject({
+      value: 'movingTime',
     });
   });
 });
@@ -60,7 +79,7 @@ describe('default layouts in every format', () => {
     for (const format of formats) {
       for (const template of [
         defaultActivityTemplate(makeActivity(), format),
-        defaultSummaryTemplate(format),
+        defaultSummaryTemplate(makeSummary(), format),
       ]) {
         const row = template.layers
           .flatMap((layer) =>
@@ -79,7 +98,8 @@ describe('default layouts in every format', () => {
 
   it('shrinks the widgets on shorter canvases', () => {
     const scaleOf = (format: (typeof formats)[number]) =>
-      defaultSummaryTemplate(format).layers.find((layer) => layer.id === 'chart')?.transform.scale;
+      defaultSummaryTemplate(makeSummary(), format).layers.find((layer) => layer.id === 'chart')
+        ?.transform.scale;
     expect(scaleOf('story')).toBeGreaterThan(scaleOf('tall') ?? 0);
     expect(scaleOf('tall')).toBeGreaterThan(scaleOf('portrait') ?? 0);
     expect(scaleOf('portrait')).toBeGreaterThan(scaleOf('square') ?? 0);
@@ -96,7 +116,7 @@ describe('landscape layout', () => {
   };
 
   it('puts graphics in the left column and text in the right one', () => {
-    const summary = defaultSummaryTemplate('landscape');
+    const summary = defaultSummaryTemplate(makeSummary(), 'landscape');
     expect(byId(summary, 'routes').transform.x).toBeLessThan(0.5);
     expect(byId(summary, 'chart').transform.x).toBeLessThan(0.5);
     for (const id of ['period', 'total-totalDistance', 'total-activityCount', 'logo']) {

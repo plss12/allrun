@@ -1,4 +1,5 @@
 import { makeActivity } from '@/test-utils/make-activity';
+import { makeSummary } from '@/test-utils/make-summary';
 
 import { weekRange } from './dates';
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
@@ -94,14 +95,30 @@ describe('summaryCatalog', () => {
   it('leaves out the routes when no activity has GPS, but keeps the chart', () => {
     const catalog = summaryCatalog(summarize([], week));
     expect(keys(catalog)).not.toContain('summaryRoutes');
-    expect(items(catalog)).toContainEqual({ kind: 'summaryChart' });
+    expect(items(catalog).some((item) => item.kind === 'summaryChart')).toBe(true);
+  });
+
+  it('offers only time totals and a time chart for a period without distance', () => {
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      elevationGainMeters: 0,
+      routePolyline: null,
+      localDate: '2026-10-13',
+    });
+    const catalog = summaryCatalog(summarize([gym], week));
+    expect(keys(catalog).filter((key) => key.startsWith('summaryMetric'))).toEqual([
+      'summaryMetric-totalMovingTime',
+      'summaryMetric-activityCount',
+    ]);
+    expect(items(catalog)).toContainEqual({ kind: 'summaryChart', value: 'movingTime' });
   });
 
   it('makes valid layers', () => {
     const catalog = summaryCatalog(summarize(activities, week));
-    const template = addAll(defaultSummaryTemplate('square'), catalog);
+    const template = addAll(defaultSummaryTemplate(makeSummary(), 'square'), catalog);
     expect(template.layers.length).toBe(
-      defaultSummaryTemplate('square').layers.length + items(catalog).length,
+      defaultSummaryTemplate(makeSummary(), 'square').layers.length + items(catalog).length,
     );
   });
 });

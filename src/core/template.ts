@@ -178,6 +178,13 @@ export const layerSchema = z.discriminatedUnion('kind', [
     axisLabels: z.boolean().default(false),
     /** A line under the chart saying what the bars measure and over what ("KM PER WEEK"). */
     title: z.boolean().default(true),
+    /** Font of the axis labels and the title. */
+    font: z.enum(FONT_IDS).default('inter'),
+    bold: z.boolean().default(true),
+    /** Whether the title is in capitals (axis labels are initials and numbers already). */
+    uppercase: z.boolean().default(true),
+    /** Where the title sits under the bars. */
+    align: z.enum(['left', 'center', 'right']).default('center'),
   }),
   z.object({
     ...layerBase,

@@ -1,7 +1,8 @@
 import type { Activity } from './activity';
 import { availableMetrics, type MetricId } from './metrics';
 import type { PeriodSummary } from './summary';
-import { type Layer, SUMMARY_METRIC_IDS, type SummaryMetricId } from './template';
+import { availableSummaryMetrics, summaryHasDistance } from './summary-metrics';
+import type { Layer, SummaryMetricId } from './template';
 
 /**
  * The widgets the user can add to the canvas, grouped for the editor's picker. Only what the
@@ -20,7 +21,10 @@ export type CatalogItem =
   | { readonly kind: 'text' }
   | { readonly kind: 'route' }
   | { readonly kind: 'summaryRoutes' }
-  | { readonly kind: 'summaryChart' }
+  | {
+      readonly kind: 'summaryChart';
+      readonly value: Extract<Layer, { kind: 'summaryChart' }>['value'];
+    }
   | { readonly kind: 'logo'; readonly brand: Brand };
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
@@ -90,14 +94,14 @@ export function summaryCatalog(summary: PeriodSummary): CatalogSection[] {
   return sections([
     {
       id: 'data',
-      items: SUMMARY_METRIC_IDS.map((metric) => ({ kind: 'summaryMetric', metric })),
+      items: availableSummaryMetrics(summary).map((metric) => ({ kind: 'summaryMetric', metric })),
     },
     { id: 'text', items: [{ kind: 'info', field: 'periodName' }, { kind: 'text' }] },
     {
       id: 'graphics',
       items: [
         ...(summary.routes.length === 0 ? [] : [{ kind: 'summaryRoutes' } as const]),
-        { kind: 'summaryChart' },
+        { kind: 'summaryChart', value: summaryHasDistance(summary) ? 'distance' : 'movingTime' },
       ],
     },
     { id: 'brand', items: BRANDS },

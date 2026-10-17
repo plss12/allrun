@@ -3,9 +3,9 @@ import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import type { DateRange } from '@/core/dates';
 import {
   chartBucketOptions,
+  chartValueOptions,
   colorPageOf,
   layerColor,
   setChartOptions,
@@ -20,7 +20,8 @@ import {
   STYLE_OPACITIES,
   type TextStyle,
 } from '@/core/layer-style';
-import { FONT_IDS, type Layer, type Template } from '@/core/template';
+import type { BucketSize, PeriodSummary } from '@/core/summary';
+import { FONT_IDS, type FontId, type Layer, type Template } from '@/core/template';
 import { colors } from '@/theme/colors';
 
 import { hasUnit } from './editor-data';
@@ -29,14 +30,13 @@ import { FONT_FAMILIES, hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts }
 /** A style edit of the template, applied by the editor as one undo step. */
 export type StyleChange = (template: Template) => Template;
 
-type Tab =
-  'color' | 'font' | 'format' | 'show' | 'width' | 'data' | 'bars' | 'opacity' | 'variant' | 'tone';
+type Tab = 'color' | 'font' | 'format' | 'show' | 'width' | 'data' | 'opacity' | 'variant' | 'tone';
 
 type TextLayer = Extract<Layer, { kind: 'metric' | 'summaryMetric' | 'info' | 'text' }>;
 type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
 type ChartLayer = Extract<Layer, { kind: 'summaryChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
-type Bucket = ChartLayer['bucket'];
+type ChartValue = ChartLayer['value'];
 
 function isTextLayer(layer: Layer): layer is TextLayer {
   return (
@@ -48,10 +48,23 @@ function isTextLayer(layer: Layer): layer is TextLayer {
 }
 
 /**
- * Tabs of the panel for a layer. A chart only offers its bar size when the period allows more
- * than one readable size besides the automatic one.
+ * What a chart can measure in its period: distance only when the period has some. A chart
+ * already measuring what the period lacks (from a template) keeps that choice, so it can be
+ * switched to one that draws.
  */
-function tabsFor(layer: Layer, buckets: readonly Bucket[]): readonly Tab[] {
+function chartValues(layer: ChartLayer, values: readonly ChartValue[]): readonly ChartValue[] {
+  return values.includes(layer.value) ? values : [layer.value, ...values];
+}
+
+/**
+ * Tabs of the panel for a layer. A chart puts its data first (what it measures and its bar
+ * size), only when the period offers a choice of either.
+ */
+function tabsFor(
+  layer: Layer,
+  buckets: readonly BucketSize[],
+  values: readonly ChartValue[],
+): readonly Tab[] {
   switch (layer.kind) {
     case 'metric':
     case 'summaryMetric':
@@ -63,9 +76,14 @@ function tabsFor(layer: Layer, buckets: readonly Bucket[]): readonly Tab[] {
     case 'summaryRoutes':
       return ['color', 'width', 'opacity'];
     case 'summaryChart':
-      return buckets.length > 2
-        ? ['color', 'data', 'bars', 'opacity']
-        : ['color', 'data', 'opacity'];
+      return [
+        ...(chartValues(layer, values).length > 1 || buckets.length > 1 ? (['data'] as const) : []),
+        'color',
+        'font',
+        'format',
+        'show',
+        'opacity',
+      ];
     case 'logo':
       return ['variant', 'tone', 'opacity'];
   }
@@ -83,8 +101,10 @@ export const STYLE_PANEL_HEIGHT = TAB_HEIGHT + ROW_GAP + OPTIONS_HEIGHT;
 
 interface StylePanelProps {
   readonly layer: Layer;
-  /** The summary's period, for the chart's bar sizes; `null` for an activity. */
-  readonly range: DateRange | null;
+  /** The summary, for what its chart can measure and its bar sizes; `null` for an activity. */
+  readonly summary: PeriodSummary | null;
+  /** Bar size of the period, which a chart on `auto` uses; `null` for an activity. */
+  readonly autoBucket: BucketSize | null;
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
 }
@@ -93,10 +113,11 @@ interface StylePanelProps {
  * Style options of the selected layer, one tab at a time, in the space of the editor's formats
  * (the editor's main button turns into "Done" meanwhile). Every tap is one undo step.
  */
-export function StylePanel({ layer, range, locale, onChange }: StylePanelProps) {
+export function StylePanel({ layer, summary, autoBucket, locale, onChange }: StylePanelProps) {
   const { t } = useTranslation();
-  const buckets = range === null ? [] : chartBucketOptions(range);
-  const tabs = tabsFor(layer, buckets);
+  const buckets = summary === null ? [] : chartBucketOptions(summary.range);
+  const values = summary === null ? [] : chartValueOptions(summary);
+  const tabs = tabsFor(layer, buckets, values);
   const [chosen, setChosen] = useState<Tab>(tabs[0] ?? 'opacity');
   const tab = tabs.includes(chosen) ? chosen : tabs[0];
   return (
@@ -131,6 +152,8 @@ export function StylePanel({ layer, range, locale, onChange }: StylePanelProps) 
             tab={tab}
             layer={layer}
             buckets={buckets}
+            autoBucket={autoBucket}
+            values={values}
             locale={locale}
             onChange={onChange}
           />
@@ -148,61 +171,97 @@ const ALIGN_ICONS: Readonly<Record<TextStyle['align'], SymbolViewProps['name']>>
   right: { ios: 'text.alignright', android: 'format_align_right' },
 };
 
+/** How a text is written; options left out don't apply to the widget. */
+interface Format {
+  readonly font: FontId;
+  readonly bold: boolean;
+  readonly uppercase?: boolean;
+  readonly align?: TextStyle['align'];
+}
+
 /**
- * Bold, uppercase and an alignment button that cycles left, center and right. Free text has no
- * uppercase: the user types the capitals they want.
+ * Bold, uppercase and an alignment button that cycles left, center and right, when they apply:
+ * free text has no uppercase (the user types the capitals they want) and a chart no alignment.
  */
 function FormatRow({
-  layer,
-  onChange,
+  format,
+  onPatch,
 }: {
-  readonly layer: TextLayer;
-  readonly onChange: (change: StyleChange) => void;
+  readonly format: Format;
+  readonly onPatch: (patch: Partial<Omit<Format, 'font'>>) => void;
 }) {
   const { t } = useTranslation();
-  const { style } = layer;
-  const setStyle = (patch: Parameters<typeof setTextStyle>[2]) =>
-    onChange((template) => setTextStyle(template, layer.id, patch));
-  const nextAlign = ALIGN_ORDER[(ALIGN_ORDER.indexOf(style.align) + 1) % ALIGN_ORDER.length];
+  const { font, bold, uppercase, align } = format;
   return (
     <Row>
       <IconToggle
         icon={{ ios: 'bold', android: 'format_bold' }}
         label={t('style.bold')}
-        selected={style.bold}
-        disabled={!hasBold(style.font)}
-        onPress={() => setStyle({ bold: !style.bold })}
+        selected={bold}
+        disabled={!hasBold(font)}
+        onPress={() => onPatch({ bold: !bold })}
       />
-      {layer.kind === 'text' ? null : (
+      {uppercase === undefined ? null : (
         <IconToggle
           icon={{ ios: 'textformat', android: 'match_case' }}
           label={t('style.uppercase')}
-          selected={style.uppercase}
-          disabled={isCapsOnly(style.font)}
-          onPress={() => setStyle({ uppercase: !style.uppercase })}
+          selected={uppercase}
+          disabled={isCapsOnly(font)}
+          onPress={() => onPatch({ uppercase: !uppercase })}
         />
       )}
-      <IconToggle
-        icon={ALIGN_ICONS[style.align]}
-        label={t('style.alignment')}
-        value={t(`style.align.${style.align}`)}
-        selected={false}
-        onPress={() => setStyle({ align: nextAlign })}
-      />
+      {align === undefined ? null : (
+        <IconToggle
+          icon={ALIGN_ICONS[align]}
+          label={t('style.alignment')}
+          value={t(`style.align.${align}`)}
+          selected={false}
+          onPress={() =>
+            onPatch({ align: ALIGN_ORDER[(ALIGN_ORDER.indexOf(align) + 1) % ALIGN_ORDER.length] })
+          }
+        />
+      )}
     </Row>
   );
+}
+
+/** The format a widget's panel edits, and how to apply a change to it. */
+function formatOf(layer: TextLayer | ChartLayer): {
+  readonly format: Format;
+  readonly change: (patch: Partial<Format>) => StyleChange;
+} {
+  if (layer.kind === 'summaryChart') {
+    return {
+      format: {
+        font: layer.font,
+        bold: layer.bold,
+        uppercase: layer.uppercase,
+        align: layer.align,
+      },
+      change: (patch) => (template) => setChartOptions(template, layer.id, patch),
+    };
+  }
+  const { font, bold, uppercase, align } = layer.style;
+  return {
+    format: { font, bold, uppercase: layer.kind === 'text' ? undefined : uppercase, align },
+    change: (patch) => (template) => setTextStyle(template, layer.id, patch),
+  };
 }
 
 function TabContent({
   tab,
   layer,
   buckets,
+  autoBucket,
+  values,
   locale,
   onChange,
 }: {
   readonly tab: Tab;
   readonly layer: Layer;
-  readonly buckets: readonly Bucket[];
+  readonly buckets: readonly BucketSize[];
+  readonly autoBucket: BucketSize | null;
+  readonly values: readonly ChartValue[];
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
 }) {
@@ -210,12 +269,22 @@ function TabContent({
     case 'color':
       return <ColorPager layer={layer} onChange={onChange} />;
     case 'font':
-      return isTextLayer(layer) ? <FontRow layer={layer} onChange={onChange} /> : null;
-    case 'format':
-      return isTextLayer(layer) ? <FormatRow layer={layer} onChange={onChange} /> : null;
+    case 'format': {
+      if (!isTextLayer(layer) && layer.kind !== 'summaryChart') {
+        return null;
+      }
+      const { format, change } = formatOf(layer);
+      return tab === 'font' ? (
+        <FontRow font={format.font} onPick={(font) => onChange(change({ font }))} />
+      ) : (
+        <FormatRow format={format} onPatch={(patch) => onChange(change(patch))} />
+      );
+    }
     case 'show':
       return layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (
         <ShowRow layer={layer} onChange={onChange} />
+      ) : layer.kind === 'summaryChart' ? (
+        <ChartShowRow layer={layer} onChange={onChange} />
       ) : null;
     case 'width':
       return layer.kind === 'route' || layer.kind === 'summaryRoutes' ? (
@@ -223,11 +292,13 @@ function TabContent({
       ) : null;
     case 'data':
       return layer.kind === 'summaryChart' ? (
-        <ChartDataRow layer={layer} onChange={onChange} />
-      ) : null;
-    case 'bars':
-      return layer.kind === 'summaryChart' ? (
-        <BarsRow layer={layer} buckets={buckets} onChange={onChange} />
+        <ChartDataRow
+          layer={layer}
+          values={values}
+          buckets={buckets}
+          autoBucket={autoBucket}
+          onChange={onChange}
+        />
       ) : null;
     case 'opacity':
       return <OpacityRow layer={layer} locale={locale} onChange={onChange} />;
@@ -350,12 +421,13 @@ function ColorPager({
   );
 }
 
+/** The bundled fonts, each name written in its own font. */
 function FontRow({
-  layer,
-  onChange,
+  font: current,
+  onPick,
 }: {
-  readonly layer: TextLayer;
-  readonly onChange: (change: StyleChange) => void;
+  readonly font: FontId;
+  readonly onPick: (font: FontId) => void;
 }) {
   const previews = usePreviewFonts();
   return (
@@ -365,8 +437,8 @@ function FontRow({
           key={font}
           label={FONT_FAMILIES[font]}
           fontFamily={previews ? PREVIEW_FAMILIES[font] : undefined}
-          selected={layer.style.font === font}
-          onPress={() => onChange((template) => setTextStyle(template, layer.id, { font }))}
+          selected={current === font}
+          onPress={() => onPick(font)}
         />
       ))}
     </Row>
@@ -430,13 +502,64 @@ function WidthRow({
   );
 }
 
-const CHART_VALUES = ['distance', 'movingTime'] as const;
-
 /**
- * What the bars measure, whether each bar has its day, week or month under it, and whether the
- * chart says what it shows ("KM PER WEEK").
+ * The chart's data, as two separate choices with a divider between them: what the bars measure
+ * (distance or time) and their size (days, weeks or months). Each shows only when the period
+ * offers a choice. A chart on `auto` shows the size the period gives it as chosen; picking one
+ * fixes it.
  */
 function ChartDataRow({
+  layer,
+  values,
+  buckets,
+  autoBucket,
+  onChange,
+}: {
+  readonly layer: ChartLayer;
+  readonly values: readonly ChartValue[];
+  readonly buckets: readonly BucketSize[];
+  readonly autoBucket: BucketSize | null;
+  readonly onChange: (change: StyleChange) => void;
+}) {
+  const { t } = useTranslation();
+  const measures = chartValues(layer, values);
+  const bucket = layer.bucket === 'auto' ? autoBucket : layer.bucket;
+  return (
+    <Row>
+      {measures.length > 1
+        ? measures.map((value) => (
+            <Chip
+              key={value}
+              label={t(`style.values.${value}`)}
+              selected={layer.value === value}
+              onPress={() => onChange((template) => setChartOptions(template, layer.id, { value }))}
+            />
+          ))
+        : null}
+      {measures.length > 1 && buckets.length > 1 ? (
+        <View
+          importantForAccessibility="no"
+          style={{ width: 1, height: 28, marginHorizontal: 8, backgroundColor: colors.separator }}
+        />
+      ) : null}
+      {buckets.length > 1
+        ? buckets.map((size) => (
+            <Chip
+              key={size}
+              label={t(`style.buckets.${size}`)}
+              selected={bucket === size}
+              onPress={() =>
+                onChange((template) => setChartOptions(template, layer.id, { bucket: size }))
+              }
+            />
+          ))
+        : null}
+    </Row>
+  );
+}
+
+/** Whether each bar has its day, week or month under it, and the chart its title. */
+function ChartShowRow({
   layer,
   onChange,
 }: {
@@ -446,14 +569,6 @@ function ChartDataRow({
   const { t } = useTranslation();
   return (
     <Row>
-      {CHART_VALUES.map((value) => (
-        <Chip
-          key={value}
-          label={t(`style.values.${value}`)}
-          selected={layer.value === value}
-          onPress={() => onChange((template) => setChartOptions(template, layer.id, { value }))}
-        />
-      ))}
       <Chip
         label={t('style.axisLabels')}
         selected={layer.axisLabels}
@@ -470,31 +585,6 @@ function ChartDataRow({
           onChange((template) => setChartOptions(template, layer.id, { title: !layer.title }))
         }
       />
-    </Row>
-  );
-}
-
-/** Bar size: automatic (the period's own) or one of the sizes that read well for it. */
-function BarsRow({
-  layer,
-  buckets,
-  onChange,
-}: {
-  readonly layer: ChartLayer;
-  readonly buckets: readonly Bucket[];
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Row>
-      {buckets.map((bucket) => (
-        <Chip
-          key={bucket}
-          label={t(`style.buckets.${bucket}`)}
-          selected={layer.bucket === bucket}
-          onPress={() => onChange((template) => setChartOptions(template, layer.id, { bucket }))}
-        />
-      ))}
     </Row>
   );
 }

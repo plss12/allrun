@@ -2,7 +2,13 @@ import { makeActivity } from '@/test-utils/make-activity';
 
 import { weekRange } from './dates';
 import { summarize } from './summary';
-import { summaryMetricValue, toDisplaySummaryMetric } from './summary-metrics';
+import {
+  availableSummaryMetrics,
+  defaultSummaryMetrics,
+  summaryHasDistance,
+  summaryMetricValue,
+  toDisplaySummaryMetric,
+} from './summary-metrics';
 
 const week = weekRange('2026-10-14');
 
@@ -66,5 +72,57 @@ describe('toDisplaySummaryMetric', () => {
       fractionDigits: 0,
       unit: null,
     });
+  });
+});
+
+describe('which totals a summary shows', () => {
+  const run = makeActivity({ distanceMeters: 10_000, elevationGainMeters: 120 });
+  const gym = makeActivity({
+    sportType: 'WeightTraining',
+    distanceMeters: 0,
+    elevationGainMeters: 0,
+    routePolyline: null,
+    localDate: '2026-10-16',
+  });
+  const flatSwim = makeActivity({
+    sportType: 'Swim',
+    distanceMeters: 2000,
+    elevationGainMeters: 0,
+    routePolyline: null,
+  });
+
+  it('shows distance, time and count, the distance only when some activity has it', () => {
+    expect(defaultSummaryMetrics(summarize([run, gym], week))).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'activityCount',
+    ]);
+    expect(summaryHasDistance(summarize([gym], week))).toBe(false);
+    expect(defaultSummaryMetrics(summarize([gym], week))).toEqual([
+      'totalMovingTime',
+      'activityCount',
+    ]);
+  });
+
+  it('offers distance totals only with distance, and elevation only when there is some', () => {
+    expect(availableSummaryMetrics(summarize([run], week))).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'activityCount',
+      'totalElevationGain',
+      'averagePace',
+      'longestDistance',
+    ]);
+    expect(availableSummaryMetrics(summarize([flatSwim], week))).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'activityCount',
+      'averagePace',
+      'longestDistance',
+    ]);
+    expect(availableSummaryMetrics(summarize([gym], week))).toEqual([
+      'totalMovingTime',
+      'activityCount',
+    ]);
   });
 });

@@ -1,4 +1,6 @@
 import { type DateRange, rangeLength } from './dates';
+import type { BucketSize, PeriodSummary } from './summary';
+import { summaryHasDistance } from './summary-metrics';
 import type { Layer, LayerKind, Template } from './template';
 
 /**
@@ -277,11 +279,19 @@ export function setStrokeWidth(template: Template, id: string, width: number): T
   );
 }
 
-/** What a chart shows (distance or time), its bar size, its labels and its title. */
+/**
+ * What a chart shows (distance or time), its bar size, whether it has labels and a title, and
+ * how they are written (font, bold, capitals, alignment of the title).
+ */
 export function setChartOptions(
   template: Template,
   id: string,
-  patch: Partial<Pick<ChartLayer, 'value' | 'bucket' | 'axisLabels' | 'title'>>,
+  patch: Partial<
+    Pick<
+      ChartLayer,
+      'value' | 'bucket' | 'axisLabels' | 'title' | 'font' | 'bold' | 'uppercase' | 'align'
+    >
+  >,
 ): Template {
   return editLayer(template, id, ['summaryChart'], 'chart options', (layer) =>
     unchanged(layer, patch) ? layer : { ...layer, ...patch },
@@ -299,16 +309,25 @@ export function setLogoOptions(
   );
 }
 
+/**
+ * What a chart of the period can measure: distance only when some activity has any (a month of
+ * gym sessions would draw empty bars), time always. Time and space O(1).
+ */
+export function chartValueOptions(summary: PeriodSummary): ChartLayer['value'][] {
+  return summaryHasDistance(summary) ? ['distance', 'movingTime'] : ['movingTime'];
+}
+
 /** Fewest and most bars a chart may have for a bar size to be offered. */
 const MIN_BARS = 3;
 const MAX_BARS = 62;
 
 /**
- * Bar sizes worth offering for a chart of `range`: `auto` (the period's own, see
- * `bucketForPeriod`) and every size that gives between 3 and 62 bars, so a week offers only
- * days, a month days or weeks, and a year weeks or months. Time and space O(1).
+ * Bar sizes worth offering for a chart of `range`: every size that gives between 3 and 62 bars,
+ * so a week offers only days, a month days or weeks, and a year weeks or months. A chart starts
+ * on `auto` (the period's own size, which is always one of these when there is a choice) until
+ * the user picks one. Time and space O(1).
  */
-export function chartBucketOptions(range: DateRange): ChartLayer['bucket'][] {
+export function chartBucketOptions(range: DateRange): BucketSize[] {
   const days = rangeLength(range);
   const [startYear, startMonth] = range.start.split('-').map(Number);
   const [endYear, endMonth] = range.end.split('-').map(Number);
@@ -320,5 +339,5 @@ export function chartBucketOptions(range: DateRange): ChartLayer['bucket'][] {
   const sizes = (['day', 'week', 'month'] as const).filter(
     (size) => counts[size] >= MIN_BARS && counts[size] <= MAX_BARS,
   );
-  return ['auto', ...sizes];
+  return sizes;
 }

@@ -14,14 +14,22 @@ describe('modalityOfStravaType', () => {
     ['EMountainBikeRide', 'eBikeRide', 'ride'],
     ['VirtualRide', 'indoorRide', 'ride'],
     ['Swim', 'swim', 'swim'],
+    ['WeightTraining', 'workout', 'training'],
+    ['Crossfit', 'workout', 'training'],
+    ['Workout', 'workout', 'training'],
+    ['HighIntensityIntervalTraining', 'workout', 'training'],
+    ['Yoga', 'workout', 'training'],
+    ['Pilates', 'workout', 'training'],
+    ['Elliptical', 'workout', 'training'],
+    ['StairStepper', 'workout', 'training'],
   ] as const)('maps %s to the %s modality in the %s family', (sportType, modality, family) => {
     expect(modalityOfStravaType(sportType)).toBe(modality);
     expect(FAMILY_OF_MODALITY[modalityOfStravaType(sportType)]).toBe(family);
   });
 
   it('falls back to the generic modality for other or unknown sport types', () => {
-    expect(modalityOfStravaType('WeightTraining')).toBe('other');
-    expect(modalityOfStravaType('Crossfit')).toBe('other');
+    expect(modalityOfStravaType('RockClimbing')).toBe('other');
+    expect(modalityOfStravaType('Golf')).toBe('other');
     expect(modalityOfStravaType('SomethingStravaAddsTomorrow')).toBe('other');
   });
 });

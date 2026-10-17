@@ -130,6 +130,8 @@ const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
     'calories',
   ],
   swim: ['distance', 'movingTime', 'swimPace', ...HEART_RATE, 'calories', 'elapsedTime'],
+  // Sessions measured in time and effort; a cardio machine's distance is rarely real.
+  workout: ['movingTime', ...HEART_RATE, 'calories', 'elapsedTime'],
   other: [
     'movingTime',
     'elapsedTime',

@@ -1,7 +1,9 @@
 import type { Activity } from './activity';
 import type { NewLayer } from './layer-catalog';
 import { availableMetrics } from './metrics';
-import type { CanvasFormat, Layer, SummaryMetricId, Template } from './template';
+import type { PeriodSummary } from './summary';
+import { defaultSummaryMetrics, summaryHasDistance } from './summary-metrics';
+import type { CanvasFormat, Layer, Template } from './template';
 
 /**
  * Starting compositions for the editor: something good-looking on screen the moment a photo is
@@ -196,19 +198,18 @@ export function defaultActivityTemplate(
   return { version: 1, id: 'default-activity', name: 'AllRun', mode: 'activity', format, layers };
 }
 
-const SUMMARY_METRICS: readonly SummaryMetricId[] = [
-  'totalDistance',
-  'totalMovingTime',
-  'activityCount',
-];
-
 /**
  * Default composition for a period summary: the period name, every route of the period
- * overlaid, a bar chart of the distance (bars sized to the period), the main totals and the logo.
+ * overlaid, a bar chart (bars sized to the period), the headline totals and the logo. A period
+ * without distance (gym sessions) charts and totals its time instead of "0.00 km".
  */
-export function defaultSummaryTemplate(format: CanvasFormat = 'story'): Template {
+export function defaultSummaryTemplate(
+  summary: PeriodSummary,
+  format: CanvasFormat = 'story',
+): Template {
   const layout = LAYOUTS[format];
-  const row = metricsRow(layout, SUMMARY_METRICS.length);
+  const metrics = defaultSummaryMetrics(summary);
+  const row = metricsRow(layout, metrics.length);
   const layers: Layer[] = [
     {
       id: 'period',
@@ -230,14 +231,18 @@ export function defaultSummaryTemplate(format: CanvasFormat = 'story'): Template
       id: 'chart',
       kind: 'summaryChart',
       bucket: 'auto',
-      value: 'distance',
+      value: summaryHasDistance(summary) ? 'distance' : 'movingTime',
       color: WHITE,
       axisLabels: true,
       title: true,
+      font: 'inter',
+      bold: true,
+      uppercase: true,
+      align: 'center',
       transform: at(layout.chart),
       opacity: 0.9,
     },
-    ...SUMMARY_METRICS.map((metric, i): Layer => ({
+    ...metrics.map((metric, i): Layer => ({
       id: `total-${metric}`,
       kind: 'summaryMetric',
       metric,
@@ -313,10 +318,13 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         ...item,
         id,
         bucket: 'auto',
-        value: 'distance',
         color: WHITE,
         axisLabels: true,
         title: true,
+        font: 'inter',
+        bold: true,
+        uppercase: true,
+        align: 'center',
         transform: centered(layout.chart.scale),
         opacity: 0.9,
       };
