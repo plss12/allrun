@@ -1,10 +1,16 @@
 import { weekRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from '@/core/default-layout';
-import { bucketize, summarize } from '@/core/summary';
+import { summarize } from '@/core/summary';
 import type { Layer } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
 
-import { type EditorData, layerText, MISSING_VALUE } from './editor-data';
+import {
+  chartBuckets,
+  type EditorData,
+  layerText,
+  MISSING_VALUE,
+  type SummaryData,
+} from './editor-data';
 
 const context = { unit: 'km', locale: 'es' } as const;
 const activity = makeActivity({ name: 'Rodaje suave', startLocal: '2026-10-14T08:00:00' });
@@ -53,7 +59,7 @@ describe('layerText for an activity', () => {
   });
 
   it('returns nothing for summary layers and non-text layers', () => {
-    const summaryLayers = defaultSummaryTemplate('day').layers;
+    const summaryLayers = defaultSummaryTemplate().layers;
     expect(layerText(layer('period', summaryLayers), activityData, context)).toBeNull();
     expect(layerText(layer('logo', layers), activityData, context)).toBeNull();
   });
@@ -66,10 +72,10 @@ describe('layerText for a summary', () => {
     mode: 'summary',
     kind: 'week',
     summary: summarize(activities, range),
-    buckets: bucketize(activities, range, 'day'),
+    activities,
     bucketSize: 'day',
   };
-  const { layers } = defaultSummaryTemplate('day');
+  const { layers } = defaultSummaryTemplate();
 
   it('shows totals and the period name', () => {
     expect(layerText(layer('total-totalDistance', layers), data, context)).toEqual({
@@ -79,5 +85,35 @@ describe('layerText for a summary', () => {
     });
     expect(layerText(layer('total-activityCount', layers), data, context)?.value).toBe('2');
     expect(layerText(layer('period', layers), data, context)?.value).toBe('12 oct – 18 oct 2026');
+  });
+});
+
+describe('chartBuckets', () => {
+  const range = weekRange('2026-10-14');
+  const activities = [makeActivity(), makeActivity({ localDate: '2026-10-16' })];
+  const data: SummaryData = {
+    mode: 'summary',
+    kind: 'week',
+    summary: summarize(activities, range),
+    activities,
+    bucketSize: 'day',
+  };
+  const found = layer('chart', defaultSummaryTemplate('story').layers);
+  if (found.kind !== 'summaryChart') {
+    throw new Error('The default summary has no chart');
+  }
+  const chart = found;
+
+  it("uses the period's own bars for an automatic chart", () => {
+    const { size, buckets } = chartBuckets({ ...chart, bucket: 'auto' }, data);
+    expect(size).toBe('day');
+    expect(buckets).toHaveLength(7);
+  });
+
+  it("uses the chart's own bar size when it sets one", () => {
+    const { size, buckets } = chartBuckets({ ...chart, bucket: 'week' }, data);
+    expect(size).toBe('week');
+    expect(buckets).toHaveLength(1);
+    expect(buckets[0].distanceMeters).toBe(20_000);
   });
 });

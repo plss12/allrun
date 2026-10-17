@@ -82,6 +82,19 @@ describe('parseTemplate', () => {
     expect(() => parseTemplate({ ...activityTemplate, version: 2 })).toThrow(/version/);
     expect(() => parseTemplate({ ...activityTemplate, name: '   ' })).toThrow(/name/);
   });
+
+  it('sizes the bars of a chart without a bucket to the period', () => {
+    const chart = {
+      id: 'chart',
+      kind: 'summaryChart',
+      value: 'distance',
+      color: '#FFFFFF',
+      transform: center,
+      opacity: 1,
+    };
+    const template = parseTemplate({ ...activityTemplate, mode: 'summary', layers: [chart] });
+    expect(template.layers[0]).toMatchObject({ bucket: 'auto', axisLabels: false });
+  });
 });
 
 describe('isLayerAllowed', () => {

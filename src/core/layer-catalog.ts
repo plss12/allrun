@@ -1,6 +1,6 @@
 import type { Activity } from './activity';
 import { availableMetrics, type MetricId } from './metrics';
-import type { BucketSize, PeriodSummary } from './summary';
+import type { PeriodSummary } from './summary';
 import { type Layer, SUMMARY_METRIC_IDS, type SummaryMetricId } from './template';
 
 /**
@@ -20,7 +20,7 @@ export type CatalogItem =
   | { readonly kind: 'text' }
   | { readonly kind: 'route' }
   | { readonly kind: 'summaryRoutes' }
-  | { readonly kind: 'summaryChart'; readonly bucket: BucketSize }
+  | { readonly kind: 'summaryChart' }
   | { readonly kind: 'logo'; readonly brand: Brand };
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
@@ -84,9 +84,9 @@ export function activityCatalog(activity: Activity): CatalogSection[] {
 
 /**
  * Widgets for a period summary: every total, the period name, free text, the overlaid routes
- * when any activity has GPS, the bar chart per `bucket`, and the logo. Time O(1).
+ * when any activity has GPS, the bar chart, and the logo. Time O(1).
  */
-export function summaryCatalog(summary: PeriodSummary, bucket: BucketSize): CatalogSection[] {
+export function summaryCatalog(summary: PeriodSummary): CatalogSection[] {
   return sections([
     {
       id: 'data',
@@ -97,7 +97,7 @@ export function summaryCatalog(summary: PeriodSummary, bucket: BucketSize): Cata
       id: 'graphics',
       items: [
         ...(summary.routes.length === 0 ? [] : [{ kind: 'summaryRoutes' } as const]),
-        { kind: 'summaryChart', bucket },
+        { kind: 'summaryChart' },
       ],
     },
     { id: 'brand', items: BRANDS },

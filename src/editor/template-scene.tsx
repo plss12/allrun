@@ -4,10 +4,12 @@ import {
   Group,
   Image,
   MipmapMode,
+  Paint,
   Paragraph,
   Path,
   Rect,
   RoundedRect,
+  Shadow,
   Skia,
   type SkImage,
   type SkParagraph,
@@ -27,7 +29,13 @@ import { type Point, projectRoutes } from '@/core/route-projection';
 import { CANVAS_FORMATS, type CanvasFormat, type Layer, type Template } from '@/core/template';
 import { formatBucketLabels } from '@/ui/format';
 
-import { type EditorData, type LabelKey, layerText, type TextContext } from './editor-data';
+import {
+  chartBuckets,
+  type EditorData,
+  type LabelKey,
+  layerText,
+  type TextContext,
+} from './editor-data';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
 import { FONT_FAMILIES } from './fonts';
@@ -228,14 +236,18 @@ function prepareLayer(
       return preparedRoutes(layer, routes, ROUTES_WIDTH, ROUTES_HEIGHT);
     }
     case 'summaryChart': {
-      if (data.mode !== 'summary' || data.buckets.length === 0) {
+      if (data.mode !== 'summary') {
         return null;
       }
-      const values = data.buckets.map((bucket) =>
+      const { size, buckets } = chartBuckets(layer, data);
+      if (buckets.length === 0) {
+        return null;
+      }
+      const values = buckets.map((bucket) =>
         layer.value === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds,
       );
       const labels = layer.axisLabels
-        ? formatBucketLabels(data.buckets, data.bucketSize, textContext.locale).map((label) =>
+        ? formatBucketLabels(buckets, size, textContext.locale).map((label) =>
             label === ''
               ? null
               : buildParagraph(
@@ -313,6 +325,21 @@ const MAX_TEXT_WIDTH = 1000;
 
 type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
 
+/**
+ * The soft shadow under texts, routes and bars. It keeps white widgets readable on bright
+ * photos and lifts the top one off the layers below it: without it, a white route over white
+ * text would merge with it.
+ */
+const SHADOW_COLOR = 'rgba(0, 0, 0, 0.45)';
+const SHADOW_OFFSET_Y = 3;
+const SHADOW_BLUR_RADIUS = 10;
+/** Paragraph shadows take a blur radius, image filters a sigma; this is Skia's conversion. */
+const SHADOW_SIGMA = 0.57735 * SHADOW_BLUR_RADIUS + 0.5;
+
+function DropShadow() {
+  return <Shadow dx={0} dy={SHADOW_OFFSET_Y} blur={SHADOW_SIGMA} color={SHADOW_COLOR} />;
+}
+
 const LABEL_STYLE: TextStyle = {
   font: 'inter',
   color: '#FFFFFF',
@@ -342,7 +369,13 @@ function buildParagraph(
     fontSize,
     fontStyle: { weight: bold ? FontWeight.Bold : FontWeight.Normal },
     shadows: style.shadow
-      ? [{ color: Skia.Color('rgba(0, 0, 0, 0.45)'), offset: { x: 0, y: 3 }, blurRadius: 10 }]
+      ? [
+          {
+            color: Skia.Color(SHADOW_COLOR),
+            offset: { x: 0, y: SHADOW_OFFSET_Y },
+            blurRadius: SHADOW_BLUR_RADIUS,
+          },
+        ]
       : [],
   });
   const caseOf = (text: string) => (style.uppercase ? text.toLocaleUpperCase() : text);
@@ -432,7 +465,9 @@ function RouteLines({ routes, box, boxHeight, stroke }: RouteLinesProps) {
       strokeCap="round"
       strokeJoin="round"
       color={stroke.color}
-    />
+    >
+      <DropShadow />
+    </Path>
   );
 }
 
@@ -457,21 +492,30 @@ function BarChart({
   const totalHeight = CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND);
   return (
     <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
-      {values.map((value, i) => {
-        const height = max > 0 ? Math.max(minHeight, (value / max) * CHART_HEIGHT) : minHeight;
-        return (
-          <RoundedRect
-            key={i}
-            x={i * slot + (slot - barWidth) / 2}
-            y={CHART_HEIGHT - height}
-            width={barWidth}
-            height={height}
-            r={Math.min(barWidth / 2, 12)}
-            color={color}
-            opacity={value > 0 ? 1 : 0.4}
-          />
-        );
-      })}
+      {/* One shadow for all the bars, drawn as a layer, instead of one blur per bar. */}
+      <Group
+        layer={
+          <Paint>
+            <DropShadow />
+          </Paint>
+        }
+      >
+        {values.map((value, i) => {
+          const height = max > 0 ? Math.max(minHeight, (value / max) * CHART_HEIGHT) : minHeight;
+          return (
+            <RoundedRect
+              key={i}
+              x={i * slot + (slot - barWidth) / 2}
+              y={CHART_HEIGHT - height}
+              width={barWidth}
+              height={height}
+              r={Math.min(barWidth / 2, 12)}
+              color={color}
+              opacity={value > 0 ? 1 : 0.4}
+            />
+          );
+        })}
+      </Group>
       {labels?.map((label, i) => {
         if (label === null) {
           return null;

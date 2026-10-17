@@ -1,23 +1,37 @@
 import type { Activity } from '@/core/activity';
 import { type MetricId, type MetricUnit, metricValue, toDisplayMetric } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
-import type { BucketSize, PeriodSummary, SummaryBucket } from '@/core/summary';
+import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type { Layer, SummaryMetricId } from '@/core/template';
 import type { DistanceUnit } from '@/core/units';
 import { formatActivityDate, formatMetric, formatPeriodName } from '@/ui/format';
 
+/** A period summary to fill a template with. */
+export interface SummaryData {
+  readonly mode: 'summary';
+  readonly kind: PeriodKind;
+  readonly summary: PeriodSummary;
+  /** The activities summed up (sport filter already applied), for charts of any bar size. */
+  readonly activities: readonly Activity[];
+  /** Bar size that suits the period, used by charts set to `auto`. */
+  readonly bucketSize: BucketSize;
+}
+
 /** What the editor fills the template with: one activity, or a period summary. */
-export type EditorData =
-  | { readonly mode: 'activity'; readonly activity: Activity }
-  | {
-      readonly mode: 'summary';
-      readonly kind: PeriodKind;
-      readonly summary: PeriodSummary;
-      readonly buckets: readonly SummaryBucket[];
-      /** Size the buckets were made with, for the chart labels. */
-      readonly bucketSize: BucketSize;
-    };
+export type EditorData = { readonly mode: 'activity'; readonly activity: Activity } | SummaryData;
+
+/**
+ * Bars of a summary chart and their size: the chart's own size, or the period's for `auto`.
+ * Time O(b + n) for b bars and n activities, space O(b).
+ */
+export function chartBuckets(
+  layer: Extract<Layer, { kind: 'summaryChart' }>,
+  data: SummaryData,
+): { readonly size: BucketSize; readonly buckets: SummaryBucket[] } {
+  const size = layer.bucket === 'auto' ? data.bucketSize : layer.bucket;
+  return { size, buckets: bucketize(data.activities, data.summary.range, size) };
+}
 
 /** Translation key of a data widget's label. */
 export type LabelKey = `metrics.${MetricId}` | `summaryMetrics.${SummaryMetricId}`;

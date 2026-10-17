@@ -1,7 +1,6 @@
 import type { Activity } from './activity';
 import type { NewLayer } from './layer-catalog';
 import { availableMetrics } from './metrics';
-import type { BucketSize } from './summary';
 import type { CanvasFormat, Layer, SummaryMetricId, Template } from './template';
 
 /**
@@ -207,10 +206,7 @@ const SUMMARY_METRICS: readonly SummaryMetricId[] = [
  * Default composition for a period summary: the period name, every route of the period
  * overlaid, a bar chart of the distance (bars sized to the period), the main totals and the logo.
  */
-export function defaultSummaryTemplate(
-  bucket: BucketSize,
-  format: CanvasFormat = 'story',
-): Template {
+export function defaultSummaryTemplate(format: CanvasFormat = 'story'): Template {
   const layout = LAYOUTS[format];
   const row = metricsRow(layout, SUMMARY_METRICS.length);
   const layers: Layer[] = [
@@ -233,7 +229,7 @@ export function defaultSummaryTemplate(
     {
       id: 'chart',
       kind: 'summaryChart',
-      bucket,
+      bucket: 'auto',
       value: 'distance',
       color: WHITE,
       axisLabels: true,
@@ -315,6 +311,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
       return {
         ...item,
         id,
+        bucket: 'auto',
         value: 'distance',
         color: WHITE,
         axisLabels: true,

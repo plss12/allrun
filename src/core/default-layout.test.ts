@@ -44,11 +44,11 @@ describe('defaultActivityTemplate', () => {
 });
 
 describe('defaultSummaryTemplate', () => {
-  it('is a valid summary template with the requested chart buckets', () => {
-    const template = parseTemplate(defaultSummaryTemplate('month'));
+  it('is a valid summary template whose chart bars follow the period', () => {
+    const template = parseTemplate(defaultSummaryTemplate());
     expect(template.mode).toBe('summary');
     expect(template.layers.find((layer) => layer.kind === 'summaryChart')).toMatchObject({
-      bucket: 'month',
+      bucket: 'auto',
     });
   });
 });
@@ -60,7 +60,7 @@ describe('default layouts in every format', () => {
     for (const format of formats) {
       for (const template of [
         defaultActivityTemplate(makeActivity(), format),
-        defaultSummaryTemplate('day', format),
+        defaultSummaryTemplate(format),
       ]) {
         const row = template.layers
           .flatMap((layer) =>
@@ -79,8 +79,7 @@ describe('default layouts in every format', () => {
 
   it('shrinks the widgets on shorter canvases', () => {
     const scaleOf = (format: (typeof formats)[number]) =>
-      defaultSummaryTemplate('day', format).layers.find((layer) => layer.id === 'chart')?.transform
-        .scale;
+      defaultSummaryTemplate(format).layers.find((layer) => layer.id === 'chart')?.transform.scale;
     expect(scaleOf('story')).toBeGreaterThan(scaleOf('tall') ?? 0);
     expect(scaleOf('tall')).toBeGreaterThan(scaleOf('portrait') ?? 0);
     expect(scaleOf('portrait')).toBeGreaterThan(scaleOf('square') ?? 0);
@@ -97,7 +96,7 @@ describe('landscape layout', () => {
   };
 
   it('puts graphics in the left column and text in the right one', () => {
-    const summary = defaultSummaryTemplate('day', 'landscape');
+    const summary = defaultSummaryTemplate('landscape');
     expect(byId(summary, 'routes').transform.x).toBeLessThan(0.5);
     expect(byId(summary, 'chart').transform.x).toBeLessThan(0.5);
     for (const id of ['period', 'total-totalDistance', 'total-activityCount', 'logo']) {

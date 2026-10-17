@@ -167,7 +167,11 @@ export const layerSchema = z.discriminatedUnion('kind', [
   z.object({
     ...layerBase,
     kind: z.literal('summaryChart'),
-    bucket: z.enum(['day', 'week', 'month']),
+    /**
+     * Size of each bar: `auto` follows the period (days for a week or month, months for a
+     * year, see `bucketForPeriod`), so one template suits any period; the others force it.
+     */
+    bucket: z.enum(['auto', 'day', 'week', 'month']).default('auto'),
     value: z.enum(['distance', 'movingTime']),
     color: colorSchema,
     /** Day, date or month initial under each bar. */

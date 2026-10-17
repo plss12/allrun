@@ -32,7 +32,7 @@ import {
 } from '@/core/layer-catalog';
 import { DEFAULT_FRAMING } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
-import { bucketize, summarize } from '@/core/summary';
+import { selectActivities, summarize } from '@/core/summary';
 import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
 import {
   addLayer,
@@ -120,13 +120,13 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
     const range = customRange(params.start, params.end);
     const activities = await source.listInRange(range);
     const filter = params.families.length === 0 ? {} : { families: params.families };
-    const bucketSize = bucketForPeriod(params.kind, range);
+    const selected = selectActivities(activities, range, filter);
     return {
       mode: 'summary',
       kind: params.kind,
-      summary: summarize(activities, range, filter),
-      buckets: bucketize(activities, range, bucketSize, filter),
-      bucketSize,
+      summary: summarize(selected, range),
+      activities: selected,
+      bucketSize: bucketForPeriod(params.kind, range),
     };
   }, JSON.stringify(params));
 
@@ -155,7 +155,7 @@ function EditorWorkspace({
   const defaultTemplate: DefaultTemplate = (format) =>
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
-      : defaultSummaryTemplate(bucketForPeriod(data.kind, data.summary.range), format);
+      : defaultSummaryTemplate(format);
   const [history, setHistory] = useState(() =>
     createHistory(createDocument(defaultTemplate, 'story', DEFAULT_FRAMING)),
   );
@@ -168,9 +168,7 @@ function EditorWorkspace({
   const selected = template.layers.find((layer) => layer.id === selectedId) ?? null;
   const [sheet, setSheet] = useState<LayerSheetRequest | null>(null);
   const catalog =
-    data.mode === 'activity'
-      ? activityCatalog(data.activity)
-      : summaryCatalog(data.summary, data.bucketSize);
+    data.mode === 'activity' ? activityCatalog(data.activity) : summaryCatalog(data.summary);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);

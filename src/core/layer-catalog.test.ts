@@ -75,7 +75,7 @@ describe('summaryCatalog', () => {
   const activities = [makeActivity({ localDate: '2026-10-13' })];
 
   it('offers every total, the period texts, the routes, the chart and the logo', () => {
-    const catalog = summaryCatalog(summarize(activities, week), 'day');
+    const catalog = summaryCatalog(summarize(activities, week));
     expect(keys(catalog)).toEqual([
       'summaryMetric-totalDistance',
       'summaryMetric-totalMovingTime',
@@ -92,16 +92,16 @@ describe('summaryCatalog', () => {
   });
 
   it('leaves out the routes when no activity has GPS, but keeps the chart', () => {
-    const catalog = summaryCatalog(summarize([], week), 'week');
+    const catalog = summaryCatalog(summarize([], week));
     expect(keys(catalog)).not.toContain('summaryRoutes');
-    expect(items(catalog)).toContainEqual({ kind: 'summaryChart', bucket: 'week' });
+    expect(items(catalog)).toContainEqual({ kind: 'summaryChart' });
   });
 
   it('makes valid layers', () => {
-    const catalog = summaryCatalog(summarize(activities, week), 'day');
-    const template = addAll(defaultSummaryTemplate('day', 'square'), catalog);
+    const catalog = summaryCatalog(summarize(activities, week));
+    const template = addAll(defaultSummaryTemplate('square'), catalog);
     expect(template.layers.length).toBe(
-      defaultSummaryTemplate('day', 'square').layers.length + items(catalog).length,
+      defaultSummaryTemplate('square').layers.length + items(catalog).length,
     );
   });
 });
