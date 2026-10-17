@@ -4,7 +4,7 @@ import { defaultActivityTemplate } from './default-layout';
 import {
   createDocument,
   type DefaultTemplate,
-  removeLayer,
+  editLayers,
   resetFraming,
   resetLayout,
   sameDocument,
@@ -13,6 +13,7 @@ import {
   setLayerTransform,
 } from './editor-document';
 import { DEFAULT_FRAMING } from './photo-framing';
+import { removeLayer } from './template-edit';
 
 const activity = makeActivity();
 const defaultTemplate: DefaultTemplate = (format) => defaultActivityTemplate(activity, format);
@@ -119,18 +120,18 @@ describe('setLayerTransform and resetLayout', () => {
   });
 });
 
-describe('removeLayer', () => {
-  it('removes the layer and makes the layout custom, undone by restoring it', () => {
+describe('editLayers', () => {
+  it('applies the edit and makes the layout custom, undone by restoring it', () => {
     const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
     const [first, ...rest] = document.template.layers;
-    const removed = removeLayer(document, first.id);
+    const removed = editLayers(document, (template) => removeLayer(template, first.id));
     expect(removed.template.layers).toEqual(rest);
     expect(removed.customLayout).toBe(true);
     expect(resetLayout(removed, defaultTemplate).template.layers[0]).toEqual(first);
   });
 
-  it('returns the same document for a missing layer', () => {
+  it('returns the same document when the edit changes nothing', () => {
     const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
-    expect(removeLayer(document, 'missing')).toBe(document);
+    expect(editLayers(document, (template) => removeLayer(template, 'missing'))).toBe(document);
   });
 });

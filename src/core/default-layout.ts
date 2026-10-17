@@ -1,4 +1,5 @@
 import type { Activity } from './activity';
+import type { NewLayer } from './layer-catalog';
 import { availableMetrics } from './metrics';
 import type { BucketSize } from './summary';
 import type { CanvasFormat, Layer, SummaryMetricId, Template } from './template';
@@ -204,7 +205,7 @@ const SUMMARY_METRICS: readonly SummaryMetricId[] = [
 
 /**
  * Default composition for a period summary: the period name, every route of the period
- * overlaid, a bar chart of the distance per `bucket`, the main totals and the logo.
+ * overlaid, a bar chart of the distance (bars sized to the period), the main totals and the logo.
  */
 export function defaultSummaryTemplate(
   bucket: BucketSize,
@@ -253,4 +254,81 @@ export function defaultSummaryTemplate(
     logo(layout),
   ];
   return { version: 1, id: 'default-summary', name: 'AllRun', mode: 'summary', format, layers };
+}
+
+/**
+ * A widget added from the picker, with the same look and size it has in the default layout of
+ * `format`, centered on the canvas (the user then drags it into place).
+ */
+export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Layer {
+  const layout = LAYOUTS[format];
+  const centered = (scale: number) => ({ x: 0.5, y: 0.5, scale, rotation: 0 });
+  switch (item.kind) {
+    case 'metric':
+    case 'summaryMetric':
+      return {
+        ...item,
+        id,
+        showLabel: true,
+        showUnit: true,
+        style: textStyle({ font: 'bebasNeue' }),
+        transform: centered(layout.scale),
+        opacity: 1,
+      };
+    case 'info': {
+      const isTitle = item.field !== 'activityDate';
+      return {
+        ...item,
+        id,
+        maxWidth: layout.titleMaxWidth,
+        style: textStyle({ bold: isTitle, uppercase: item.field === 'periodName' }),
+        transform: centered(isTitle ? layout.title.scale : layout.subtitle.scale),
+        opacity: isTitle ? 1 : 0.9,
+      };
+    }
+    case 'text':
+      return {
+        ...item,
+        id,
+        maxWidth: layout.titleMaxWidth,
+        style: textStyle({ bold: true }),
+        transform: centered(layout.title.scale),
+        opacity: 1,
+      };
+    case 'route':
+      return {
+        ...item,
+        id,
+        stroke: { color: WHITE, width: 8 },
+        transform: centered(layout.route.scale),
+        opacity: 0.95,
+      };
+    case 'summaryRoutes':
+      return {
+        ...item,
+        id,
+        stroke: { color: WHITE, width: 4 },
+        transform: centered(layout.routes.scale),
+        opacity: 0.85,
+      };
+    case 'summaryChart':
+      return {
+        ...item,
+        id,
+        value: 'distance',
+        color: WHITE,
+        axisLabels: true,
+        transform: centered(layout.chart.scale),
+        opacity: 0.9,
+      };
+    case 'logo':
+      return {
+        ...item,
+        id,
+        tone: 'light',
+        variant: 'wordmark',
+        transform: centered(layout.logo.scale),
+        opacity: 0.95,
+      };
+  }
 }

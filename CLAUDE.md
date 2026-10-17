@@ -16,7 +16,7 @@ App móvil (iOS + Android) para poner datos de Strava sobre tus fotos con libert
 Las carpetas que aún no existen se crean en su hito.
 
 - `src/app/`: solo pantallas y layouts (Expo Router).
-- `src/core/`: dominio puro y testeado (unidades, perfiles por deporte, métricas, resúmenes, recorte de privacidad de la ruta, esquema de plantillas). Sin imports de React Native ni de E/S.
+- `src/core/`: dominio puro y testeado (unidades, perfiles por deporte, métricas, resúmenes, recorte de privacidad de la ruta, esquema de plantillas, edición de sus capas y catálogo de widgets). Sin imports de React Native ni de E/S.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/schema.ts` valida con Zod y mapea al modelo `Activity`; `fixtures/` genera un historial sintético con el formato de Strava que pasa por ese mismo esquema.
 - `scripts/brand/`: generador de variantes de marca e iconos.
 - `src/i18n/`: i18next con textos en `locales/en.ts` (fuente de las claves) y `locales/es.ts`, que el compilador obliga a tener las mismas claves; las claves de `t()` están tipadas.
@@ -34,7 +34,7 @@ Las carpetas que aún no existen se crean en su hito.
 - SDK 57 y no 58 porque el Expo Go de la App Store aún no soporta el 58: cuando lo haga, hay que subir (notas en `docs/decisions/001-stack.md`). Mientras, usa la API de las librerías del SDK 57 (p. ej. gesture-handler 2.x, no 3.x).
 - Marca: el diseño original está en `docs/marca` (no tocar). Las variantes (monograma reducido de 3 calles, logo horizontal, monocromos), los iconos de la app y `src/editor/brand/geometry.generated.ts` salen de `scripts/brand/build-brand.mjs` (`npm run brand`), que reconstruye el monograma desde su geometría. Iconos y marcas de agua usan el monograma reducido porque las 4 calles se empastan en tamaños pequeños.
 - Calidad ante todo (es una app de fotos): logos y marcas de agua siempre como vectores de Skia (`editor/brand/brand-art.tsx`), nunca imágenes escaladas; las fotos se dibujan con filtrado trilineal. Marca de agua por defecto: solo «AllRun» (promociona el nombre); el monograma y el conjunto son opciones. Colores: Track Red `#C94A2E` (acento), Night Ink `#141B2D`, Chalk `#F6F1EA`.
-- Strava: datos bajo demanda y caché local de menos de 7 días; el trazado llega completo al dueño, así que el recorte de privacidad del inicio y del final viene activado por defecto; solo se pueden usar los logos oficiales «Powered by Strava» / «Compatible with Strava».
+- Strava: datos bajo demanda y caché local de menos de 7 días; el trazado llega completo al dueño, así que el recorte de privacidad del inicio y del final viene activado por defecto; solo se pueden usar los logos oficiales «Powered by Strava» / «Compatible with Strava», sin modificar; el logo propio de Strava, no. Por decisión de producto, el editor solo ofrece el logo de AllRun.
 - Datos de ejemplo siempre sintéticos (`generateStravaFixtures`, con semilla fija): el repo es público y las actividades reales revelarían dónde vive el usuario.
 - Fechas: los periodos se agrupan por fecha local (`LocalDate`, `YYYY-MM-DD`) con aritmética de días en `core/dates.ts`; sin librerías de fechas ni `Date` local.
 - Cualquier `sport_type` de Strava tiene que funcionar. Deporte en dos niveles (`core/sports.ts`): la modalidad decide las métricas (`core/metrics.ts`), la familia agrupa para los resúmenes; lo desconocido cae en `other`, el perfil genérico.

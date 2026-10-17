@@ -66,13 +66,19 @@ export function setLayerTransform(
   return { ...document, template: { ...document.template, layers }, customLayout: true };
 }
 
-/** Removes one layer; the layout becomes the user's own. `document` itself if it is missing. */
-export function removeLayer(document: EditorDocument, id: string): EditorDocument {
-  const layers = document.template.layers.filter((layer) => layer.id !== id);
-  if (layers.length === document.template.layers.length) {
+/**
+ * Applies an edit of the layer list (see `template-edit.ts`); the layout becomes the user's own.
+ * Returns `document` itself when the edit returns the template unchanged.
+ */
+export function editLayers(
+  document: EditorDocument,
+  change: (template: Template) => Template,
+): EditorDocument {
+  const template = change(document.template);
+  if (template === document.template) {
     return document;
   }
-  return { ...document, template: { ...document.template, layers }, customLayout: true };
+  return { ...document, template, customLayout: true };
 }
 
 /** Puts back the default layout of the current format, discarding the user's layer changes. */

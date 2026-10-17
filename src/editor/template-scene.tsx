@@ -253,26 +253,13 @@ function prepareLayer(
       };
     }
     case 'logo': {
-      if (layer.brand === 'allrun') {
-        const { width, height } = watermarkLayout(layer.variant);
-        return {
-          layer,
-          width,
-          height,
-          content: <Watermark variant={layer.variant} tone={layer.tone} />,
-        };
-      }
-      // Placeholder until the official Strava artwork lands; its guidelines allow this exact text.
-      const paragraph = buildParagraph(
-        fonts,
-        {
-          ...LABEL_STYLE,
-          color: layer.tone === 'light' ? '#FFFFFF' : layer.tone === 'dark' ? '#000000' : '#141B2D',
-          shadow: layer.tone === 'light',
-        },
-        { label: null, value: 'Powered by Strava', unit: null, valueSize: 30 },
-      );
-      return preparedParagraph(layer, paragraph);
+      const { width, height } = watermarkLayout(layer.variant);
+      return {
+        layer,
+        width,
+        height,
+        content: <Watermark variant={layer.variant} tone={layer.tone} />,
+      };
     }
   }
 }

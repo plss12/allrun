@@ -69,6 +69,12 @@ export const SUMMARY_METRIC_IDS = [
 
 export type SummaryMetricId = (typeof SUMMARY_METRIC_IDS)[number];
 
+/** Most layers a template can hold. */
+export const MAX_LAYERS = 50;
+
+/** Longest free text a text layer can hold, in characters. */
+export const MAX_TEXT_LENGTH = 200;
+
 const colorSchema = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/, 'Expected a #RRGGBB or #RRGGBBAA color');
@@ -152,7 +158,7 @@ export const layerSchema = z.discriminatedUnion('kind', [
   z.object({
     ...layerBase,
     kind: z.literal('text'),
-    content: z.string().min(1).max(200),
+    content: z.string().min(1).max(MAX_TEXT_LENGTH),
     ...textFit,
     style: textStyleSchema,
   }),
@@ -170,12 +176,16 @@ export const layerSchema = z.discriminatedUnion('kind', [
   z.object({
     ...layerBase,
     kind: z.literal('logo'),
-    brand: z.enum(['allrun', 'poweredByStrava']),
+    /**
+     * Only AllRun for now. Strava's guidelines allow just its official "Powered by" / "Compatible
+     * with" marks, unmodified; the product left them out (see ADR 002).
+     */
+    brand: z.enum(['allrun']),
     /** `light` (white) for dark photos, `dark` (black) for light ones, `color` on plain light. */
     tone: z.enum(['light', 'dark', 'color']),
     /**
      * AllRun artwork: the name alone (default, it is what people can search for), the monogram
-     * alone, or both side by side. Ignored for other brands.
+     * alone, or both side by side.
      */
     variant: z.enum(['wordmark', 'mark', 'lockup']).default('wordmark'),
   }),
@@ -208,7 +218,7 @@ export const templateSchema = z
     name: z.string().trim().min(1).max(60),
     mode: z.enum(['activity', 'summary']),
     format: z.enum(['story', 'tall', 'portrait', 'square', 'landscape']),
-    layers: z.array(layerSchema).max(50),
+    layers: z.array(layerSchema).max(MAX_LAYERS),
   })
   .superRefine((template, context) => {
     const seen = new Set<string>();

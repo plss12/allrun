@@ -12,7 +12,9 @@ streams for charts). As of October 2026:
   guaranteed timeline. Since June 2026 the developer needs a paid Strava subscription even to
   create the API app. Data may be cached for at most 7 days. The brand guidelines don't require
   showing a Strava logo; if shown, only the official "Powered by Strava" / "Compatible with
-  Strava" marks may be used, unmodified, without implying sponsorship.
+  Strava" marks may be used, unmodified, without implying sponsorship. Strava's own logo (the
+  one on its share templates) may not. The editor therefore offers only the AllRun logo
+  (decided 2026-10-17).
 - **Garmin:** new Connect Developer Program access paused since September 2026.
 - **COROS / Suunto:** partner programs that require a company and an existing user base.
 - **Apple Health / Health Connect:** usable, but Android limits history to 30 days without an
