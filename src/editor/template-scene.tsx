@@ -32,6 +32,7 @@ import { formatBucketLabels } from '@/ui/format';
 
 import {
   chartBuckets,
+  chartTitleKey,
   type EditorData,
   type LabelKey,
   layerText,
@@ -61,7 +62,8 @@ export interface LayerContext {
   readonly data: EditorData;
   readonly fonts: SkTypefaceFontProvider;
   readonly textContext: TextContext;
-  readonly translate: (key: LabelKey) => string;
+  /** Translates a label; `values` fill its placeholders, such as the chart title's unit. */
+  readonly translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string;
 }
 
 /**
@@ -263,11 +265,25 @@ function prepareLayer(
                 ),
           )
         : null;
+      const title = layer.title
+        ? buildParagraph(
+            fonts,
+            { ...LABEL_STYLE, color: layer.color },
+            {
+              label: null,
+              value: translate(chartTitleKey(layer.value, size), {
+                unit: textContext.unit,
+              }).toLocaleUpperCase(textContext.locale),
+              unit: null,
+              valueSize: AXIS_LABEL_SIZE,
+            },
+          )
+        : null;
       return {
         layer,
         width: CHART_WIDTH,
-        height: CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND),
-        content: <BarChart values={values} color={layer.color} labels={labels} />,
+        height: chartHeight(labels !== null, title !== null),
+        content: <BarChart values={values} color={layer.color} labels={labels} title={title} />,
       };
     }
     case 'logo': {
@@ -326,8 +342,14 @@ const ROUTES_WIDTH = 800;
 const ROUTES_HEIGHT = 560;
 const CHART_WIDTH = 880;
 const CHART_HEIGHT = 240;
-/** Room under the bars for the axis labels. */
+/** Room under the bars for the axis labels, and under those for the title. */
 const LABEL_BAND = 44;
+const TITLE_BAND = 48;
+
+/** Height of a chart with or without its axis labels and title. */
+function chartHeight(labels: boolean, title: boolean): number {
+  return CHART_HEIGHT + (labels ? LABEL_BAND : 0) + (title ? TITLE_BAND : 0);
+}
 const MAX_TEXT_WIDTH = 1000;
 
 type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
@@ -465,11 +487,14 @@ function BarChart({
   values,
   color,
   labels,
+  title,
 }: {
   readonly values: readonly number[];
   readonly color: string;
   /** One paragraph per bar (`null` for unlabelled bars), or `null` for no axis labels. */
   readonly labels: readonly (SkParagraph | null)[] | null;
+  /** What the bars measure, centered under them, or `null` for no title. */
+  readonly title: SkParagraph | null;
 }) {
   if (values.length === 0) {
     return null;
@@ -479,7 +504,8 @@ function BarChart({
   const barWidth = slot * 0.7;
   // Empty days still get a small mark so the time axis stays readable.
   const minHeight = Math.min(8, barWidth);
-  const totalHeight = CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND);
+  const totalHeight = chartHeight(labels !== null, title !== null);
+  const titleTop = CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND);
   return (
     <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
       {/* One shadow for all the bars, drawn as a layer, instead of one blur per bar. */}
@@ -523,6 +549,14 @@ function BarChart({
           />
         );
       })}
+      {title === null ? null : (
+        <Paragraph
+          paragraph={title}
+          x={CHART_WIDTH / 2 - (Math.ceil(title.getLongestLine()) + 1) / 2}
+          y={titleTop + (TITLE_BAND - title.getHeight()) / 2 + 4}
+          width={Math.ceil(title.getLongestLine()) + 1}
+        />
+      )}
     </Group>
   );
 }

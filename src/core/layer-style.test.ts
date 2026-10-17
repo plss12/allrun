@@ -154,8 +154,12 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
   });
 
   it('sets chart and logo options', () => {
-    const chart = setChartOptions(summary, 'chart', { bucket: 'week', axisLabels: false });
-    expect(find(chart, 'chart')).toMatchObject({ bucket: 'week', axisLabels: false });
+    const chart = setChartOptions(summary, 'chart', {
+      bucket: 'week',
+      axisLabels: false,
+      title: false,
+    });
+    expect(find(chart, 'chart')).toMatchObject({ bucket: 'week', axisLabels: false, title: false });
     expect(setChartOptions(summary, 'chart', { value: 'distance' })).toBe(summary);
     const logo = setLogoOptions(activity, 'logo', { tone: 'color', variant: 'lockup' });
     expect(find(logo, 'logo')).toMatchObject({ tone: 'color', variant: 'lockup' });

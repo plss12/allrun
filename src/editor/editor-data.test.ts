@@ -2,10 +2,12 @@ import { weekRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from '@/core/default-layout';
 import { summarize } from '@/core/summary';
 import type { Layer } from '@/core/template';
+import { en } from '@/i18n/locales/en';
 import { makeActivity } from '@/test-utils/make-activity';
 
 import {
   chartBuckets,
+  chartTitleKey,
   type EditorData,
   hasUnit,
   layerText,
@@ -169,5 +171,18 @@ describe('hasUnit', () => {
     expect(hasUnit(total)).toBe(true);
     expect(hasUnit({ ...total, metric: 'totalMovingTime' })).toBe(true);
     expect(hasUnit({ ...total, metric: 'activityCount' })).toBe(false);
+  });
+});
+
+describe('chartTitleKey', () => {
+  it('names a translated title for every value and bar size', () => {
+    for (const value of ['distance', 'movingTime'] as const) {
+      for (const size of ['day', 'week', 'month'] as const) {
+        const key = chartTitleKey(value, size);
+        expect(key).toBe(`chartTitles.${value}.${size}`);
+        expect(en.chartTitles[value][size]).toEqual(expect.any(String));
+      }
+    }
+    expect(en.chartTitles.distance.week).toBe('{{unit}} per week');
   });
 });

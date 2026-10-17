@@ -3,14 +3,19 @@ import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import type { DateRange } from '@/core/dates';
 import {
+  chartBucketOptions,
   colorPageOf,
   layerColor,
+  setChartOptions,
   setDataLabels,
   setLayerColor,
   setLayerOpacity,
   setLogoOptions,
+  setStrokeWidth,
   setTextStyle,
+  STROKE_WIDTHS,
   STYLE_COLOR_PAGES,
   STYLE_OPACITIES,
   type TextStyle,
@@ -24,10 +29,14 @@ import { FONT_FAMILIES, hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts }
 /** A style edit of the template, applied by the editor as one undo step. */
 export type StyleChange = (template: Template) => Template;
 
-type Tab = 'color' | 'font' | 'format' | 'show' | 'opacity' | 'variant' | 'tone';
+type Tab =
+  'color' | 'font' | 'format' | 'show' | 'width' | 'data' | 'bars' | 'opacity' | 'variant' | 'tone';
 
 type TextLayer = Extract<Layer, { kind: 'metric' | 'summaryMetric' | 'info' | 'text' }>;
+type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
+type ChartLayer = Extract<Layer, { kind: 'summaryChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
+type Bucket = ChartLayer['bucket'];
 
 function isTextLayer(layer: Layer): layer is TextLayer {
   return (
@@ -38,8 +47,11 @@ function isTextLayer(layer: Layer): layer is TextLayer {
   );
 }
 
-/** Tabs of the panel for a layer; empty for layers it can't style yet. */
-function tabsFor(layer: Layer): readonly Tab[] {
+/**
+ * Tabs of the panel for a layer. A chart only offers its bar size when the period allows more
+ * than one readable size besides the automatic one.
+ */
+function tabsFor(layer: Layer, buckets: readonly Bucket[]): readonly Tab[] {
   switch (layer.kind) {
     case 'metric':
     case 'summaryMetric':
@@ -47,12 +59,15 @@ function tabsFor(layer: Layer): readonly Tab[] {
     case 'info':
     case 'text':
       return ['color', 'font', 'format', 'opacity'];
-    case 'logo':
-      return ['variant', 'tone', 'opacity'];
     case 'route':
     case 'summaryRoutes':
+      return ['color', 'width', 'opacity'];
     case 'summaryChart':
-      return [];
+      return buckets.length > 2
+        ? ['color', 'data', 'bars', 'opacity']
+        : ['color', 'data', 'opacity'];
+    case 'logo':
+      return ['variant', 'tone', 'opacity'];
   }
 }
 
@@ -66,13 +81,10 @@ const OPTIONS_HEIGHT = 50;
 const ROW_GAP = 6;
 export const STYLE_PANEL_HEIGHT = TAB_HEIGHT + ROW_GAP + OPTIONS_HEIGHT;
 
-/** Whether the style panel has options for this layer. */
-export function canStyle(layer: Layer): boolean {
-  return tabsFor(layer).length > 0;
-}
-
 interface StylePanelProps {
   readonly layer: Layer;
+  /** The summary's period, for the chart's bar sizes; `null` for an activity. */
+  readonly range: DateRange | null;
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
 }
@@ -81,9 +93,10 @@ interface StylePanelProps {
  * Style options of the selected layer, one tab at a time, in the space of the editor's formats
  * (the editor's main button turns into "Done" meanwhile). Every tap is one undo step.
  */
-export function StylePanel({ layer, locale, onChange }: StylePanelProps) {
+export function StylePanel({ layer, range, locale, onChange }: StylePanelProps) {
   const { t } = useTranslation();
-  const tabs = tabsFor(layer);
+  const buckets = range === null ? [] : chartBucketOptions(range);
+  const tabs = tabsFor(layer, buckets);
   const [chosen, setChosen] = useState<Tab>(tabs[0] ?? 'opacity');
   const tab = tabs.includes(chosen) ? chosen : tabs[0];
   return (
@@ -114,7 +127,13 @@ export function StylePanel({ layer, locale, onChange }: StylePanelProps) {
       </ScrollView>
       <View style={{ height: OPTIONS_HEIGHT, flexShrink: 0, justifyContent: 'center' }}>
         {tab === undefined ? null : (
-          <TabContent tab={tab} layer={layer} locale={locale} onChange={onChange} />
+          <TabContent
+            tab={tab}
+            layer={layer}
+            buckets={buckets}
+            locale={locale}
+            onChange={onChange}
+          />
         )}
       </View>
     </View>
@@ -177,11 +196,13 @@ function FormatRow({
 function TabContent({
   tab,
   layer,
+  buckets,
   locale,
   onChange,
 }: {
   readonly tab: Tab;
   readonly layer: Layer;
+  readonly buckets: readonly Bucket[];
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
 }) {
@@ -195,6 +216,18 @@ function TabContent({
     case 'show':
       return layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (
         <ShowRow layer={layer} onChange={onChange} />
+      ) : null;
+    case 'width':
+      return layer.kind === 'route' || layer.kind === 'summaryRoutes' ? (
+        <WidthRow layer={layer} onChange={onChange} />
+      ) : null;
+    case 'data':
+      return layer.kind === 'summaryChart' ? (
+        <ChartDataRow layer={layer} onChange={onChange} />
+      ) : null;
+    case 'bars':
+      return layer.kind === 'summaryChart' ? (
+        <BarsRow layer={layer} buckets={buckets} onChange={onChange} />
       ) : null;
     case 'opacity':
       return <OpacityRow layer={layer} locale={locale} onChange={onChange} />;
@@ -367,6 +400,101 @@ function ShowRow({
           }
         />
       ) : null}
+    </Row>
+  );
+}
+
+const WIDTHS = ['thin', 'medium', 'thick'] as const;
+
+/** Line width of a route, from three sizes suited to one route or to a period's many. */
+function WidthRow({
+  layer,
+  onChange,
+}: {
+  readonly layer: LineLayer;
+  readonly onChange: (change: StyleChange) => void;
+}) {
+  const { t } = useTranslation();
+  const sizes = STROKE_WIDTHS[layer.kind];
+  return (
+    <Row>
+      {WIDTHS.map((width) => (
+        <Chip
+          key={width}
+          label={t(`style.widths.${width}`)}
+          selected={layer.stroke.width === sizes[width]}
+          onPress={() => onChange((template) => setStrokeWidth(template, layer.id, sizes[width]))}
+        />
+      ))}
+    </Row>
+  );
+}
+
+const CHART_VALUES = ['distance', 'movingTime'] as const;
+
+/**
+ * What the bars measure, whether each bar has its day, week or month under it, and whether the
+ * chart says what it shows ("KM PER WEEK").
+ */
+function ChartDataRow({
+  layer,
+  onChange,
+}: {
+  readonly layer: ChartLayer;
+  readonly onChange: (change: StyleChange) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Row>
+      {CHART_VALUES.map((value) => (
+        <Chip
+          key={value}
+          label={t(`style.values.${value}`)}
+          selected={layer.value === value}
+          onPress={() => onChange((template) => setChartOptions(template, layer.id, { value }))}
+        />
+      ))}
+      <Chip
+        label={t('style.axisLabels')}
+        selected={layer.axisLabels}
+        onPress={() =>
+          onChange((template) =>
+            setChartOptions(template, layer.id, { axisLabels: !layer.axisLabels }),
+          )
+        }
+      />
+      <Chip
+        label={t('style.chartTitle')}
+        selected={layer.title}
+        onPress={() =>
+          onChange((template) => setChartOptions(template, layer.id, { title: !layer.title }))
+        }
+      />
+    </Row>
+  );
+}
+
+/** Bar size: automatic (the period's own) or one of the sizes that read well for it. */
+function BarsRow({
+  layer,
+  buckets,
+  onChange,
+}: {
+  readonly layer: ChartLayer;
+  readonly buckets: readonly Bucket[];
+  readonly onChange: (change: StyleChange) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Row>
+      {buckets.map((bucket) => (
+        <Chip
+          key={bucket}
+          label={t(`style.buckets.${bucket}`)}
+          selected={layer.bucket === bucket}
+          onPress={() => onChange((template) => setChartOptions(template, layer.id, { bucket }))}
+        />
+      ))}
     </Row>
   );
 }

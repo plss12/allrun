@@ -83,7 +83,7 @@ describe('parseTemplate', () => {
     expect(() => parseTemplate({ ...activityTemplate, name: '   ' })).toThrow(/name/);
   });
 
-  it('sizes the bars of a chart without a bucket to the period', () => {
+  it('sizes the bars of a chart without a bucket to the period, and titles it', () => {
     const chart = {
       id: 'chart',
       kind: 'summaryChart',
@@ -93,7 +93,7 @@ describe('parseTemplate', () => {
       opacity: 1,
     };
     const template = parseTemplate({ ...activityTemplate, mode: 'summary', layers: [chart] });
-    expect(template.layers[0]).toMatchObject({ bucket: 'auto', axisLabels: false });
+    expect(template.layers[0]).toMatchObject({ bucket: 'auto', axisLabels: false, title: true });
   });
 });
 

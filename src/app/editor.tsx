@@ -61,7 +61,7 @@ import { LayerSheet } from '@/editor/layer-sheet';
 import type { PickedPhoto } from '@/editor/photo-plan';
 import { preparePhoto } from '@/editor/prepare-photo';
 import { SelectionBar } from '@/editor/selection-bar';
-import { canStyle, STYLE_PANEL_HEIGHT, StylePanel } from '@/editor/style-panel';
+import { STYLE_PANEL_HEIGHT, StylePanel } from '@/editor/style-panel';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
@@ -193,11 +193,11 @@ function EditorWorkspace({
   const selected = template.layers.find((layer) => layer.id === selectedId) ?? null;
   const [sheetOpen, setSheetOpen] = useState(false);
   /**
-   * Whether the style panel replaces the bottom controls. It closes when nothing is selected or
-   * the selection moves to a layer it can't style.
+   * Whether the style panel replaces the bottom controls. It closes when nothing is selected; a
+   * tap on another layer switches the panel to it.
    */
   const [styling, setStyling] = useState(false);
-  const styled = styling && selected !== null && canStyle(selected) ? selected : null;
+  const styled = styling ? selected : null;
   if (styling && styled === null) {
     setStyling(false);
   }
@@ -208,7 +208,7 @@ function EditorWorkspace({
     data,
     fonts,
     textContext: { unit, locale },
-    translate: (key) => t(key),
+    translate: (key, values) => t(key, values),
   };
   // While typing, the text leaves the canvas for the typing overlay, which shows it as typed.
   const shownTemplate =
@@ -491,6 +491,7 @@ function EditorWorkspace({
         {styled !== null ? (
           <StylePanel
             layer={styled}
+            range={data.mode === 'summary' ? data.summary.range : null}
             locale={locale}
             onChange={(change) => edit((document) => editLayers(document, change))}
           />
@@ -566,7 +567,7 @@ function EditorWorkspace({
                       ? () => startTyping(editTextDraft(selected))
                       : undefined
                   }
-                  onStyle={canStyle(selected) ? () => setStyling(true) : undefined}
+                  onStyle={() => setStyling(true)}
                   onDuplicate={() => duplicateSelected(selected.id)}
                   onBringToFront={() =>
                     edit((document) =>

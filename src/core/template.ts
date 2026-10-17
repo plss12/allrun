@@ -176,6 +176,8 @@ export const layerSchema = z.discriminatedUnion('kind', [
     color: colorSchema,
     /** Day, date or month initial under each bar. */
     axisLabels: z.boolean().default(false),
+    /** A line under the chart saying what the bars measure and over what ("KM PER WEEK"). */
+    title: z.boolean().default(true),
   }),
   z.object({
     ...layerBase,

@@ -83,12 +83,15 @@ export function formatPeriodName(kind: PeriodKind, range: DateRange, locale: str
 
 /** Above this many day bars, only the 1st and every 5th day keep their number. */
 const MAX_DAY_NUMBERS = 16;
+/** Above this many week bars, weeks are marked by month instead of numbered. */
+const MAX_WEEK_NUMBERS = 12;
 
 /**
  * Labels under the bars of a summary chart, one per bucket ("" for an unlabelled bar):
  * - a week of days: weekday initials ("L M X J V S D" in Spanish);
  * - longer runs of days: the day of the month, thinned to 1, 5, 10… when there are many;
- * - weeks (custom training blocks): the week number within the block, from 1;
+ * - a few weeks (a training block): the week number within the block, from 1;
+ * - many weeks (a year): the month initial on the first week of each month, the rest blank;
  * - months: the month initial ("E F M A…").
  */
 export function formatBucketLabels(
@@ -102,7 +105,14 @@ export function formatBucketLabels(
       .toLocaleUpperCase(locale);
   switch (size) {
     case 'week':
-      return buckets.map((_, i) => String(i + 1));
+      if (buckets.length <= MAX_WEEK_NUMBERS) {
+        return buckets.map((_, i) => String(i + 1));
+      }
+      return buckets.map((bucket, i) => {
+        const month = bucket.range.start.slice(0, 7);
+        const newMonth = i === 0 || month !== buckets[i - 1].range.start.slice(0, 7);
+        return newMonth ? format(bucket.range.start, { month: 'narrow' }) : '';
+      });
     case 'month':
       return buckets.map((bucket) => format(bucket.range.start, { month: 'narrow' }));
     case 'day': {

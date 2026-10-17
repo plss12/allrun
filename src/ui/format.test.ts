@@ -88,4 +88,15 @@ describe('formatBucketLabels', () => {
       Array.from({ length: 10 }, (_, i) => String(i + 1)),
     );
   });
+
+  it('marks a year of weeks with the initial of each month, on its first week', () => {
+    const year = bucketize([], customRange('2026-01-01', '2026-12-31'), 'week');
+    const labels = formatBucketLabels(year, 'week', 'es');
+    expect(labels).toHaveLength(53);
+    expect(labels.filter((label) => label !== '').join('')).toBe('EFMAMJJASOND');
+    // Weeks run from Thursday 1 January: the one from 29 January is still January's,
+    // the one from 5 February is February's first.
+    expect(labels[4]).toBe('');
+    expect(labels[5]).toBe('F');
+  });
 });

@@ -277,11 +277,11 @@ export function setStrokeWidth(template: Template, id: string, width: number): T
   );
 }
 
-/** What a chart shows (distance or time), its bar size and whether bars are labelled. */
+/** What a chart shows (distance or time), its bar size, its labels and its title. */
 export function setChartOptions(
   template: Template,
   id: string,
-  patch: Partial<Pick<ChartLayer, 'value' | 'bucket' | 'axisLabels'>>,
+  patch: Partial<Pick<ChartLayer, 'value' | 'bucket' | 'axisLabels' | 'title'>>,
 ): Template {
   return editLayer(template, id, ['summaryChart'], 'chart options', (layer) =>
     unchanged(layer, patch) ? layer : { ...layer, ...patch },

@@ -77,6 +77,9 @@ export const en = {
     font: 'Font',
     format: 'Format',
     show: 'Show',
+    width: 'Width',
+    data: 'Data',
+    bars: 'Bars',
     opacity: 'Opacity',
     variant: 'Version',
     tone: 'Tone',
@@ -90,6 +93,23 @@ export const en = {
     },
     showLabel: 'Label',
     showUnit: 'Unit',
+    axisLabels: 'Labels',
+    chartTitle: 'Title',
+    widths: {
+      thin: 'Thin',
+      medium: 'Medium',
+      thick: 'Thick',
+    },
+    values: {
+      distance: 'Distance',
+      movingTime: 'Time',
+    },
+    buckets: {
+      auto: 'Automatic',
+      day: 'Days',
+      week: 'Weeks',
+      month: 'Months',
+    },
     variants: {
       wordmark: 'Name',
       mark: 'Monogram',
@@ -133,6 +153,18 @@ export const en = {
       gray3: 'Gray',
       gray4: 'Dark gray',
       gray5: 'Very dark gray',
+    },
+  },
+  chartTitles: {
+    distance: {
+      day: '{{unit}} per day',
+      week: '{{unit}} per week',
+      month: '{{unit}} per month',
+    },
+    movingTime: {
+      day: 'Hours per day',
+      week: 'Hours per week',
+      month: 'Hours per month',
     },
   },
   metrics: {

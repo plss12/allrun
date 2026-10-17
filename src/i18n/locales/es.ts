@@ -78,6 +78,9 @@ export const es: Translations = {
     font: 'Fuente',
     format: 'Formato',
     show: 'Mostrar',
+    width: 'Grosor',
+    data: 'Datos',
+    bars: 'Barras',
     opacity: 'Opacidad',
     variant: 'Versión',
     tone: 'Tono',
@@ -91,6 +94,23 @@ export const es: Translations = {
     },
     showLabel: 'Etiqueta',
     showUnit: 'Unidad',
+    axisLabels: 'Etiquetas',
+    chartTitle: 'Título',
+    widths: {
+      thin: 'Fino',
+      medium: 'Medio',
+      thick: 'Grueso',
+    },
+    values: {
+      distance: 'Distancia',
+      movingTime: 'Tiempo',
+    },
+    buckets: {
+      auto: 'Automático',
+      day: 'Días',
+      week: 'Semanas',
+      month: 'Meses',
+    },
     variants: {
       wordmark: 'Nombre',
       mark: 'Monograma',
@@ -134,6 +154,18 @@ export const es: Translations = {
       gray3: 'Gris',
       gray4: 'Gris oscuro',
       gray5: 'Gris muy oscuro',
+    },
+  },
+  chartTitles: {
+    distance: {
+      day: '{{unit}} por día',
+      week: '{{unit}} por semana',
+      month: '{{unit}} por mes',
+    },
+    movingTime: {
+      day: 'Horas por día',
+      week: 'Horas por semana',
+      month: 'Horas por mes',
     },
   },
   metrics: {

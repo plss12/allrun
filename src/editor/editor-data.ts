@@ -25,6 +25,14 @@ export type EditorData = { readonly mode: 'activity'; readonly activity: Activit
  * Bars of a summary chart and their size: the chart's own size, or the period's for `auto`.
  * Time O(b + n) for b bars and n activities, space O(b).
  */
+/** Key of the title of a chart measuring `value` in bars of `size` ("km per week"). */
+export function chartTitleKey(
+  value: Extract<Layer, { kind: 'summaryChart' }>['value'],
+  size: BucketSize,
+): ChartTitleKey {
+  return `chartTitles.${value}.${size}`;
+}
+
 export function chartBuckets(
   layer: Extract<Layer, { kind: 'summaryChart' }>,
   data: SummaryData,
@@ -34,7 +42,12 @@ export function chartBuckets(
 }
 
 /** Translation key of a data widget's label. */
-export type LabelKey = `metrics.${MetricId}` | `summaryMetrics.${SummaryMetricId}`;
+/** Translation key of a chart's title, which takes the distance unit as `{{unit}}`. */
+export type ChartTitleKey =
+  `chartTitles.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
+
+/** Translation key of a label the canvas draws. */
+export type LabelKey = `metrics.${MetricId}` | `summaryMetrics.${SummaryMetricId}` | ChartTitleKey;
 
 /** Text content of a text-like layer, before translation and styling. */
 export interface LayerText {

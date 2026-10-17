@@ -233,6 +233,7 @@ export function defaultSummaryTemplate(format: CanvasFormat = 'story'): Template
       value: 'distance',
       color: WHITE,
       axisLabels: true,
+      title: true,
       transform: at(layout.chart),
       opacity: 0.9,
     },
@@ -315,6 +316,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         value: 'distance',
         color: WHITE,
         axisLabels: true,
+        title: true,
         transform: centered(layout.chart.scale),
         opacity: 0.9,
       };
