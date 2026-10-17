@@ -3,10 +3,12 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { defaultActivityTemplate } from './default-layout';
 import {
   createDocument,
+  canRestore,
   type DefaultTemplate,
   editLayers,
+  INITIAL_FORMAT,
   resetFraming,
-  resetLayout,
+  restoreDocument,
   sameDocument,
   setFormat,
   setFraming,
@@ -87,7 +89,7 @@ describe('resetFraming and sameDocument', () => {
   });
 });
 
-describe('setLayerTransform and resetLayout', () => {
+describe('setLayerTransform and restoreDocument', () => {
   const moved = { x: 0.3, y: 0.4, scale: 1.5, rotation: 0.2 };
 
   it('changes only that layer and makes the layout custom', () => {
@@ -106,17 +108,36 @@ describe('setLayerTransform and resetLayout', () => {
     expect(setLayerTransform(document, first.id, { ...first.transform })).toBe(document);
   });
 
-  it('restores the default layout of the current format', () => {
-    const document = createDocument(defaultTemplate, 'story', DEFAULT_FRAMING);
+  it('restores the initial format, its default layout and a centered, straight photo', () => {
+    const framing = { centerX: 0.4, centerY: 0.5, zoom: 2, rotation: 0.3 };
+    const document = createDocument(defaultTemplate, INITIAL_FORMAT, framing);
     const edited = setFormat(
       setLayerTransform(document, document.template.layers[0].id, moved),
       'square',
       defaultTemplate,
     );
-    const restored = resetLayout(edited, defaultTemplate);
-    expect(restored.template).toEqual(defaultTemplate('square'));
+    expect(canRestore(edited)).toBe(true);
+    const restored = restoreDocument(edited, defaultTemplate);
+    expect(restored.template).toEqual(defaultTemplate(INITIAL_FORMAT));
     expect(restored.customLayout).toBe(false);
-    expect(resetLayout(restored, defaultTemplate)).toBe(restored);
+    expect(restored.framing).toEqual(DEFAULT_FRAMING);
+    expect(canRestore(restored)).toBe(false);
+    expect(restoreDocument(restored, defaultTemplate)).toBe(restored);
+  });
+
+  it('restores a rotated photo alone', () => {
+    const document = createDocument(defaultTemplate, INITIAL_FORMAT, DEFAULT_FRAMING);
+    const rotated = setFraming(document, { ...DEFAULT_FRAMING, rotation: Math.PI / 2 });
+    expect(canRestore(rotated)).toBe(true);
+    expect(restoreDocument(rotated, defaultTemplate).framing).toEqual(DEFAULT_FRAMING);
+  });
+
+  it('restores a format change alone', () => {
+    const document = createDocument(defaultTemplate, INITIAL_FORMAT, DEFAULT_FRAMING);
+    const square = setFormat(document, 'square', defaultTemplate);
+    expect(square.customLayout).toBe(false);
+    expect(canRestore(square)).toBe(true);
+    expect(restoreDocument(square, defaultTemplate).template.format).toBe(INITIAL_FORMAT);
   });
 });
 
@@ -127,7 +148,7 @@ describe('editLayers', () => {
     const removed = editLayers(document, (template) => removeLayer(template, first.id));
     expect(removed.template.layers).toEqual(rest);
     expect(removed.customLayout).toBe(true);
-    expect(resetLayout(removed, defaultTemplate).template.layers[0]).toEqual(first);
+    expect(restoreDocument(removed, defaultTemplate).template.layers[0]).toEqual(first);
   });
 
   it('returns the same document when the edit changes nothing', () => {

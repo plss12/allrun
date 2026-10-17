@@ -20,6 +20,9 @@ export interface EditorDocument {
 /** Default layout of the current activity or summary for a format. */
 export type DefaultTemplate = (format: CanvasFormat) => Template;
 
+/** Format a new design starts in, and goes back to when restored. */
+export const INITIAL_FORMAT: CanvasFormat = 'story';
+
 export function createDocument(
   defaultTemplate: DefaultTemplate,
   format: CanvasFormat,
@@ -81,15 +84,32 @@ export function editLayers(
   return { ...document, template, customLayout: true };
 }
 
-/** Puts back the default layout of the current format, discarding the user's layer changes. */
-export function resetLayout(
+/**
+ * Whether {@link restoreDocument} would change anything: the layers, the format or the photo
+ * framing differ from how the editor started.
+ */
+export function canRestore(document: EditorDocument): boolean {
+  return (
+    document.customLayout ||
+    document.template.format !== INITIAL_FORMAT ||
+    !sameFraming(document.framing, DEFAULT_FRAMING)
+  );
+}
+
+/**
+ * Starts over: the editor as it opened, with the initial format, its default layout and the photo
+ * centered and straight. It undoes everything undo can (the photo itself stays: picking it is not
+ * an undo step), and is one undo step itself. Returns `document` itself when there is nothing to
+ * restore.
+ */
+export function restoreDocument(
   document: EditorDocument,
   defaultTemplate: DefaultTemplate,
 ): EditorDocument {
-  if (!document.customLayout) {
+  if (!canRestore(document)) {
     return document;
   }
-  return { ...document, template: defaultTemplate(document.template.format), customLayout: false };
+  return createDocument(defaultTemplate, INITIAL_FORMAT, DEFAULT_FRAMING);
 }
 
 /** Sets the photo framing; returns `document` itself when it is the same framing. */

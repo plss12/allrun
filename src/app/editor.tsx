@@ -12,12 +12,14 @@ import { z } from 'zod';
 import { customRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from '@/core/default-layout';
 import {
+  canRestore,
   createDocument,
   type DefaultTemplate,
   editLayers,
   type EditorDocument,
+  INITIAL_FORMAT,
   resetFraming,
-  resetLayout,
+  restoreDocument,
   sameDocument,
   setFormat,
   setFraming,
@@ -33,7 +35,7 @@ import {
 import { DEFAULT_FRAMING } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
 import { selectActivities, summarize } from '@/core/summary';
-import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
+import { type CanvasFormat, CANVAS_FORMATS, type Layer } from '@/core/template';
 import {
   addLayer,
   canAddLayer,
@@ -41,17 +43,25 @@ import {
   duplicateLayer,
   moveLayer,
   removeLayer,
-  setTextContent,
   uniqueLayerId,
 } from '@/core/template-edit';
+import {
+  commitTextDraft,
+  editTextDraft,
+  previewTextDraft,
+  type TextDraft,
+} from '@/core/text-draft';
 import { useActivitySource } from '@/data/activity-source';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import type { EditorData } from '@/editor/editor-data';
+import type { LayerContext } from '@/editor/template-scene';
+import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
-import { LayerSheet, type LayerSheetRequest } from '@/editor/layer-sheet';
+import { LayerSheet } from '@/editor/layer-sheet';
 import type { PickedPhoto } from '@/editor/photo-plan';
 import { preparePhoto } from '@/editor/prepare-photo';
 import { SelectionBar } from '@/editor/selection-bar';
+import { canStyle, STYLE_PANEL_HEIGHT, StylePanel } from '@/editor/style-panel';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
@@ -88,7 +98,22 @@ interface EditorPhoto {
   readonly exportUri: string | null;
 }
 
-const FORMATS: readonly CanvasFormat[] = ['story', 'tall', 'portrait', 'square', 'landscape'];
+/** Formats in two rows whatever the screen width, so the controls always have the same height. */
+const FORMAT_ROWS: readonly (readonly CanvasFormat[])[] = [
+  ['story', 'tall', 'portrait'],
+  ['square', 'landscape'],
+];
+/** Two rows of formats take the same space as the style panel, which replaces them. */
+const FORMAT_HEIGHT = (STYLE_PANEL_HEIGHT - 8) / 2;
+const MAIN_BUTTON_HEIGHT = 50;
+/** Room under the controls, above the home indicator. */
+const CONTROLS_BOTTOM = 32;
+
+/**
+ * Height of the controls under the canvas: the formats (or the style panel) and the main button
+ * ("Change photo", or "Done" while styling). It never changes, so neither does the canvas.
+ */
+const CONTROLS_HEIGHT = STYLE_PANEL_HEIGHT + 12 + MAIN_BUTTON_HEIGHT + CONTROLS_BOTTOM;
 
 export default function Editor() {
   const { t } = useTranslation();
@@ -157,7 +182,7 @@ function EditorWorkspace({
       ? defaultActivityTemplate(data.activity, format)
       : defaultSummaryTemplate(format);
   const [history, setHistory] = useState(() =>
-    createHistory(createDocument(defaultTemplate, 'story', DEFAULT_FRAMING)),
+    createHistory(createDocument(defaultTemplate, INITIAL_FORMAT, DEFAULT_FRAMING)),
   );
   const { template, framing } = history.present;
   /** Applies an edit as one undo step (none when it changes nothing). */
@@ -166,7 +191,39 @@ function EditorWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Undo can take away the selected layer; then nothing is selected.
   const selected = template.layers.find((layer) => layer.id === selectedId) ?? null;
-  const [sheet, setSheet] = useState<LayerSheetRequest | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  /**
+   * Whether the style panel replaces the bottom controls. It closes when nothing is selected or
+   * the selection moves to a layer it can't style.
+   */
+  const [styling, setStyling] = useState(false);
+  const styled = styling && selected !== null && canStyle(selected) ? selected : null;
+  if (styling && styled === null) {
+    setStyling(false);
+  }
+  /** Free text being typed, committed as one undo step on "Done". */
+  const [textDraft, setTextDraft] = useState<TextDraft | null>(null);
+  const typing = textDraft !== null;
+  const layerContext: LayerContext = {
+    data,
+    fonts,
+    textContext: { unit, locale },
+    translate: (key) => t(key),
+  };
+  // While typing, the text leaves the canvas for the typing overlay, which shows it as typed.
+  const shownTemplate =
+    textDraft === null
+      ? template
+      : {
+          ...template,
+          layers: template.layers.filter((layer) => layer.id !== textDraft.layerId),
+        };
+  const typedLayer =
+    textDraft === null
+      ? undefined
+      : previewTextDraft(template, textDraft).layers.find(
+          (layer) => layer.id === textDraft.layerId,
+        );
   const catalog =
     data.mode === 'activity' ? activityCatalog(data.activity) : summaryCatalog(data.summary);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
@@ -219,13 +276,29 @@ function EditorWorkspace({
   });
 
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
-  const addNewLayer = (item: NewLayer) => {
+  const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     const id = uniqueLayerId(template, catalogItemKey(item));
     edit((document) =>
       editLayers(document, (current) => addLayer(current, newLayer(item, id, current.format))),
     );
     setSelectedId(id);
-    setSheet(null);
+    setSheetOpen(false);
+  };
+
+  /** Opens the keyboard to type a text. */
+  const startTyping = (draft: TextDraft) => {
+    setStyling(false);
+    setTextDraft(draft);
+  };
+
+  /** Commits the typed text (a blank one adds nothing, or removes the text) and selects it. */
+  const finishTyping = () => {
+    if (textDraft === null) {
+      return;
+    }
+    edit((document) => editLayers(document, (current) => commitTextDraft(current, textDraft)));
+    setSelectedId(textDraft.content.trim() === '' ? null : textDraft.layerId);
+    setTextDraft(null);
   };
 
   const duplicateSelected = (id: string) => {
@@ -237,6 +310,23 @@ function EditorWorkspace({
   const size = CANVAS_FORMATS[template.format];
   const displayWidth =
     area === null ? 0 : Math.min(area.width, (area.height * size.width) / size.height);
+  const displayHeight = (displayWidth * size.height) / size.width;
+
+  /**
+   * Where a layer is on screen, in the editor's coordinates: the canvas is centered in its area,
+   * inside a 16 pt padding.
+   */
+  const originOf = (layer: Layer): TextOrigin => {
+    const ratio = displayWidth / size.width;
+    const left = 16 + ((area?.width ?? 0) - displayWidth) / 2;
+    const top = 16 + ((area?.height ?? 0) - displayHeight) / 2;
+    return {
+      x: left + layer.transform.x * displayWidth,
+      y: top + layer.transform.y * displayHeight,
+      scale: ratio * layer.transform.scale,
+      rotation: layer.transform.rotation,
+    };
+  };
 
   const pickPhoto = async () => {
     setPhotoError(false);
@@ -265,11 +355,21 @@ function EditorWorkspace({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.systemBackground }}>
+      {/* Restoring first, far from adding; nothing is edited while typing, since the draft isn't
+          in the history yet. */}
       <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon="arrow.counterclockwise"
+          accessibilityLabel={t('editor.restore')}
+          disabled={typing || !canRestore(history.present)}
+          onPress={() => edit((document) => restoreDocument(document, defaultTemplate))}
+        >
+          {t('editor.restore')}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           icon="arrow.uturn.backward"
           accessibilityLabel={t('editor.undo')}
-          disabled={!canUndo(history)}
+          disabled={typing || !canUndo(history)}
           onPress={() => setHistory(undo)}
         >
           {t('editor.undo')}
@@ -277,7 +377,7 @@ function EditorWorkspace({
         <Stack.Toolbar.Button
           icon="arrow.uturn.forward"
           accessibilityLabel={t('editor.redo')}
-          disabled={!canRedo(history)}
+          disabled={typing || !canRedo(history)}
           onPress={() => setHistory(redo)}
         >
           {t('editor.redo')}
@@ -285,23 +385,20 @@ function EditorWorkspace({
         <Stack.Toolbar.Button
           icon="plus"
           accessibilityLabel={t('editor.addLayer')}
-          disabled={!canAddLayer(template)}
-          onPress={() => setSheet({ kind: 'add' })}
+          disabled={typing || !canAddLayer(template)}
+          onPress={() => setSheetOpen(true)}
         >
           {t('editor.addLayer')}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <LayerSheet
-        request={sheet}
+        visible={sheetOpen}
         catalog={catalog}
         onAdd={addNewLayer}
-        onEditText={(id, content) => {
-          edit((document) =>
-            editLayers(document, (current) => setTextContent(current, id, content)),
-          );
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
+        onAddText={() =>
+          startTyping({ layerId: uniqueLayerId(template, 'text'), isNew: true, content: '' })
+        }
+        onClose={() => setSheetOpen(false)}
       />
       <View
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}
@@ -321,16 +418,11 @@ function EditorWorkspace({
           >
             <EditorCanvas
               displayWidth={displayWidth}
-              template={template}
-              layerContext={{
-                data,
-                fonts,
-                textContext: { unit, locale },
-                translate: (key) => t(key),
-              }}
+              template={shownTemplate}
+              layerContext={layerContext}
               photo={canvasImage}
               framing={framing}
-              selectedId={selectedId}
+              selectedId={typing ? null : selectedId}
               onSelect={setSelectedId}
               onFramingChange={(next) => edit((document) => setFraming(document, next))}
               onLayerTransform={(id, transform) =>
@@ -361,138 +453,186 @@ function EditorWorkspace({
                 />
               </View>
             ) : null}
+            {photoError ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  padding: 10,
+                  borderRadius: 10,
+                  borderCurve: 'continuous',
+                  backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                }}
+              >
+                <Text
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="polite"
+                  style={{ color: '#FFFFFF', fontSize: 14, textAlign: 'center' }}
+                >
+                  {t('editor.photoError')}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
 
-      <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 32, paddingTop: 8 }}>
-        {photoError ? (
-          <Text
-            accessibilityRole="alert"
-            style={{ color: colors.error, fontSize: 13, textAlign: 'center' }}
-          >
-            {t('editor.photoError')}
-          </Text>
-        ) : null}
-        {/* The selection bar covers the formats instead of pushing them, so the canvas keeps its
-            size when a layer gets selected. */}
-        <View style={{ minHeight: 56, justifyContent: 'center' }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 8,
-              justifyContent: 'center',
-              opacity: selected === null ? 1 : 0,
-            }}
-            pointerEvents={selected === null ? 'auto' : 'none'}
-            accessibilityElementsHidden={selected !== null}
-            importantForAccessibility={selected === null ? 'auto' : 'no-hide-descendants'}
-            accessibilityRole="tablist"
-            accessibilityLabel={t('editor.format')}
-          >
-            {FORMATS.map((option) => (
-              <Pressable
-                key={option}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: template.format === option }}
-                onPress={() => edit((document) => setFormat(document, option, defaultTemplate))}
-                style={({ pressed }) => ({
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  backgroundColor:
-                    template.format === option ? colors.tint : colors.secondarySystemBackground,
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text
-                  style={{
-                    color: template.format === option ? colors.onTint : colors.label,
-                    fontSize: 14,
-                    fontWeight: '600',
-                  }}
-                >
-                  {t(`formats.${option}`)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          {selected === null ? null : (
+      <View
+        style={{
+          height: CONTROLS_HEIGHT,
+          gap: 12,
+          paddingHorizontal: 16,
+          paddingBottom: CONTROLS_BOTTOM,
+        }}
+      >
+        {styled !== null ? (
+          <StylePanel
+            layer={styled}
+            locale={locale}
+            onChange={(change) => edit((document) => editLayers(document, change))}
+          />
+        ) : (
+          // The selection bar covers the formats instead of pushing them, so the canvas keeps its
+          // size when a layer gets selected.
+          <View style={{ height: STYLE_PANEL_HEIGHT, justifyContent: 'center' }}>
             <View
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                justifyContent: 'center',
-              }}
+              style={{ gap: 8, opacity: selected === null ? 1 : 0 }}
+              pointerEvents={selected === null ? 'auto' : 'none'}
+              accessibilityElementsHidden={selected !== null}
+              importantForAccessibility={selected === null ? 'auto' : 'no-hide-descendants'}
+              accessibilityRole="tablist"
+              accessibilityLabel={t('editor.format')}
             >
-              <SelectionBar
-                onEditText={
-                  selected.kind === 'text'
-                    ? () =>
-                        setSheet({
-                          kind: 'editText',
-                          layerId: selected.id,
-                          content: selected.content,
-                        })
-                    : undefined
-                }
-                onDuplicate={() => duplicateSelected(selected.id)}
-                onBringToFront={() =>
-                  edit((document) =>
-                    editLayers(document, (current) => moveLayer(current, selected.id, 'front')),
-                  )
-                }
-                onSendToBack={() =>
-                  edit((document) =>
-                    editLayers(document, (current) => moveLayer(current, selected.id, 'back')),
-                  )
-                }
-                onRemove={() => {
-                  edit((document) =>
-                    editLayers(document, (current) => removeLayer(current, selected.id)),
-                  );
-                  setSelectedId(null);
-                }}
-                canDuplicate={canAddLayer(template)}
-                canBringToFront={canMoveLayer(template, selected.id, 'front')}
-                canSendToBack={canMoveLayer(template, selected.id, 'back')}
-              />
+              {FORMAT_ROWS.map((row) => (
+                <View key={row.join()} style={{ flexDirection: 'row', gap: 8 }}>
+                  {row.map((option) => (
+                    <Pressable
+                      key={option}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: template.format === option }}
+                      hitSlop={4}
+                      onPress={() =>
+                        edit((document) => setFormat(document, option, defaultTemplate))
+                      }
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        height: FORMAT_HEIGHT,
+                        paddingHorizontal: 8,
+                        borderRadius: 999,
+                        justifyContent: 'center',
+                        backgroundColor:
+                          template.format === option
+                            ? colors.tint
+                            : colors.secondarySystemBackground,
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                        maxFontSizeMultiplier={1.3}
+                        style={{
+                          color: template.format === option ? colors.onTint : colors.label,
+                          fontSize: 14,
+                          fontWeight: '600',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {t(`formats.${option}`)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ))}
             </View>
-          )}
-        </View>
-        {history.present.customLayout ? (
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={12}
-            onPress={() => edit((document) => resetLayout(document, defaultTemplate))}
-            style={({ pressed }) => ({ alignSelf: 'center', opacity: pressed ? 0.6 : 1 })}
-          >
-            <Text style={{ color: colors.tint, fontSize: 15, fontWeight: '600' }}>
-              {t('editor.restoreLayout')}
-            </Text>
-          </Pressable>
-        ) : null}
+            {selected === null ? null : (
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  justifyContent: 'center',
+                }}
+              >
+                <SelectionBar
+                  onEditText={
+                    selected.kind === 'text'
+                      ? () => startTyping(editTextDraft(selected))
+                      : undefined
+                  }
+                  onStyle={canStyle(selected) ? () => setStyling(true) : undefined}
+                  onDuplicate={() => duplicateSelected(selected.id)}
+                  onBringToFront={() =>
+                    edit((document) =>
+                      editLayers(document, (current) => moveLayer(current, selected.id, 'front')),
+                    )
+                  }
+                  onSendToBack={() =>
+                    edit((document) =>
+                      editLayers(document, (current) => moveLayer(current, selected.id, 'back')),
+                    )
+                  }
+                  onRemove={() => {
+                    edit((document) =>
+                      editLayers(document, (current) => removeLayer(current, selected.id)),
+                    );
+                    setSelectedId(null);
+                  }}
+                  canDuplicate={canAddLayer(template)}
+                  canBringToFront={canMoveLayer(template, selected.id, 'front')}
+                  canSendToBack={canMoveLayer(template, selected.id, 'back')}
+                />
+              </View>
+            )}
+          </View>
+        )}
         <Pressable
           accessibilityRole="button"
-          onPress={pickPhoto}
+          // With a layer selected it reads "Done", one step back: from the style panel to the
+          // layer's actions, then from those to no selection.
+          onPress={
+            styled !== null
+              ? () => setStyling(false)
+              : selected !== null
+                ? () => setSelectedId(null)
+                : pickPhoto
+          }
           style={({ pressed }) => ({
+            height: MAIN_BUTTON_HEIGHT,
             backgroundColor: colors.tint,
             borderRadius: 14,
             borderCurve: 'continuous',
-            padding: 14,
             alignItems: 'center',
+            justifyContent: 'center',
             opacity: pressed ? 0.8 : 1,
           })}
         >
-          <Text style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}>
-            {photo === null ? t('editor.choosePhoto') : t('editor.changePhoto')}
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}
+          >
+            {selected !== null
+              ? t('editor.done')
+              : photo === null
+                ? t('editor.choosePhoto')
+                : t('editor.changePhoto')}
           </Text>
         </Pressable>
       </View>
+      {textDraft === null || typedLayer?.kind !== 'text' ? null : (
+        <TypingOverlay
+          layer={typedLayer}
+          origin={originOf(typedLayer)}
+          onChangeText={(content) => setTextDraft({ ...textDraft, content })}
+          onDone={finishTyping}
+        />
+      )}
     </View>
   );
 }
