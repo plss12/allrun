@@ -40,4 +40,6 @@ releases write an incomplete `package-lock.json` that breaks `npm ci`.
 
 ## License
 
-[MIT](LICENSE) © Pedro Luis Soto Santos
+Source available under the [PolyForm Strict License 1.0.0](LICENSE) © Pedro Luis Soto Santos:
+you may read and use the code for noncommercial purposes, but not change, build on or
+distribute it. The AllRun name and logo are not licensed; all rights reserved.
