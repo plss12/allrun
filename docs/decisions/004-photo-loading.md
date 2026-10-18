@@ -22,8 +22,7 @@ Tried and rejected after testing on an iPhone:
 Skia alone draws the photo, from two copies (`src/editor/photo-plan.ts`):
 
 - **Editor copy**, at most 2048 px (JPEG 0.92 when re-encoded): sharper than the on-screen canvas
-  even on the largest phones, and quick to prepare. The canvas shows its placeholder and a spinner
-  meanwhile.
+  even on the largest phones, and quick to prepare. The canvas shows a spinner meanwhile.
 - **Export copy**, at most 4096 px (JPEG quality 1 when re-encoded), prepared in the background
   while the user edits, for exporting.
 
