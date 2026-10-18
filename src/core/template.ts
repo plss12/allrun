@@ -76,6 +76,56 @@ export const SUMMARY_METRIC_IDS = [
 
 export type SummaryMetricId = (typeof SUMMARY_METRIC_IDS)[number];
 
+/**
+ * How an activity's date reads (Spanish examples): `full` "Miércoles, 14 de octubre de 2026",
+ * `weekday` "Miércoles", `long` "14 de octubre de 2026", `short` "14 oct", `numeric`
+ * "14/10/2026", `weekdayTime` "Miércoles, 10:00" and `time` "10:00" (the start time).
+ */
+export const DATE_FORMATS = [
+  'full',
+  'weekday',
+  'long',
+  'short',
+  'numeric',
+  'weekdayTime',
+  'time',
+] as const;
+
+export type DateFormat = (typeof DATE_FORMATS)[number];
+
+/**
+ * How a time reads: `clock` "1:40:30" (a period's total "280:40 h"), `units` "1h 40min 30s"
+ * ("280h 40min") and `rounded`, one unit less precise: "1h 41min" ("281h").
+ */
+export const TIME_NOTATIONS = ['clock', 'units', 'rounded'] as const;
+
+export type TimeNotation = (typeof TIME_NOTATIONS)[number];
+
+/**
+ * How a period's name reads (Spanish examples, a week and a month): `full` "12 oct – 18 oct
+ * 2026", "Octubre de 2026"; `noYear` "12–18 oct", "Octubre"; `short` "12–18 OCT", "Oct 2026";
+ * `numeric` "12/10 – 18/10", "10/2026". A year is always "2026".
+ */
+export const PERIOD_FORMATS = ['full', 'noYear', 'short', 'numeric'] as const;
+
+export type PeriodFormat = (typeof PERIOD_FORMATS)[number];
+
+/** Decimals a distance can show: `10,02`, `10,0` or `10` km. */
+export const DISTANCE_DECIMALS = [2, 1, 0] as const;
+
+/**
+ * What goes behind a text, as in story editors: nothing, or a box of the color opposite to the
+ * text's (black behind light text, white behind dark text), translucent or solid. The text keeps
+ * its color.
+ */
+export const BACKDROPS = ['none', 'soft', 'solid'] as const;
+
+/** Room between letters: none, open, or wide open (as a fraction of the font size). */
+export const LETTER_SPACINGS = ['normal', 'wide', 'wider'] as const;
+
+/** How a route's line is drawn. */
+export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
+
 /** Most layers a template can hold. */
 export const MAX_LAYERS = 50;
 
@@ -107,12 +157,20 @@ const textStyleSchema = z.object({
   uppercase: z.boolean(),
   align: z.enum(['left', 'center', 'right']),
   shadow: z.boolean(),
+  /** What goes behind the text (see `BACKDROPS`); `none` when absent. */
+  backdrop: z.enum(BACKDROPS).optional(),
+  /** Room between letters (see `LETTER_SPACINGS`); `normal` when absent. */
+  letterSpacing: z.enum(LETTER_SPACINGS).optional(),
 });
 
 const strokeStyleSchema = z.object({
   color: colorSchema,
   /** Line width in pixels at a 1080 px wide canvas; scaled with the export size. */
   width: z.number().min(1).max(40),
+  /** Solid, dashed or dotted; `solid` when absent. */
+  line: z.enum(LINE_STYLES).optional(),
+  /** A soft glow of the line's color around it. */
+  glow: z.boolean().optional(),
 });
 
 const layerBase = {
@@ -135,6 +193,17 @@ const dataLabels = {
   showLabel: z.boolean(),
   /** Show the unit after the value ("km"). */
   showUnit: z.boolean(),
+  /**
+   * How a pace reads: `5:28` (`colon`, also when absent) or `5'28"` with minute and second
+   * marks (`marks`), as on sports watches. Other metrics ignore it.
+   */
+  paceNotation: z.enum(['colon', 'marks']).optional(),
+  /**
+   * How a time reads (see `TIME_NOTATIONS`); `clock` when absent. Other metrics ignore it.
+   */
+  timeNotation: z.enum(TIME_NOTATIONS).optional(),
+  /** Decimals of a distance (see `DISTANCE_DECIMALS`); 2 when absent. Others ignore it. */
+  decimals: z.union([z.literal(2), z.literal(1), z.literal(0)]).optional(),
 };
 
 export const layerSchema = z.discriminatedUnion('kind', [
@@ -159,6 +228,10 @@ export const layerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('info'),
     /** Activity name or date, or the period name ("October 2026"). */
     field: z.enum(['activityName', 'activityDate', 'periodName']),
+    /** How the activity's date reads; `full` when absent. Other fields ignore it. */
+    dateFormat: z.enum(DATE_FORMATS).optional(),
+    /** How the period's name reads; `full` when absent. Other fields ignore it. */
+    periodFormat: z.enum(PERIOD_FORMATS).optional(),
     ...textFit,
     style: textStyleSchema,
   }),
@@ -169,7 +242,13 @@ export const layerSchema = z.discriminatedUnion('kind', [
     ...textFit,
     style: textStyleSchema,
   }),
-  z.object({ ...layerBase, kind: z.literal('route'), stroke: strokeStyleSchema }),
+  z.object({
+    ...layerBase,
+    kind: z.literal('route'),
+    stroke: strokeStyleSchema,
+    /** A dot where the route starts and a ring where it ends, in the line's color. */
+    endpoints: z.boolean().optional(),
+  }),
   z.object({ ...layerBase, kind: z.literal('summaryRoutes'), stroke: strokeStyleSchema }),
   z.object({
     ...layerBase,
@@ -192,6 +271,8 @@ export const layerSchema = z.discriminatedUnion('kind', [
     uppercase: z.boolean().default(true),
     /** Where the title sits under the bars. */
     align: z.enum(['left', 'center', 'right']).default('center'),
+    /** A dashed line across the bars at their average. */
+    averageLine: z.boolean().optional(),
   }),
   z.object({
     ...layerBase,
@@ -235,7 +316,8 @@ export const templateSchema = z
     /** Bumped on breaking changes, with a migration for stored templates. */
     version: z.literal(1),
     id: z.string().min(1),
-    name: z.string().trim().min(1).max(60),
+    /** Optional: templates are recognised by their thumbnail (see ADR 007). */
+    name: z.string().trim().min(1).max(60).optional(),
     mode: z.enum(['activity', 'summary']),
     format: z.enum(['story', 'tall', 'portrait', 'square', 'landscape']),
     layers: z.array(layerSchema).max(MAX_LAYERS),

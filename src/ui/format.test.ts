@@ -25,6 +25,21 @@ describe('formatActivityDate', () => {
     expect(formatActivityDate('2026-10-15T23:30:00', 'en')).toBe('Thursday, October 15, 2026');
     expect(formatActivityDate('2026-10-15T23:30:00', 'es')).toBe('Jueves, 15 de octubre de 2026');
   });
+
+  it('writes the date in each format, with the locale clock for times', () => {
+    const start = '2026-10-14T07:05:00';
+    const es = (format: Parameters<typeof formatActivityDate>[2]) =>
+      formatActivityDate(start, 'es', format);
+    expect(es('full')).toBe('Miércoles, 14 de octubre de 2026');
+    expect(es('weekday')).toBe('Miércoles');
+    expect(es('long')).toBe('14 de octubre de 2026');
+    expect(es('short')).toBe('14 oct');
+    expect(es('numeric')).toBe('14/10/2026');
+    expect(es('weekdayTime')).toBe('Miércoles, 7:05');
+    expect(es('time')).toBe('7:05');
+    expect(formatActivityDate(start, 'en', 'numeric')).toBe('10/14/2026');
+    expect(formatActivityDate(start, 'en', 'time')).toMatch(/^7:05\sAM$/);
+  });
 });
 
 describe('formatPeriodName', () => {
@@ -39,6 +54,35 @@ describe('formatPeriodName', () => {
     expect(formatPeriodName('custom', customRange('2025-12-29', '2026-01-04'), 'en')).toBe(
       'Dec 29, 2025 – Jan 4, 2026',
     );
+  });
+
+  it('writes a week in each format, naming the month once where the locale puts it', () => {
+    const week = weekRange('2026-10-16');
+    const es = (format: Parameters<typeof formatPeriodName>[3]) =>
+      formatPeriodName('week', week, 'es', format);
+    expect(es('full')).toBe('12 oct – 18 oct 2026');
+    expect(es('noYear')).toBe('12 oct – 18 oct');
+    expect(es('short')).toBe('12–18 oct');
+    expect(es('numeric')).toBe('12/10 – 18/10');
+    expect(formatPeriodName('week', week, 'en', 'short')).toBe('Oct 12–18');
+    expect(formatPeriodName('week', week, 'en', 'numeric')).toBe('10/12 – 10/18');
+  });
+
+  it('keeps both months of a week across two, and the years of a range across two', () => {
+    expect(formatPeriodName('week', weekRange('2026-10-01'), 'es', 'short')).toBe(
+      '28 sept – 4 oct',
+    );
+    expect(
+      formatPeriodName('custom', customRange('2025-12-29', '2026-01-04'), 'en', 'numeric'),
+    ).toBe('Dec 29, 2025 – Jan 4, 2026');
+  });
+
+  it('writes a month in each format, and a year always alike', () => {
+    const month = monthRange('2026-10-16');
+    expect(formatPeriodName('month', month, 'es', 'noYear')).toBe('Octubre');
+    expect(formatPeriodName('month', month, 'es', 'short')).toBe('Oct 2026');
+    expect(formatPeriodName('month', month, 'es', 'numeric')).toBe('10/2026');
+    expect(formatPeriodName('year', yearRange('2026-10-16'), 'es', 'numeric')).toBe('2026');
   });
 });
 

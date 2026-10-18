@@ -1,7 +1,13 @@
 import { type DateRange, rangeLength } from './dates';
 import type { BucketSize, PeriodSummary } from './summary';
 import { summaryHasDistance } from './summary-metrics';
-import type { Layer, LayerKind, Template } from './template';
+import {
+  type DateFormat,
+  type Layer,
+  type LayerKind,
+  type PeriodFormat,
+  type Template,
+} from './template';
 
 /**
  * The look of each layer, as the style panel edits it: color, opacity, text style, data labels,
@@ -110,6 +116,19 @@ export function relativeLuminance(color: string): number {
  */
 export const SHADOW_LUMINANCE = 0.1;
 
+/** Luminance above which a color reads as light: what goes with it is dark, and the reverse. */
+const LIGHT_LUMINANCE = 0.4;
+
+/**
+ * Black or white, whichever is opposite to `color`: the backdrop behind a text of that color,
+ * solid or translucent (black behind light text, white behind dark text).
+ *
+ * @throws Error for a color that is not `#RRGGBB(AA)`.
+ */
+export function contrastingInk(color: string): '#000000' | '#FFFFFF' {
+  return relativeLuminance(color) > LIGHT_LUMINANCE ? '#000000' : '#FFFFFF';
+}
+
 /** Whether a widget of this color gets the drop shadow; there is no setting for it. */
 export function castsShadow(color: string): boolean {
   return relativeLuminance(color) > SHADOW_LUMINANCE;
@@ -119,6 +138,7 @@ type LayerOf<K extends LayerKind> = Extract<Layer, { kind: K }>;
 type TextLayer = LayerOf<'metric' | 'summaryMetric' | 'info' | 'text'>;
 export type TextStyle = TextLayer['style'];
 type ChartLayer = LayerOf<'summaryChart'>;
+type LineStyle = NonNullable<LayerOf<'route'>['stroke']['line']>;
 type LogoLayer = LayerOf<'logo'>;
 
 const TEXT_KINDS = ['metric', 'summaryMetric', 'info', 'text'] as const;
@@ -229,25 +249,84 @@ export function setLayerOpacity(template: Template, id: string, opacity: number)
   );
 }
 
-/** Font, weight, case or alignment of a text layer; the color goes through `setLayerColor`. */
+/**
+ * How an activity's date reads.
+ *
+ * @throws Error for any layer but the activity's date.
+ */
+export function setDateFormat(template: Template, id: string, dateFormat: DateFormat): Template {
+  return editLayer(template, id, ['info'], 'date format', (layer) => {
+    if (layer.field !== 'activityDate') {
+      throw new Error(`Layer "${id}" (${layer.field}) has no date format`);
+    }
+    return (layer.dateFormat ?? 'full') === dateFormat ? layer : { ...layer, dateFormat };
+  });
+}
+
+/**
+ * How a period's name reads.
+ *
+ * @throws Error for any layer but the period's name.
+ */
+export function setPeriodFormat(
+  template: Template,
+  id: string,
+  periodFormat: PeriodFormat,
+): Template {
+  return editLayer(template, id, ['info'], 'period format', (layer) => {
+    if (layer.field !== 'periodName') {
+      throw new Error(`Layer "${id}" (${layer.field}) has no period format`);
+    }
+    return (layer.periodFormat ?? 'full') === periodFormat ? layer : { ...layer, periodFormat };
+  });
+}
+
+/**
+ * Font, weight, case, alignment, backdrop or letter spacing of a text layer; the color goes
+ * through `setLayerColor`.
+ */
 export function setTextStyle(
   template: Template,
   id: string,
   patch: Partial<Omit<TextStyle, 'color' | 'shadow'>>,
 ): Template {
-  return editLayer(template, id, TEXT_KINDS, 'text style', (layer) =>
-    unchanged(layer.style, patch) ? layer : { ...layer, style: { ...layer.style, ...patch } },
-  );
+  return editLayer(template, id, TEXT_KINDS, 'text style', (layer) => {
+    // Without them a text has no backdrop and normal spacing: choosing that changes nothing.
+    const current = {
+      ...layer.style,
+      backdrop: layer.style.backdrop ?? 'none',
+      letterSpacing: layer.style.letterSpacing ?? 'normal',
+    };
+    return unchanged(current, patch) ? layer : { ...layer, style: { ...layer.style, ...patch } };
+  });
 }
 
-/** Whether a metric shows its name above the value and its unit after it. */
+/**
+ * Whether a metric shows its name above the value and its unit after it, and how its value
+ * reads: a pace (`5:28` or `5'28"`), a time (`1:40:30`, `1h 40min 30s`…) or the decimals of a
+ * distance.
+ */
 export function setDataLabels(
   template: Template,
   id: string,
-  patch: Partial<Pick<LayerOf<'metric'>, 'showLabel' | 'showUnit'>>,
+  patch: Partial<
+    Pick<LayerOf<'metric'>, 'showLabel' | 'showUnit' | 'paceNotation' | 'timeNotation' | 'decimals'>
+  >,
 ): Template {
   return editLayer(template, id, DATA_KINDS, 'data labels', (layer) =>
-    unchanged(layer, patch) ? layer : { ...layer, ...patch },
+    // Without a notation a pace reads with a colon, a time as a clock and a distance with two
+    // decimals: choosing that changes nothing.
+    unchanged(
+      {
+        ...layer,
+        paceNotation: layer.paceNotation ?? 'colon',
+        timeNotation: layer.timeNotation ?? 'clock',
+        decimals: layer.decimals ?? 2,
+      },
+      patch,
+    )
+      ? layer
+      : { ...layer, ...patch },
   );
 }
 
@@ -280,8 +359,41 @@ export function setStrokeWidth(template: Template, id: string, width: number): T
 }
 
 /**
- * What a chart shows (distance or time), its bar size, whether it has labels and a title, and
- * how they are written (font, bold, capitals, alignment of the title).
+ * How a route's line is drawn (solid, dashed or dotted), whether it glows and, for one
+ * activity's route, whether its start and end are marked.
+ *
+ * @throws Error when marking the ends of a period's routes, which would be a cloud of dots.
+ */
+export function setLineOptions(
+  template: Template,
+  id: string,
+  patch: {
+    readonly line?: LineStyle;
+    readonly glow?: boolean;
+    readonly endpoints?: boolean;
+  },
+): Template {
+  return editLayer(template, id, LINE_KINDS, 'line options', (layer) => {
+    if (patch.endpoints !== undefined && layer.kind !== 'route') {
+      throw new Error(`Layer "${id}" (${layer.kind}) has no start and end marks`);
+    }
+    const current = {
+      line: layer.stroke.line ?? 'solid',
+      glow: layer.stroke.glow ?? false,
+      endpoints: layer.kind === 'route' ? (layer.endpoints ?? false) : false,
+    };
+    if (unchanged(current, patch)) {
+      return layer;
+    }
+    const { endpoints, ...stroke } = patch;
+    const next = { ...layer, stroke: { ...layer.stroke, ...stroke } };
+    return endpoints === undefined ? next : { ...next, endpoints };
+  });
+}
+
+/**
+ * What a chart shows (distance or time), its bar size, whether it has labels, a title and an
+ * average line, and how its texts are written (font, bold, capitals, alignment of the title).
  */
 export function setChartOptions(
   template: Template,
@@ -289,13 +401,25 @@ export function setChartOptions(
   patch: Partial<
     Pick<
       ChartLayer,
-      'value' | 'bucket' | 'axisLabels' | 'title' | 'font' | 'bold' | 'uppercase' | 'align'
+      | 'value'
+      | 'bucket'
+      | 'axisLabels'
+      | 'title'
+      | 'font'
+      | 'bold'
+      | 'uppercase'
+      | 'align'
+      | 'averageLine'
     >
   >,
 ): Template {
-  return editLayer(template, id, ['summaryChart'], 'chart options', (layer) =>
-    unchanged(layer, patch) ? layer : { ...layer, ...patch },
-  );
+  return editLayer(template, id, ['summaryChart'], 'chart options', (layer) => {
+    const current = {
+      ...layer,
+      averageLine: layer.averageLine ?? false,
+    };
+    return unchanged(current, patch) ? layer : { ...layer, ...patch };
+  });
 }
 
 /** Tone (light, dark or brand colors) and artwork (name, monogram or both) of the logo. */

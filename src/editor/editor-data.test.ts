@@ -5,19 +5,23 @@ import type { Layer } from '@/core/template';
 import { en } from '@/i18n/locales/en';
 import { makeActivity } from '@/test-utils/make-activity';
 import { makeSummary } from '@/test-utils/make-summary';
+import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
 
 import {
   chartBuckets,
   chartTitleKey,
   type EditorData,
   hasUnit,
+  isDistanceLayer,
+  isPaceLayer,
+  isTimeLayer,
   layerText,
   MISSING_VALUE,
   type SummaryData,
   textRuns,
 } from './editor-data';
 
-const context = { unit: 'km', locale: 'es' } as const;
+const context = { unit: 'km', locale: 'es', durationUnits: TEST_DURATION_UNITS } as const;
 const activity = makeActivity({ name: 'Rodaje suave', startLocal: '2026-10-14T08:00:00' });
 const activityData: EditorData = { mode: 'activity', activity };
 
@@ -39,15 +43,25 @@ describe('layerText for an activity', () => {
       unit: 'km',
     });
     expect(
-      layerText(layer('metric-distance', layers), activityData, { unit: 'mi', locale: 'en' }),
+      layerText(layer('metric-distance', layers), activityData, {
+        ...context,
+        unit: 'mi',
+        locale: 'en',
+      }),
     ).toMatchObject({ value: '6.21', unit: 'mi' });
   });
 
-  it('shows the name and the local date', () => {
+  it('shows the name and the local date, in the format the layer asks for', () => {
     expect(layerText(layer('name', layers), activityData, context)?.value).toBe('Rodaje suave');
-    expect(layerText(layer('date', layers), activityData, context)?.value).toBe(
-      'Miércoles, 14 de octubre de 2026',
-    );
+    const date = layer('date', layers);
+    expect(layerText(date, activityData, context)?.value).toBe('Miércoles, 14 de octubre de 2026');
+    expect(
+      layerText(
+        date.kind === 'info' ? { ...date, dateFormat: 'weekdayTime' } : date,
+        activityData,
+        context,
+      )?.value,
+    ).toBe('Miércoles, 8:00');
   });
 
   it('hides label and unit when the layer says so, and marks missing values', () => {
@@ -61,6 +75,57 @@ describe('layerText for an activity', () => {
       value: MISSING_VALUE,
       unit: null,
     });
+  });
+
+  it('writes a pace with minute and second marks when the layer asks for it', () => {
+    const time = layer('metric-movingTime', layers);
+    if (time.kind !== 'metric') {
+      throw new Error('Expected a metric layer');
+    }
+    const pace: Layer = { ...time, metric: 'pace', paceNotation: 'marks' };
+    expect(layerText(pace, activityData, context)).toMatchObject({ value: `5'00"`, unit: '/km' });
+    expect(layerText({ ...pace, paceNotation: 'colon' }, activityData, context)).toMatchObject({
+      value: '5:00',
+      unit: 'min/km',
+    });
+    // Other metrics ignore it.
+    expect(layerText({ ...time, paceNotation: 'marks' }, activityData, context)?.value).toBe(
+      '50:00',
+    );
+  });
+
+  it('writes a time in words or rounded when the layer asks for it', () => {
+    const time = layer('metric-movingTime', layers);
+    if (time.kind !== 'metric') {
+      throw new Error('Expected a metric layer');
+    }
+    const long = { ...activityData, activity: { ...activity, movingTimeSeconds: 6030 } };
+    expect(layerText(time, long, context)?.value).toBe('1:40:30');
+    expect(layerText({ ...time, timeNotation: 'units' }, long, context)).toMatchObject({
+      value: '1h 40min 30seg',
+      unit: null,
+    });
+    expect(layerText({ ...time, timeNotation: 'rounded' }, long, context)?.value).toBe('1h 41min');
+    // Other metrics ignore it.
+    const distance = layer('metric-distance', layers);
+    expect(
+      layerText(
+        distance.kind === 'metric' ? { ...distance, timeNotation: 'units' } : distance,
+        activityData,
+        context,
+      )?.value,
+    ).toBe('10,00');
+  });
+
+  it('writes a distance with the decimals the layer asks for, alongside other options', () => {
+    const distance = layer('metric-distance', layers);
+    if (distance.kind !== 'metric') {
+      throw new Error('Expected a metric layer');
+    }
+    expect(layerText({ ...distance, decimals: 1 }, activityData, context)?.value).toBe('10,0');
+    expect(
+      layerText({ ...distance, decimals: 0, paceNotation: 'marks' }, activityData, context)?.value,
+    ).toBe('10');
   });
 
   it('returns nothing for summary layers and non-text layers', () => {
@@ -89,7 +154,26 @@ describe('layerText for a summary', () => {
       unit: 'km',
     });
     expect(layerText(layer('total-activityCount', layers), data, context)?.value).toBe('2');
+    const total = layer('total-totalMovingTime', layers);
+    if (total.kind !== 'summaryMetric') {
+      throw new Error('Expected a summary metric');
+    }
+    // Two 50-minute runs.
+    expect(layerText(total, data, context)).toMatchObject({ value: '1:40', unit: 'h' });
+    expect(layerText({ ...total, timeNotation: 'units' }, data, context)).toMatchObject({
+      value: '1h 40min',
+      unit: null,
+    });
+    expect(layerText({ ...total, timeNotation: 'rounded' }, data, context)?.value).toBe('2h');
     expect(layerText(layer('period', layers), data, context)?.value).toBe('12 oct – 18 oct 2026');
+    const period = layer('period', layers);
+    expect(
+      layerText(
+        period.kind === 'info' ? { ...period, periodFormat: 'short' } : period,
+        data,
+        context,
+      )?.value,
+    ).toBe('12–18 oct');
   });
 });
 
@@ -150,6 +234,45 @@ describe('textRuns', () => {
   });
 });
 
+describe('isDistanceLayer', () => {
+  it('is true for the distance of an activity and the distances of a period', () => {
+    const distance = layer('metric-distance', defaultActivityTemplate(activity).layers);
+    const total = layer('total-totalDistance', defaultSummaryTemplate(makeSummary()).layers);
+    if (distance.kind !== 'metric' || total.kind !== 'summaryMetric') {
+      throw new Error('Expected data layers');
+    }
+    expect(isDistanceLayer(distance)).toBe(true);
+    expect(isDistanceLayer({ ...distance, metric: 'pace' })).toBe(false);
+    expect(isDistanceLayer(total)).toBe(true);
+    expect(isDistanceLayer({ ...total, metric: 'longestDistance' })).toBe(true);
+    expect(isDistanceLayer({ ...total, metric: 'activityCount' })).toBe(false);
+  });
+});
+
+describe('isTimeLayer', () => {
+  it('is true for the times of an activity and the total time of a period', () => {
+    const time = layer('metric-movingTime', defaultActivityTemplate(activity).layers);
+    const total = layer('total-totalMovingTime', defaultSummaryTemplate(makeSummary()).layers);
+    if (time.kind !== 'metric' || total.kind !== 'summaryMetric') {
+      throw new Error('Expected data layers');
+    }
+    expect(isTimeLayer(time)).toBe(true);
+    expect(isTimeLayer({ ...time, metric: 'elapsedTime' })).toBe(true);
+    expect(isTimeLayer({ ...time, metric: 'pace' })).toBe(false);
+    expect(isTimeLayer(total)).toBe(true);
+    expect(isTimeLayer({ ...total, metric: 'totalDistance' })).toBe(false);
+  });
+
+  it('leaves no unit to hide once the time is written in words', () => {
+    const total = layer('total-totalMovingTime', defaultSummaryTemplate(makeSummary()).layers);
+    if (total.kind !== 'summaryMetric') {
+      throw new Error('Expected a summary metric');
+    }
+    expect(hasUnit(total)).toBe(true);
+    expect(hasUnit({ ...total, timeNotation: 'units' })).toBe(false);
+  });
+});
+
 describe('hasUnit', () => {
   const metric = (id: string) => {
     const found = layer(id, defaultActivityTemplate(activity).layers);
@@ -172,6 +295,23 @@ describe('hasUnit', () => {
     expect(hasUnit(total)).toBe(true);
     expect(hasUnit({ ...total, metric: 'totalMovingTime' })).toBe(true);
     expect(hasUnit({ ...total, metric: 'activityCount' })).toBe(false);
+  });
+});
+
+describe('isPaceLayer', () => {
+  it('is true only for paces, of an activity or of a period', () => {
+    const distance = layer('metric-distance', defaultActivityTemplate(activity).layers);
+    const total = layer('total-totalDistance', defaultSummaryTemplate(makeSummary()).layers);
+    if (distance.kind !== 'metric' || total.kind !== 'summaryMetric') {
+      throw new Error('Expected data layers');
+    }
+    expect(isPaceLayer(distance)).toBe(false);
+    expect(isPaceLayer({ ...distance, metric: 'pace' })).toBe(true);
+    expect(isPaceLayer({ ...distance, metric: 'swimPace' })).toBe(true);
+    expect(isPaceLayer({ ...distance, metric: 'movingTime' })).toBe(false);
+    expect(isPaceLayer(total)).toBe(false);
+    expect(isPaceLayer({ ...total, metric: 'averagePace' })).toBe(true);
+    expect(isPaceLayer({ ...total, metric: 'totalMovingTime' })).toBe(false);
   });
 });
 

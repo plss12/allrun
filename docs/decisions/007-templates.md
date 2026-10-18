@@ -2,7 +2,7 @@
 
 Date: 2026-10-18
 
-Status: agreed, not built yet (milestone 3d).
+Status: built in milestone 3d.
 
 ## Context
 
@@ -25,7 +25,10 @@ proportions of the canvas don't change much (see ADR 005 on why format changes p
   - **Classic:** Playfair Display, elegant, fewer data and more space.
   - **Minimal:** small Inter, everything grouped in a corner so the photo leads.
 
-  Adding more later is cheap: one more recipe.
+  Adding more later is cheap: one more recipe (`core/starter-templates.ts`). Sport is still the
+  design the editor opens with, so "Start over" goes back to it, whichever template was chosen.
+  Widgets and texts added later take the font most texts of the design use, so they don't stand
+  out.
 
 - **The user's templates:** the design on screen, saved as is (a `Template`: format plus layers,
   validated with Zod). Reused with other activities or periods, its widgets fill in with the new
@@ -43,12 +46,17 @@ templates can be deleted.
 ### Formats
 
 A user's template belongs to the format it was made in: the sheet only shows the user's templates
-of the current format. AllRun's recipes fit every format.
+of the current format. AllRun's recipes fit every format. A user's template also belongs to its
+data mode (an activity's widgets show nothing in a summary), so the sheet filters by mode too.
+Saving a design that is already saved is not offered, to avoid two identical thumbnails.
 
 ### Storage
 
-Local JSON (validated on read) behind a small store interface, so that when real login arrives
-the user's templates sync to Supabase (a firm requirement, ADR 003) without touching the editor.
+Local JSON (validated on read) behind a small store interface (`data/template-store.ts`), so that
+when real login arrives the user's templates sync to Supabase (a firm requirement, ADR 003)
+without touching the editor. One file per template, named by its id: saving or deleting one never
+rewrites the others, and a damaged file loses only its own template (it is logged and left on
+disk). A template's `name` is optional in the schema, so no name has to be made up.
 
 ## Alternatives discarded
 

@@ -1,5 +1,6 @@
 import type { Activity } from './activity';
 import type { NewLayer } from './layer-catalog';
+import { at, fitWidth, logoLayer, row, type Slot, slot, textStyle, WHITE } from './layout-kit';
 import { availableMetrics } from './metrics';
 import type { PeriodSummary } from './summary';
 import { defaultSummaryMetrics, summaryHasDistance } from './summary-metrics';
@@ -7,40 +8,19 @@ import type { CanvasFormat, FontId, Layer, Template } from './template';
 
 /**
  * Starting compositions for the editor: something good-looking on screen the moment a photo is
- * picked, which the user then rearranges. Starter templates (milestone 3d) will replace these as
- * the default choice.
+ * picked, which the user then rearranges. They are also the Sport starter template (see
+ * `starter-templates.ts`).
  *
  * Every canvas is 1080 px wide but their heights differ (1920 for stories down to 566 for
  * landscape posts), so each format places every element explicitly: tall formats stack them,
  * the landscape format splits the canvas into a graphic column and a text column.
  */
 
-const WHITE = '#FFFFFF';
-
 /**
- * The one font of every text in these compositions (a mix of fonts reads as clutter); starter
- * templates will each bring their own. Condensed, so big numbers fit side by side.
+ * The one font of every text in these compositions (a mix of fonts reads as clutter); each
+ * starter template brings its own. Condensed, so big numbers fit side by side.
  */
-const FONT: FontId = 'barlowCondensed';
-
-type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
-
-const textStyle = (overrides: Partial<TextStyle> = {}): TextStyle => ({
-  font: FONT,
-  color: WHITE,
-  bold: false,
-  uppercase: false,
-  align: 'center',
-  shadow: true,
-  ...overrides,
-});
-
-/** Where an element goes: its center (0..1 of the canvas) and its scale. */
-interface Slot {
-  readonly x: number;
-  readonly y: number;
-  readonly scale: number;
-}
+export const DEFAULT_FONT: FontId = 'barlowCondensed';
 
 interface FormatLayout {
   readonly title: Slot;
@@ -58,8 +38,6 @@ interface FormatLayout {
   readonly scale: number;
   readonly logo: Slot;
 }
-
-const slot = (x: number, y: number, scale: number): Slot => ({ x, y, scale });
 
 const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
   story: {
@@ -120,40 +98,12 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
   },
 };
 
-const at = ({ x, y, scale }: Slot) => ({ x, y, scale, rotation: 0 });
+/** The row of metrics of a format with `count` widgets (see `row`). */
+const metricsRow = (layout: FormatLayout, count: number) =>
+  row(count, { ...layout.metrics, scale: layout.scale });
 
-/**
- * A layer's `maxWidth` for it to be at most `width` wide on the canvas: `maxWidth` applies before
- * the layer's scale. Capped at the whole canvas, the most the schema allows.
- */
-const fitWidth = (width: number, scale: number): number => Math.min(1, width / scale);
-
-/**
- * Centers and maximum width of a row of `count` widgets across `from`..`to`: the span split into
- * equal columns, each widget narrower than its column. A long value ("4362,23 KM") shrinks to
- * that width, which keeps it clear of its neighbours and of the canvas edges.
- */
-function metricsRow(layout: FormatLayout, count: number) {
-  const { from, to, y } = layout.metrics;
-  const column = (to - from) / count;
-  return {
-    maxWidth: fitWidth(column * 0.88, layout.scale),
-    slots: Array.from({ length: count }, (_, i) =>
-      slot(from + column * (i + 0.5), y, layout.scale),
-    ),
-  };
-}
-
-const logo = (layout: FormatLayout): Layer => ({
-  id: 'logo',
-  kind: 'logo',
-  brand: 'allrun',
-  tone: 'light',
-  variant: 'wordmark',
-  // The watermark is the free publicity of the app: its slot shrinks less than other widgets.
-  transform: at(layout.logo),
-  opacity: 0.95,
-});
+// The watermark is the free publicity of the app: its slot shrinks less than other widgets.
+const logo = (layout: FormatLayout): Layer => logoLayer(layout.logo);
 
 /**
  * Default composition for one activity: name and date, the route, the three most relevant
@@ -182,7 +132,7 @@ export function defaultActivityTemplate(
       kind: 'info',
       field: 'activityName',
       maxWidth: fitWidth(layout.titleMaxWidth, layout.title.scale),
-      style: textStyle({ bold: true }),
+      style: textStyle(DEFAULT_FONT, { bold: true }),
       transform: at(layout.title),
       opacity: 1,
     },
@@ -191,7 +141,7 @@ export function defaultActivityTemplate(
       kind: 'info',
       field: 'activityDate',
       maxWidth: fitWidth(layout.titleMaxWidth, layout.subtitle.scale),
-      style: textStyle(),
+      style: textStyle(DEFAULT_FONT),
       transform: at(layout.subtitle),
       opacity: 0.9,
     },
@@ -202,7 +152,7 @@ export function defaultActivityTemplate(
       showLabel: true,
       showUnit: true,
       maxWidth: row.maxWidth,
-      style: textStyle({ bold: true, uppercase: true }),
+      style: textStyle(DEFAULT_FONT, { bold: true, uppercase: true }),
       transform: at(row.slots[i]),
       opacity: 1,
     })),
@@ -229,7 +179,7 @@ export function defaultSummaryTemplate(
       kind: 'info',
       field: 'periodName',
       maxWidth: fitWidth(layout.titleMaxWidth, layout.title.scale),
-      style: textStyle({ bold: true, uppercase: true }),
+      style: textStyle(DEFAULT_FONT, { bold: true, uppercase: true }),
       transform: at(layout.title),
       opacity: 1,
     },
@@ -248,7 +198,7 @@ export function defaultSummaryTemplate(
       color: WHITE,
       axisLabels: true,
       title: true,
-      font: FONT,
+      font: DEFAULT_FONT,
       bold: true,
       uppercase: true,
       align: 'center',
@@ -262,7 +212,7 @@ export function defaultSummaryTemplate(
       showLabel: true,
       showUnit: true,
       maxWidth: row.maxWidth,
-      style: textStyle({ bold: true, uppercase: true }),
+      style: textStyle(DEFAULT_FONT, { bold: true, uppercase: true }),
       transform: at(row.slots[i]),
       opacity: 1,
     })),
@@ -273,9 +223,15 @@ export function defaultSummaryTemplate(
 
 /**
  * A widget added from the picker, with the same look and size it has in the default layout of
- * `format`, centered on the canvas (the user then drags it into place).
+ * `format`, centered on the canvas (the user then drags it into place). Its texts are in
+ * `font`, the one of the design on the canvas (see `designFont`), so it doesn't stand out.
  */
-export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Layer {
+export function newLayer(
+  item: NewLayer,
+  id: string,
+  format: CanvasFormat,
+  font: FontId = DEFAULT_FONT,
+): Layer {
   const layout = LAYOUTS[format];
   const centered = (scale: number) => ({ x: 0.5, y: 0.5, scale, rotation: 0 });
   switch (item.kind) {
@@ -286,7 +242,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         id,
         showLabel: true,
         showUnit: true,
-        style: textStyle({ bold: true, uppercase: true }),
+        style: textStyle(font, { bold: true, uppercase: true }),
         transform: centered(layout.scale),
         opacity: 1,
       };
@@ -297,7 +253,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         ...item,
         id,
         maxWidth: fitWidth(layout.titleMaxWidth, scale),
-        style: textStyle({ bold: isTitle, uppercase: item.field === 'periodName' }),
+        style: textStyle(font, { bold: isTitle, uppercase: item.field === 'periodName' }),
         transform: centered(scale),
         opacity: isTitle ? 1 : 0.9,
       };
@@ -307,7 +263,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         ...item,
         id,
         maxWidth: fitWidth(layout.titleMaxWidth, layout.title.scale),
-        style: textStyle({ bold: true }),
+        style: textStyle(font, { bold: true }),
         transform: centered(layout.title.scale),
         opacity: 1,
       };
@@ -335,7 +291,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         color: WHITE,
         axisLabels: true,
         title: true,
-        font: FONT,
+        font,
         bold: true,
         uppercase: true,
         align: 'center',
@@ -351,5 +307,45 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         transform: centered(layout.logo.scale),
         opacity: 0.95,
       };
+  }
+}
+
+/**
+ * The font of a design: the one most of its texts are in (the first of them on a tie), or the
+ * default font when it has no text. Widgets added to it take this font. Time O(n) for n layers.
+ */
+export function designFont(layers: readonly Layer[]): FontId {
+  const counts = new Map<FontId, number>();
+  for (const layer of layers) {
+    const font = textFont(layer);
+    if (font !== null) {
+      counts.set(font, (counts.get(font) ?? 0) + 1);
+    }
+  }
+  let best: FontId = DEFAULT_FONT;
+  let most = 0;
+  for (const [font, count] of counts) {
+    if (count > most) {
+      best = font;
+      most = count;
+    }
+  }
+  return best;
+}
+
+/** Font of a layer's text, or `null` for layers without text. */
+function textFont(layer: Layer): FontId | null {
+  switch (layer.kind) {
+    case 'metric':
+    case 'summaryMetric':
+    case 'info':
+    case 'text':
+      return layer.style.font;
+    case 'summaryChart':
+      return layer.font;
+    case 'route':
+    case 'summaryRoutes':
+    case 'logo':
+      return null;
   }
 }

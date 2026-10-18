@@ -1,4 +1,4 @@
-import { newLayer } from './default-layout';
+import { designFont, newLayer } from './default-layout';
 import { type Layer, MAX_TEXT_LENGTH, type Template } from './template';
 import { addLayer, cleanText, removeLayer, setTextContent } from './template-edit';
 
@@ -30,6 +30,7 @@ export function previewTextDraft(template: Template, draft: TextDraft): Template
       { kind: 'text', content: draft.content },
       draft.layerId,
       template.format,
+      designFont(template.layers),
     );
     return { ...template, layers: [...template.layers, layer] };
   }
@@ -57,6 +58,14 @@ export function commitTextDraft(template: Template, draft: TextDraft): Template 
     throw new Error(`Text layers hold at most ${MAX_TEXT_LENGTH} characters`);
   }
   return draft.isNew
-    ? addLayer(template, newLayer({ kind: 'text', content }, draft.layerId, template.format))
+    ? addLayer(
+        template,
+        newLayer(
+          { kind: 'text', content },
+          draft.layerId,
+          template.format,
+          designFont(template.layers),
+        ),
+      )
     : setTextContent(template, draft.layerId, content);
 }

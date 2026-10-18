@@ -17,6 +17,7 @@ import { defaultActivityTemplate } from '@/core/default-layout';
 import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
 import { CANVAS_FORMATS } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
+import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
 
 import type { LayerContext } from './template-scene';
 
@@ -54,7 +55,7 @@ function layerContext(): LayerContext {
     data: { mode: 'activity', activity },
     // No fonts: these tests look at the background, not the text.
     fonts: Skia.TypefaceFontProvider.Make(),
-    textContext: { unit: 'km', locale: 'en' },
+    textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
     translate: (key) => key,
   };
 }

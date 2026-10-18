@@ -1,4 +1,4 @@
-import { formatDuration, formatPace, metersToUnit } from './units';
+import { durationParts, formatDuration, formatPace, metersToUnit } from './units';
 
 describe('metersToUnit', () => {
   it('converts meters to kilometers and miles', () => {
@@ -38,5 +38,35 @@ describe('formatPace', () => {
   it('returns null when there is no meaningful speed', () => {
     expect(formatPace(0, 'km')).toBeNull();
     expect(formatPace(Number.POSITIVE_INFINITY, 'km')).toBeNull();
+  });
+});
+
+describe('durationParts', () => {
+  const h = (amount: number) => ({ amount, unit: 'hours' });
+  const min = (amount: number) => ({ amount, unit: 'minutes' });
+  const s = (amount: number) => ({ amount, unit: 'seconds' });
+
+  it('splits a duration down to seconds, minutes or hours', () => {
+    expect(durationParts(6030, 'seconds')).toEqual([h(1), min(40), s(30)]);
+    expect(durationParts(6030, 'minutes')).toEqual([h(1), min(41)]);
+    expect(durationParts(6030, 'hours')).toEqual([h(2)]);
+  });
+
+  it('leaves out the parts that are zero, but never all of them', () => {
+    expect(durationParts(3030, 'seconds')).toEqual([min(50), s(30)]);
+    expect(durationParts(3630, 'seconds')).toEqual([h(1), s(30)]);
+    expect(durationParts(7200, 'seconds')).toEqual([h(2)]);
+    expect(durationParts(0, 'minutes')).toEqual([min(0)]);
+    expect(durationParts(20, 'minutes')).toEqual([min(0)]);
+  });
+
+  it('carries a rounded unit over to the next one', () => {
+    expect(durationParts(3599.6, 'seconds')).toEqual([h(1)]);
+    expect(durationParts(3570, 'minutes')).toEqual([h(1)]);
+  });
+
+  it('rejects negative or non-finite durations', () => {
+    expect(() => durationParts(-1, 'seconds')).toThrow(RangeError);
+    expect(() => durationParts(Number.NaN, 'minutes')).toThrow(RangeError);
   });
 });

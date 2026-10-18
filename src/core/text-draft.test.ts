@@ -1,6 +1,7 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
 import { defaultActivityTemplate, newLayer } from './default-layout';
+import { starterTemplate } from './starter-templates';
 import { MAX_TEXT_LENGTH, parseTemplate, type Template } from './template';
 import { addLayer } from './template-edit';
 import { commitTextDraft, editTextDraft, previewTextDraft } from './text-draft';
@@ -61,5 +62,20 @@ describe('commitTextDraft', () => {
     expect(() => commitTextDraft(withText, { ...editTextDraft(textLayer), content: long })).toThrow(
       /at most 200 characters/,
     );
+  });
+});
+
+describe('new texts', () => {
+  it('take the font of the design they are added to', () => {
+    const poster = starterTemplate(
+      'poster',
+      { mode: 'activity', activity: makeActivity() },
+      'story',
+    );
+    const draft = { layerId: 'text', isNew: true, content: 'PB!' };
+    for (const template of [previewTextDraft(poster, draft), commitTextDraft(poster, draft)]) {
+      const added = template.layers[template.layers.length - 1];
+      expect(added.kind === 'text' && added.style.font).toBe('archivoBlack');
+    }
   });
 });

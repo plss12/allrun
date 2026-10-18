@@ -1,6 +1,6 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
-import { availableMetrics, metricValue, toDisplayMetric } from './metrics';
+import { availableMetrics, metricValue, toDisplayMetric, withPaceMarks } from './metrics';
 
 describe('availableMetrics', () => {
   it('offers pace, not speed, for road runs, leading with distance, time and pace', () => {
@@ -162,5 +162,39 @@ describe('toDisplayMetric', () => {
       text: '1:23:45',
       unit: null,
     });
+  });
+});
+
+describe('withPaceMarks', () => {
+  const context = { unit: 'km', sportFamily: 'run' } as const;
+
+  it('writes a pace as 5\'28" and leaves "min" out of its unit', () => {
+    expect(withPaceMarks(toDisplayMetric('pace', 1000 / 328, context))).toEqual({
+      kind: 'time',
+      text: `5'28"`,
+      unit: '/km',
+    });
+    expect(
+      withPaceMarks(toDisplayMetric('swimPace', 100 / 105, { ...context, unit: 'mi' })),
+    ).toMatchObject({ unit: '/100yd' });
+    expect(
+      withPaceMarks(toDisplayMetric('pace', 1000 / 328, { ...context, unit: 'mi' })),
+    ).toMatchObject({ unit: '/mi' });
+  });
+
+  it('keeps the hours of a pace of an hour or more', () => {
+    expect(withPaceMarks(toDisplayMetric('pace', 1000 / 3930, context))).toMatchObject({
+      text: `1h 05'30"`,
+    });
+  });
+
+  it('leaves anything that is not a pace as it is', () => {
+    for (const display of [
+      toDisplayMetric('movingTime', 3000, context),
+      toDisplayMetric('distance', 10_000, context),
+      toDisplayMetric('speed', 5, context),
+    ]) {
+      expect(withPaceMarks(display)).toBe(display);
+    }
   });
 });

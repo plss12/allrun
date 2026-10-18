@@ -68,7 +68,28 @@ Few, visual options: color swatches (no free picker), five opacity presets, ten 
 the style they give (Modern, Sport, Comic, Signature…) rather than by name. Shadows are automatic:
 a widget whose color has a WCAG luminance above 0.1 casts a soft dark shadow so it reads over any
 photo; darker colors go without, since a dark shadow would only blur them. Default designs use
-one font for every widget; each starter template (milestone 3d) will bring its own.
+one font for every widget; each starter template brings its own (ADR 007).
+
+What a widget shows and how its value is written sit in its Format tab, after bold, case and
+alignment. First how the value is written, in one chip that shows the widget's own value written
+the current way (never a made-up sample) and moves to the next way on each tap, like the
+alignment button: a pace with a colon or with minute and second marks (`5:28`, `5'28"`, as on
+sports watches; an hour or more reads `1h 05'30"`), a time as a clock, with units or rounded
+(`1:40:30`, `1h 40min 30seg`, `1h 41min`; a period's total `280:40 h`, `280h 40min`, `281h`),
+an activity's date in full, weekday, in words, short, in numbers, weekday and start time, or
+start time, a distance with two, one or no decimals, a period's name in full, without the year,
+short or in numbers. Then label and unit. The chip carries no icon: tapping it shows what it does.
+Texts also get, as icon buttons next to bold and case, a backdrop that cycles like the story
+editors' (none, a translucent box, a solid box), always in the color opposite to the text's,
+which keeps its color, and letter spacing (normal, open, wide open), whose icon shows the
+spacing chosen, as the alignment one does. Routes add their line style (solid, dashed, dotted), a
+glow and, for one activity, a dot where it starts and a ring where it ends, in the line's color.
+Charts put their bar option first (a dashed average line), then their texts (axis labels,
+title).
+
+Data widgets keep their metric's own label: there is no renaming them. Typing a label over a
+widget written in capitals jumped between cases, and a free text next to a widget without its
+label already says anything the user wants.
 
 ### Typing over the photo
 

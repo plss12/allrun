@@ -8,13 +8,17 @@ import {
   chartBucketOptions,
   chartValueOptions,
   colorPageOf,
+  contrastingInk,
   layerColor,
   relativeLuminance,
   setChartOptions,
   setDataLabels,
+  setDateFormat,
   setLayerColor,
   setLayerOpacity,
+  setLineOptions,
   setLogoOptions,
+  setPeriodFormat,
   setStrokeWidth,
   setTextStyle,
   STYLE_COLOR_PAGES,
@@ -142,6 +146,88 @@ describe('setTextStyle and setDataLabels', () => {
     expect(find(edited, 'metric-distance')).toMatchObject({ showLabel: true, showUnit: false });
     expect(setDataLabels(activity, 'metric-distance', { showLabel: true })).toBe(activity);
     expect(() => setDataLabels(activity, 'name', { showLabel: false })).toThrow(/data labels/);
+  });
+
+  it('writes a pace with marks or without', () => {
+    const marked = setDataLabels(activity, 'metric-distance', { paceNotation: 'marks' });
+    expect(find(marked, 'metric-distance')).toMatchObject({ paceNotation: 'marks' });
+    expect(setDataLabels(marked, 'metric-distance', { paceNotation: 'marks' })).toBe(marked);
+    // Without a notation a pace reads with a colon: choosing it records no step.
+    expect(setDataLabels(activity, 'metric-distance', { paceNotation: 'colon' })).toBe(activity);
+  });
+
+  it('writes a time in words or as a clock', () => {
+    const words = setDataLabels(activity, 'metric-movingTime', { timeNotation: 'units' });
+    expect(find(words, 'metric-movingTime')).toMatchObject({ timeNotation: 'units' });
+    // Without a notation a time reads as a clock: choosing it records no step.
+    expect(setDataLabels(activity, 'metric-movingTime', { timeNotation: 'clock' })).toBe(activity);
+  });
+
+  it("sets how the activity's date reads, and only the date's", () => {
+    const short = setDateFormat(activity, 'date', 'short');
+    expect(find(short, 'date')).toMatchObject({ dateFormat: 'short' });
+    expect(setDateFormat(short, 'date', 'short')).toBe(short);
+    // Without a format the date reads in full.
+    expect(setDateFormat(activity, 'date', 'full')).toBe(activity);
+    expect(() => setDateFormat(activity, 'name', 'short')).toThrow(/date format/);
+    expect(() => setDateFormat(activity, 'route', 'short')).toThrow(/date format/);
+  });
+});
+
+describe('contrastingInk', () => {
+  it('is black on light colors and white on dark ones', () => {
+    expect(contrastingInk('#FFFFFF')).toBe('#000000');
+    expect(contrastingInk('#F6F1EA')).toBe('#000000');
+    expect(contrastingInk('#141B2D')).toBe('#FFFFFF');
+    expect(contrastingInk('#C94A2E')).toBe('#FFFFFF');
+  });
+});
+
+describe('the options of the format tab', () => {
+  it('sets the decimals of a distance, two being the default', () => {
+    const one = setDataLabels(activity, 'metric-distance', { decimals: 1 });
+    expect(find(one, 'metric-distance')).toMatchObject({ decimals: 1 });
+    expect(setDataLabels(activity, 'metric-distance', { decimals: 2 })).toBe(activity);
+  });
+
+  it("sets how the period's name reads, and only the period's", () => {
+    const short = setPeriodFormat(summary, 'period', 'short');
+    expect(find(short, 'period')).toMatchObject({ periodFormat: 'short' });
+    expect(setPeriodFormat(summary, 'period', 'full')).toBe(summary);
+    expect(() => setPeriodFormat(activity, 'date', 'short')).toThrow(/period format/);
+  });
+
+  it('puts a backdrop and letter spacing on texts, none and normal being the defaults', () => {
+    const boxed = setTextStyle(activity, 'name', { backdrop: 'solid', letterSpacing: 'wide' });
+    expect(find(boxed, 'name')).toMatchObject({
+      style: { backdrop: 'solid', letterSpacing: 'wide' },
+    });
+    expect(setTextStyle(activity, 'name', { backdrop: 'none', letterSpacing: 'normal' })).toBe(
+      activity,
+    );
+  });
+
+  it('dashes and lights up routes, and marks the ends of one activity only', () => {
+    const route = setLineOptions(activity, 'route', {
+      line: 'dotted',
+      glow: true,
+      endpoints: true,
+    });
+    expect(find(route, 'route')).toMatchObject({
+      endpoints: true,
+      stroke: { line: 'dotted', glow: true },
+    });
+    expect(setLineOptions(activity, 'route', { line: 'solid', glow: false })).toBe(activity);
+    expect(find(setLineOptions(summary, 'routes', { line: 'dashed' }), 'routes')).toMatchObject({
+      stroke: { line: 'dashed' },
+    });
+    expect(() => setLineOptions(summary, 'routes', { endpoints: true })).toThrow(/start and end/);
+  });
+
+  it("draws a chart's average, off by default", () => {
+    const chart = setChartOptions(summary, 'chart', { averageLine: true });
+    expect(find(chart, 'chart')).toMatchObject({ averageLine: true });
+    expect(setChartOptions(summary, 'chart', { averageLine: false })).toBe(summary);
   });
 });
 

@@ -13,7 +13,12 @@ import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { z } from 'zod';
 
 import { customRange } from '@/core/dates';
-import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from '@/core/default-layout';
+import {
+  defaultActivityTemplate,
+  defaultSummaryTemplate,
+  designFont,
+  newLayer,
+} from '@/core/default-layout';
 import {
   canRestore,
   type DefaultTemplate,
@@ -50,11 +55,12 @@ import {
   type TextDraft,
 } from '@/core/text-draft';
 import { useActivitySource } from '@/data/activity-source';
+import { useUserTemplates } from '@/data/user-templates';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import { ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
 import type { ExportDesign } from '@/editor/export-scene';
-import type { EditorData } from '@/editor/editor-data';
+import { type EditorData, layerText } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
@@ -65,6 +71,7 @@ import { preparePhoto } from '@/editor/prepare-photo';
 import { QuickActions } from '@/editor/quick-actions';
 import { SelectionBar } from '@/editor/selection-bar';
 import { STYLE_PANEL_HEIGHT, StylePanel } from '@/editor/style-panel';
+import { TemplateSheet } from '@/editor/template-sheet';
 import { useExport } from '@/editor/use-export';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
@@ -209,6 +216,8 @@ function EditorWorkspace({
   // Undo can take away the selected layer; then nothing is selected.
   const selected = template.layers.find((layer) => layer.id === selectedId) ?? null;
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const userTemplates = useUserTemplates();
   /**
    * Whether the style panel replaces the bottom controls. It closes when nothing is selected; a
    * tap on another layer switches the panel to it.
@@ -224,7 +233,15 @@ function EditorWorkspace({
   const layerContext: LayerContext = {
     data,
     fonts,
-    textContext: { unit, locale },
+    textContext: {
+      unit,
+      locale,
+      durationUnits: {
+        hours: t('durationUnits.hours'),
+        minutes: t('durationUnits.minutes'),
+        seconds: t('durationUnits.seconds'),
+      },
+    },
     translate: (key, values) => t(key, values),
   };
   // While typing, the text leaves the canvas for the typing overlay, which shows it as typed.
@@ -331,9 +348,21 @@ function EditorWorkspace({
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     const id = uniqueLayerId(template, catalogItemKey(item));
-    edit((current) => addLayer(current, newLayer(item, id, current.format)));
+    edit((current) =>
+      addLayer(current, newLayer(item, id, current.format, designFont(current.layers))),
+    );
     setSelectedId(id);
     setSheetOpen(false);
+  };
+
+  /**
+   * Replaces the widgets with a template's (`null`: the default design) as one undo step, and
+   * closes the sheet.
+   */
+  const chooseTemplate = (layers: EditorLayers) => {
+    setHistory((current) => commit(current, layers));
+    setSelectedId(null);
+    setTemplatesOpen(false);
   };
 
   /** Opens the keyboard to type a text. */
@@ -436,6 +465,7 @@ function EditorWorkspace({
     setSelectedId(null);
     setStyling(false);
     setSheetOpen(false);
+    setTemplatesOpen(false);
     setStep('photo');
   };
 
@@ -523,6 +553,18 @@ function EditorWorkspace({
         onAdd={addNewLayer}
         onAddText={addText}
         onClose={() => setSheetOpen(false)}
+      />
+      <TemplateSheet
+        visible={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        data={data}
+        format={format}
+        design={template}
+        layerContext={layerContext}
+        photo={canvasImage}
+        framing={framing}
+        userTemplates={userTemplates}
+        onChoose={chooseTemplate}
       />
       <View
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}
@@ -618,6 +660,7 @@ function EditorWorkspace({
             summary={data.mode === 'summary' ? data.summary : null}
             autoBucket={data.mode === 'summary' ? data.bucketSize : null}
             locale={locale}
+            textOf={(layer) => layerText(layer, data, layerContext.textContext)?.value ?? null}
             onChange={edit}
           />
         ) : (
@@ -647,6 +690,7 @@ function EditorWorkspace({
               <QuickActions
                 onAddLayer={() => setSheetOpen(true)}
                 onAddText={addText}
+                onTemplates={() => setTemplatesOpen(true)}
                 canAdd={canAddLayer(template)}
               />
             )}

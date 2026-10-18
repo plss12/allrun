@@ -39,6 +39,42 @@ export function formatDuration(totalSeconds: number): string {
   return `${hours}:${String(minutes).padStart(2, '0')}:${ss}`;
 }
 
+/** A unit of a duration written in words. */
+export type DurationUnit = 'hours' | 'minutes' | 'seconds';
+
+/** One part of a duration written in words: "40" minutes. */
+export interface DurationPart {
+  readonly amount: number;
+  readonly unit: DurationUnit;
+}
+
+const SECONDS_IN: Readonly<Record<DurationUnit, number>> = { hours: 3600, minutes: 60, seconds: 1 };
+const DURATION_UNITS: readonly DurationUnit[] = ['hours', 'minutes', 'seconds'];
+
+/**
+ * Splits a duration into hours, minutes and seconds down to `smallest`, rounded to it, for
+ * writing it in words ("1h 40min 30s", or "1h 41min" down to minutes). Parts that are zero are
+ * left out ("1h 30s"), unless all are: then it is zero of `smallest`. Time and space O(1).
+ *
+ * @throws RangeError if `totalSeconds` is negative or not finite.
+ */
+export function durationParts(totalSeconds: number, smallest: DurationUnit): DurationPart[] {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    throw new RangeError(`Invalid duration: ${totalSeconds}`);
+  }
+  const step = SECONDS_IN[smallest];
+  let rest = Math.round(totalSeconds / step) * step;
+  const parts: DurationPart[] = [];
+  for (const unit of DURATION_UNITS.slice(0, DURATION_UNITS.indexOf(smallest) + 1)) {
+    const amount = Math.floor(rest / SECONDS_IN[unit]);
+    rest -= amount * SECONDS_IN[unit];
+    if (amount > 0) {
+      parts.push({ amount, unit });
+    }
+  }
+  return parts.length > 0 ? parts : [{ amount: 0, unit: smallest }];
+}
+
 /**
  * Formats an average speed as a running pace (time per km or per mile), e.g. `4:35`.
  *

@@ -1,7 +1,11 @@
 import {
+  BlurMask,
+  Circle,
+  DashPathEffect,
   FilterMode,
   FontWeight,
   Group,
+  Line,
   Image,
   MipmapMode,
   Paint,
@@ -22,7 +26,7 @@ import {
 import type { ReactElement } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { castsShadow } from '@/core/layer-style';
+import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { LayerTransform } from '@/core/layer-transform';
 import type { PhotoPlacement, Size } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
@@ -251,18 +255,32 @@ function prepareLayer(
         return null;
       }
       const isData = layer.kind === 'metric' || layer.kind === 'summaryMetric';
+      const backdrop = layer.style.backdrop ?? 'none';
+      // A backdrop already sets the text apart: no shadow. The text keeps its color.
+      const style = backdrop === 'none' ? layer.style : { ...layer.style, shadow: false };
       const paragraph = buildFittedParagraph(
         fonts,
-        layer.style,
+        style,
         {
           label: text.label === null ? null : translate(text.label),
           value: text.value,
           unit: text.unit,
           valueSize: isData ? VALUE_SIZE : layer.kind === 'info' ? INFO_SIZE : TEXT_SIZE,
         },
-        layer.maxWidth === undefined ? null : layer.maxWidth * canvasWidth,
+        // On a backdrop the box has to fit too: the text gets a little less room.
+        layer.maxWidth === undefined
+          ? null
+          : layer.maxWidth * canvasWidth * (backdrop === 'none' ? 1 : BACKDROP_FIT),
       );
-      return preparedParagraph(layer, paragraph);
+      return backdrop === 'none'
+        ? preparedParagraph(layer, paragraph)
+        : preparedBackdrop(
+            layer,
+            paragraph,
+            backdrop === 'solid'
+              ? contrastingInk(layer.style.color)
+              : softBackdrop(layer.style.color),
+          );
     }
     case 'route': {
       if (data.mode !== 'activity' || data.activity.routePolyline === null) {
@@ -331,6 +349,7 @@ function prepareLayer(
             labels={labels}
             title={title}
             titleAlign={layer.align}
+            averageLine={layer.averageLine ?? false}
           />
         ),
       };
@@ -357,6 +376,52 @@ function preparedParagraph(layer: Layer, paragraph: SkParagraph): PreparedLayer 
 }
 
 /**
+ * Behind a light text a translucent dark box, behind a dark text a translucent light one, as in
+ * story editors.
+ */
+function softBackdrop(textColor: string): string {
+  return contrastingInk(textColor) === '#000000'
+    ? 'rgba(0, 0, 0, 0.5)'
+    : 'rgba(255, 255, 255, 0.75)';
+}
+
+/**
+ * A text on a rounded box of `color`, padded in proportion to the text so it looks the same at
+ * any size. The box is part of the widget: a finger can grab it and it fits within the canvas.
+ */
+function preparedBackdrop(layer: Layer, paragraph: SkParagraph, color: string): PreparedLayer {
+  const textWidth = Math.ceil(paragraph.getLongestLine()) + 1;
+  const textHeight = paragraph.getHeight();
+  const padY = Math.max(6, textHeight * BACKDROP_PADDING);
+  const padX = padY * 1.6;
+  const width = textWidth + 2 * padX;
+  const height = textHeight + 2 * padY;
+  return {
+    layer,
+    width,
+    height,
+    content: (
+      <Group>
+        <RoundedRect
+          x={-width / 2}
+          y={-height / 2}
+          width={width}
+          height={height}
+          r={Math.min(padY * 1.4, height / 2)}
+          color={color}
+        />
+        <CenteredParagraph paragraph={paragraph} />
+      </Group>
+    ),
+  };
+}
+
+/** Room around a text on a backdrop, above and below, as a fraction of the text's height. */
+const BACKDROP_PADDING = 0.16;
+/** Share of a widget's maximum width its text may take on a backdrop, leaving room for the box. */
+const BACKDROP_FIT = 0.85;
+
+/**
  * Routes projected into a `box` × `boxHeight` box. They are centered in it, so their own extent
  * (plus the stroke) is what a finger can grab, not the whole box. `null` without any point.
  */
@@ -372,11 +437,22 @@ function preparedRoutes(
   }
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
+  const endpoints = layer.kind === 'route' && (layer.endpoints ?? false);
+  // The start and end marks are wider than the line.
+  const margin = endpoints ? 2 * ENDPOINT_RADIUS * layer.stroke.width : layer.stroke.width;
   return {
     layer,
-    width: Math.max(...xs) - Math.min(...xs) + layer.stroke.width,
-    height: Math.max(...ys) - Math.min(...ys) + layer.stroke.width,
-    content: <RouteLines routes={routes} box={box} boxHeight={boxHeight} stroke={layer.stroke} />,
+    width: Math.max(...xs) - Math.min(...xs) + margin,
+    height: Math.max(...ys) - Math.min(...ys) + margin,
+    content: (
+      <RouteLines
+        routes={routes}
+        box={box}
+        boxHeight={boxHeight}
+        stroke={layer.stroke}
+        endpoints={endpoints}
+      />
+    ),
   };
 }
 
@@ -405,6 +481,8 @@ function chartHeight(labels: boolean, title: boolean): number {
   return CHART_HEIGHT + (labels ? LABEL_BAND : 0) + (title ? TITLE_BAND : 0);
 }
 const MAX_TEXT_WIDTH = 1000;
+/** A layout width no text reaches: lines only break where the text does. */
+const NO_WRAP_WIDTH = 1_000_000;
 
 type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
 
@@ -435,16 +513,25 @@ const LABEL_STYLE: TextStyle = {
 
 const ALIGN = { left: TextAlign.Left, center: TextAlign.Center, right: TextAlign.Right } as const;
 
+/** Room added after each letter, as a fraction of the font size. */
+const LETTER_SPACING = { normal: 0, wide: 0.08, wider: 0.2 } as const;
+
+/**
+ * Lays out a text widget, wrapping lines longer than `wrapWidth` (line breaks in the text always
+ * apply), then shrinks the paragraph to its longest line so it centers on (0, 0).
+ */
 function buildParagraph(
   fonts: SkTypefaceFontProvider,
   style: TextStyle,
   content: ParagraphContent,
+  wrapWidth = MAX_TEXT_WIDTH,
 ): SkParagraph {
   const textStyle = (fontSize: number, bold: boolean): SkTextStyle => ({
     color: Skia.Color(style.color),
     fontFamilies: [FONT_FAMILIES[style.font]],
     fontSize,
     fontStyle: { weight: bold ? FontWeight.Bold : FontWeight.Normal },
+    letterSpacing: fontSize * LETTER_SPACING[style.letterSpacing ?? 'normal'],
     shadows:
       style.shadow && castsShadow(style.color)
         ? [
@@ -462,14 +549,17 @@ function buildParagraph(
   }
   const paragraph = builder.build();
   // Lay out once to measure, then shrink to the longest line so the block centers on (0, 0).
-  paragraph.layout(MAX_TEXT_WIDTH);
+  paragraph.layout(wrapWidth);
   paragraph.layout(Math.ceil(paragraph.getLongestLine()) + 1);
   return paragraph;
 }
 
 /**
- * Like {@link buildParagraph}, but when the text is wider than `maxWidth` it is rebuilt with all
- * its font sizes reduced in proportion, so long values ("4178,08 km") never overlap neighbours.
+ * Like {@link buildParagraph}, but a text with a `maxWidth` doesn't wrap: when it is wider, it is
+ * rebuilt with all its font sizes reduced in proportion, so long values ("4178,08 km") and names
+ * never overlap neighbours. Wrapping first would break the proportion: the smaller text would
+ * flow back into fewer, longer lines, wider than `maxWidth`, and the extra lines would run into
+ * the widget below.
  */
 function buildFittedParagraph(
   fonts: SkTypefaceFontProvider,
@@ -477,15 +567,20 @@ function buildFittedParagraph(
   content: ParagraphContent,
   maxWidth: number | null,
 ): SkParagraph {
-  const paragraph = buildParagraph(fonts, style, content);
+  if (maxWidth === null) {
+    return buildParagraph(fonts, style, content);
+  }
+  const paragraph = buildParagraph(fonts, style, content, NO_WRAP_WIDTH);
   const width = paragraph.getLongestLine();
-  if (maxWidth === null || width <= maxWidth) {
+  if (width <= maxWidth) {
     return paragraph;
   }
-  return buildParagraph(fonts, style, {
-    ...content,
-    valueSize: content.valueSize * (maxWidth / width),
-  });
+  return buildParagraph(
+    fonts,
+    style,
+    { ...content, valueSize: content.valueSize * (maxWidth / width) },
+    NO_WRAP_WIDTH,
+  );
 }
 
 function CenteredParagraph({ paragraph }: { readonly paragraph: SkParagraph }) {
@@ -507,15 +602,26 @@ interface RouteLinesProps {
   readonly routes: readonly Point[][];
   readonly box: number;
   readonly boxHeight: number;
-  readonly stroke: { readonly color: string; readonly width: number };
+  readonly stroke: Extract<Layer, { kind: 'route' }>['stroke'];
+  /** A dot where the (first) route starts and a ring where it ends. */
+  readonly endpoints: boolean;
 }
 
-function RouteLines({ routes, box, boxHeight, stroke }: RouteLinesProps) {
+/** Radius of the start and end marks of a route, in line widths. */
+const ENDPOINT_RADIUS = 1.6;
+
+/**
+ * Dash and gap lengths of each line style, in line widths. Dots are dashes of no length: the
+ * round caps draw them as circles.
+ */
+const LINE_DASHES = { dashed: [2.5, 2], dotted: [0, 2] } as const;
+
+function RouteLines({ routes, box, boxHeight, stroke, endpoints }: RouteLinesProps) {
   const builder = Skia.PathBuilder.Make();
+  const at = (point: Point) => ({ x: point.x - box / 2, y: point.y - boxHeight / 2 });
   for (const route of routes) {
     route.forEach((point, i) => {
-      const x = point.x - box / 2;
-      const y = point.y - boxHeight / 2;
+      const { x, y } = at(point);
       if (i === 0) {
         builder.moveTo(x, y);
       } else {
@@ -523,19 +629,64 @@ function RouteLines({ routes, box, boxHeight, stroke }: RouteLinesProps) {
       }
     });
   }
+  const path = builder.detach();
+  const { color, width } = stroke;
+  const line = stroke.line ?? 'solid';
+  const shadow = castsShadow(color) ? <DropShadow /> : null;
+  const first = routes[0];
+  const start = first?.[0];
+  const end = first?.[first.length - 1];
   return (
-    <Path
-      path={builder.detach()}
-      style="stroke"
-      strokeWidth={stroke.width}
-      strokeCap="round"
-      strokeJoin="round"
-      color={stroke.color}
-    >
-      {castsShadow(stroke.color) ? <DropShadow /> : null}
-    </Path>
+    <Group>
+      {stroke.glow ? (
+        // A wider, blurred copy of the line under it.
+        <Path
+          path={path}
+          style="stroke"
+          strokeWidth={width * 2.5}
+          strokeCap="round"
+          strokeJoin="round"
+          color={color}
+          opacity={0.6}
+        >
+          <BlurMask blur={width * 1.5} style="normal" />
+        </Path>
+      ) : null}
+      <Path
+        path={path}
+        style="stroke"
+        strokeWidth={width}
+        strokeCap="round"
+        strokeJoin="round"
+        color={color}
+      >
+        {line === 'solid' ? null : (
+          <DashPathEffect intervals={LINE_DASHES[line].map((length) => length * width + 0.01)} />
+        )}
+        {shadow}
+      </Path>
+      {endpoints && start !== undefined && end !== undefined ? (
+        <>
+          <Circle
+            c={at(end)}
+            r={ENDPOINT_RADIUS * width}
+            style="stroke"
+            strokeWidth={width * 0.7}
+            color={color}
+          >
+            {shadow}
+          </Circle>
+          <Circle c={at(start)} r={ENDPOINT_RADIUS * width * 0.75} color={color}>
+            {shadow}
+          </Circle>
+        </>
+      ) : null}
+    </Group>
   );
 }
+
+/** Width of a chart's average line, in canvas pixels before the layer's scale. */
+const AVERAGE_LINE_WIDTH = 4;
 
 function BarChart({
   values,
@@ -543,6 +694,7 @@ function BarChart({
   labels,
   title,
   titleAlign,
+  averageLine,
 }: {
   readonly values: readonly number[];
   readonly color: string;
@@ -552,6 +704,8 @@ function BarChart({
   readonly title: SkParagraph | null;
   /** Where the title sits: under the first bar, centered, or under the last bar. */
   readonly titleAlign: 'left' | 'center' | 'right';
+  /** A dashed line across the bars at their average (empty bars count). */
+  readonly averageLine: boolean;
 }) {
   if (values.length === 0) {
     return null;
@@ -563,6 +717,8 @@ function BarChart({
   const minHeight = Math.min(8, barWidth);
   const totalHeight = chartHeight(labels !== null, title !== null);
   const titleTop = CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND);
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const averageY = max > 0 ? CHART_HEIGHT - (average / max) * CHART_HEIGHT : CHART_HEIGHT;
   return (
     <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
       {/* One shadow for all the bars, drawn as a layer, instead of one blur per bar. */}
@@ -590,6 +746,17 @@ function BarChart({
             />
           );
         })}
+        {averageLine && max > 0 ? (
+          <Line
+            p1={{ x: 0, y: averageY }}
+            p2={{ x: CHART_WIDTH, y: averageY }}
+            color={color}
+            strokeWidth={AVERAGE_LINE_WIDTH}
+            strokeCap="round"
+          >
+            <DashPathEffect intervals={[3 * AVERAGE_LINE_WIDTH, 2.5 * AVERAGE_LINE_WIDTH]} />
+          </Line>
+        ) : null}
       </Group>
       {labels?.map((label, i) => {
         if (label === null) {

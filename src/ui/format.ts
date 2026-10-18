@@ -2,6 +2,7 @@ import type { DateRange, LocalDate } from '@/core/dates';
 import type { DisplayMetric, MetricUnit } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
 import type { BucketSize, SummaryBucket } from '@/core/summary';
+import type { DateFormat, PeriodFormat } from '@/core/template';
 
 /** A metric as text: the value and its unit label. */
 export interface FormattedMetric {
@@ -29,16 +30,30 @@ const asUtc = (localDateTime: string) => new Date(`${localDateTime}Z`);
 
 const capitalize = (text: string) => text.charAt(0).toLocaleUpperCase() + text.slice(1);
 
-/** Activity start for display, e.g. "Thursday, October 15, 2026". */
-export function formatActivityDate(startLocal: string, locale: string): string {
+/** What each date format of an activity shows (see `DateFormat`). */
+const DATE_FORMAT_OPTIONS: Readonly<Record<DateFormat, Intl.DateTimeFormatOptions>> = {
+  full: { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' },
+  weekday: { weekday: 'long' },
+  long: { day: 'numeric', month: 'long', year: 'numeric' },
+  short: { day: 'numeric', month: 'short' },
+  numeric: { day: '2-digit', month: '2-digit', year: 'numeric' },
+  weekdayTime: { weekday: 'long', hour: 'numeric', minute: '2-digit' },
+  time: { hour: 'numeric', minute: '2-digit' },
+};
+
+/**
+ * Activity start for display, as `format` says: by default "Thursday, October 15, 2026"; see
+ * `DateFormat` for the others. Times follow the locale's clock (24 h in Spanish).
+ */
+export function formatActivityDate(
+  startLocal: string,
+  locale: string,
+  format: DateFormat = 'full',
+): string {
   return capitalize(
-    new Intl.DateTimeFormat(locale, {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(asUtc(startLocal)),
+    new Intl.DateTimeFormat(locale, { ...DATE_FORMAT_OPTIONS[format], timeZone: 'UTC' }).format(
+      asUtc(startLocal),
+    ),
   );
 }
 
@@ -58,29 +73,74 @@ export function formatDate(date: LocalDate, locale: string): string {
   );
 }
 
+/** What a month's name shows in each period format (see `PeriodFormat`). */
+const MONTH_FORMATS: Readonly<Record<PeriodFormat, Intl.DateTimeFormatOptions>> = {
+  full: { month: 'long', year: 'numeric' },
+  noYear: { month: 'long' },
+  short: { month: 'short', year: 'numeric' },
+  numeric: { month: '2-digit', year: 'numeric' },
+};
+
 /**
- * Name of a summary period: "October 2026" for a month, "2026" for a year, and the day range for
- * weeks and custom ranges ("Oct 12 – Oct 18, 2026").
+ * Name of a summary period, as `format` says (see `PeriodFormat`). By default "October 2026"
+ * for a month, "2026" for a year (in every format) and the day range for weeks and custom
+ * ranges ("Oct 12 – Oct 18, 2026").
  */
-export function formatPeriodName(kind: PeriodKind, range: DateRange, locale: string): string {
+export function formatPeriodName(
+  kind: PeriodKind,
+  range: DateRange,
+  locale: string,
+  format: PeriodFormat = 'full',
+): string {
   switch (kind) {
     case 'year':
       return range.start.slice(0, 4);
     case 'month':
       return capitalize(
-        new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+        new Intl.DateTimeFormat(locale, { ...MONTH_FORMATS[format], timeZone: 'UTC' }).format(
           asUtc(`${range.start}T00:00:00`),
         ),
       );
     case 'week':
-    case 'custom': {
-      const sameYear = range.start.slice(0, 4) === range.end.slice(0, 4);
-      const start = sameYear
-        ? formatShortDate(range.start, locale)
-        : formatDate(range.start, locale);
-      return `${start} – ${formatDate(range.end, locale)}`;
-    }
+    case 'custom':
+      return formatDayRange(range, locale, format);
   }
+}
+
+/** A day of the month as a plain number, in the locale's digits. */
+const dayNumber = (date: LocalDate, locale: string) =>
+  new Intl.NumberFormat(locale).format(Number(date.slice(8, 10)));
+
+/** A day and month in numbers, in the locale's order: "12/10", "10/12". */
+const numericDay = (date: LocalDate, locale: string) =>
+  new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(
+    asUtc(`${date}T00:00:00`),
+  );
+
+/**
+ * A range of days: in full with the year ("12 oct – 18 oct 2026"), without it ("12 oct – 18
+ * oct"), short, naming the month once when it doesn't change ("12–18 oct", "Oct 12–18"), or in
+ * numbers ("12/10 – 18/10"). A range across years always keeps them.
+ */
+function formatDayRange(range: DateRange, locale: string, format: PeriodFormat): string {
+  const sameYear = range.start.slice(0, 4) === range.end.slice(0, 4);
+  if (format === 'full' || !sameYear) {
+    const start = sameYear ? formatShortDate(range.start, locale) : formatDate(range.start, locale);
+    return `${start} – ${formatDate(range.end, locale)}`;
+  }
+  if (format === 'numeric') {
+    return `${numericDay(range.start, locale)} – ${numericDay(range.end, locale)}`;
+  }
+  const start = formatShortDate(range.start, locale);
+  const end = formatShortDate(range.end, locale);
+  if (format === 'noYear' || range.start.slice(0, 7) !== range.end.slice(0, 7)) {
+    return `${start} – ${end}`;
+  }
+  // Same month: the month once, where the locale puts it ("12–18 oct", "Oct 12–18").
+  const dayFirst = /^\d/.test(end);
+  return dayFirst
+    ? `${dayNumber(range.start, locale)}–${end}`
+    : `${start}–${dayNumber(range.end, locale)}`;
 }
 
 /** Above this many day bars, only the 1st and every 5th day keep their number. */

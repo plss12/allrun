@@ -203,6 +203,10 @@ export type MetricUnit =
   | 'min/mi'
   | 'min/100m'
   | 'min/100yd'
+  | '/km'
+  | '/mi'
+  | '/100m'
+  | '/100yd'
   | 'km/h'
   | 'mph'
   | 'bpm'
@@ -295,6 +299,34 @@ export function toDisplayMetric(
     case 'calories':
       return { kind: 'number', amount: value, fractionDigits: 0, unit: 'kcal' };
   }
+}
+
+/** Unit of each pace once written with marks: the marks already say "min". */
+const MARKED_PACE_UNITS: Partial<Record<MetricUnit, MetricUnit>> = {
+  'min/km': '/km',
+  'min/mi': '/mi',
+  'min/100m': '/100m',
+  'min/100yd': '/100yd',
+};
+
+/**
+ * A pace written with minute and second marks, as sports watches do: `5'28"`, with the unit
+ * left without "min" (`/km`). A pace of an hour or more reads `1h 05'30"`. Anything that is not
+ * a pace comes back as it is. Time and space O(1).
+ */
+export function withPaceMarks(metric: DisplayMetric): DisplayMetric {
+  const unit = metric.unit === null ? undefined : MARKED_PACE_UNITS[metric.unit];
+  if (metric.kind !== 'time' || unit === undefined) {
+    return metric;
+  }
+  const [seconds, minutes, hours] = metric.text.split(':').reverse();
+  const marked = `${minutes}'${seconds}"`;
+  return { kind: 'time', text: hours === undefined ? marked : `${hours}h ${marked}`, unit };
+}
+
+/** Whether a displayed metric is a pace, which can be written with marks. */
+export function isPace(metric: DisplayMetric): boolean {
+  return withPaceMarks(metric) !== metric;
 }
 
 function paceText(metersPerSecond: number, metersPerUnit: number): string {

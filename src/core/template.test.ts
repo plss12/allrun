@@ -78,6 +78,71 @@ describe('parseTemplate', () => {
     );
   });
 
+  it('reads a pace notation, optional so older templates still read', () => {
+    const pace = { ...distance, metric: 'pace', paceNotation: 'marks' };
+    expect(parseTemplate({ ...activityTemplate, layers: [pace] }).layers[0]).toMatchObject({
+      paceNotation: 'marks',
+    });
+    expect(parseTemplate({ ...activityTemplate, layers: [distance] }).layers[0]).not.toHaveProperty(
+      'paceNotation',
+    );
+    expect(() =>
+      parseTemplate({ ...activityTemplate, layers: [{ ...pace, paceNotation: 'quotes' }] }),
+    ).toThrow(/paceNotation/);
+  });
+
+  it('reads a time notation, optional so older templates still read', () => {
+    const time = { ...distance, metric: 'movingTime', timeNotation: 'rounded' };
+    expect(parseTemplate({ ...activityTemplate, layers: [time] }).layers[0]).toMatchObject({
+      timeNotation: 'rounded',
+    });
+    expect(() =>
+      parseTemplate({ ...activityTemplate, layers: [{ ...time, timeNotation: 'words' }] }),
+    ).toThrow(/timeNotation/);
+  });
+
+  it('reads a date format, optional so older templates still read', () => {
+    const date = {
+      id: 'date',
+      kind: 'info',
+      field: 'activityDate',
+      dateFormat: 'weekday',
+      style: textStyle,
+      transform: center,
+      opacity: 1,
+    };
+    expect(parseTemplate({ ...activityTemplate, layers: [date] }).layers[0]).toMatchObject({
+      dateFormat: 'weekday',
+    });
+    expect(() =>
+      parseTemplate({ ...activityTemplate, layers: [{ ...date, dateFormat: 'iso' }] }),
+    ).toThrow(/dateFormat/);
+  });
+
+  it('reads the newer style options, all optional, and rejects unknown values', () => {
+    const styled = {
+      ...distance,
+      decimals: 1,
+      style: { ...textStyle, backdrop: 'soft', letterSpacing: 'wide' },
+    };
+    const lined = {
+      ...route,
+      endpoints: true,
+      stroke: { ...route.stroke, line: 'dotted', glow: true },
+    };
+    expect(parseTemplate({ ...activityTemplate, layers: [styled, lined] }).layers).toMatchObject([
+      styled,
+      lined,
+    ]);
+    for (const broken of [
+      { ...styled, decimals: 3 },
+      { ...styled, style: { ...textStyle, backdrop: 'neon' } },
+      { ...lined, stroke: { ...route.stroke, line: 'wavy' } },
+    ]) {
+      expect(() => parseTemplate({ ...activityTemplate, layers: [broken] })).toThrow();
+    }
+  });
+
   it('rejects unknown versions and blank names', () => {
     expect(() => parseTemplate({ ...activityTemplate, version: 2 })).toThrow(/version/);
     expect(() => parseTemplate({ ...activityTemplate, name: '   ' })).toThrow(/name/);

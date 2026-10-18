@@ -15,6 +15,7 @@ import {
 import { defaultActivityTemplate } from '@/core/default-layout';
 import type { Layer, Template } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
+import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
 
 import { FONT_FAMILIES } from './fonts';
 import type { LayerContext } from './template-scene';
@@ -80,7 +81,7 @@ async function render(change: (layer: Layer) => Layer, id: string): Promise<SkIm
   const context: LayerContext = {
     data: { mode: 'activity', activity },
     fonts: interFonts(),
-    textContext: { unit: 'km', locale: 'en' },
+    textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
     translate: (key) => key,
   };
   const surface = makeOffscreenSurface(1080, 1920);
@@ -106,6 +107,103 @@ function maxAlpha(image: SkImage): number {
   }
   return max;
 }
+
+describe('prepareLayers', () => {
+  it('shrinks a long text to its maximum width on one line instead of wrapping it', () => {
+    const template = defaultActivityTemplate(activity, 'story');
+    const name = template.layers.find((layer) => layer.id === 'name');
+    if (name === undefined || name.kind !== 'info' || name.maxWidth === undefined) {
+      throw new Error('The default layout has no name with a maximum width');
+    }
+    const plain: Layer = { ...name, style: { ...name.style, font: 'inter', bold: false } };
+    const prepareName = (activityName: string) => {
+      const [prepared] = scene.prepareLayers(
+        { ...template, layers: [plain] },
+        {
+          data: { mode: 'activity', activity: { ...activity, name: activityName } },
+          fonts: interFonts(),
+          textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+          translate: (key) => key,
+        },
+      );
+      return prepared;
+    };
+    const long = prepareName('Tirada larga por el río con los amigos del club de atletismo');
+    // The prepared width rounds the longest line up and adds a pixel.
+    expect(long.width).toBeLessThanOrEqual(name.maxWidth * 1080 + 2);
+    // One line, so no taller than a short name.
+    expect(long.height).toBeLessThanOrEqual(prepareName('Morning Run').height);
+  });
+});
+
+/** How many pixels of an image are more opaque than `alpha` (0..255). */
+function countAbove(image: SkImage, alpha: number): number {
+  const pixels = image.readPixels(0, 0, image.getImageInfo());
+  if (pixels === null) {
+    throw new Error('Could not read the pixels');
+  }
+  let count = 0;
+  for (let i = 3; i < pixels.length; i += 4) {
+    if (pixels[i] > alpha) {
+      count++;
+    }
+  }
+  return count;
+}
+
+describe('TemplateScene style options', () => {
+  const plain = (layer: Layer): Layer =>
+    layer.kind === 'info'
+      ? { ...layer, style: { ...layer.style, font: 'inter', bold: false } }
+      : layer;
+  const withStroke = (change: Partial<Extract<Layer, { kind: 'route' }>['stroke']>) => {
+    return (layer: Layer): Layer =>
+      layer.kind === 'route' ? { ...layer, stroke: { ...layer.stroke, ...change } } : layer;
+  };
+
+  it('draws a box behind a text with a backdrop', async () => {
+    const bare = countAbove(await render(plain, 'name'), 128);
+    const boxed = countAbove(
+      await render((layer) => {
+        const text = plain(layer);
+        return text.kind === 'info'
+          ? { ...text, style: { ...text.style, backdrop: 'solid' } }
+          : text;
+      }, 'name'),
+      128,
+    );
+    // The letters cover a fraction of their box.
+    expect(boxed).toBeGreaterThan(bare * 3);
+  });
+
+  it('draws dashed and dotted routes with gaps, and a glow around a route', async () => {
+    const solid = countAbove(await render((layer) => layer, 'route'), 128);
+    const dashed = countAbove(await render(withStroke({ line: 'dashed' }), 'route'), 128);
+    const dotted = countAbove(await render(withStroke({ line: 'dotted' }), 'route'), 128);
+    expect(dashed).toBeLessThan(solid * 0.8);
+    expect(dotted).toBeLessThan(solid * 0.8);
+    const halo = (image: SkImage) => countAbove(image, 0);
+    expect(halo(await render(withStroke({ glow: true }), 'route'))).toBeGreaterThan(
+      halo(await render((layer) => layer, 'route')),
+    );
+  });
+
+  it('makes room for the start and end marks of a route', () => {
+    const base = defaultActivityTemplate(activity, 'story');
+    const route = base.layers.find((layer) => layer.id === 'route');
+    if (route?.kind !== 'route') {
+      throw new Error('No route');
+    }
+    const context: LayerContext = {
+      data: { mode: 'activity', activity },
+      fonts: interFonts(),
+      textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+      translate: (key) => key,
+    };
+    const sizeOf = (layer: Layer) => scene.prepareLayers({ ...base, layers: [layer] }, context)[0];
+    expect(sizeOf({ ...route, endpoints: true }).width).toBeGreaterThan(sizeOf(route).width);
+  });
+});
 
 describe('TemplateScene opacity', () => {
   const plainText = (layer: Layer): Layer =>
