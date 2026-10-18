@@ -43,6 +43,10 @@ let scene: typeof import('./template-scene');
 // JavaScript realm as the test: it type-checks arrays with `instanceof`, which fails across realms.
 // The scene is imported afterwards, since some modules draw with Skia as they load.
 beforeAll(async () => {
+  // React Native's test setup expects every React update inside act(), but Skia's off-screen
+  // renderer mounts and unmounts its own React root outside it; nothing here is a component
+  // under test, so the act checks would only warn about Skia.
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
   // Expo's test setup swaps in a UTF-8-only TextDecoder; CanvasKit decodes UTF-16 text too.
   globalThis.TextDecoder = util.TextDecoder;
   (globalThis as { CanvasKit?: unknown }).CanvasKit = await CanvasKitInit({});
