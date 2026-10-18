@@ -35,6 +35,7 @@ export const es: Translations = {
   editor: {
     choosePhoto: 'Elegir foto',
     changePhoto: 'Cambiar foto',
+    removePhoto: 'Quitar foto',
     format: 'Formato',
     notFound: 'Esta actividad ya no existe',
     error: 'No se han podido cargar los datos de esta imagen',
@@ -63,6 +64,20 @@ export const es: Translations = {
     formatChangeTitle: '¿Cambiar de formato?',
     formatChangeMessage: 'Los elementos volverán a su sitio por defecto en el nuevo formato.',
     formatChangeConfirm: 'Cambiar',
+    export: 'Exportar',
+  },
+  export: {
+    preparing: 'Preparando la imagen…',
+    error: 'No se ha podido preparar la imagen.',
+    save: 'Guardar',
+    saved: 'Guardada',
+    share: 'Compartir',
+    copy: 'Copiar',
+    copied: 'Copiada',
+    actionError: 'Algo ha fallado. Inténtalo de nuevo.',
+    noPermissionTitle: 'Sin acceso a Fotos',
+    noPermissionMessage: 'Permite que AllRun añada fotos en Ajustes para guardar tus imágenes.',
+    openSettings: 'Abrir Ajustes',
   },
   widgets: {
     sections: {

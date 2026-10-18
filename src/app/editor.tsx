@@ -7,7 +7,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 // TODO(SDK 58): import usePreventRemove from 'expo-router', which exports it from SDK 58 on. In
 // SDK 57 it already ships, and the native stack honours it, but only under this internal path.
 import { usePreventRemove } from 'expo-router/build/react-navigation/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { z } from 'zod';
@@ -51,6 +51,9 @@ import {
 } from '@/core/text-draft';
 import { useActivitySource } from '@/data/activity-source';
 import { EditorCanvas } from '@/editor/editor-canvas';
+import { ExportBar } from '@/editor/export-bar';
+import { loadPhoto } from '@/editor/export-image';
+import type { ExportDesign } from '@/editor/export-scene';
 import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
@@ -62,6 +65,7 @@ import { preparePhoto } from '@/editor/prepare-photo';
 import { QuickActions } from '@/editor/quick-actions';
 import { SelectionBar } from '@/editor/selection-bar';
 import { STYLE_PANEL_HEIGHT, StylePanel } from '@/editor/style-panel';
+import { useExport } from '@/editor/use-export';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
@@ -243,6 +247,21 @@ function EditorWorkspace({
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const [nextPhotoId, setNextPhotoId] = useState(1);
+  /** The full-quality copy being prepared in the background, to wait for it when exporting. */
+  const pendingExportCopy = useRef<{ id: number; uri: Promise<string> } | null>(null);
+  /**
+   * Exporting replaces the design controls with what to do with the image; the canvas, frozen
+   * meanwhile, shows exactly what is exported.
+   */
+  const exporter = useExport();
+  const exporting = exporter.state.status !== 'idle';
+  const startExport = () =>
+    exporter.start(async (): Promise<ExportDesign> => ({
+      template,
+      layerContext,
+      framing,
+      photo: photo === null ? null : await loadPhoto(await exportCopyOf(photo)),
+    }));
 
   /** Applies a change only if `id` is still the current photo. */
   const updatePhoto = (id: number, change: Partial<EditorPhoto>) =>
@@ -267,11 +286,32 @@ function EditorWorkspace({
       return;
     }
     try {
-      updatePhoto(id, { exportUri: await preparePhoto(picked, 'export') });
+      const exportCopy = preparePhoto(picked, 'export');
+      pendingExportCopy.current = { id, uri: exportCopy };
+      updatePhoto(id, { exportUri: await exportCopy });
     } catch (error) {
       // The editor keeps working; exporting will retry the full-quality copy.
       logError('Could not prepare the export copy of the photo', error);
     }
+  };
+
+  /**
+   * The full-quality copy of `current` for exporting: the one ready, else the one being prepared
+   * (waited for), else a new one if that failed or hasn't started.
+   */
+  const exportCopyOf = async (current: EditorPhoto): Promise<string> => {
+    if (current.exportUri !== null) {
+      return current.exportUri;
+    }
+    const pending = pendingExportCopy.current;
+    if (pending?.id === current.id) {
+      try {
+        return await pending.uri;
+      } catch (error) {
+        logError('Retrying the export copy of the photo', error);
+      }
+    }
+    return preparePhoto(current.picked, 'export');
   };
 
   const canvasImage = useImage(photo?.editorUri, (error) => {
@@ -400,16 +440,26 @@ function EditorWorkspace({
   };
 
   // While designing, going back (the header's back button, Android's back) returns to the photo
-  // step instead of leaving the editor; the text being typed is committed first. The iOS swipe
+  // step instead of leaving the editor; exporting is left and the text being typed is committed
+  // first. The iOS swipe
   // back is off then: react-native-screens lets UIKit pop the screen and pushes it back after,
   // which flashes the previous screen.
   usePreventRemove(step === 'design', () => {
-    if (typing) {
+    if (exporting) {
+      exporter.stop();
+    } else if (typing) {
       finishTyping();
     } else {
       backToPhoto();
     }
   });
+
+  /** Back to no photo: the design goes on transparent, as a sticker; the widgets stay. */
+  const removePhoto = () => {
+    setPhoto(null);
+    setPhotoError(false);
+    setFraming(DEFAULT_FRAMING);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.systemBackground }}>
@@ -421,6 +471,17 @@ function EditorWorkspace({
           headerBackVisible: true,
         }}
       />
+      {step === 'photo' && photo !== null ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="trash"
+            accessibilityLabel={t('editor.removePhoto')}
+            onPress={removePhoto}
+          >
+            {t('editor.removePhoto')}
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      ) : null}
       {step === 'design' ? (
         <>
           {/* Two buttons on each side, so the title has room in the middle (UIKit only centers it
@@ -430,7 +491,7 @@ function EditorWorkspace({
             <Stack.Toolbar.Button
               icon="arrow.counterclockwise"
               accessibilityLabel={t('editor.restore')}
-              disabled={typing || !canRestore(history.present)}
+              disabled={typing || exporting || !canRestore(history.present)}
               onPress={() => setHistory((current) => commit(current, null))}
             >
               {t('editor.restore')}
@@ -440,7 +501,7 @@ function EditorWorkspace({
             <Stack.Toolbar.Button
               icon="arrow.uturn.backward"
               accessibilityLabel={t('editor.undo')}
-              disabled={typing || !canUndo(history)}
+              disabled={typing || exporting || !canUndo(history)}
               onPress={() => setHistory(undo)}
             >
               {t('editor.undo')}
@@ -448,7 +509,7 @@ function EditorWorkspace({
             <Stack.Toolbar.Button
               icon="arrow.uturn.forward"
               accessibilityLabel={t('editor.redo')}
-              disabled={typing || !canRedo(history)}
+              disabled={typing || exporting || !canRedo(history)}
               onPress={() => setHistory(redo)}
             >
               {t('editor.redo')}
@@ -472,6 +533,7 @@ function EditorWorkspace({
       >
         {displayWidth > 0 ? (
           <View
+            pointerEvents={exporting ? 'none' : 'auto'}
             style={{
               borderRadius: 12,
               borderCurve: 'continuous',
@@ -562,6 +624,8 @@ function EditorWorkspace({
           <View style={{ height: STYLE_PANEL_HEIGHT, justifyContent: 'center' }}>
             {step === 'photo' ? (
               <FormatPicker format={format} onPick={chooseFormat} />
+            ) : exporting ? (
+              <ExportBar state={exporter.state} onRetry={startExport} />
             ) : selected !== null ? (
               <SelectionBar
                 onEditText={
@@ -611,7 +675,11 @@ function EditorWorkspace({
               label={t('editor.done')}
               onPress={styled !== null ? () => setStyling(false) : () => setSelectedId(null)}
             />
-          ) : null}
+          ) : exporting ? (
+            <MainButton label={t('editor.done')} onPress={exporter.stop} secondary />
+          ) : (
+            <MainButton label={t('editor.export')} onPress={startExport} />
+          )}
         </View>
       </View>
       {textDraft === null || typedLayer?.kind !== 'text' ? null : (

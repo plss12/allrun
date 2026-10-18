@@ -15,8 +15,9 @@ widgets. Most of these choices came from testing on an iPhone.
 
 1. **Photo and format:** pick the photo, the canvas format and the framing (drag, pinch, rotate).
    The default widgets show, so the photo can be framed around them, but they ignore touches
-   (`layersLocked`): every gesture frames the photo. The photo is optional: without one the
-   canvas shows a dark transparency checkerboard and the image exports transparent, as a sticker.
+   (`layersLocked`): every gesture frames the photo. The photo is optional, and can be removed
+   again from the header: without one the canvas shows a dark transparency checkerboard and the
+   image exports transparent, as a sticker.
 2. **Design:** the widgets. The photo can still be framed, but neither replaced nor given another
    format.
 

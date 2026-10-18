@@ -20,3 +20,9 @@ export function fromLocalDate(date: LocalDate): Date {
 export function todayLocal(now: Date = new Date()): LocalDate {
   return toLocalDate(now);
 }
+
+/** A moment in the device time zone as `YYYYMMDD-HHMMSS`, for file names. */
+export function toLocalTimestamp(date: Date): string {
+  const day = toLocalDate(date).replaceAll('-', '');
+  return `${day}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}

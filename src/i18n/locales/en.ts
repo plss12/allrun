@@ -34,6 +34,7 @@ export const en = {
   editor: {
     choosePhoto: 'Choose photo',
     changePhoto: 'Change photo',
+    removePhoto: 'Remove photo',
     format: 'Format',
     notFound: 'This activity no longer exists',
     error: 'Could not load the data for this image',
@@ -62,6 +63,20 @@ export const en = {
     formatChangeTitle: 'Change the format?',
     formatChangeMessage: 'The elements go back to their default places in the new format.',
     formatChangeConfirm: 'Change',
+    export: 'Export',
+  },
+  export: {
+    preparing: 'Preparing the image…',
+    error: 'The image could not be prepared.',
+    save: 'Save',
+    saved: 'Saved',
+    share: 'Share',
+    copy: 'Copy',
+    copied: 'Copied',
+    actionError: 'Something went wrong. Please try again.',
+    noPermissionTitle: 'No access to Photos',
+    noPermissionMessage: 'Let AllRun add photos in Settings to save your images.',
+    openSettings: 'Open Settings',
   },
   widgets: {
     sections: {
