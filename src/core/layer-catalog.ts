@@ -2,12 +2,12 @@ import type { Activity } from './activity';
 import { availableMetrics, type MetricId } from './metrics';
 import type { PeriodSummary } from './summary';
 import { availableSummaryMetrics, summaryHasDistance } from './summary-metrics';
-import type { Layer, SummaryMetricId } from './template';
+import type { ActivityChartSeries, Layer, SummaryMetricId } from './template';
 
 /**
  * The widgets the user can add to the canvas, grouped for the editor's picker. Only what the
  * current activity or period can show is offered: metrics the activity has a value for, the route
- * when there is one. `default-layout.ts` turns a pick into a layer with the default look.
+ * when there is one, the charts it recorded data for. `default-layout.ts` turns a pick into a layer with the default look.
  */
 
 type InfoField = Extract<Layer, { kind: 'info' }>['field'];
@@ -25,6 +25,7 @@ export type CatalogItem =
       readonly kind: 'summaryChart';
       readonly value: Extract<Layer, { kind: 'summaryChart' }>['value'];
     }
+  | { readonly kind: 'activityChart'; readonly series: ActivityChartSeries }
   | { readonly kind: 'logo'; readonly brand: Brand };
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
@@ -48,6 +49,8 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
       return `info-${item.field}`;
     case 'logo':
       return `logo-${item.brand}`;
+    case 'activityChart':
+      return `chart-${item.series}`;
     case 'text':
     case 'route':
     case 'summaryRoutes':
@@ -64,10 +67,14 @@ const sections = (all: readonly CatalogSection[]): CatalogSection[] =>
 
 /**
  * Widgets for one activity: the metrics of its sport it has values for (in the sport's order),
- * its name and date, free text, the route when it has GPS, and the logo. Time O(m) for the m
- * metrics of the sport.
+ * its name and date, free text, the route when it has GPS, the `charts` it recorded data for
+ * (see `availableActivityCharts`), and the logo. Time O(m + c) for the m metrics of the sport
+ * and c charts.
  */
-export function activityCatalog(activity: Activity): CatalogSection[] {
+export function activityCatalog(
+  activity: Activity,
+  charts: readonly ActivityChartSeries[] = [],
+): CatalogSection[] {
   return sections([
     {
       id: 'data',
@@ -81,7 +88,13 @@ export function activityCatalog(activity: Activity): CatalogSection[] {
         { kind: 'text' },
       ],
     },
-    { id: 'graphics', items: activity.routePolyline === null ? [] : [{ kind: 'route' }] },
+    {
+      id: 'graphics',
+      items: [
+        ...(activity.routePolyline === null ? [] : [{ kind: 'route' } as const]),
+        ...charts.map((series) => ({ kind: 'activityChart', series }) as const),
+      ],
+    },
     { id: 'brand', items: BRANDS },
   ]);
 }

@@ -12,8 +12,14 @@ import {
   type SkImage,
 } from '@shopify/react-native-skia/lib/commonjs/headless';
 
-import { defaultActivityTemplate } from '@/core/default-layout';
-import type { Layer, Template } from '@/core/template';
+import { defaultActivityTemplate, newLayer } from '@/core/default-layout';
+import {
+  ACTIVITY_CHART_SERIES,
+  type ActivityChartSeries,
+  type Layer,
+  type Template,
+} from '@/core/template';
+import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 import { makeActivity } from '@/test-utils/make-activity';
 import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
 
@@ -79,7 +85,7 @@ async function render(change: (layer: Layer) => Layer, id: string): Promise<SkIm
   }
   const template: Template = { ...base, layers: [change(layer)] };
   const context: LayerContext = {
-    data: { mode: 'activity', activity },
+    data: { mode: 'activity', activity, detail: null },
     fonts: interFonts(),
     textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
     translate: (key) => key,
@@ -120,7 +126,7 @@ describe('prepareLayers', () => {
       const [prepared] = scene.prepareLayers(
         { ...template, layers: [plain] },
         {
-          data: { mode: 'activity', activity: { ...activity, name: activityName } },
+          data: { mode: 'activity', activity: { ...activity, name: activityName }, detail: null },
           fonts: interFonts(),
           textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
           translate: (key) => key,
@@ -195,7 +201,7 @@ describe('TemplateScene style options', () => {
       throw new Error('No route');
     }
     const context: LayerContext = {
-      data: { mode: 'activity', activity },
+      data: { mode: 'activity', activity, detail: null },
       fonts: interFonts(),
       textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
       translate: (key) => key,
@@ -204,6 +210,60 @@ describe('TemplateScene style options', () => {
     expect(sizeOf({ ...route, endpoints: true }).width).toBeGreaterThan(sizeOf(route).width);
   });
 });
+
+describe('activity charts', () => {
+  it('draw what the activity recorded, and nothing without its detail', async () => {
+    const source = new FixtureActivitySource({ endDate: '2026-10-18', days: 30, seed: 42 });
+    const ride = (await source.listRecent(30)).find(
+      (candidate) => candidate.sportType === 'Ride' && candidate.averagePowerWatts !== null,
+    );
+    if (ride === undefined) {
+      throw new Error('No ride with power in the fixtures');
+    }
+    const detail = await source.getActivityDetail(ride.id);
+    const base = defaultActivityTemplate(ride, 'story');
+    const drawn = async (
+      data: LayerContext['data'],
+      series: ActivityChartSeries,
+      options: { readonly orientation?: 'rows' } = {},
+    ) => {
+      const chart = {
+        ...newLayer({ kind: 'activityChart', series }, 'chart', 'story'),
+        ...options,
+      };
+      const context: LayerContext = {
+        data,
+        fonts: interFonts(),
+        textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+        translate: (key) => key,
+      };
+      const layers = scene.prepareLayers({ ...base, layers: [plainChart(chart)] }, context);
+      const image = await drawOffscreen(
+        makeOffscreenSurface(1080, 1920),
+        <scene.TemplateScene format="story" layers={layers} background={{ kind: 'none' }} />,
+      );
+      return { layers, pixels: countAbove(image, 128) };
+    };
+    for (const series of ACTIVITY_CHART_SERIES) {
+      const { layers, pixels } = await drawn({ mode: 'activity', activity: ride, detail }, series);
+      expect(layers).toHaveLength(1);
+      expect(pixels).toBeGreaterThan(5000);
+    }
+    const { layers } = await drawn({ mode: 'activity', activity: ride, detail: null }, 'pace');
+    expect(layers).toEqual([]);
+    // As rows, the splits draw too, as tall as their rows.
+    const rows = await drawn({ mode: 'activity', activity: ride, detail }, 'splits', {
+      orientation: 'rows',
+    });
+    expect(rows.pixels).toBeGreaterThan(5000);
+    expect(rows.layers[0].height).toBeGreaterThan(400);
+  });
+});
+
+/** A chart written in the only font these tests load. */
+function plainChart(layer: Layer): Layer {
+  return layer.kind === 'activityChart' ? { ...layer, font: 'inter' } : layer;
+}
 
 describe('TemplateScene opacity', () => {
   const plainText = (layer: Layer): Layer =>

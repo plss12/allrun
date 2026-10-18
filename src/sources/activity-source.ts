@@ -1,4 +1,5 @@
 import type { Activity } from '@/core/activity';
+import type { ActivityDetail } from '@/core/activity-detail';
 import type { DateRange } from '@/core/dates';
 
 /**
@@ -13,4 +14,9 @@ export interface ActivitySource {
   listInRange(range: DateRange): Promise<Activity[]>;
   /** The activity with this `Activity.id`, or `null` if the source has none. */
   getActivity(id: string): Promise<Activity | null>;
+  /**
+   * What the activity recorded along the way (streams and splits), for its charts; fetched only
+   * when an activity is opened in the editor. `null` if the source has no such activity.
+   */
+  getActivityDetail(id: string): Promise<ActivityDetail | null>;
 }

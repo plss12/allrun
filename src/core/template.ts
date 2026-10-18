@@ -102,6 +102,14 @@ export const TIME_NOTATIONS = ['clock', 'units', 'rounded'] as const;
 export type TimeNotation = (typeof TIME_NOTATIONS)[number];
 
 /**
+ * What an activity chart draws: its elevation profile, pace, heart rate or power along the way
+ * (an area under a line), or its splits (a bar per kilometer or mile).
+ */
+export const ACTIVITY_CHART_SERIES = ['elevation', 'pace', 'heartRate', 'power', 'splits'] as const;
+
+export type ActivityChartSeries = (typeof ACTIVITY_CHART_SERIES)[number];
+
+/**
  * How a period's name reads (Spanish examples, a week and a month): `full` "12 oct – 18 oct
  * 2026", "Octubre de 2026"; `noYear` "12–18 oct", "Octubre"; `short` "12–18 OCT", "Oct 2026";
  * `numeric` "12/10 – 18/10", "10/2026". A year is always "2026".
@@ -273,6 +281,37 @@ export const layerSchema = z.discriminatedUnion('kind', [
     align: z.enum(['left', 'center', 'right']).default('center'),
     /** A dashed line across the bars at their average. */
     averageLine: z.boolean().optional(),
+    /** The value of the highest bar, over it. */
+    maxLabel: z.boolean().optional(),
+  }),
+  z.object({
+    ...layerBase,
+    kind: z.literal('activityChart'),
+    series: z.enum(ACTIVITY_CHART_SERIES),
+    color: colorSchema,
+    /** Distance (or time) at both ends of a line; the split numbers under the bars. */
+    axisLabels: z.boolean(),
+    /** A line under the chart saying what it shows ("ELEVATION", "SPLITS PER KM"). */
+    title: z.boolean(),
+    /** Font of the axis labels and the title. */
+    font: z.enum(FONT_IDS),
+    bold: z.boolean(),
+    uppercase: z.boolean(),
+    /** Where the title sits under the chart. */
+    align: z.enum(['left', 'center', 'right']),
+    /** A dashed line across the chart at the average. */
+    averageLine: z.boolean().optional(),
+    /** The highest point (the fastest split) marked, with its value. */
+    maxLabel: z.boolean().optional(),
+    /**
+     * Splits as columns side by side (absent), or as rows one under another, each with its number
+     * before the bar and its texts in a column on the right. Other series ignore it.
+     */
+    orientation: z.enum(['columns', 'rows']).optional(),
+    /** In rows, each split's pace ("5:12"); shown when absent. */
+    splitPace: z.boolean().optional(),
+    /** In rows, each split's change in altitude ("+12 m"); hidden when absent. */
+    splitElevation: z.boolean().optional(),
   }),
   z.object({
     ...layerBase,
@@ -296,7 +335,7 @@ export type Layer = z.infer<typeof layerSchema>;
 export type LayerKind = Layer['kind'];
 
 /** Layer kinds that only make sense with one activity or with a period summary. */
-const ACTIVITY_ONLY: ReadonlySet<LayerKind> = new Set(['metric', 'route']);
+const ACTIVITY_ONLY: ReadonlySet<LayerKind> = new Set(['metric', 'route', 'activityChart']);
 const SUMMARY_ONLY: ReadonlySet<LayerKind> = new Set([
   'summaryMetric',
   'summaryRoutes',

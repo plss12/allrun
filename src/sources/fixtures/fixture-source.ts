@@ -1,8 +1,12 @@
 import type { Activity } from '@/core/activity';
+import type { ActivityDetail } from '@/core/activity-detail';
 import type { DateRange } from '@/core/dates';
 import { selectActivities } from '@/core/summary';
 import type { ActivitySource } from '@/sources/activity-source';
+import { parseStravaDetail } from '@/sources/strava/detail';
 import { parseStravaActivities } from '@/sources/strava/schema';
+
+import { generateStravaDetail } from './detail';
 
 import { type FixtureOptions, generateStravaFixtures } from './generate';
 
@@ -35,4 +39,24 @@ export class FixtureActivitySource implements ActivitySource {
   async getActivity(id: string): Promise<Activity | null> {
     return this.activities.find((activity) => activity.id === id) ?? null;
   }
+
+  /** Synthetic streams and splits, the same for an activity every time (seeded by its id). */
+  async getActivityDetail(id: string): Promise<ActivityDetail | null> {
+    const activity = await this.getActivity(id);
+    if (activity === null) {
+      return null;
+    }
+    // Through the same validation and mapping as Strava's responses.
+    const { streams, splits } = generateStravaDetail(activity, seedOf(id));
+    return parseStravaDetail(JSON.parse(JSON.stringify(streams)), splits);
+  }
+}
+
+/** A seed from an id: the same id always gives the same seed (FNV-1a). Time O(id length). */
+function seedOf(id: string): number {
+  let hash = 2_166_136_261;
+  for (let i = 0; i < id.length; i++) {
+    hash = Math.imul(hash ^ id.charCodeAt(i), 16_777_619);
+  }
+  return hash >>> 0;
 }

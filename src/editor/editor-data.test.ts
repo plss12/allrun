@@ -10,20 +10,25 @@ import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
 import {
   chartBuckets,
   chartTitleKey,
+  chartValueText,
   type EditorData,
   hasUnit,
   isDistanceLayer,
   isPaceLayer,
   isTimeLayer,
   layerText,
+  lineAxisLabels,
   MISSING_VALUE,
+  speedMeasure,
+  splitLabels,
+  splitRowTexts,
   type SummaryData,
   textRuns,
 } from './editor-data';
 
 const context = { unit: 'km', locale: 'es', durationUnits: TEST_DURATION_UNITS } as const;
 const activity = makeActivity({ name: 'Rodaje suave', startLocal: '2026-10-14T08:00:00' });
-const activityData: EditorData = { mode: 'activity', activity };
+const activityData: EditorData = { mode: 'activity', activity, detail: null };
 
 const layer = (id: string, layers: readonly Layer[]): Layer => {
   const found = layers.find((candidate) => candidate.id === id);
@@ -231,6 +236,73 @@ describe('textRuns', () => {
       { ...content, label: null, unit: null },
     );
     expect(valueOnly).toEqual([{ text: '120', fontSize: 100, bold: false }]);
+  });
+});
+
+describe('lineAxisLabels and splitLabels', () => {
+  it("label the ends of a line with how far it runs, in the user's unit", () => {
+    expect(lineAxisLabels({ axis: 'distance', axisEnd: 16_080 }, context)).toEqual([
+      '0',
+      '16,1 km',
+    ]);
+    expect(
+      lineAxisLabels(
+        { axis: 'distance', axisEnd: 16_093.44 },
+        { ...context, unit: 'mi', locale: 'en' },
+      ),
+    ).toEqual(['0', '10.0 mi']);
+    expect(lineAxisLabels({ axis: 'time', axisEnd: 2700 }, context)).toEqual(['0:00', '45:00']);
+  });
+
+  it('number every split, or 1 and every 5th of many', () => {
+    expect(splitLabels(3)).toEqual(['1', '2', '3']);
+    const marathon = splitLabels(42);
+    expect(marathon.filter((label) => label !== '')).toEqual([
+      '1',
+      '5',
+      '10',
+      '15',
+      '20',
+      '25',
+      '30',
+      '35',
+      '40',
+    ]);
+  });
+});
+
+describe('chart texts', () => {
+  it('write a speed as each sport does', () => {
+    expect(speedMeasure('run')).toBe('pace');
+    expect(speedMeasure('swim')).toBe('swimPace');
+    expect(speedMeasure('ride')).toBe('speed');
+  });
+
+  it('write a highlighted value with its unit', () => {
+    expect(chartValueText('elevation', 283.4, context)).toBe('283 m');
+    expect(chartValueText('pace', 1000 / 397, context)).toBe('6:37 min/km');
+    expect(chartValueText('speed', 30 / 3.6, context)).toBe('30,0 km/h');
+    expect(chartValueText('heartRate', 158, context)).toBe('158 bpm');
+    expect(chartValueText('power', 221, context)).toBe('221 W');
+    expect(chartValueText('periodDistance', 52_300, context)).toBe('52,30 km');
+    expect(chartValueText('periodTime', 19_200, context)).toBe('5:20 h');
+  });
+
+  it('write a row of splits: its number, its pace alone and its change in altitude', () => {
+    const row = { first: 1, last: 1, speed: 1000 / 450, elevationDifference: 110.4 };
+    expect(splitRowTexts(row, 'pace', context)).toEqual({
+      number: '1',
+      value: '7:30',
+      elevation: '+110 m',
+    });
+    expect(splitRowTexts({ ...row, last: 3, elevationDifference: -72 }, 'speed', context)).toEqual({
+      number: '1–3',
+      value: '8,0',
+      elevation: '−72 m',
+    });
+    expect(splitRowTexts({ ...row, elevationDifference: 0.2 }, 'pace', context).elevation).toBe(
+      '0 m',
+    );
   });
 });
 

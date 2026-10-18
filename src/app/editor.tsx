@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { z } from 'zod';
 
+import { availableActivityCharts } from '@/core/activity-charts';
 import { customRange } from '@/core/dates';
 import {
   defaultActivityTemplate,
@@ -141,11 +142,18 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
   const fonts = useEditorFonts();
   const data = useAsync(async (): Promise<EditorData> => {
     if (params.mode === 'activity') {
-      const activity = await source.getActivity(params.activityId);
+      // The charts' data comes along; without it the editor still works, just without charts.
+      const [activity, detail] = await Promise.all([
+        source.getActivity(params.activityId),
+        source.getActivityDetail(params.activityId).catch((error: unknown) => {
+          logError('Could not load the activity detail for its charts', error);
+          return null;
+        }),
+      ]);
       if (activity === null) {
         throw new ActivityNotFoundError(`No activity with id ${params.activityId}`);
       }
-      return { mode: 'activity', activity };
+      return { mode: 'activity', activity, detail };
     }
     const range = customRange(params.start, params.end);
     const activities = await source.listInRange(range);
@@ -259,7 +267,12 @@ function EditorWorkspace({
           (layer) => layer.id === textDraft.layerId,
         );
   const catalog =
-    data.mode === 'activity' ? activityCatalog(data.activity) : summaryCatalog(data.summary);
+    data.mode === 'activity'
+      ? activityCatalog(
+          data.activity,
+          data.detail === null ? [] : availableActivityCharts(data.detail, unit),
+        )
+      : summaryCatalog(data.summary);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);

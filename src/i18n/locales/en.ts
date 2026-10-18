@@ -144,6 +144,14 @@ export const en = {
     glow: 'Glow',
     endpoints: 'Start and end',
     averageLine: 'Average',
+    maxLabel: 'Peak',
+    splitPace: 'Pace',
+    splitElevation: 'Elevation',
+    orientation: 'Layout',
+    orientations: {
+      columns: 'Columns',
+      rows: 'Rows',
+    },
     timeNotations: {
       clock: 'Like a clock',
       units: 'With units',
@@ -303,6 +311,20 @@ export const en = {
       classic: 'Classic',
       minimal: 'Minimal',
     },
+  },
+  activityCharts: {
+    elevation: 'Elevation profile',
+    pace: 'Pace chart',
+    heartRate: 'Heart rate chart',
+    power: 'Power chart',
+    splits: 'Splits',
+  },
+  activityChartTitles: {
+    elevation: 'Elevation',
+    pace: 'Pace',
+    heartRate: 'Heart rate',
+    power: 'Power',
+    splits: 'Splits per {{unit}}',
   },
   durationUnits: {
     hours: 'h',

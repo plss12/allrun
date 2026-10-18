@@ -50,6 +50,8 @@ type Tab = 'color' | 'font' | 'format' | 'width' | 'data' | 'opacity' | 'variant
 type TextLayer = Extract<Layer, { kind: 'metric' | 'summaryMetric' | 'info' | 'text' }>;
 type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
 type ChartLayer = Extract<Layer, { kind: 'summaryChart' }>;
+/** A period's chart or an activity's: they share how their texts look and their extras. */
+type AnyChartLayer = Extract<Layer, { kind: 'summaryChart' | 'activityChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
 type ChartValue = ChartLayer['value'];
 
@@ -97,6 +99,9 @@ function tabsFor(
         'format',
         'opacity',
       ];
+    // An activity's chart draws one series: another one is another chart from the catalog.
+    case 'activityChart':
+      return ['color', 'font', 'format', 'opacity'];
     case 'logo':
       return ['variant', 'tone', 'opacity'];
   }
@@ -282,11 +287,11 @@ function FormatRow({
 }
 
 /** The format a widget's panel edits, and how to apply a change to it. */
-function formatOf(layer: TextLayer | ChartLayer): {
+function formatOf(layer: TextLayer | AnyChartLayer): {
   readonly format: Format;
   readonly change: (patch: Partial<Format>) => StyleChange;
 } {
-  if (layer.kind === 'summaryChart') {
+  if (layer.kind === 'summaryChart' || layer.kind === 'activityChart') {
     return {
       format: {
         font: layer.font,
@@ -335,7 +340,7 @@ function TabContent({
       return <ColorPager layer={layer} onChange={onChange} />;
     case 'font':
     case 'format': {
-      if (!isTextLayer(layer) && layer.kind !== 'summaryChart') {
+      if (!isTextLayer(layer) && layer.kind !== 'summaryChart' && layer.kind !== 'activityChart') {
         return null;
       }
       const { format, change } = formatOf(layer);
@@ -345,7 +350,7 @@ function TabContent({
         <FormatRow format={format} onPatch={(patch) => onChange(change(patch))}>
           {layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (
             <DataOptions layer={layer} textOf={textOf} onChange={onChange} />
-          ) : layer.kind === 'summaryChart' ? (
+          ) : layer.kind === 'summaryChart' || layer.kind === 'activityChart' ? (
             <ChartOptions layer={layer} onChange={onChange} />
           ) : layer.kind === 'info' && layer.field === 'activityDate' ? (
             <DateOptions layer={layer} textOf={textOf} onChange={onChange} />
@@ -792,47 +797,98 @@ function ChartDataRow({
 }
 
 /**
- * The chart's extras, first the bars' (an average line), then its texts (each bar's day, week
- * or month under it, and its title).
+ * The chart's extras. Splits first choose columns or rows, with a button whose icon shows the
+ * layout chosen, like the alignment one. Then what the chart draws besides its data: an average
+ * line and its highest value marked or, as rows, each split's pace (shown unless hidden) and its
+ * change in altitude instead, since every row writes its own. Then its texts: the labels under
+ * it, which rows don't have, and its title.
  */
 function ChartOptions({
   layer,
   onChange,
 }: {
-  readonly layer: ChartLayer;
+  readonly layer: AnyChartLayer;
   readonly onChange: (change: StyleChange) => void;
 }) {
   const { t } = useTranslation();
+  const splits = layer.kind === 'activityChart' && layer.series === 'splits';
+  const orientation = layer.kind === 'activityChart' ? (layer.orientation ?? 'columns') : 'columns';
+  const rows = splits && orientation === 'rows';
+  const toggle = (option: 'averageLine' | 'maxLabel' | 'axisLabels' | 'title', value: boolean) =>
+    onChange((template) => setChartOptions(template, layer.id, { [option]: !value }));
   return (
     <>
+      {splits ? (
+        <IconToggle
+          icon={ORIENTATION_ICONS[orientation]}
+          label={t('style.orientation')}
+          value={t(`style.orientations.${orientation}`)}
+          selected={false}
+          onPress={() =>
+            onChange((template) =>
+              setChartOptions(template, layer.id, {
+                orientation: orientation === 'columns' ? 'rows' : 'columns',
+              }),
+            )
+          }
+        />
+      ) : null}
       <Chip
         label={t('style.averageLine')}
         selected={layer.averageLine ?? false}
-        onPress={() =>
-          onChange((template) =>
-            setChartOptions(template, layer.id, { averageLine: !(layer.averageLine ?? false) }),
-          )
-        }
+        onPress={() => toggle('averageLine', layer.averageLine ?? false)}
       />
-      <Chip
-        label={t('style.axisLabels')}
-        selected={layer.axisLabels}
-        onPress={() =>
-          onChange((template) =>
-            setChartOptions(template, layer.id, { axisLabels: !layer.axisLabels }),
-          )
-        }
-      />
+      {rows && layer.kind === 'activityChart' ? (
+        <>
+          <Chip
+            label={t('style.splitPace')}
+            selected={layer.splitPace ?? true}
+            onPress={() =>
+              onChange((template) =>
+                setChartOptions(template, layer.id, { splitPace: !(layer.splitPace ?? true) }),
+              )
+            }
+          />
+          <Chip
+            label={t('style.splitElevation')}
+            selected={layer.splitElevation ?? false}
+            onPress={() =>
+              onChange((template) =>
+                setChartOptions(template, layer.id, {
+                  splitElevation: !(layer.splitElevation ?? false),
+                }),
+              )
+            }
+          />
+        </>
+      ) : (
+        <Chip
+          label={t('style.maxLabel')}
+          selected={layer.maxLabel ?? false}
+          onPress={() => toggle('maxLabel', layer.maxLabel ?? false)}
+        />
+      )}
+      {rows ? null : (
+        <Chip
+          label={t('style.axisLabels')}
+          selected={layer.axisLabels}
+          onPress={() => toggle('axisLabels', layer.axisLabels)}
+        />
+      )}
       <Chip
         label={t('style.chartTitle')}
         selected={layer.title}
-        onPress={() =>
-          onChange((template) => setChartOptions(template, layer.id, { title: !layer.title }))
-        }
+        onPress={() => toggle('title', layer.title)}
       />
     </>
   );
 }
+
+/** The icon of each layout of the splits: bars standing side by side, or lying one under another. */
+const ORIENTATION_ICONS: Readonly<Record<'columns' | 'rows', SymbolViewProps['name']>> = {
+  columns: { ios: 'chart.bar.xaxis', android: 'bar_chart' },
+  rows: { ios: 'chart.bar.yaxis', android: 'align_horizontal_left' },
+};
 
 const LOGO_OPTIONS = {
   variant: ['wordmark', 'mark', 'lockup'],

@@ -298,6 +298,20 @@ export function newLayer(
         transform: centered(layout.chart.scale),
         opacity: 0.9,
       };
+    case 'activityChart':
+      return {
+        ...item,
+        id,
+        color: WHITE,
+        axisLabels: true,
+        title: true,
+        font,
+        bold: true,
+        uppercase: true,
+        align: 'center',
+        transform: centered(layout.chart.scale),
+        opacity: 0.9,
+      };
     case 'logo':
       return {
         ...item,
@@ -342,6 +356,7 @@ function textFont(layer: Layer): FontId | null {
     case 'text':
       return layer.style.font;
     case 'summaryChart':
+    case 'activityChart':
       return layer.font;
     case 'route':
     case 'summaryRoutes':

@@ -145,6 +145,14 @@ export const es: Translations = {
     glow: 'Brillo',
     endpoints: 'Inicio y fin',
     averageLine: 'Media',
+    maxLabel: 'Máximo',
+    splitPace: 'Ritmo',
+    splitElevation: 'Desnivel',
+    orientation: 'Disposición',
+    orientations: {
+      columns: 'Columnas',
+      rows: 'Filas',
+    },
     timeNotations: {
       clock: 'Como un reloj',
       units: 'Con unidades',
@@ -302,6 +310,20 @@ export const es: Translations = {
       classic: 'Clásica',
       minimal: 'Minimalista',
     },
+  },
+  activityCharts: {
+    elevation: 'Perfil de desnivel',
+    pace: 'Gráfica de ritmo',
+    heartRate: 'Gráfica de pulso',
+    power: 'Gráfica de potencia',
+    splits: 'Parciales',
+  },
+  activityChartTitles: {
+    elevation: 'Desnivel',
+    pace: 'Ritmo',
+    heartRate: 'Frecuencia cardiaca',
+    power: 'Potencia',
+    splits: 'Parciales por {{unit}}',
   },
   durationUnits: {
     hours: 'h',

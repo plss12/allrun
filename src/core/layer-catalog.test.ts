@@ -53,6 +53,16 @@ describe('activityCatalog', () => {
     ]);
   });
 
+  it('offers the charts the activity recorded data for, after the route', () => {
+    const catalog = activityCatalog(makeActivity(), ['elevation', 'splits']);
+    expect(keys(catalog).slice(-4)).toEqual([
+      'route',
+      'chart-elevation',
+      'chart-splits',
+      'logo-allrun',
+    ]);
+  });
+
   it('leaves out the graphics of an activity without GPS', () => {
     const catalog = activityCatalog(makeActivity({ sportType: 'Yoga', routePolyline: null }));
     expect(catalog.some((section) => section.id === 'graphics')).toBe(false);
@@ -62,9 +72,10 @@ describe('activityCatalog', () => {
     'makes valid, centered layers in the %s format',
     (format) => {
       const activity = makeActivity();
-      const template = addAll(defaultActivityTemplate(activity, format), activityCatalog(activity));
+      const catalog = activityCatalog(activity, ['elevation', 'pace', 'splits']);
+      const template = addAll(defaultActivityTemplate(activity, format), catalog);
       const added = template.layers.slice(defaultActivityTemplate(activity, format).layers.length);
-      expect(added).toHaveLength(items(activityCatalog(activity)).length);
+      expect(added).toHaveLength(items(catalog).length);
       for (const layer of added) {
         expect(layer.transform).toMatchObject({ x: 0.5, y: 0.5, rotation: 0 });
       }

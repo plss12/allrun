@@ -1,4 +1,6 @@
 import type { Activity } from '@/core/activity';
+import type { LineSeries, SplitRow } from '@/core/activity-charts';
+import type { ActivityDetail } from '@/core/activity-detail';
 import {
   type DisplayMetric,
   isPace,
@@ -9,10 +11,11 @@ import {
   withPaceMarks,
 } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
+import type { SportFamily } from '@/core/sports';
 import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
-import type { Layer, SummaryMetricId } from '@/core/template';
-import { durationParts, type DistanceUnit, type DurationUnit } from '@/core/units';
+import type { ActivityChartSeries, Layer, SummaryMetricId } from '@/core/template';
+import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
 import { formatActivityDate, formatMetric, formatPeriodName } from '@/ui/format';
 
 /** A period summary to fill a template with. */
@@ -26,8 +29,16 @@ export interface SummaryData {
   readonly bucketSize: BucketSize;
 }
 
+/** One activity to fill a template with. */
+export interface ActivityData {
+  readonly mode: 'activity';
+  readonly activity: Activity;
+  /** What it recorded along the way, for its charts; `null` if it couldn't be fetched. */
+  readonly detail: ActivityDetail | null;
+}
+
 /** What the editor fills the template with: one activity, or a period summary. */
-export type EditorData = { readonly mode: 'activity'; readonly activity: Activity } | SummaryData;
+export type EditorData = ActivityData | SummaryData;
 
 /**
  * Bars of a summary chart and their size: the chart's own size, or the period's for `auto`.
@@ -54,8 +65,15 @@ export function chartBuckets(
 export type ChartTitleKey =
   `chartTitles.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
 
+/** Key of the title of an activity chart; the splits' takes the distance unit as `{{unit}}`. */
+export type ActivityChartTitleKey = `activityChartTitles.${ActivityChartSeries}`;
+
 /** Translation key of a label the canvas draws. */
-export type LabelKey = `metrics.${MetricId}` | `summaryMetrics.${SummaryMetricId}` | ChartTitleKey;
+export type LabelKey =
+  | `metrics.${MetricId}`
+  | `summaryMetrics.${SummaryMetricId}`
+  | ChartTitleKey
+  | ActivityChartTitleKey;
 
 /** Text content of a text-like layer, before translation and styling. */
 export interface LayerText {
@@ -157,6 +175,7 @@ export function layerText(layer: Layer, data: EditorData, context: TextContext):
     case 'route':
     case 'summaryRoutes':
     case 'summaryChart':
+    case 'activityChart':
     case 'logo':
       return null;
   }
@@ -280,4 +299,129 @@ export function isPaceLayer(layer: Extract<Layer, { kind: 'metric' | 'summaryMet
       ? toDisplayMetric(layer.metric, 1, { unit: 'km', sportFamily: 'run' })
       : toDisplaySummaryMetric(layer.metric, 1, 'km'),
   );
+}
+
+/** Key of the title of an activity chart ("ELEVATION", "SPLITS PER KM"). */
+export function activityChartTitleKey(series: ActivityChartSeries): ActivityChartTitleKey {
+  return `activityChartTitles.${series}`;
+}
+
+/**
+ * Labels at both ends of a line chart: where it starts and how far it runs, in distance
+ * ("0", "16,1 km") or, without one, in time ("0:00", "45:00").
+ */
+export function lineAxisLabels(
+  series: Pick<LineSeries, 'axis' | 'axisEnd'>,
+  context: TextContext,
+): readonly [string, string] {
+  if (series.axis === 'time') {
+    return ['0:00', formatDuration(series.axisEnd)];
+  }
+  const display = toDisplayMetric('distance', series.axisEnd, {
+    unit: context.unit,
+    sportFamily: 'run',
+  });
+  const end = formatMetric(
+    display.kind === 'number' ? { ...display, fractionDigits: 1 } : display,
+    context.locale,
+  );
+  return ['0', `${end.value} ${end.unit ?? ''}`.trim()];
+}
+
+/** Above this many splits, only the 1st and every 5th keep their number. */
+const MAX_SPLIT_NUMBERS = 16;
+
+/**
+ * Numbers under the bars of the splits ("1", "2"…), thinned to 1, 5, 10… for long activities
+ * ("" for an unlabelled bar). Time and space O(n).
+ */
+export function splitLabels(count: number): string[] {
+  return Array.from({ length: count }, (_, i) => {
+    const number = i + 1;
+    return count <= MAX_SPLIT_NUMBERS || number === 1 || number % 5 === 0 ? String(number) : '';
+  });
+}
+
+/** How a sport writes how fast it went: a pace, a swimming pace or a speed. */
+export type SpeedMeasure = 'pace' | 'swimPace' | 'speed';
+
+/** Runners and walkers think in pace, swimmers in pace per 100, cyclists and the rest in speed. */
+export function speedMeasure(family: SportFamily): SpeedMeasure {
+  switch (family) {
+    case 'run':
+      return 'pace';
+    case 'swim':
+      return 'swimPace';
+    case 'ride':
+    case 'training':
+    case 'other':
+      return 'speed';
+  }
+}
+
+/** What a chart's highlighted value measures, to write it with its unit. */
+export type ChartMeasure =
+  SpeedMeasure | 'elevation' | 'heartRate' | 'power' | 'periodDistance' | 'periodTime';
+
+/**
+ * A chart's highlighted value with its unit, written as the widget of that measure writes it:
+ * "52 m", "4:58 min/km", "34,2 km/h", "172 bpm", "420 W", "52,30 km", "5:20 h". Values are in SI
+ * units (meters, m/s, bpm, watts, seconds).
+ */
+export function chartValueText(measure: ChartMeasure, value: number, context: TextContext): string {
+  const display =
+    measure === 'periodDistance'
+      ? toDisplaySummaryMetric('totalDistance', value, context.unit)
+      : measure === 'periodTime'
+        ? toDisplaySummaryMetric('totalMovingTime', value, context.unit)
+        : toDisplayMetric(CHART_METRICS[measure], value, {
+            unit: context.unit,
+            sportFamily: 'run',
+          });
+  const formatted = formatMetric(display, context.locale);
+  return formatted.unit === null ? formatted.value : `${formatted.value} ${formatted.unit}`;
+}
+
+const CHART_METRICS = {
+  pace: 'pace',
+  swimPace: 'swimPace',
+  speed: 'speed',
+  elevation: 'maxElevation',
+  heartRate: 'averageHeartRate',
+  power: 'averagePower',
+} as const satisfies Record<Exclude<ChartMeasure, 'periodDistance' | 'periodTime'>, MetricId>;
+
+/** The texts of a row of splits: its number, how fast it went and its change in altitude. */
+export interface SplitRowTexts {
+  /** "3", or "1–3" for a row of several splits. */
+  readonly number: string;
+  /** The pace or speed alone, without its unit: "5:12", "34,2". */
+  readonly value: string;
+  /** "+12 m", "−3 m". */
+  readonly elevation: string;
+}
+
+/** Writes a row of splits in the user's units and locale. */
+export function splitRowTexts(
+  row: SplitRow,
+  measure: SpeedMeasure,
+  context: TextContext,
+): SplitRowTexts {
+  const speed = formatMetric(
+    toDisplayMetric(measure, row.speed, { unit: context.unit, sportFamily: 'run' }),
+    context.locale,
+  );
+  const climb = formatMetric(
+    toDisplayMetric('elevationGain', Math.abs(row.elevationDifference), {
+      unit: context.unit,
+      sportFamily: 'run',
+    }),
+    context.locale,
+  );
+  const sign = climb.value === '0' ? '' : row.elevationDifference < 0 ? '−' : '+';
+  return {
+    number: row.first === row.last ? String(row.first) : `${row.first}–${row.last}`,
+    value: speed.value,
+    elevation: `${sign}${climb.value} ${climb.unit ?? ''}`.trim(),
+  };
 }

@@ -134,6 +134,8 @@ function useCatalogLabel(item: CatalogItem): string {
       return t(`widgets.${item.field}`);
     case 'logo':
       return t('widgets.allrunLogo');
+    case 'activityChart':
+      return t(`activityCharts.${item.series}`);
     case 'text':
     case 'route':
     case 'summaryRoutes':

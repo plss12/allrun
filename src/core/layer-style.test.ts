@@ -2,7 +2,7 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { makeSummary } from '@/test-utils/make-summary';
 
 import { customRange, monthRange, weekRange, yearRange } from './dates';
-import { defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
+import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
 import {
   castsShadow,
   chartBucketOptions,
@@ -222,6 +222,60 @@ describe('the options of the format tab', () => {
       stroke: { line: 'dashed' },
     });
     expect(() => setLineOptions(summary, 'routes', { endpoints: true })).toThrow(/start and end/);
+  });
+
+  it("styles an activity's chart like a period's, but it measures only its series", () => {
+    const withChart = parseTemplate({
+      ...activity,
+      layers: [
+        ...activity.layers,
+        newLayer({ kind: 'activityChart', series: 'elevation' }, 'chart', 'story'),
+      ],
+    });
+    const styled = setChartOptions(withChart, 'chart', { averageLine: true, title: false });
+    expect(find(styled, 'chart')).toMatchObject({ averageLine: true, title: false });
+    expect(find(setLayerColor(styled, 'chart', '#C94A2E'), 'chart')).toMatchObject({
+      color: '#C94A2E',
+    });
+    expect(() => setChartOptions(withChart, 'chart', { value: 'distance' })).toThrow(/measure/);
+  });
+
+  it('lays splits out as rows with their pace and elevation, and marks the highest value', () => {
+    const withSplits = parseTemplate({
+      ...activity,
+      layers: [
+        ...activity.layers,
+        newLayer({ kind: 'activityChart', series: 'splits' }, 'splits', 'story'),
+      ],
+    });
+    // A new chart comes with nothing extra, like the average line: as columns, without its
+    // highest value marked; as rows, with each split's pace but not its elevation.
+    const added = find(withSplits, 'splits');
+    expect(added).not.toHaveProperty('maxLabel');
+    expect(added).not.toHaveProperty('splitElevation');
+    expect(
+      setChartOptions(withSplits, 'splits', {
+        orientation: 'columns',
+        maxLabel: false,
+        splitPace: true,
+        splitElevation: false,
+      }),
+    ).toBe(withSplits);
+    const rows = setChartOptions(withSplits, 'splits', {
+      orientation: 'rows',
+      splitPace: false,
+      splitElevation: true,
+    });
+    expect(find(rows, 'splits')).toMatchObject({
+      orientation: 'rows',
+      splitPace: false,
+      splitElevation: true,
+    });
+    const marked = setChartOptions(summary, 'chart', { maxLabel: true });
+    expect(find(marked, 'chart')).toMatchObject({ maxLabel: true });
+    expect(() => setChartOptions(summary, 'chart', { orientation: 'rows' })).toThrow(
+      /split layout/,
+    );
   });
 
   it("draws a chart's average, off by default", () => {

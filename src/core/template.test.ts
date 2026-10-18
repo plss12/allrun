@@ -143,6 +143,39 @@ describe('parseTemplate', () => {
     }
   });
 
+  it('takes activity charts in activity templates only', () => {
+    const chart = {
+      id: 'chart',
+      kind: 'activityChart',
+      series: 'splits',
+      color: '#FFFFFF',
+      axisLabels: true,
+      title: true,
+      font: 'inter',
+      bold: true,
+      uppercase: true,
+      align: 'center',
+      transform: center,
+      opacity: 1,
+    };
+    expect(parseTemplate({ ...activityTemplate, layers: [chart] }).layers[0]).toMatchObject({
+      series: 'splits',
+    });
+    expect(() => parseTemplate({ ...activityTemplate, mode: 'summary', layers: [chart] })).toThrow(
+      /activityChart.*not allowed in summary/,
+    );
+    expect(() =>
+      parseTemplate({ ...activityTemplate, layers: [{ ...chart, series: 'cadence' }] }),
+    ).toThrow(/series/);
+    const rows = { ...chart, orientation: 'rows', splitElevation: true, maxLabel: true };
+    expect(parseTemplate({ ...activityTemplate, layers: [rows] }).layers[0]).toMatchObject({
+      orientation: 'rows',
+    });
+    expect(() =>
+      parseTemplate({ ...activityTemplate, layers: [{ ...rows, orientation: 'diagonal' }] }),
+    ).toThrow(/orientation/);
+  });
+
   it('rejects unknown versions and blank names', () => {
     expect(() => parseTemplate({ ...activityTemplate, version: 2 })).toThrow(/version/);
     expect(() => parseTemplate({ ...activityTemplate, name: '   ' })).toThrow(/name/);

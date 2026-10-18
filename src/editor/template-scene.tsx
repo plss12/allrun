@@ -26,22 +26,36 @@ import {
 import type { ReactElement } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
+import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity-charts';
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { LayerTransform } from '@/core/layer-transform';
 import type { PhotoPlacement, Size } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
-import { CANVAS_FORMATS, type CanvasFormat, type Layer, type Template } from '@/core/template';
+import {
+  type ActivityChartSeries,
+  CANVAS_FORMATS,
+  type CanvasFormat,
+  type Layer,
+  type Template,
+} from '@/core/template';
 import { formatBucketLabels } from '@/ui/format';
 
 import {
+  activityChartTitleKey,
   chartBuckets,
+  type ChartMeasure,
   chartTitleKey,
+  chartValueText,
   type EditorData,
   type LabelKey,
   layerText,
+  lineAxisLabels,
   type ParagraphContent,
+  speedMeasure,
+  splitLabels,
+  splitRowTexts,
   type TextContext,
   textRuns,
 } from './editor-data';
@@ -338,10 +352,24 @@ function prepareLayer(
             },
           )
         : null;
+      const max = Math.max(...values);
+      const peak =
+        layer.maxLabel === true && max > 0
+          ? buildParagraph(fonts, chartText, {
+              label: null,
+              value: chartValueText(
+                layer.value === 'distance' ? 'periodDistance' : 'periodTime',
+                max,
+                textContext,
+              ),
+              unit: null,
+              valueSize: AXIS_LABEL_SIZE,
+            })
+          : null;
       return {
         layer,
         width: CHART_WIDTH,
-        height: chartHeight(labels !== null, title !== null),
+        height: chartHeight(labels !== null, title !== null, peak !== null),
         content: (
           <BarChart
             values={values}
@@ -350,6 +378,112 @@ function prepareLayer(
             title={title}
             titleAlign={layer.align}
             averageLine={layer.averageLine ?? false}
+            peak={peak}
+          />
+        ),
+      };
+    }
+    case 'activityChart': {
+      if (data.mode !== 'activity' || data.detail === null) {
+        return null;
+      }
+      const series = activityChartSeries(data.detail, layer.series, textContext.unit);
+      if (series === null) {
+        return null;
+      }
+      // Axis labels are numbers: capitals only apply to the title.
+      const chartText = { ...LABEL_STYLE, color: layer.color, font: layer.font, bold: layer.bold };
+      const paragraph = (value: string, uppercase = false, size = AXIS_LABEL_SIZE) =>
+        buildParagraph(
+          fonts,
+          { ...chartText, uppercase },
+          { label: null, value, unit: null, valueSize: size },
+        );
+      // How fast the activity went is written as its sport does: pace, pace per 100 or speed.
+      const speed = speedMeasure(data.activity.sportFamily);
+      const peakOf = (measure: ChartMeasure, value: number) =>
+        layer.maxLabel === true ? paragraph(chartValueText(measure, value, textContext)) : null;
+      const title = layer.title
+        ? paragraph(
+            translate(activityChartTitleKey(layer.series), { unit: textContext.unit }),
+            layer.uppercase,
+          )
+        : null;
+      const averageLine = layer.averageLine ?? false;
+      if (series.kind === 'bars' && layer.orientation === 'rows') {
+        const rows = splitRows(series.splits, MAX_SPLIT_ROWS).map((row) => {
+          const texts = splitRowTexts(row, speed, textContext);
+          return {
+            speed: row.speed,
+            number: paragraph(texts.number, false, ROW_TEXT_SIZE),
+            value: (layer.splitPace ?? true) ? paragraph(texts.value, false, ROW_TEXT_SIZE) : null,
+            elevation:
+              layer.splitElevation === true
+                ? paragraph(texts.elevation, false, ROW_TEXT_SIZE)
+                : null,
+          };
+        });
+        return {
+          layer,
+          width: CHART_WIDTH,
+          height: rowsHeight(rows.length, title !== null),
+          content: (
+            <SplitRows
+              rows={rows}
+              average={series.average}
+              color={layer.color}
+              title={title}
+              titleAlign={layer.align}
+              averageLine={averageLine}
+            />
+          ),
+        };
+      }
+      if (series.kind === 'bars') {
+        const labels = layer.axisLabels
+          ? splitLabels(series.values.length).map((label) =>
+              label === '' ? null : paragraph(label),
+            )
+          : null;
+        const peak = peakOf(speed, Math.max(...series.values));
+        return {
+          layer,
+          width: CHART_WIDTH,
+          height: chartHeight(labels !== null, title !== null, peak !== null),
+          content: (
+            <BarChart
+              values={series.values}
+              color={layer.color}
+              labels={labels}
+              title={title}
+              titleAlign={layer.align}
+              averageLine={averageLine}
+              peak={peak}
+              floorShare={ROW_MIN_SHARE}
+            />
+          ),
+        };
+      }
+      const ends = layer.axisLabels
+        ? lineAxisLabels(series, textContext).map((label) => paragraph(label))
+        : null;
+      const peak = peakOf(
+        layer.series === 'pace' ? speed : (LINE_MEASURES[layer.series] ?? 'elevation'),
+        series.max,
+      );
+      return {
+        layer,
+        width: CHART_WIDTH,
+        height: chartHeight(ends !== null, title !== null, peak !== null),
+        content: (
+          <LineChart
+            series={series}
+            color={layer.color}
+            ends={ends === null ? null : [ends[0], ends[1]]}
+            title={title}
+            titleAlign={layer.align}
+            averageLine={averageLine}
+            peak={peak}
           />
         ),
       };
@@ -476,9 +610,38 @@ function alignedX(align: 'left' | 'center' | 'right', width: number, span: numbe
   return align === 'left' ? 0 : align === 'right' ? span - width : (span - width) / 2;
 }
 
-/** Height of a chart with or without its axis labels and title. */
-function chartHeight(labels: boolean, title: boolean): number {
-  return CHART_HEIGHT + (labels ? LABEL_BAND : 0) + (title ? TITLE_BAND : 0);
+/** Room over a chart for its highest value. */
+const PEAK_BAND = 52;
+
+/** Height of a chart with or without its axis labels, its title and its highest value. */
+function chartHeight(labels: boolean, title: boolean, peak = false): number {
+  return (
+    (peak ? PEAK_BAND : 0) + CHART_HEIGHT + (labels ? LABEL_BAND : 0) + (title ? TITLE_BAND : 0)
+  );
+}
+
+/** The measure each line chart's highest value is written in (pace depends on the sport). */
+const LINE_MEASURES: Partial<Record<ActivityChartSeries, ChartMeasure>> = {
+  elevation: 'elevation',
+  heartRate: 'heartRate',
+  power: 'power',
+};
+
+/** Most rows of splits drawn one under another; more are grouped (km 1–3…). */
+const MAX_SPLIT_ROWS = 20;
+/** Height of a row of splits and thickness of its bar, before the layer's scale. */
+const ROW_HEIGHT = 46;
+const ROW_BAR = 28;
+/** Size of the texts of a row of splits: the content itself, bigger than axis labels. */
+const ROW_TEXT_SIZE = 30;
+/** Room between a row's number, its bar and its texts. */
+const ROW_GAP = 14;
+/** Share of the room the slowest split's bar takes: the differences between splits show. */
+const ROW_MIN_SHARE = 0.45;
+
+/** Height of the splits as rows, with or without their title. */
+function rowsHeight(rows: number, title: boolean): number {
+  return rows * ROW_HEIGHT + (title ? TITLE_BAND : 0);
 }
 const MAX_TEXT_WIDTH = 1000;
 /** A layout width no text reaches: lines only break where the text does. */
@@ -685,6 +848,278 @@ function RouteLines({ routes, box, boxHeight, stroke, endpoints }: RouteLinesPro
   );
 }
 
+/** Room left under the lowest point of a line, as a share of its range: the area never vanishes. */
+const LINE_FLOOR = 0.15;
+/** Width of a chart's line, in canvas pixels before the layer's scale. */
+const LINE_WIDTH = 6;
+/** How opaque the area under a line is. */
+const AREA_OPACITY = 0.35;
+
+/**
+ * A line over a translucent area, the shape of an activity's elevation, pace, heart rate or
+ * power along the way, between the lowest and the highest values (with some room below the
+ * lowest, so the area keeps some body). Under it, optionally, where it starts and how far it
+ * runs, and its title.
+ */
+function LineChart({
+  series,
+  color,
+  ends,
+  title,
+  titleAlign,
+  averageLine,
+  peak,
+}: {
+  readonly series: LineSeries;
+  readonly color: string;
+  /** Labels under the start and the end of the line, or `null` for none. */
+  readonly ends: readonly [SkParagraph, SkParagraph] | null;
+  readonly title: SkParagraph | null;
+  readonly titleAlign: 'left' | 'center' | 'right';
+  /** A dashed line across at the average. */
+  readonly averageLine: boolean;
+  /** The highest value, written over a dot at the highest point; `null` for none. */
+  readonly peak: SkParagraph | null;
+}) {
+  const range = series.max - series.min;
+  const floor = series.min - range * LINE_FLOOR;
+  const span = range * (1 + LINE_FLOOR);
+  // A flat line sits halfway up.
+  const yOf = (value: number) =>
+    span > 0 ? CHART_HEIGHT - ((value - floor) / span) * CHART_HEIGHT : CHART_HEIGHT / 2;
+  const points = series.points.map((point) => ({ x: point.x * CHART_WIDTH, y: yOf(point.y) }));
+  const line = Skia.PathBuilder.Make();
+  points.forEach((point, i) =>
+    i === 0 ? line.moveTo(point.x, point.y) : line.lineTo(point.x, point.y),
+  );
+  const linePath = line.detach();
+  const area = Skia.PathBuilder.Make();
+  points.forEach((point, i) =>
+    i === 0 ? area.moveTo(point.x, point.y) : area.lineTo(point.x, point.y),
+  );
+  area.lineTo(points[points.length - 1].x, CHART_HEIGHT);
+  area.lineTo(points[0].x, CHART_HEIGHT);
+  area.close();
+  const totalHeight = chartHeight(ends !== null, title !== null, peak !== null);
+  const titleTop = CHART_HEIGHT + (ends === null ? 0 : LABEL_BAND);
+  const averageY = yOf(series.average);
+  const top = points.reduce((best, point) => (point.y < best.y ? point : best), points[0]);
+  return (
+    <Group
+      transform={[
+        { translateX: -CHART_WIDTH / 2 },
+        { translateY: -totalHeight / 2 + (peak === null ? 0 : PEAK_BAND) },
+      ]}
+    >
+      <Path path={area.detach()} color={color} opacity={AREA_OPACITY} />
+      <Path
+        path={linePath}
+        style="stroke"
+        strokeWidth={LINE_WIDTH}
+        strokeCap="round"
+        strokeJoin="round"
+        color={color}
+      >
+        {castsShadow(color) ? <DropShadow /> : null}
+      </Path>
+      {averageLine ? (
+        <Line
+          p1={{ x: 0, y: averageY }}
+          p2={{ x: CHART_WIDTH, y: averageY }}
+          color={color}
+          strokeWidth={AVERAGE_LINE_WIDTH}
+          strokeCap="round"
+        >
+          <DashPathEffect intervals={[3 * AVERAGE_LINE_WIDTH, 2.5 * AVERAGE_LINE_WIDTH]} />
+        </Line>
+      ) : null}
+      {peak === null ? null : (
+        <>
+          <Circle c={top} r={PEAK_DOT} color={color}>
+            {castsShadow(color) ? <DropShadow /> : null}
+          </Circle>
+          <PeakLabel paragraph={peak} x={top.x} bottom={top.y - PEAK_DOT - 6} />
+        </>
+      )}
+      {ends === null
+        ? null
+        : ends.map((label, i) => {
+            const width = Math.ceil(label.getLongestLine()) + 1;
+            return (
+              <Paragraph
+                key={i === 0 ? 'start' : 'end'}
+                paragraph={label}
+                x={i === 0 ? 0 : CHART_WIDTH - width}
+                y={CHART_HEIGHT + (LABEL_BAND - label.getHeight()) / 2 + 4}
+                width={width}
+              />
+            );
+          })}
+      {title === null ? null : (
+        <Paragraph
+          paragraph={title}
+          x={alignedX(titleAlign, Math.ceil(title.getLongestLine()) + 1, CHART_WIDTH)}
+          y={titleTop + (TITLE_BAND - title.getHeight()) / 2 + 4}
+          width={Math.ceil(title.getLongestLine()) + 1}
+        />
+      )}
+    </Group>
+  );
+}
+
+/** Radius of the dot at a line's highest point. */
+const PEAK_DOT = 9;
+
+/**
+ * A chart's highest value, centered over `x` with its bottom at `bottom`, kept within the
+ * chart's width.
+ */
+function PeakLabel({
+  paragraph,
+  x,
+  bottom,
+}: {
+  readonly paragraph: SkParagraph;
+  readonly x: number;
+  readonly bottom: number;
+}) {
+  const width = Math.ceil(paragraph.getLongestLine()) + 1;
+  const left = Math.min(Math.max(0, x - width / 2), CHART_WIDTH - width);
+  return (
+    <Paragraph paragraph={paragraph} x={left} y={bottom - paragraph.getHeight()} width={width} />
+  );
+}
+
+/** One row of splits ready to draw. */
+interface PreparedRow {
+  readonly speed: number;
+  readonly number: SkParagraph;
+  /** The pace or speed, or `null` when hidden. */
+  readonly value: SkParagraph | null;
+  /** The change in altitude, or `null` when hidden. */
+  readonly elevation: SkParagraph | null;
+}
+
+/**
+ * Splits one under another: each row with its number, a bar as long as it was fast (the slowest
+ * still takes {@link ROW_MIN_SHARE} of the room, so the differences show) and, on the far right,
+ * its pace or speed and its change in altitude when shown, in columns that keep the digits in
+ * line. Optionally, a dashed line down the bars at the average, and the title under them.
+ */
+function SplitRows({
+  rows,
+  average,
+  color,
+  title,
+  titleAlign,
+  averageLine,
+}: {
+  readonly rows: readonly PreparedRow[];
+  /** Average speed of the splits, for the average line. */
+  readonly average: number;
+  readonly color: string;
+  readonly title: SkParagraph | null;
+  readonly titleAlign: 'left' | 'center' | 'right';
+  /** A dashed line down the bars at the average speed. */
+  readonly averageLine: boolean;
+}) {
+  const widthOf = (paragraph: SkParagraph) => Math.ceil(paragraph.getLongestLine()) + 1;
+  const columnWidth = (column: (row: PreparedRow) => SkParagraph | null) =>
+    Math.max(
+      0,
+      ...rows.map((row) => {
+        const paragraph = column(row);
+        return paragraph === null ? 0 : widthOf(paragraph);
+      }),
+    );
+  const numberWidth = columnWidth((row) => row.number);
+  const valueWidth = columnWidth((row) => row.value);
+  const elevationWidth = columnWidth((row) => row.elevation);
+  // The texts sit in columns on the right, each right-aligned so their digits line up.
+  const elevationRight = CHART_WIDTH;
+  const valueRight = elevationRight - (elevationWidth > 0 ? elevationWidth + ROW_GAP : 0);
+  const textsWidth = (valueWidth > 0 ? valueWidth : 0) + (elevationWidth > 0 ? elevationWidth : 0);
+  const textsGap = valueWidth > 0 && elevationWidth > 0 ? ROW_GAP : 0;
+  const barStart = numberWidth + ROW_GAP;
+  const room = CHART_WIDTH - barStart - (textsWidth > 0 ? ROW_GAP + textsGap + textsWidth : 0);
+  const speeds = rows.map((row) => row.speed);
+  const slowest = Math.min(...speeds);
+  const fastest = Math.max(...speeds);
+  const lengthOf = (speed: number) =>
+    fastest > slowest
+      ? room * (ROW_MIN_SHARE + ((1 - ROW_MIN_SHARE) * (speed - slowest)) / (fastest - slowest))
+      : room;
+  const totalHeight = rowsHeight(rows.length, title !== null);
+  const rowsBottom = rows.length * ROW_HEIGHT;
+  const averageX = barStart + lengthOf(average);
+  const shadow = castsShadow(color) ? (
+    <Paint>
+      <DropShadow />
+    </Paint>
+  ) : undefined;
+  /** A text right-aligned at `right`, centered on its row. */
+  const rightAligned = (paragraph: SkParagraph, right: number, middle: number, key: string) => (
+    <Paragraph
+      key={key}
+      paragraph={paragraph}
+      x={right - widthOf(paragraph)}
+      y={middle - paragraph.getHeight() / 2}
+      width={widthOf(paragraph)}
+    />
+  );
+  return (
+    <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
+      <Group layer={shadow}>
+        {rows.map((row, i) => (
+          <RoundedRect
+            key={i}
+            x={barStart}
+            y={i * ROW_HEIGHT + (ROW_HEIGHT - ROW_BAR) / 2}
+            width={lengthOf(row.speed)}
+            height={ROW_BAR}
+            r={ROW_BAR / 2}
+            color={color}
+          />
+        ))}
+        {averageLine ? (
+          <Line
+            p1={{ x: averageX, y: 0 }}
+            p2={{ x: averageX, y: rowsBottom }}
+            color={color}
+            strokeWidth={AVERAGE_LINE_WIDTH}
+            strokeCap="round"
+          >
+            <DashPathEffect intervals={[3 * AVERAGE_LINE_WIDTH, 2.5 * AVERAGE_LINE_WIDTH]} />
+          </Line>
+        ) : null}
+      </Group>
+      {rows.map((row, i) => {
+        const middle = i * ROW_HEIGHT + ROW_HEIGHT / 2;
+        return (
+          <Group key={`texts-${i}`}>
+            {rightAligned(row.number, numberWidth, middle, 'number')}
+            {row.value === null ? null : rightAligned(row.value, valueRight, middle, 'value')}
+            {row.elevation === null ? null : (
+              // The change in altitude reads as secondary.
+              <Group layer={<Paint opacity={0.75} />}>
+                {rightAligned(row.elevation, elevationRight, middle, 'elevation')}
+              </Group>
+            )}
+          </Group>
+        );
+      })}
+      {title === null ? null : (
+        <Paragraph
+          paragraph={title}
+          x={alignedX(titleAlign, widthOf(title), CHART_WIDTH)}
+          y={rowsBottom + (TITLE_BAND - title.getHeight()) / 2 + 4}
+          width={widthOf(title)}
+        />
+      )}
+    </Group>
+  );
+}
+
 /** Width of a chart's average line, in canvas pixels before the layer's scale. */
 const AVERAGE_LINE_WIDTH = 4;
 
@@ -695,6 +1130,8 @@ function BarChart({
   title,
   titleAlign,
   averageLine,
+  peak,
+  floorShare,
 }: {
   readonly values: readonly number[];
   readonly color: string;
@@ -706,6 +1143,13 @@ function BarChart({
   readonly titleAlign: 'left' | 'center' | 'right';
   /** A dashed line across the bars at their average (empty bars count). */
   readonly averageLine: boolean;
+  /** The highest value, written over the highest bar; `null` for none. */
+  readonly peak: SkParagraph | null;
+  /**
+   * Share of the height of the lowest bar, for values that never get near zero (the speed of
+   * each split); bars start at zero without it.
+   */
+  readonly floorShare?: number;
 }) {
   if (values.length === 0) {
     return null;
@@ -715,12 +1159,26 @@ function BarChart({
   const barWidth = slot * 0.7;
   // Empty days still get a small mark so the time axis stays readable.
   const minHeight = Math.min(8, barWidth);
-  const totalHeight = chartHeight(labels !== null, title !== null);
+  const totalHeight = chartHeight(labels !== null, title !== null, peak !== null);
   const titleTop = CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND);
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-  const averageY = max > 0 ? CHART_HEIGHT - (average / max) * CHART_HEIGHT : CHART_HEIGHT;
+  // From zero, or, for splits, from the slowest bar at a share of the height, so they differ.
+  const min = Math.min(...values);
+  const heightOf = (value: number) =>
+    max <= 0
+      ? 0
+      : floorShare === undefined || max === min
+        ? (value / max) * CHART_HEIGHT
+        : (floorShare + ((1 - floorShare) * (value - min)) / (max - min)) * CHART_HEIGHT;
+  const averageY = max > 0 ? CHART_HEIGHT - heightOf(average) : CHART_HEIGHT;
+  const highest = values.indexOf(max);
   return (
-    <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
+    <Group
+      transform={[
+        { translateX: -CHART_WIDTH / 2 },
+        { translateY: -totalHeight / 2 + (peak === null ? 0 : PEAK_BAND) },
+      ]}
+    >
       {/* One shadow for all the bars, drawn as a layer, instead of one blur per bar. */}
       <Group
         layer={
@@ -732,7 +1190,7 @@ function BarChart({
         }
       >
         {values.map((value, i) => {
-          const height = max > 0 ? Math.max(minHeight, (value / max) * CHART_HEIGHT) : minHeight;
+          const height = Math.max(minHeight, heightOf(value));
           return (
             <RoundedRect
               key={i}
@@ -758,6 +1216,9 @@ function BarChart({
           </Line>
         ) : null}
       </Group>
+      {peak === null ? null : (
+        <PeakLabel paragraph={peak} x={highest * slot + slot / 2} bottom={-6} />
+      )}
       {labels?.map((label, i) => {
         if (label === null) {
           return null;

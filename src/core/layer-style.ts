@@ -144,7 +144,8 @@ type LogoLayer = LayerOf<'logo'>;
 const TEXT_KINDS = ['metric', 'summaryMetric', 'info', 'text'] as const;
 const DATA_KINDS = ['metric', 'summaryMetric'] as const;
 const LINE_KINDS = ['route', 'summaryRoutes'] as const;
-const ALL_KINDS = [...TEXT_KINDS, ...LINE_KINDS, 'summaryChart', 'logo'] as const;
+const CHART_KINDS = ['summaryChart', 'activityChart'] as const;
+const ALL_KINDS = [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS, 'logo'] as const;
 
 function isKind<K extends LayerKind>(layer: Layer, kinds: readonly K[]): layer is LayerOf<K> {
   return (kinds as readonly LayerKind[]).includes(layer.kind);
@@ -197,6 +198,7 @@ export function layerColor(layer: Layer): string | null {
     case 'summaryRoutes':
       return layer.stroke.color;
     case 'summaryChart':
+    case 'activityChart':
       return layer.color;
     case 'logo':
       return null;
@@ -213,7 +215,7 @@ export function setLayerColor(template: Template, id: string, color: string): Te
   return editLayer(
     template,
     id,
-    [...TEXT_KINDS, ...LINE_KINDS, 'summaryChart'],
+    [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS],
     'color',
     (layer) => {
       if (layerColor(layer) === color) {
@@ -229,6 +231,7 @@ export function setLayerColor(template: Template, id: string, color: string): Te
         case 'summaryRoutes':
           return { ...layer, stroke: { ...layer.stroke, color } };
         case 'summaryChart':
+        case 'activityChart':
           return { ...layer, color };
       }
     },
@@ -391,34 +394,63 @@ export function setLineOptions(
   });
 }
 
+/** What a chart's texts look like and what it draws besides its data, for any chart. */
+type ChartLooks = Pick<
+  ChartLayer,
+  'axisLabels' | 'title' | 'font' | 'bold' | 'uppercase' | 'align' | 'averageLine' | 'maxLabel'
+>;
+
+/** How an activity's splits are laid out. */
+type SplitLayout = Pick<LayerOf<'activityChart'>, 'orientation' | 'splitPace' | 'splitElevation'>;
+
 /**
- * What a chart shows (distance or time), its bar size, whether it has labels, a title and an
- * average line, and how its texts are written (font, bold, capitals, alignment of the title).
+ * Whether a chart has labels, a title, an average line and its highest value marked, and how
+ * its texts are written (font, bold, capitals, alignment of the title); for a period's chart also
+ * what it measures (distance or time) and its bar size; for an activity's splits, columns or
+ * rows and whether rows show each split's pace and its change in altitude.
+ *
+ * @throws Error when setting what an activity's chart measures or its bar size (it draws one
+ *   series, at the activity's own pace), or a split layout on a period's chart.
  */
 export function setChartOptions(
   template: Template,
   id: string,
-  patch: Partial<
-    Pick<
-      ChartLayer,
-      | 'value'
-      | 'bucket'
-      | 'axisLabels'
-      | 'title'
-      | 'font'
-      | 'bold'
-      | 'uppercase'
-      | 'align'
-      | 'averageLine'
-    >
-  >,
+  patch: Partial<ChartLooks & Pick<ChartLayer, 'value' | 'bucket'> & SplitLayout>,
 ): Template {
-  return editLayer(template, id, ['summaryChart'], 'chart options', (layer) => {
+  return editLayer(template, id, CHART_KINDS, 'chart options', (layer) => {
     const current = {
       ...layer,
       averageLine: layer.averageLine ?? false,
+      maxLabel: layer.maxLabel ?? false,
+      orientation: layer.kind === 'activityChart' ? (layer.orientation ?? 'columns') : undefined,
+      splitPace: layer.kind === 'activityChart' ? (layer.splitPace ?? true) : undefined,
+      splitElevation: layer.kind === 'activityChart' ? (layer.splitElevation ?? false) : undefined,
     };
-    return unchanged(current, patch) ? layer : { ...layer, ...patch };
+    if (unchanged(current, patch)) {
+      return layer;
+    }
+    const { value, bucket, orientation, splitPace, splitElevation, ...looks } = patch;
+    if (layer.kind === 'summaryChart') {
+      if (orientation !== undefined || splitPace !== undefined || splitElevation !== undefined) {
+        throw new Error(`Layer "${id}" (summaryChart) has no split layout`);
+      }
+      return {
+        ...layer,
+        ...looks,
+        ...(value === undefined ? {} : { value }),
+        ...(bucket === undefined ? {} : { bucket }),
+      };
+    }
+    if (value !== undefined || bucket !== undefined) {
+      throw new Error(`Layer "${id}" (activityChart) has no measure or bar size`);
+    }
+    return {
+      ...layer,
+      ...looks,
+      ...(orientation === undefined ? {} : { orientation }),
+      ...(splitPace === undefined ? {} : { splitPace }),
+      ...(splitElevation === undefined ? {} : { splitElevation }),
+    };
   });
 }
 
