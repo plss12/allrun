@@ -26,6 +26,7 @@ proportions of the canvas don't change much (see ADR 005 on why format changes p
   - **Minimal:** small Inter, everything grouped in a corner so the photo leads.
 
   Adding more later is cheap: one more recipe.
+
 - **The user's templates:** the design on screen, saved as is (a `Template`: format plus layers,
   validated with Zod). Reused with other activities or periods, its widgets fill in with the new
   data. **No names:** a template is recognised by its thumbnail; asking for a name adds a step,
