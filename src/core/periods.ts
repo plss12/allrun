@@ -52,3 +52,58 @@ export function bucketForPeriod(kind: PeriodKind, range: DateRange): BucketSize 
       return rangeLength(range) <= 31 ? 'day' : 'week';
   }
 }
+
+/**
+ * Longest custom range, in days: a year, leap day included. Longer ranges would chart more than
+ * 52 bars and fetch years of activities from Strava at once.
+ */
+export const MAX_CUSTOM_DAYS = 366;
+
+const earlier = (a: LocalDate, b: LocalDate): LocalDate => (a <= b ? a : b);
+const later = (a: LocalDate, b: LocalDate): LocalDate => (a >= b ? a : b);
+
+/**
+ * The custom range a summary switches to from the period on screen: the same days, cut at
+ * `today` (a month in progress ends today) and to {@link MAX_CUSTOM_DAYS} counting back from the
+ * end.
+ */
+export function startCustomRange(range: DateRange, today: LocalDate): DateRange {
+  const end = earlier(range.end, today);
+  const start = later(earlier(range.start, end), addDays(end, -(MAX_CUSTOM_DAYS - 1)));
+  return { start, end };
+}
+
+/** Earliest and latest date one end of a custom range can take. */
+export interface DateLimits {
+  readonly min: LocalDate;
+  readonly max: LocalDate;
+}
+
+/**
+ * Dates each end of a custom range can move to while the other stays: the start up to the end
+ * and at most {@link MAX_CUSTOM_DAYS} before it; the end from the start, up to `today` and at
+ * most {@link MAX_CUSTOM_DAYS} after the start.
+ */
+export function customRangeLimits(
+  range: DateRange,
+  today: LocalDate,
+): { readonly start: DateLimits; readonly end: DateLimits } {
+  return {
+    start: { min: addDays(range.end, -(MAX_CUSTOM_DAYS - 1)), max: range.end },
+    end: { min: range.start, max: earlier(today, addDays(range.start, MAX_CUSTOM_DAYS - 1)) },
+  };
+}
+
+/**
+ * Moves one end of a custom range to `date`, kept within {@link customRangeLimits} (the pickers
+ * already stop there; this guards the range whatever they send).
+ */
+export function setCustomRangeDate(
+  range: DateRange,
+  which: 'start' | 'end',
+  date: LocalDate,
+  today: LocalDate,
+): DateRange {
+  const limits = customRangeLimits(range, today)[which];
+  return { ...range, [which]: later(limits.min, earlier(date, limits.max)) };
+}

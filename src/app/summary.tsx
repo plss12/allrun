@@ -5,7 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { DateRange } from '@/core/dates';
-import { type PeriodKind, periodContaining, shiftPeriod } from '@/core/periods';
+import {
+  customRangeLimits,
+  type PeriodKind,
+  periodContaining,
+  setCustomRangeDate,
+  shiftPeriod,
+  startCustomRange,
+} from '@/core/periods';
 import type { SportFamily } from '@/core/sports';
 import { summarize } from '@/core/summary';
 import {
@@ -15,15 +22,14 @@ import {
 } from '@/core/summary-metrics';
 import { useActivitySource } from '@/data/activity-source';
 import { colors } from '@/theme/colors';
+import { DateRangeField } from '@/ui/date-range-field';
 import { formatMetric, formatPeriodName } from '@/ui/format';
 import { useDisplaySettings } from '@/ui/settings';
 import { ErrorView, LoadingView } from '@/ui/state-views';
 import { todayLocal } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
 
-type CalendarKind = Exclude<PeriodKind, 'custom'>;
-
-const KINDS: readonly CalendarKind[] = ['week', 'month', 'year'];
+const KINDS: readonly PeriodKind[] = ['week', 'month', 'year', 'custom'];
 /** "All sports" and the five families, in two rows of three. */
 const SPORT_ROWS: readonly (readonly (SportFamily | 'all')[])[] = [
   ['all', 'run', 'ride'],
@@ -36,7 +42,7 @@ export default function Summary() {
   const source = useActivitySource();
   const today = todayLocal();
 
-  const [kind, setKind] = useState<CalendarKind>('month');
+  const [kind, setKind] = useState<PeriodKind>('month');
   const [range, setRange] = useState<DateRange>(() => periodContaining('month', today));
   // Empty means every sport.
   const [families, setFamilies] = useState<readonly SportFamily[]>([]);
@@ -44,10 +50,15 @@ export default function Summary() {
   const activities = useAsync(() => source.listInRange(range), `${range.start}/${range.end}`);
   const isCurrentOrFuture = range.end >= today;
 
-  const selectKind = (next: CalendarKind) => {
+  // A custom range starts as the period on screen, then its dates are picked.
+  const selectKind = (next: PeriodKind) => {
+    if (next === kind) {
+      return;
+    }
     setKind(next);
-    setRange(periodContaining(next, today));
+    setRange(next === 'custom' ? startCustomRange(range, today) : periodContaining(next, today));
   };
+  const limits = customRangeLimits(range, today);
   const toggleFamily = (family: SportFamily) =>
     setFamilies((current) =>
       current.includes(family) ? current.filter((f) => f !== family) : [...current, family],
@@ -70,30 +81,42 @@ export default function Summary() {
         ))}
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <StepButton
-          icon={{ ios: 'chevron.left', android: 'chevron_left' }}
-          accessibilityLabel={t('summary.previous')}
-          onPress={() => setRange(shiftPeriod(kind, range, -1))}
+      {/* A custom range is its two dates, picked directly; calendar periods step with arrows.
+          Both rows are as tall, so nothing below moves when switching (until a calendar opens). */}
+      {kind === 'custom' ? (
+        <DateRangeField
+          range={range}
+          limits={limits}
+          labels={{ start: t('summary.from'), end: t('summary.to') }}
+          locale={locale}
+          onChange={(end, date) => setRange(setCustomRangeDate(range, end, date, today))}
         />
-        <Text
-          style={{
-            flex: 1,
-            textAlign: 'center',
-            color: colors.label,
-            fontSize: 20,
-            fontWeight: '700',
-          }}
-        >
-          {formatPeriodName(kind, range, locale)}
-        </Text>
-        <StepButton
-          icon={{ ios: 'chevron.right', android: 'chevron_right' }}
-          accessibilityLabel={t('summary.next')}
-          disabled={isCurrentOrFuture}
-          onPress={() => setRange(shiftPeriod(kind, range, 1))}
-        />
-      </View>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <StepButton
+            icon={{ ios: 'chevron.left', android: 'chevron_left' }}
+            accessibilityLabel={t('summary.previous')}
+            onPress={() => setRange(shiftPeriod(kind, range, -1))}
+          />
+          <Text
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              color: colors.label,
+              fontSize: 20,
+              fontWeight: '700',
+            }}
+          >
+            {formatPeriodName(kind, range, locale)}
+          </Text>
+          <StepButton
+            icon={{ ios: 'chevron.right', android: 'chevron_right' }}
+            accessibilityLabel={t('summary.next')}
+            disabled={isCurrentOrFuture}
+            onPress={() => setRange(shiftPeriod(kind, range, 1))}
+          />
+        </View>
+      )}
 
       <View style={{ gap: 8 }}>
         <Text style={{ color: colors.secondaryLabel, fontSize: 13, fontWeight: '600' }}>
@@ -142,18 +165,20 @@ export default function Summary() {
                   backgroundColor: colors.secondarySystemBackground,
                   borderRadius: 16,
                   borderCurve: 'continuous',
-                  padding: 16,
-                  gap: 12,
+                  paddingVertical: 16,
                 }}
               >
                 {/* The totals the image starts with: distance (when there is any), time and
-                    number of activities. */}
+                    number of activities, each centered in a column that lines up with the
+                    chips above (same width and gap). */}
                 {summary.activityCount === 0 ? (
-                  <Text style={{ color: colors.secondaryLabel, fontSize: 15 }}>
+                  <Text
+                    style={{ color: colors.secondaryLabel, fontSize: 15, paddingHorizontal: 16 }}
+                  >
                     {t('summary.empty')}
                   </Text>
                 ) : (
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
                     {defaultSummaryMetrics(summary).map((metric) => {
                       const value = summaryMetricValue(summary, metric);
                       const formatted =
@@ -161,12 +186,20 @@ export default function Summary() {
                           ? null
                           : formatMetric(toDisplaySummaryMetric(metric, value, unit), locale);
                       return (
-                        <View key={metric} style={{ flex: 1, gap: 2 }}>
+                        <View
+                          key={metric}
+                          style={{ flex: 1, gap: 2, alignItems: 'center', paddingHorizontal: 8 }}
+                        >
                           <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>
                             {t(`summaryMetrics.${metric}`)}
                           </Text>
+                          {/* One line whatever the total: a long range's "12.345,6 km" shrinks
+                              to fit its column instead of wrapping. */}
                           <Text
                             selectable
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.5}
                             style={{
                               color: colors.label,
                               fontSize: 22,

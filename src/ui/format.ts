@@ -51,6 +51,13 @@ export function formatShortDate(date: LocalDate, locale: string): string {
   }).format(asUtc(`${date}T00:00:00`));
 }
 
+/** A date with its year, as the platform writes it: "Oct 18, 2026", "18 oct 2026". */
+export function formatDate(date: LocalDate, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+    asUtc(`${date}T00:00:00`),
+  );
+}
+
 /**
  * Name of a summary period: "October 2026" for a month, "2026" for a year, and the day range for
  * weeks and custom ranges ("Oct 12 – Oct 18, 2026").
@@ -70,13 +77,8 @@ export function formatPeriodName(kind: PeriodKind, range: DateRange, locale: str
       const sameYear = range.start.slice(0, 4) === range.end.slice(0, 4);
       const start = sameYear
         ? formatShortDate(range.start, locale)
-        : new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-            asUtc(`${range.start}T00:00:00`),
-          );
-      const end = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-        asUtc(`${range.end}T00:00:00`),
-      );
-      return `${start} – ${end}`;
+        : formatDate(range.start, locale);
+      return `${start} – ${formatDate(range.end, locale)}`;
     }
   }
 }
