@@ -65,9 +65,11 @@ interface EditorCanvasProps {
   readonly displayWidth: number;
   readonly template: Template;
   readonly layerContext: LayerContext;
-  /** The photo, or `null` to show the placeholder while there is none. */
+  /** The photo, or `null` for none: the image is transparent under the widgets. */
   readonly photo: SkImage | null;
   readonly framing: PhotoFraming;
+  /** Whether the layers ignore touches, so that every gesture frames the photo. */
+  readonly layersLocked: boolean;
   /** Id of the selected layer, or `null`. */
   readonly selectedId: string | null;
   readonly onSelect: (id: string | null) => void;
@@ -152,7 +154,8 @@ function playHaptic(style: ImpactFeedbackStyle): void {
 /**
  * The template scene scaled down from its 1080 px export size to the screen, edited with the
  * fingers: a tap selects the layer under it (or clears the selection), and dragging, pinching and
- * rotating move whatever is under the fingers when the gesture starts: a layer, or else the photo.
+ * rotating move whatever is under the fingers when the gesture starts: a layer, or else the photo
+ * (always the photo while the layers are locked).
  *
  * Layers snap to the canvas center lines, to its edges and to straight angles, with guides and a
  * haptic tick; dropping one on the trash that appears while dragging removes it. The photo snaps
@@ -169,6 +172,7 @@ export function EditorCanvas({
   layerContext,
   photo,
   framing,
+  layersLocked,
   selectedId,
   onSelect,
   onFramingChange,
@@ -190,6 +194,8 @@ export function EditorCanvas({
     height,
   }));
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
+  /** Layers a finger can grab: none while they are locked. */
+  const touchable = layersLocked ? [] : boxes;
   const thresholds = { distance: SNAP_DISTANCE / ratio, rotation: SNAP_ANGLE };
   // The trash center, in screen points from the canvas's top-left corner.
   const trashX = displayWidth / 2;
@@ -273,7 +279,7 @@ export function EditorCanvas({
       return;
     }
     resetSnaps();
-    const id = hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio);
+    const id = hitTestLayers(touchable, point, canvas, MIN_TOUCH / ratio);
     const box = id === null ? undefined : boxes.find((candidate) => candidate.id === id);
     if (box === undefined) {
       target.set(TARGET_PHOTO);
@@ -419,7 +425,7 @@ export function EditorCanvas({
   const tap = Gesture.Tap().onEnd((event, success) => {
     if (success) {
       const point = { x: event.x / ratio, y: event.y / ratio };
-      scheduleOnRN(onSelect, hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio));
+      scheduleOnRN(onSelect, hitTestLayers(touchable, point, canvas, MIN_TOUCH / ratio));
     }
   });
 
@@ -475,7 +481,7 @@ export function EditorCanvas({
               layers={layers}
               background={
                 photo === null
-                  ? { kind: 'placeholder' }
+                  ? { kind: 'transparent' }
                   : { kind: 'photo', image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
               }
               live={

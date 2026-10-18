@@ -4,9 +4,12 @@ import {
   UIImagePickerPreferredAssetRepresentationMode,
 } from 'expo-image-picker';
 import { Stack, useLocalSearchParams } from 'expo-router';
+// TODO(SDK 58): import usePreventRemove from 'expo-router', which exports it from SDK 58 on. In
+// SDK 57 it already ships, and the native stack honours it, but only under this internal path.
+import { usePreventRemove } from 'expo-router/build/react-navigation/core';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { z } from 'zod';
 
 import { customRange } from '@/core/dates';
@@ -52,9 +55,11 @@ import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
+import { FormatPicker } from '@/editor/format-picker';
 import { LayerSheet } from '@/editor/layer-sheet';
 import type { PickedPhoto } from '@/editor/photo-plan';
 import { preparePhoto } from '@/editor/prepare-photo';
+import { QuickActions } from '@/editor/quick-actions';
 import { SelectionBar } from '@/editor/selection-bar';
 import { STYLE_PANEL_HEIGHT, StylePanel } from '@/editor/style-panel';
 import { colors } from '@/theme/colors';
@@ -93,28 +98,14 @@ interface EditorPhoto {
   readonly exportUri: string | null;
 }
 
-/** Formats from tallest to widest, in one row: each button shows its shape and proportions. */
-const FORMATS: readonly CanvasFormat[] = ['story', 'tall', 'portrait', 'square', 'landscape'];
-/** The format buttons fit in the space of the style panel, which replaces them. */
-const FORMAT_HEIGHT = 72;
-/** Longest side of the shape drawn on each format button. */
-const FORMAT_SHAPE = 28;
-
-/** Size of a format's shape on its button: its proportions, with the longer side fixed. */
-function formatShape(format: CanvasFormat): { width: number; height: number } {
-  const { width, height } = CANVAS_FORMATS[format];
-  return width >= height
-    ? { width: FORMAT_SHAPE, height: (FORMAT_SHAPE * height) / width }
-    : { width: (FORMAT_SHAPE * width) / height, height: FORMAT_SHAPE };
-}
-
 const MAIN_BUTTON_HEIGHT = 50;
 /** Room under the controls, above the home indicator. */
 const CONTROLS_BOTTOM = 32;
 
 /**
- * Height of the controls under the canvas: the formats (or the style panel) and the main button
- * ("Change photo", or "Done" while styling). It never changes, so neither does the canvas.
+ * Height of the controls under the canvas: a row of tiles (the formats, the quick actions or the
+ * selected layer's actions) or the style panel, and the main buttons. It never changes, so
+ * neither does the canvas, whichever step the editor is in.
  */
 const CONTROLS_HEIGHT = STYLE_PANEL_HEIGHT + 12 + MAIN_BUTTON_HEIGHT + CONTROLS_BOTTOM;
 
@@ -184,6 +175,14 @@ function EditorWorkspace({
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
       : defaultSummaryTemplate(data.summary, format);
+  /**
+   * The editor works in two steps on the same canvas: first the photo (optional: without one the
+   * image is transparent), its format and framing (the layers show but can't be touched), then
+   * the design, where the photo can still be framed
+   * but neither replaced nor given another format. Laying out widgets in one format and then
+   * switching to a very different one would pile them up.
+   */
+  const [step, setStep] = useState<'photo' | 'design'>('photo');
   // The format and the photo framing come first and stay out of the history: undo and Start
   // over only change the widgets (see `EditorLayers`).
   const [format, setFormat] = useState<CanvasFormat>(INITIAL_FORMAT);
@@ -303,6 +302,10 @@ function EditorWorkspace({
     setTextDraft(draft);
   };
 
+  /** Opens the keyboard for a new text. */
+  const addText = () =>
+    startTyping({ layerId: uniqueLayerId(template, 'text'), isNew: true, content: '' });
+
   /** Commits the typed text (a blank one adds nothing, or removes the text) and selects it. */
   const finishTyping = () => {
     if (textDraft === null) {
@@ -365,51 +368,99 @@ function EditorWorkspace({
     }
   };
 
+  /**
+   * Picks another format. A new format starts a new design, with an empty history: undoing into
+   * layers laid out for the old format would pile them up. Losing the user's own layers asks
+   * first.
+   */
+  const chooseFormat = (next: CanvasFormat) => {
+    if (next === format) {
+      return;
+    }
+    const change = () => {
+      setFormat(next);
+      setHistory(createHistory<EditorLayers>(null));
+    };
+    if (history.present === null) {
+      change();
+      return;
+    }
+    Alert.alert(t('editor.formatChangeTitle'), t('editor.formatChangeMessage'), [
+      { text: t('editor.cancel'), style: 'cancel' },
+      { text: t('editor.formatChangeConfirm'), onPress: change },
+    ]);
+  };
+
+  /** Back to the photo and format; the design stays as it is until the format changes. */
+  const backToPhoto = () => {
+    setSelectedId(null);
+    setStyling(false);
+    setSheetOpen(false);
+    setStep('photo');
+  };
+
+  // While designing, going back (the header's back button, Android's back) returns to the photo
+  // step instead of leaving the editor; the text being typed is committed first. The iOS swipe
+  // back is off then: react-native-screens lets UIKit pop the screen and pushes it back after,
+  // which flashes the previous screen.
+  usePreventRemove(step === 'design', () => {
+    if (typing) {
+      finishTyping();
+    } else {
+      backToPhoto();
+    }
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.systemBackground }}>
-      {/* Restoring first, far from adding; nothing is edited while typing, since the draft isn't
-          in the history yet. */}
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          icon="arrow.counterclockwise"
-          accessibilityLabel={t('editor.restore')}
-          disabled={typing || !canRestore(history.present)}
-          onPress={() => setHistory((current) => commit(current, null))}
-        >
-          {t('editor.restore')}
-        </Stack.Toolbar.Button>
-        <Stack.Toolbar.Button
-          icon="arrow.uturn.backward"
-          accessibilityLabel={t('editor.undo')}
-          disabled={typing || !canUndo(history)}
-          onPress={() => setHistory(undo)}
-        >
-          {t('editor.undo')}
-        </Stack.Toolbar.Button>
-        <Stack.Toolbar.Button
-          icon="arrow.uturn.forward"
-          accessibilityLabel={t('editor.redo')}
-          disabled={typing || !canRedo(history)}
-          onPress={() => setHistory(redo)}
-        >
-          {t('editor.redo')}
-        </Stack.Toolbar.Button>
-        <Stack.Toolbar.Button
-          icon="plus"
-          accessibilityLabel={t('editor.addLayer')}
-          disabled={typing || !canAddLayer(template)}
-          onPress={() => setSheetOpen(true)}
-        >
-          {t('editor.addLayer')}
-        </Stack.Toolbar.Button>
-      </Stack.Toolbar>
+      <Stack.Screen
+        options={{
+          title: t(step === 'photo' ? 'editor.photoStep' : 'editor.designStep'),
+          gestureEnabled: step === 'photo',
+          // Keeps the native back button next to the left toolbar instead of replaced by it.
+          headerBackVisible: true,
+        }}
+      />
+      {step === 'design' ? (
+        <>
+          {/* Two buttons on each side, so the title has room in the middle (UIKit only centers it
+              when it fits between the wider side and its mirror). Restoring sits apart from undo;
+              nothing is edited while typing, since the draft isn't in the history yet. */}
+          <Stack.Toolbar placement="left">
+            <Stack.Toolbar.Button
+              icon="arrow.counterclockwise"
+              accessibilityLabel={t('editor.restore')}
+              disabled={typing || !canRestore(history.present)}
+              onPress={() => setHistory((current) => commit(current, null))}
+            >
+              {t('editor.restore')}
+            </Stack.Toolbar.Button>
+          </Stack.Toolbar>
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button
+              icon="arrow.uturn.backward"
+              accessibilityLabel={t('editor.undo')}
+              disabled={typing || !canUndo(history)}
+              onPress={() => setHistory(undo)}
+            >
+              {t('editor.undo')}
+            </Stack.Toolbar.Button>
+            <Stack.Toolbar.Button
+              icon="arrow.uturn.forward"
+              accessibilityLabel={t('editor.redo')}
+              disabled={typing || !canRedo(history)}
+              onPress={() => setHistory(redo)}
+            >
+              {t('editor.redo')}
+            </Stack.Toolbar.Button>
+          </Stack.Toolbar>
+        </>
+      ) : null}
       <LayerSheet
         visible={sheetOpen}
         catalog={catalog}
         onAdd={addNewLayer}
-        onAddText={() =>
-          startTyping({ layerId: uniqueLayerId(template, 'text'), isNew: true, content: '' })
-        }
+        onAddText={addText}
         onClose={() => setSheetOpen(false)}
       />
       <View
@@ -434,6 +485,7 @@ function EditorWorkspace({
               layerContext={layerContext}
               photo={canvasImage}
               framing={framing}
+              layersLocked={step === 'photo'}
               selectedId={typing ? null : selectedId}
               onSelect={setSelectedId}
               onFramingChange={setFraming}
@@ -507,138 +559,60 @@ function EditorWorkspace({
             onChange={edit}
           />
         ) : (
-          // The selection bar covers the formats instead of pushing them, so the canvas keeps its
-          // size when a layer gets selected.
           <View style={{ height: STYLE_PANEL_HEIGHT, justifyContent: 'center' }}>
-            <View
-              style={{ flexDirection: 'row', gap: 8, opacity: selected === null ? 1 : 0 }}
-              pointerEvents={selected === null ? 'auto' : 'none'}
-              accessibilityElementsHidden={selected !== null}
-              importantForAccessibility={selected === null ? 'auto' : 'no-hide-descendants'}
-              accessibilityRole="tablist"
-              accessibilityLabel={t('editor.format')}
-            >
-              {FORMATS.map((option) => {
-                const chosen = template.format === option;
-                const ink = chosen ? colors.onTint : colors.label;
-                return (
-                  <Pressable
-                    key={option}
-                    accessibilityRole="tab"
-                    accessibilityLabel={t(`formats.${option}`)}
-                    accessibilityState={{ selected: chosen }}
-                    hitSlop={4}
-                    onPress={() => setFormat(option)}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      height: FORMAT_HEIGHT,
-                      borderRadius: 16,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      backgroundColor: chosen ? colors.tint : colors.secondarySystemBackground,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                  >
-                    <View
-                      style={{
-                        height: FORMAT_SHAPE,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <View
-                        style={{
-                          ...formatShape(option),
-                          borderWidth: 2,
-                          borderRadius: 4,
-                          borderColor: ink,
-                        }}
-                      />
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.8}
-                      maxFontSizeMultiplier={1.3}
-                      style={{
-                        color: ink,
-                        fontSize: 13,
-                        fontWeight: '600',
-                        fontVariant: ['tabular-nums'],
-                      }}
-                    >
-                      {t(`formatRatios.${option}`)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {selected === null ? null : (
-              <View
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  justifyContent: 'center',
+            {step === 'photo' ? (
+              <FormatPicker format={format} onPick={chooseFormat} />
+            ) : selected !== null ? (
+              <SelectionBar
+                onEditText={
+                  selected.kind === 'text' ? () => startTyping(editTextDraft(selected)) : undefined
+                }
+                onStyle={() => setStyling(true)}
+                onDuplicate={() => duplicateSelected(selected.id)}
+                onBringToFront={() => edit((current) => moveLayer(current, selected.id, 'front'))}
+                onSendToBack={() => edit((current) => moveLayer(current, selected.id, 'back'))}
+                onRemove={() => {
+                  edit((current) => removeLayer(current, selected.id));
+                  setSelectedId(null);
                 }}
-              >
-                <SelectionBar
-                  onEditText={
-                    selected.kind === 'text'
-                      ? () => startTyping(editTextDraft(selected))
-                      : undefined
-                  }
-                  onStyle={() => setStyling(true)}
-                  onDuplicate={() => duplicateSelected(selected.id)}
-                  onBringToFront={() => edit((current) => moveLayer(current, selected.id, 'front'))}
-                  onSendToBack={() => edit((current) => moveLayer(current, selected.id, 'back'))}
-                  onRemove={() => {
-                    edit((current) => removeLayer(current, selected.id));
-                    setSelectedId(null);
-                  }}
-                  canDuplicate={canAddLayer(template)}
-                  canBringToFront={canMoveLayer(template, selected.id, 'front')}
-                  canSendToBack={canMoveLayer(template, selected.id, 'back')}
-                />
-              </View>
+                canDuplicate={canAddLayer(template)}
+                canBringToFront={canMoveLayer(template, selected.id, 'front')}
+                canSendToBack={canMoveLayer(template, selected.id, 'back')}
+              />
+            ) : (
+              <QuickActions
+                onAddLayer={() => setSheetOpen(true)}
+                onAddText={addText}
+                canAdd={canAddLayer(template)}
+              />
             )}
           </View>
         )}
-        <Pressable
-          accessibilityRole="button"
-          // With a layer selected it reads "Done", one step back: from the style panel to the
-          // layer's actions, then from those to no selection.
-          onPress={
-            styled !== null
-              ? () => setStyling(false)
-              : selected !== null
-                ? () => setSelectedId(null)
-                : pickPhoto
-          }
-          style={({ pressed }) => ({
-            height: MAIN_BUTTON_HEIGHT,
-            backgroundColor: colors.tint,
-            borderRadius: 14,
-            borderCurve: 'continuous',
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: pressed ? 0.8 : 1,
-          })}
-        >
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}
-          >
-            {selected !== null
-              ? t('editor.done')
-              : photo === null
-                ? t('editor.choosePhoto')
-                : t('editor.changePhoto')}
-          </Text>
-        </Pressable>
+        <View style={{ height: MAIN_BUTTON_HEIGHT, flexDirection: 'row', gap: 12 }}>
+          {step === 'photo' ? (
+            // Without a photo the design can go on too: it exports transparent, as a sticker.
+            // The button most people want next stands out.
+            <>
+              <MainButton
+                label={photo === null ? t('editor.choosePhoto') : t('editor.changePhoto')}
+                onPress={pickPhoto}
+                secondary={photo !== null}
+              />
+              <MainButton
+                label={t('editor.next')}
+                onPress={() => setStep('design')}
+                secondary={photo === null}
+              />
+            </>
+          ) : selected !== null ? (
+            // "Done" goes one step back: from the style panel to the layer's actions, then from
+            // those to no selection.
+            <MainButton
+              label={t('editor.done')}
+              onPress={styled !== null ? () => setStyling(false) : () => setSelectedId(null)}
+            />
+          ) : null}
+        </View>
       </View>
       {textDraft === null || typedLayer?.kind !== 'text' ? null : (
         <TypingOverlay
@@ -649,5 +623,42 @@ function EditorWorkspace({
         />
       )}
     </View>
+  );
+}
+
+/** A wide button under the controls; side by side, they share the row equally. */
+function MainButton({
+  label,
+  onPress,
+  secondary = false,
+}: {
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly secondary?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        backgroundColor: secondary ? colors.secondarySystemBackground : colors.tint,
+        borderRadius: 14,
+        borderCurve: 'continuous',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.8 : 1,
+      })}
+    >
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        maxFontSizeMultiplier={1.3}
+        style={{ color: secondary ? colors.label : colors.onTint, fontSize: 17, fontWeight: '700' }}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }

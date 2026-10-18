@@ -30,7 +30,6 @@ export const es: Translations = {
     createImage: 'Crear imagen',
   },
   editor: {
-    title: 'Editor',
     choosePhoto: 'Elegir foto',
     changePhoto: 'Cambiar foto',
     format: 'Formato',
@@ -54,6 +53,13 @@ export const es: Translations = {
     remove: 'Eliminar',
     style: 'Estilo',
     textTitle: 'Texto',
+    photoStep: 'Foto y formato',
+    designStep: 'Diseño',
+    next: 'Siguiente',
+    addText: 'Texto',
+    formatChangeTitle: '¿Cambiar de formato?',
+    formatChangeMessage: 'Los elementos volverán a su sitio por defecto en el nuevo formato.',
+    formatChangeConfirm: 'Cambiar',
   },
   widgets: {
     sections: {

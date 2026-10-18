@@ -29,7 +29,6 @@ export const en = {
     createImage: 'Create image',
   },
   editor: {
-    title: 'Editor',
     choosePhoto: 'Choose photo',
     changePhoto: 'Change photo',
     format: 'Format',
@@ -53,6 +52,13 @@ export const en = {
     remove: 'Remove',
     style: 'Style',
     textTitle: 'Text',
+    photoStep: 'Photo and format',
+    designStep: 'Design',
+    next: 'Next',
+    addText: 'Text',
+    formatChangeTitle: 'Change the format?',
+    formatChangeMessage: 'The elements go back to their default places in the new format.',
+    formatChangeConfirm: 'Change',
   },
   widgets: {
     sections: {

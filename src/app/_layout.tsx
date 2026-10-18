@@ -18,7 +18,13 @@ export default function RootLayout() {
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ActivitySourceProvider>
-          <Stack screenOptions={{ contentStyle: { backgroundColor: colors.systemBackground } }}>
+          {/* Back buttons are just the arrow: the previous screen's title adds nothing. */}
+          <Stack
+            screenOptions={{
+              contentStyle: { backgroundColor: colors.systemBackground },
+              headerBackButtonDisplayMode: 'minimal',
+            }}
+          >
             <Stack.Screen
               name="index"
               options={{
@@ -28,7 +34,8 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="summary" options={{ title: t('summary.title') }} />
-            <Stack.Screen name="editor" options={{ title: t('editor.title') }} />
+            {/* The editor opens in its photo step; the screen titles each step itself. */}
+            <Stack.Screen name="editor" options={{ title: t('editor.photoStep') }} />
           </Stack>
         </ActivitySourceProvider>
       </GestureHandlerRootView>

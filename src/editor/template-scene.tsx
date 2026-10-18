@@ -13,6 +13,7 @@ import {
   Skia,
   type SkImage,
   type SkParagraph,
+  type SkPath,
   type SkTextStyle,
   type SkTypefaceFontProvider,
   TextAlign,
@@ -128,7 +129,8 @@ export interface TemplateSceneProps {
    * - `photo`: the photo, drawn in `rect` inside a group transformed by `matrix` (see
    *   {@link photoMatrix} and {@link photoRect}); the editor passes shared values so gestures move
    *   it without re-rendering the layers;
-   * - `placeholder`: a dark fill, while no photo is chosen;
+   * - `transparent`: no photo, shown as the usual checkerboard of transparency (dark, so white
+   *   widgets stay readable): the image exports with nothing under the widgets;
    * - `none`: nothing, for the transparent sticker export.
    */
   readonly background:
@@ -138,7 +140,7 @@ export interface TemplateSceneProps {
         readonly matrix: Transforms3d | SharedValue<Transforms3d>;
         readonly rect: DrawRect | SharedValue<DrawRect>;
       }
-    | { readonly kind: 'placeholder' }
+    | { readonly kind: 'transparent' }
     | { readonly kind: 'none' };
   /**
    * The layer being moved, drawn from a shared transform so gestures don't re-render, with a
@@ -151,7 +153,37 @@ export interface TemplateSceneProps {
   } | null;
 }
 
-const PLACEHOLDER_COLOR = '#1C1C1E';
+/** The two tones of the transparency checkerboard and the side of its squares (canvas pixels). */
+const CHECKER_DARK = '#1C1C1E';
+const CHECKER_LIGHT = '#2C2C2E';
+const CHECKER_SQUARE = 40;
+
+/** The light squares of the checkerboard of each format, built once. */
+const checkerPaths = new Map<CanvasFormat, SkPath>();
+
+function checkerPath(format: CanvasFormat): SkPath {
+  const cached = checkerPaths.get(format);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const { width, height } = CANVAS_FORMATS[format];
+  const builder = Skia.PathBuilder.Make();
+  for (let row = 0; row * CHECKER_SQUARE < height; row++) {
+    for (let column = row % 2; column * CHECKER_SQUARE < width; column += 2) {
+      builder.addRect(
+        Skia.XYWHRect(
+          column * CHECKER_SQUARE,
+          row * CHECKER_SQUARE,
+          CHECKER_SQUARE,
+          CHECKER_SQUARE,
+        ),
+      );
+    }
+  }
+  const path = builder.detach();
+  checkerPaths.set(format, path);
+  return path;
+}
 
 /**
  * Photos are usually much larger than the canvas; trilinear filtering (linear + mipmaps) keeps
@@ -164,8 +196,11 @@ export function TemplateScene({ format, layers, background, live = null }: Templ
   const { width, height } = canvas;
   return (
     <Group>
-      {background.kind === 'placeholder' ? (
-        <Rect x={0} y={0} width={width} height={height} color={PLACEHOLDER_COLOR} />
+      {background.kind === 'transparent' ? (
+        <Group clip={{ x: 0, y: 0, width, height }}>
+          <Rect x={0} y={0} width={width} height={height} color={CHECKER_DARK} />
+          <Path path={checkerPath(format)} color={CHECKER_LIGHT} />
+        </Group>
       ) : background.kind === 'photo' ? (
         <Group clip={{ x: 0, y: 0, width, height }}>
           <Group transform={background.matrix}>
@@ -476,21 +511,21 @@ interface RouteLinesProps {
 }
 
 function RouteLines({ routes, box, boxHeight, stroke }: RouteLinesProps) {
-  const path = Skia.Path.Make();
+  const builder = Skia.PathBuilder.Make();
   for (const route of routes) {
     route.forEach((point, i) => {
       const x = point.x - box / 2;
       const y = point.y - boxHeight / 2;
       if (i === 0) {
-        path.moveTo(x, y);
+        builder.moveTo(x, y);
       } else {
-        path.lineTo(x, y);
+        builder.lineTo(x, y);
       }
     });
   }
   return (
     <Path
-      path={path}
+      path={builder.detach()}
       style="stroke"
       strokeWidth={stroke.width}
       strokeCap="round"

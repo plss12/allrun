@@ -46,6 +46,9 @@ Store Expo Go supports it (`expo-upgrade` skill). Notes for that upgrade:
 - SDK 58's `jest-expo` requires Jest 30, while Expo's versions API still lists Jest 29.7; follow
   the unit-testing guide and exclude `jest` and `@types/jest` from `expo.install.exclude`.
 - `react-native-gesture-handler` jumps from 2.x to 3.x.
+- The editor's design step imports `usePreventRemove` from an internal path
+  (`expo-router/build/react-navigation/core`): SDK 57 ships it but only exports it publicly from
+  SDK 58. Import it from `expo-router` instead (`TODO(SDK 58)` in `src/app/editor.tsx`).
 
 Alternatives discarded: a development build or `eas go` (both require the paid Apple Developer
 account before it is otherwise needed), or pausing device testing for weeks.
