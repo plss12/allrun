@@ -13,29 +13,24 @@ import { customRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from '@/core/default-layout';
 import {
   canRestore,
-  createDocument,
   type DefaultTemplate,
   editLayers,
-  type EditorDocument,
+  type EditorLayers,
   INITIAL_FORMAT,
-  resetFraming,
-  restoreDocument,
-  sameDocument,
-  setFormat,
-  setFraming,
+  layoutTemplate,
   setLayerTransform,
 } from '@/core/editor-document';
-import { canRedo, canUndo, commit, createHistory, mapHistory, redo, undo } from '@/core/history';
+import { canRedo, canUndo, commit, createHistory, redo, undo } from '@/core/history';
 import {
   activityCatalog,
   catalogItemKey,
   type NewLayer,
   summaryCatalog,
 } from '@/core/layer-catalog';
-import { DEFAULT_FRAMING } from '@/core/photo-framing';
+import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
 import { selectActivities, summarize } from '@/core/summary';
-import { type CanvasFormat, CANVAS_FORMATS, type Layer } from '@/core/template';
+import { type CanvasFormat, CANVAS_FORMATS, type Layer, type Template } from '@/core/template';
 import {
   addLayer,
   canAddLayer,
@@ -189,13 +184,24 @@ function EditorWorkspace({
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
       : defaultSummaryTemplate(data.summary, format);
-  const [history, setHistory] = useState(() =>
-    createHistory(createDocument(defaultTemplate, INITIAL_FORMAT, DEFAULT_FRAMING)),
-  );
-  const { template, framing } = history.present;
-  /** Applies an edit as one undo step (none when it changes nothing). */
-  const edit = (change: (document: EditorDocument) => EditorDocument) =>
-    setHistory((current) => commit(current, change(current.present)));
+  // The format and the photo framing come first and stay out of the history: undo and Start
+  // over only change the widgets (see `EditorLayers`).
+  const [format, setFormat] = useState<CanvasFormat>(INITIAL_FORMAT);
+  const [framing, setFraming] = useState<PhotoFraming>(DEFAULT_FRAMING);
+  const [history, setHistory] = useState(() => createHistory<EditorLayers>(null));
+  const template = layoutTemplate(defaultTemplate, format, history.present);
+  /** Applies an edit of the widgets as one undo step (none when it changes nothing). */
+  const edit = (change: (template: Template) => Template) =>
+    setHistory((current) =>
+      commit(
+        current,
+        editLayers(
+          current.present,
+          layoutTemplate(defaultTemplate, format, current.present),
+          change,
+        ),
+      ),
+    );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Undo can take away the selected layer; then nothing is selected.
   const selected = template.layers.find((layer) => layer.id === selectedId) ?? null;
@@ -286,9 +292,7 @@ function EditorWorkspace({
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     const id = uniqueLayerId(template, catalogItemKey(item));
-    edit((document) =>
-      editLayers(document, (current) => addLayer(current, newLayer(item, id, current.format))),
-    );
+    edit((current) => addLayer(current, newLayer(item, id, current.format)));
     setSelectedId(id);
     setSheetOpen(false);
   };
@@ -304,14 +308,14 @@ function EditorWorkspace({
     if (textDraft === null) {
       return;
     }
-    edit((document) => editLayers(document, (current) => commitTextDraft(current, textDraft)));
+    edit((current) => commitTextDraft(current, textDraft));
     setSelectedId(textDraft.content.trim() === '' ? null : textDraft.layerId);
     setTextDraft(null);
   };
 
   const duplicateSelected = (id: string) => {
     const copyId = uniqueLayerId(template, id);
-    edit((document) => editLayers(document, (current) => duplicateLayer(current, id, copyId)));
+    edit((current) => duplicateLayer(current, id, copyId));
     setSelectedId(copyId);
   };
 
@@ -351,8 +355,8 @@ function EditorWorkspace({
         const id = nextPhotoId;
         setNextPhotoId(id + 1);
         setPhoto({ id, picked, editorUri: null, editorReencoded: false, exportUri: null });
-        // Changing the photo can't be undone: the framing of the old one goes away entirely.
-        setHistory((current) => mapHistory(current, resetFraming, sameDocument));
+        // Framings are proportions of one photo and mean nothing for another: center the new one.
+        setFraming(DEFAULT_FRAMING);
         void preparePhotoCopies(id, picked, false);
       }
     } catch (error) {
@@ -370,7 +374,7 @@ function EditorWorkspace({
           icon="arrow.counterclockwise"
           accessibilityLabel={t('editor.restore')}
           disabled={typing || !canRestore(history.present)}
-          onPress={() => edit((document) => restoreDocument(document, defaultTemplate))}
+          onPress={() => setHistory((current) => commit(current, null))}
         >
           {t('editor.restore')}
         </Stack.Toolbar.Button>
@@ -432,13 +436,11 @@ function EditorWorkspace({
               framing={framing}
               selectedId={typing ? null : selectedId}
               onSelect={setSelectedId}
-              onFramingChange={(next) => edit((document) => setFraming(document, next))}
+              onFramingChange={setFraming}
               onLayerTransform={(id, transform) =>
-                edit((document) => setLayerTransform(document, id, transform))
+                edit((current) => setLayerTransform(current, id, transform))
               }
-              onLayerRemove={(id) =>
-                edit((document) => editLayers(document, (current) => removeLayer(current, id)))
-              }
+              onLayerRemove={(id) => edit((current) => removeLayer(current, id))}
               trashLabel={t('editor.removeLayer')}
             />
             {photo !== null && canvasImage === null ? (
@@ -502,7 +504,7 @@ function EditorWorkspace({
             summary={data.mode === 'summary' ? data.summary : null}
             autoBucket={data.mode === 'summary' ? data.bucketSize : null}
             locale={locale}
-            onChange={(change) => edit((document) => editLayers(document, change))}
+            onChange={edit}
           />
         ) : (
           // The selection bar covers the formats instead of pushing them, so the canvas keeps its
@@ -526,7 +528,7 @@ function EditorWorkspace({
                     accessibilityLabel={t(`formats.${option}`)}
                     accessibilityState={{ selected: chosen }}
                     hitSlop={4}
-                    onPress={() => edit((document) => setFormat(document, option, defaultTemplate))}
+                    onPress={() => setFormat(option)}
                     style={({ pressed }) => ({
                       flex: 1,
                       height: FORMAT_HEIGHT,
@@ -591,20 +593,10 @@ function EditorWorkspace({
                   }
                   onStyle={() => setStyling(true)}
                   onDuplicate={() => duplicateSelected(selected.id)}
-                  onBringToFront={() =>
-                    edit((document) =>
-                      editLayers(document, (current) => moveLayer(current, selected.id, 'front')),
-                    )
-                  }
-                  onSendToBack={() =>
-                    edit((document) =>
-                      editLayers(document, (current) => moveLayer(current, selected.id, 'back')),
-                    )
-                  }
+                  onBringToFront={() => edit((current) => moveLayer(current, selected.id, 'front'))}
+                  onSendToBack={() => edit((current) => moveLayer(current, selected.id, 'back'))}
                   onRemove={() => {
-                    edit((document) =>
-                      editLayers(document, (current) => removeLayer(current, selected.id)),
-                    );
+                    edit((current) => removeLayer(current, selected.id));
                     setSelectedId(null);
                   }}
                   canDuplicate={canAddLayer(template)}

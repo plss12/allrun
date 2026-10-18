@@ -55,39 +55,5 @@ export function redo<T>(history: History<T>): History<T> {
   return { past: [...history.past, history.present], present: next, future: rest };
 }
 
-/**
- * Applies `change` to every value in the history (for a change that can't be undone, such as
- * replacing the photo), then drops the steps it made equal to their neighbour, so that every
- * undo or redo still changes something visible. Time O(n) calls to `change` and `equal`, space
- * O(n), for n values in the history.
- */
-export function mapHistory<T>(
-  history: History<T>,
-  change: (value: T) => T,
-  equal: (a: T, b: T) => boolean,
-): History<T> {
-  const present = change(history.present);
-  const past: T[] = [];
-  for (const value of history.past) {
-    const changed = change(value);
-    if (past.length === 0 || !equal(past[past.length - 1], changed)) {
-      past.push(changed);
-    }
-  }
-  if (past.length > 0 && equal(past[past.length - 1], present)) {
-    past.pop();
-  }
-  const future: T[] = [];
-  let previous = present;
-  for (const value of history.future) {
-    const changed = change(value);
-    if (!equal(previous, changed)) {
-      future.push(changed);
-      previous = changed;
-    }
-  }
-  return { past, present, future };
-}
-
 export const canUndo = (history: History<unknown>): boolean => history.past.length > 0;
 export const canRedo = (history: History<unknown>): boolean => history.future.length > 0;

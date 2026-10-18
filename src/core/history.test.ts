@@ -1,13 +1,4 @@
-import {
-  canRedo,
-  canUndo,
-  commit,
-  createHistory,
-  HISTORY_LIMIT,
-  mapHistory,
-  redo,
-  undo,
-} from './history';
+import { canRedo, canUndo, commit, createHistory, HISTORY_LIMIT, redo, undo } from './history';
 
 describe('history', () => {
   it('undoes and redoes committed values in order', () => {
@@ -51,27 +42,5 @@ describe('history', () => {
     }
     expect(history.past).toHaveLength(HISTORY_LIMIT);
     expect(history.past[0]).toBe(10);
-  });
-});
-
-describe('mapHistory', () => {
-  const same = (a: string, b: string) => a === b;
-
-  it('applies the change to every value', () => {
-    const history = undo(commit(commit(createHistory('a'), 'b'), 'c'));
-    const upper = mapHistory(history, (value) => value.toUpperCase(), same);
-    expect(upper).toEqual({ past: ['A'], present: 'B', future: ['C'] });
-  });
-
-  it('drops the steps that the change made invisible', () => {
-    // Values are "layout:framing"; resetting the framing leaves only the layout steps.
-    let history = createHistory('L1:F1');
-    for (const next of ['L1:F2', 'L2:F2', 'L2:F3', 'L3:F3', 'L3:F4']) {
-      history = commit(history, next);
-    }
-    history = undo(undo(history));
-    const reset = mapHistory(history, (value) => `${value.split(':')[0]}:F0`, same);
-    // Present was L2:F3, with L3:F3 and L3:F4 still to redo.
-    expect(reset).toEqual({ past: ['L1:F0'], present: 'L2:F0', future: ['L3:F0'] });
   });
 });

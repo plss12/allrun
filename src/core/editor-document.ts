@@ -1,146 +1,71 @@
 import type { LayerTransform } from './layer-transform';
-import { DEFAULT_FRAMING, type PhotoFraming } from './photo-framing';
 import type { CanvasFormat, Template } from './template';
 
 /**
- * Everything the user edits in the editor and can undo: the design and how the photo is framed.
- * The photo itself and the data (activity or summary) are not part of it.
+ * What undo, redo and Start over cover: the widgets. `null` while they are the default layout,
+ * which each format lays out its own way; the user's own layers once they edit them, which
+ * follow any format thanks to their relative positions.
+ *
+ * The format and the photo framing are left out: the user picks them first and then works on
+ * the widgets, so undoing a widget or starting the design over keeps them.
  */
-export interface EditorDocument {
-  readonly template: Template;
-  readonly framing: PhotoFraming;
-  /**
-   * Whether the user changed the layers. Until they do, each format shows its own default
-   * layout; afterwards a format change keeps their layers, which follow it thanks to their
-   * relative positions.
-   */
-  readonly customLayout: boolean;
-}
+export type EditorLayers = Template['layers'] | null;
 
 /** Default layout of the current activity or summary for a format. */
 export type DefaultTemplate = (format: CanvasFormat) => Template;
 
-/** Format a new design starts in, and goes back to when restored. */
+/** Format the editor opens in. */
 export const INITIAL_FORMAT: CanvasFormat = 'story';
 
-export function createDocument(
+/** The design on the canvas: the default layout of `format`, or the user's layers in it. */
+export function layoutTemplate(
   defaultTemplate: DefaultTemplate,
   format: CanvasFormat,
-  framing: PhotoFraming,
-): EditorDocument {
-  return { template: defaultTemplate(format), framing, customLayout: false };
+  layers: EditorLayers,
+): Template {
+  const template = defaultTemplate(format);
+  return layers === null ? template : { ...template, layers };
 }
 
 /**
- * Switches the canvas format: the default layout of `format` while the layout is untouched, the
- * user's own layers otherwise. Returns `document` itself when nothing changes, so committing the
- * result records no undo step.
- */
-export function setFormat(
-  document: EditorDocument,
-  format: CanvasFormat,
-  defaultTemplate: DefaultTemplate,
-): EditorDocument {
-  if (format === document.template.format) {
-    return document;
-  }
-  const template = document.customLayout
-    ? { ...document.template, format }
-    : defaultTemplate(format);
-  return { ...document, template };
-}
-
-/**
- * Moves, scales or rotates one layer; the layout becomes the user's own. Returns `document`
- * itself when the layer is missing or already there, so no empty undo step is recorded.
- */
-export function setLayerTransform(
-  document: EditorDocument,
-  id: string,
-  transform: LayerTransform,
-): EditorDocument {
-  const current = document.template.layers.find((layer) => layer.id === id);
-  if (current === undefined || sameTransform(current.transform, transform)) {
-    return document;
-  }
-  const layers = document.template.layers.map((layer) =>
-    layer.id === id ? { ...layer, transform } : layer,
-  );
-  return { ...document, template: { ...document.template, layers }, customLayout: true };
-}
-
-/**
- * Applies an edit of the layer list (see `template-edit.ts`); the layout becomes the user's own.
- * Returns `document` itself when the edit returns the template unchanged.
+ * Applies an edit (see `template-edit.ts`) to the design on the canvas, `template`; its layers
+ * become the user's own. Returns `layers` itself when the edit returns `template` unchanged, so
+ * committing the result records no undo step.
  */
 export function editLayers(
-  document: EditorDocument,
+  layers: EditorLayers,
+  template: Template,
   change: (template: Template) => Template,
-): EditorDocument {
-  const template = change(document.template);
-  if (template === document.template) {
-    return document;
+): EditorLayers {
+  const edited = change(template);
+  return edited === template ? layers : edited.layers;
+}
+
+/**
+ * Moves, scales or rotates one layer. Returns `template` itself when the layer is missing or
+ * already there, so no empty undo step is recorded.
+ */
+export function setLayerTransform(
+  template: Template,
+  id: string,
+  transform: LayerTransform,
+): Template {
+  const current = template.layers.find((layer) => layer.id === id);
+  if (current === undefined || sameTransform(current.transform, transform)) {
+    return template;
   }
-  return { ...document, template, customLayout: true };
+  const layers = template.layers.map((layer) =>
+    layer.id === id ? { ...layer, transform } : layer,
+  );
+  return { ...template, layers };
 }
 
 /**
- * Whether {@link restoreDocument} would change anything: the layers, the format or the photo
- * framing differ from how the editor started.
+ * Whether starting over would change anything: the user edited the widgets. Starting over goes
+ * back to the default layout (`null`) of whatever format is chosen, as one undo step.
  */
-export function canRestore(document: EditorDocument): boolean {
-  return (
-    document.customLayout ||
-    document.template.format !== INITIAL_FORMAT ||
-    !sameFraming(document.framing, DEFAULT_FRAMING)
-  );
-}
-
-/**
- * Starts over: the editor as it opened, with the initial format, its default layout and the photo
- * centered and straight. It undoes everything undo can (the photo itself stays: picking it is not
- * an undo step), and is one undo step itself. Returns `document` itself when there is nothing to
- * restore.
- */
-export function restoreDocument(
-  document: EditorDocument,
-  defaultTemplate: DefaultTemplate,
-): EditorDocument {
-  if (!canRestore(document)) {
-    return document;
-  }
-  return createDocument(defaultTemplate, INITIAL_FORMAT, DEFAULT_FRAMING);
-}
-
-/** Sets the photo framing; returns `document` itself when it is the same framing. */
-export function setFraming(document: EditorDocument, framing: PhotoFraming): EditorDocument {
-  return sameFraming(framing, document.framing) ? document : { ...document, framing };
-}
-
-/** Centers a new photo: framings are proportions of one photo and mean nothing for another. */
-export function resetFraming(document: EditorDocument): EditorDocument {
-  return setFraming(document, DEFAULT_FRAMING);
-}
-
-/**
- * Whether two documents look the same. Layouts compare by reference: every edit makes a new
- * template, so equal references mean no edit in between. Time and space O(1).
- */
-export function sameDocument(a: EditorDocument, b: EditorDocument): boolean {
-  return (
-    a.template === b.template &&
-    a.customLayout === b.customLayout &&
-    sameFraming(a.framing, b.framing)
-  );
-}
-
-function sameFraming(a: PhotoFraming, b: PhotoFraming): boolean {
-  return (
-    a.centerX === b.centerX &&
-    a.centerY === b.centerY &&
-    a.zoom === b.zoom &&
-    a.rotation === b.rotation
-  );
+export function canRestore(layers: EditorLayers): boolean {
+  return layers !== null;
 }
 
 function sameTransform(a: LayerTransform, b: LayerTransform): boolean {
