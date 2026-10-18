@@ -217,4 +217,23 @@ export const es: Translations = {
     square: 'Cuadrado 1:1',
     landscape: 'Horizontal 1,91:1',
   },
+  formatRatios: {
+    story: '9:16',
+    tall: '3:4',
+    portrait: '4:5',
+    square: '1:1',
+    landscape: '1,91:1',
+  },
+  fonts: {
+    inter: 'Moderna',
+    barlowCondensed: 'Deportiva',
+    archivoBlack: 'Fuerte',
+    playfairDisplay: 'Clásica',
+    spaceMono: 'Máquina',
+    orbitron: 'Futuro',
+    bangers: 'Cómic',
+    fredoka: 'Burbuja',
+    dancingScript: 'Firma',
+    permanentMarker: 'Rotulador',
+  },
 };

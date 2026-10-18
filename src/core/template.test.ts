@@ -2,7 +2,7 @@ import { isLayerAllowed, type Layer, parseTemplate, type Template } from './temp
 
 const center = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
 const textStyle = {
-  font: 'bebasNeue',
+  font: 'barlowCondensed',
   color: '#FFFFFF',
   bold: false,
   uppercase: true,

@@ -25,14 +25,21 @@ export const CANVAS_FORMATS = {
 
 export type CanvasFormat = keyof typeof CANVAS_FORMATS;
 
-/** Fonts bundled with the app. */
+/**
+ * Fonts bundled with the app, one of each style (the interface names them by style, not by
+ * font). Adding a font is compatible; removing one breaks the templates that use it.
+ */
 export const FONT_IDS = [
   'inter',
-  'bebasNeue',
-  'oswald',
   'barlowCondensed',
-  'spaceMono',
+  'archivoBlack',
   'playfairDisplay',
+  'spaceMono',
+  'orbitron',
+  'bangers',
+  'fredoka',
+  'dancingScript',
+  'permanentMarker',
 ] as const;
 
 export type FontId = (typeof FONT_IDS)[number];

@@ -98,13 +98,21 @@ interface EditorPhoto {
   readonly exportUri: string | null;
 }
 
-/** Formats in two rows whatever the screen width, so the controls always have the same height. */
-const FORMAT_ROWS: readonly (readonly CanvasFormat[])[] = [
-  ['story', 'tall', 'portrait'],
-  ['square', 'landscape'],
-];
-/** Two rows of formats take the same space as the style panel, which replaces them. */
-const FORMAT_HEIGHT = (STYLE_PANEL_HEIGHT - 8) / 2;
+/** Formats from tallest to widest, in one row: each button shows its shape and proportions. */
+const FORMATS: readonly CanvasFormat[] = ['story', 'tall', 'portrait', 'square', 'landscape'];
+/** The format buttons fit in the space of the style panel, which replaces them. */
+const FORMAT_HEIGHT = 72;
+/** Longest side of the shape drawn on each format button. */
+const FORMAT_SHAPE = 28;
+
+/** Size of a format's shape on its button: its proportions, with the longer side fixed. */
+function formatShape(format: CanvasFormat): { width: number; height: number } {
+  const { width, height } = CANVAS_FORMATS[format];
+  return width >= height
+    ? { width: FORMAT_SHAPE, height: (FORMAT_SHAPE * height) / width }
+    : { width: (FORMAT_SHAPE * width) / height, height: FORMAT_SHAPE };
+}
+
 const MAIN_BUTTON_HEIGHT = 50;
 /** Room under the controls, above the home indicator. */
 const CONTROLS_BOTTOM = 32;
@@ -501,55 +509,68 @@ function EditorWorkspace({
           // size when a layer gets selected.
           <View style={{ height: STYLE_PANEL_HEIGHT, justifyContent: 'center' }}>
             <View
-              style={{ gap: 8, opacity: selected === null ? 1 : 0 }}
+              style={{ flexDirection: 'row', gap: 8, opacity: selected === null ? 1 : 0 }}
               pointerEvents={selected === null ? 'auto' : 'none'}
               accessibilityElementsHidden={selected !== null}
               importantForAccessibility={selected === null ? 'auto' : 'no-hide-descendants'}
               accessibilityRole="tablist"
               accessibilityLabel={t('editor.format')}
             >
-              {FORMAT_ROWS.map((row) => (
-                <View key={row.join()} style={{ flexDirection: 'row', gap: 8 }}>
-                  {row.map((option) => (
-                    <Pressable
-                      key={option}
-                      accessibilityRole="tab"
-                      accessibilityState={{ selected: template.format === option }}
-                      hitSlop={4}
-                      onPress={() =>
-                        edit((document) => setFormat(document, option, defaultTemplate))
-                      }
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        height: FORMAT_HEIGHT,
-                        paddingHorizontal: 8,
-                        borderRadius: 999,
+              {FORMATS.map((option) => {
+                const chosen = template.format === option;
+                const ink = chosen ? colors.onTint : colors.label;
+                return (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="tab"
+                    accessibilityLabel={t(`formats.${option}`)}
+                    accessibilityState={{ selected: chosen }}
+                    hitSlop={4}
+                    onPress={() => edit((document) => setFormat(document, option, defaultTemplate))}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      height: FORMAT_HEIGHT,
+                      borderRadius: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      backgroundColor: chosen ? colors.tint : colors.secondarySystemBackground,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <View
+                      style={{
+                        height: FORMAT_SHAPE,
+                        alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor:
-                          template.format === option
-                            ? colors.tint
-                            : colors.secondarySystemBackground,
-                        opacity: pressed ? 0.7 : 1,
-                      })}
+                      }}
                     >
-                      <Text
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.8}
-                        maxFontSizeMultiplier={1.3}
+                      <View
                         style={{
-                          color: template.format === option ? colors.onTint : colors.label,
-                          fontSize: 14,
-                          fontWeight: '600',
-                          textAlign: 'center',
+                          ...formatShape(option),
+                          borderWidth: 2,
+                          borderRadius: 4,
+                          borderColor: ink,
                         }}
-                      >
-                        {t(`formats.${option}`)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ))}
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                      maxFontSizeMultiplier={1.3}
+                      style={{
+                        color: ink,
+                        fontSize: 13,
+                        fontWeight: '600',
+                        fontVariant: ['tabular-nums'],
+                      }}
+                    >
+                      {t(`formatRatios.${option}`)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
             {selected === null ? null : (
               <View

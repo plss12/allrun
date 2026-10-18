@@ -8,37 +8,56 @@ import { logError } from '@/ui/log';
 /** Skia font family name of each bundled font. */
 export const FONT_FAMILIES: Readonly<Record<FontId, string>> = {
   inter: 'Inter',
-  bebasNeue: 'Bebas Neue',
-  oswald: 'Oswald',
   barlowCondensed: 'Barlow Condensed',
-  spaceMono: 'Space Mono',
+  archivoBlack: 'Archivo Black',
   playfairDisplay: 'Playfair Display',
+  spaceMono: 'Space Mono',
+  orbitron: 'Orbitron',
+  bangers: 'Bangers',
+  fredoka: 'Fredoka',
+  dancingScript: 'Dancing Script',
+  permanentMarker: 'Permanent Marker',
 };
 
+// Fonts with a single weight are display fonts that are already heavy (or, for the marker,
+// hand-drawn), so they have no bold.
 const FONT_FILES = {
   [FONT_FAMILIES.inter]: [
     require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
     require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
   ],
-  // Bebas Neue only ships a regular weight; it is already a display font.
-  [FONT_FAMILIES.bebasNeue]: [
-    require('@expo-google-fonts/bebas-neue/400Regular/BebasNeue_400Regular.ttf'),
-  ],
-  [FONT_FAMILIES.oswald]: [
-    require('@expo-google-fonts/oswald/400Regular/Oswald_400Regular.ttf'),
-    require('@expo-google-fonts/oswald/700Bold/Oswald_700Bold.ttf'),
-  ],
   [FONT_FAMILIES.barlowCondensed]: [
     require('@expo-google-fonts/barlow-condensed/400Regular/BarlowCondensed_400Regular.ttf'),
     require('@expo-google-fonts/barlow-condensed/700Bold/BarlowCondensed_700Bold.ttf'),
+  ],
+  [FONT_FAMILIES.archivoBlack]: [
+    require('@expo-google-fonts/archivo-black/400Regular/ArchivoBlack_400Regular.ttf'),
+  ],
+  [FONT_FAMILIES.playfairDisplay]: [
+    require('@expo-google-fonts/playfair-display/400Regular/PlayfairDisplay_400Regular.ttf'),
+    require('@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf'),
   ],
   [FONT_FAMILIES.spaceMono]: [
     require('@expo-google-fonts/space-mono/400Regular/SpaceMono_400Regular.ttf'),
     require('@expo-google-fonts/space-mono/700Bold/SpaceMono_700Bold.ttf'),
   ],
-  [FONT_FAMILIES.playfairDisplay]: [
-    require('@expo-google-fonts/playfair-display/400Regular/PlayfairDisplay_400Regular.ttf'),
-    require('@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf'),
+  [FONT_FAMILIES.orbitron]: [
+    require('@expo-google-fonts/orbitron/400Regular/Orbitron_400Regular.ttf'),
+    require('@expo-google-fonts/orbitron/700Bold/Orbitron_700Bold.ttf'),
+  ],
+  [FONT_FAMILIES.bangers]: [
+    require('@expo-google-fonts/bangers/400Regular/Bangers_400Regular.ttf'),
+  ],
+  [FONT_FAMILIES.fredoka]: [
+    require('@expo-google-fonts/fredoka/400Regular/Fredoka_400Regular.ttf'),
+    require('@expo-google-fonts/fredoka/700Bold/Fredoka_700Bold.ttf'),
+  ],
+  [FONT_FAMILIES.dancingScript]: [
+    require('@expo-google-fonts/dancing-script/400Regular/DancingScript_400Regular.ttf'),
+    require('@expo-google-fonts/dancing-script/700Bold/DancingScript_700Bold.ttf'),
+  ],
+  [FONT_FAMILIES.permanentMarker]: [
+    require('@expo-google-fonts/permanent-marker/400Regular/PermanentMarker_400Regular.ttf'),
   ],
 };
 
@@ -51,7 +70,7 @@ export function useEditorFonts() {
  * Fonts whose lowercase letters are just uppercase ones (same height and width), so uppercase
  * changes nothing. Checked against the font files' glyph metrics.
  */
-const CAPS_ONLY: ReadonlySet<FontId> = new Set(['bebasNeue']);
+const CAPS_ONLY: ReadonlySet<FontId> = new Set(['bangers']);
 
 /** Whether a font only has capital letters, so the uppercase option would do nothing. */
 export function isCapsOnly(font: FontId): boolean {
@@ -66,11 +85,15 @@ export function hasBold(font: FontId): boolean {
 /** Family name of each font's regular weight in React Native, for the interface. */
 export const PREVIEW_FAMILIES: Readonly<Record<FontId, string>> = {
   inter: 'AllRunPreview-Inter',
-  bebasNeue: 'AllRunPreview-BebasNeue',
-  oswald: 'AllRunPreview-Oswald',
   barlowCondensed: 'AllRunPreview-BarlowCondensed',
-  spaceMono: 'AllRunPreview-SpaceMono',
+  archivoBlack: 'AllRunPreview-ArchivoBlack',
   playfairDisplay: 'AllRunPreview-PlayfairDisplay',
+  spaceMono: 'AllRunPreview-SpaceMono',
+  orbitron: 'AllRunPreview-Orbitron',
+  bangers: 'AllRunPreview-Bangers',
+  fredoka: 'AllRunPreview-Fredoka',
+  dancingScript: 'AllRunPreview-DancingScript',
+  permanentMarker: 'AllRunPreview-PermanentMarker',
 };
 
 /**

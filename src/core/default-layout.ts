@@ -3,7 +3,7 @@ import type { NewLayer } from './layer-catalog';
 import { availableMetrics } from './metrics';
 import type { PeriodSummary } from './summary';
 import { defaultSummaryMetrics, summaryHasDistance } from './summary-metrics';
-import type { CanvasFormat, Layer, Template } from './template';
+import type { CanvasFormat, FontId, Layer, Template } from './template';
 
 /**
  * Starting compositions for the editor: something good-looking on screen the moment a photo is
@@ -17,10 +17,16 @@ import type { CanvasFormat, Layer, Template } from './template';
 
 const WHITE = '#FFFFFF';
 
+/**
+ * The one font of every text in these compositions (a mix of fonts reads as clutter); starter
+ * templates will each bring their own. Condensed, so big numbers fit side by side.
+ */
+const FONT: FontId = 'barlowCondensed';
+
 type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
 
 const textStyle = (overrides: Partial<TextStyle> = {}): TextStyle => ({
-  font: 'inter',
+  font: FONT,
   color: WHITE,
   bold: false,
   uppercase: false,
@@ -57,59 +63,59 @@ const slot = (x: number, y: number, scale: number): Slot => ({ x, y, scale });
 
 const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
   story: {
-    title: slot(0.5, 0.1, 1),
-    subtitle: slot(0.5, 0.15, 0.7),
+    title: slot(0.5, 0.1, 1.35),
+    subtitle: slot(0.5, 0.15, 0.91),
     titleMaxWidth: 0.86,
     route: slot(0.5, 0.515, 1.15),
     routes: slot(0.5, 0.39, 1),
     chart: slot(0.5, 0.64, 1),
     metrics: { y: 0.81, from: 0, to: 1 },
-    scale: 1,
+    scale: 1.1,
     logo: slot(0.5, 0.94, 1),
   },
   tall: {
-    title: slot(0.5, 0.075, 0.8),
-    subtitle: slot(0.5, 0.125, 0.56),
+    title: slot(0.5, 0.075, 1.08),
+    subtitle: slot(0.5, 0.125, 0.728),
     titleMaxWidth: 0.86,
     route: slot(0.5, 0.5, 0.92),
     routes: slot(0.5, 0.37, 0.8),
     chart: slot(0.5, 0.63, 0.8),
     metrics: { y: 0.8, from: 0, to: 1 },
-    scale: 0.8,
+    scale: 0.88,
     logo: slot(0.5, 0.935, 0.9),
   },
   portrait: {
-    title: slot(0.5, 0.08, 0.75),
-    subtitle: slot(0.5, 0.135, 0.525),
+    title: slot(0.5, 0.08, 1.0125),
+    subtitle: slot(0.5, 0.135, 0.6825),
     titleMaxWidth: 0.86,
     route: slot(0.5, 0.5, 0.8625),
     routes: slot(0.5, 0.37, 0.75),
     chart: slot(0.5, 0.63, 0.75),
     metrics: { y: 0.8, from: 0, to: 1 },
-    scale: 0.75,
+    scale: 0.825,
     logo: slot(0.5, 0.935, 0.85),
   },
   square: {
-    title: slot(0.5, 0.08, 0.6),
-    subtitle: slot(0.5, 0.14, 0.42),
+    title: slot(0.5, 0.08, 0.81),
+    subtitle: slot(0.5, 0.14, 0.546),
     titleMaxWidth: 0.86,
     route: slot(0.5, 0.485, 0.69),
     routes: slot(0.5, 0.36, 0.6),
     chart: slot(0.5, 0.61, 0.6),
     metrics: { y: 0.79, from: 0, to: 1 },
-    scale: 0.6,
+    scale: 0.66,
     logo: slot(0.5, 0.93, 0.85),
   },
   // Two columns: graphics on the left, text on the right.
   landscape: {
-    title: slot(0.71, 0.15, 0.6),
-    subtitle: slot(0.71, 0.25, 0.42),
+    title: slot(0.71, 0.15, 0.81),
+    subtitle: slot(0.71, 0.25, 0.546),
     titleMaxWidth: 0.5,
     route: slot(0.25, 0.5, 0.75),
     routes: slot(0.25, 0.38, 0.5),
     chart: slot(0.25, 0.8, 0.42),
     metrics: { y: 0.56, from: 0.44, to: 0.98 },
-    scale: 0.55,
+    scale: 0.605,
     logo: slot(0.71, 0.86, 0.75),
   },
 };
@@ -189,7 +195,7 @@ export function defaultActivityTemplate(
       showLabel: true,
       showUnit: true,
       maxWidth: row.maxWidth,
-      style: textStyle({ font: 'bebasNeue' }),
+      style: textStyle({ bold: true, uppercase: true }),
       transform: at(row.slots[i]),
       opacity: 1,
     })),
@@ -235,7 +241,7 @@ export function defaultSummaryTemplate(
       color: WHITE,
       axisLabels: true,
       title: true,
-      font: 'inter',
+      font: FONT,
       bold: true,
       uppercase: true,
       align: 'center',
@@ -249,7 +255,7 @@ export function defaultSummaryTemplate(
       showLabel: true,
       showUnit: true,
       maxWidth: row.maxWidth,
-      style: textStyle({ font: 'bebasNeue' }),
+      style: textStyle({ bold: true, uppercase: true }),
       transform: at(row.slots[i]),
       opacity: 1,
     })),
@@ -273,7 +279,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         id,
         showLabel: true,
         showUnit: true,
-        style: textStyle({ font: 'bebasNeue' }),
+        style: textStyle({ bold: true, uppercase: true }),
         transform: centered(layout.scale),
         opacity: 1,
       };
@@ -321,7 +327,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
         color: WHITE,
         axisLabels: true,
         title: true,
-        font: 'inter',
+        font: FONT,
         bold: true,
         uppercase: true,
         align: 'center',

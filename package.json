@@ -31,10 +31,14 @@
     "preset": "jest-expo"
   },
   "dependencies": {
+    "@expo-google-fonts/archivo-black": "^0.4.1",
+    "@expo-google-fonts/bangers": "^0.4.1",
     "@expo-google-fonts/barlow-condensed": "^0.4.1",
-    "@expo-google-fonts/bebas-neue": "^0.4.1",
+    "@expo-google-fonts/dancing-script": "^0.4.2",
+    "@expo-google-fonts/fredoka": "^0.4.1",
     "@expo-google-fonts/inter": "^0.4.2",
-    "@expo-google-fonts/oswald": "^0.4.2",
+    "@expo-google-fonts/orbitron": "^0.4.2",
+    "@expo-google-fonts/permanent-marker": "^0.4.0",
     "@expo-google-fonts/playfair-display": "^0.4.2",
     "@expo-google-fonts/space-mono": "^0.4.2",
     "@expo/ui": "~57.0.25",

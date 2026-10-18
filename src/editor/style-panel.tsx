@@ -25,7 +25,7 @@ import { FONT_IDS, type FontId, type Layer, type Template } from '@/core/templat
 import { colors } from '@/theme/colors';
 
 import { hasUnit } from './editor-data';
-import { FONT_FAMILIES, hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts } from './fonts';
+import { hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts } from './fonts';
 
 /** A style edit of the template, applied by the editor as one undo step. */
 export type StyleChange = (template: Template) => Template;
@@ -421,7 +421,7 @@ function ColorPager({
   );
 }
 
-/** The bundled fonts, each name written in its own font. */
+/** The bundled fonts, each named by its style and written in itself. */
 function FontRow({
   font: current,
   onPick,
@@ -429,13 +429,14 @@ function FontRow({
   readonly font: FontId;
   readonly onPick: (font: FontId) => void;
 }) {
+  const { t } = useTranslation();
   const previews = usePreviewFonts();
   return (
     <Row>
       {FONT_IDS.map((font) => (
         <Chip
           key={font}
-          label={FONT_FAMILIES[font]}
+          label={t(`fonts.${font}`)}
           fontFamily={previews ? PREVIEW_FAMILIES[font] : undefined}
           selected={current === font}
           onPress={() => onPick(font)}

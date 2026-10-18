@@ -128,9 +128,9 @@ describe('setLayerOpacity', () => {
 
 describe('setTextStyle and setDataLabels', () => {
   it('changes only the given text properties', () => {
-    const edited = setTextStyle(activity, 'name', { font: 'oswald', uppercase: true });
+    const edited = setTextStyle(activity, 'name', { font: 'orbitron', uppercase: true });
     expect(find(edited, 'name')).toMatchObject({
-      style: { font: 'oswald', uppercase: true, bold: true, align: 'center' },
+      style: { font: 'orbitron', uppercase: true, bold: true, align: 'center' },
     });
     expect(parseTemplate(edited)).toEqual(edited);
     expect(setTextStyle(activity, 'name', { bold: true })).toBe(activity);
@@ -160,7 +160,7 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
       bucket: 'week',
       axisLabels: false,
       title: false,
-      font: 'oswald',
+      font: 'orbitron',
       bold: false,
       uppercase: false,
       align: 'left',
@@ -170,7 +170,7 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
       bucket: 'week',
       axisLabels: false,
       title: false,
-      font: 'oswald',
+      font: 'orbitron',
       bold: false,
       uppercase: false,
     });

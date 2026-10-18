@@ -216,6 +216,27 @@ export const en = {
     square: 'Square 1:1',
     landscape: 'Landscape 1.91:1',
   },
+  /** Each format's proportions, under its shape in the format picker. */
+  formatRatios: {
+    story: '9:16',
+    tall: '3:4',
+    portrait: '4:5',
+    square: '1:1',
+    landscape: '1.91:1',
+  },
+  /** Fonts go by the style they give, not by their names, as on Instagram. */
+  fonts: {
+    inter: 'Modern',
+    barlowCondensed: 'Sport',
+    archivoBlack: 'Strong',
+    playfairDisplay: 'Classic',
+    spaceMono: 'Typewriter',
+    orbitron: 'Future',
+    bangers: 'Comic',
+    fredoka: 'Bubble',
+    dancingScript: 'Signature',
+    permanentMarker: 'Marker',
+  },
 };
 
 type Strings<T> = { readonly [K in keyof T]: T[K] extends string ? string : Strings<T[K]> };

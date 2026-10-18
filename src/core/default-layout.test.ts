@@ -1,8 +1,8 @@
 import { makeActivity } from '@/test-utils/make-activity';
 import { makeSummary } from '@/test-utils/make-summary';
 
-import { defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
-import { parseTemplate } from './template';
+import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
+import { type Layer, parseTemplate } from './template';
 
 describe('defaultActivityTemplate', () => {
   it('is a valid template with the top three metrics of the sport', () => {
@@ -103,6 +103,32 @@ describe('default layouts in every format', () => {
     expect(scaleOf('story')).toBeGreaterThan(scaleOf('tall') ?? 0);
     expect(scaleOf('tall')).toBeGreaterThan(scaleOf('portrait') ?? 0);
     expect(scaleOf('portrait')).toBeGreaterThan(scaleOf('square') ?? 0);
+  });
+
+  it('writes every text, including widgets added later, in one font', () => {
+    const fontsOf = (layers: readonly Layer[]) =>
+      layers.flatMap((layer) => {
+        switch (layer.kind) {
+          case 'metric':
+          case 'summaryMetric':
+          case 'info':
+          case 'text':
+            return [layer.style.font];
+          case 'summaryChart':
+            return [layer.font];
+          default:
+            return [];
+        }
+      });
+    const fonts = new Set([
+      ...fontsOf(defaultActivityTemplate(makeActivity()).layers),
+      ...fontsOf(defaultSummaryTemplate(makeSummary()).layers),
+      ...fontsOf([
+        newLayer({ kind: 'text', content: 'PB!' }, 'text', 'story'),
+        newLayer({ kind: 'metric', metric: 'distance' }, 'metric', 'story'),
+      ]),
+    ]);
+    expect(fonts.size).toBe(1);
   });
 });
 
