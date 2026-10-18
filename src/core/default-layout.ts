@@ -45,7 +45,7 @@ interface Slot {
 interface FormatLayout {
   readonly title: Slot;
   readonly subtitle: Slot;
-  /** Widest the title and subtitle may be (fraction of the canvas width). */
+  /** Widest the title and subtitle may be on the canvas (fraction of its width). */
   readonly titleMaxWidth: number;
   /** The route of an activity; it has no chart beside it, so it takes more room. */
   readonly route: Slot;
@@ -69,7 +69,7 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     route: slot(0.5, 0.515, 1.15),
     routes: slot(0.5, 0.39, 1),
     chart: slot(0.5, 0.64, 1),
-    metrics: { y: 0.81, from: 0, to: 1 },
+    metrics: { y: 0.81, from: 0.03, to: 0.97 },
     scale: 1.1,
     logo: slot(0.5, 0.94, 1),
   },
@@ -80,7 +80,7 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     route: slot(0.5, 0.5, 0.92),
     routes: slot(0.5, 0.37, 0.8),
     chart: slot(0.5, 0.63, 0.8),
-    metrics: { y: 0.8, from: 0, to: 1 },
+    metrics: { y: 0.8, from: 0.03, to: 0.97 },
     scale: 0.88,
     logo: slot(0.5, 0.935, 0.9),
   },
@@ -91,7 +91,7 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     route: slot(0.5, 0.5, 0.8625),
     routes: slot(0.5, 0.37, 0.75),
     chart: slot(0.5, 0.63, 0.75),
-    metrics: { y: 0.8, from: 0, to: 1 },
+    metrics: { y: 0.8, from: 0.03, to: 0.97 },
     scale: 0.825,
     logo: slot(0.5, 0.935, 0.85),
   },
@@ -102,7 +102,7 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     route: slot(0.5, 0.485, 0.69),
     routes: slot(0.5, 0.36, 0.6),
     chart: slot(0.5, 0.61, 0.6),
-    metrics: { y: 0.79, from: 0, to: 1 },
+    metrics: { y: 0.79, from: 0.03, to: 0.97 },
     scale: 0.66,
     logo: slot(0.5, 0.93, 0.85),
   },
@@ -114,7 +114,7 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     route: slot(0.25, 0.5, 0.75),
     routes: slot(0.25, 0.38, 0.5),
     chart: slot(0.25, 0.8, 0.42),
-    metrics: { y: 0.56, from: 0.44, to: 0.98 },
+    metrics: { y: 0.56, from: 0.44, to: 0.96 },
     scale: 0.605,
     logo: slot(0.71, 0.86, 0.75),
   },
@@ -123,14 +123,21 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
 const at = ({ x, y, scale }: Slot) => ({ x, y, scale, rotation: 0 });
 
 /**
+ * A layer's `maxWidth` for it to be at most `width` wide on the canvas: `maxWidth` applies before
+ * the layer's scale. Capped at the whole canvas, the most the schema allows.
+ */
+const fitWidth = (width: number, scale: number): number => Math.min(1, width / scale);
+
+/**
  * Centers and maximum width of a row of `count` widgets across `from`..`to`: the span split into
- * equal columns, each widget a little narrower than its column so neighbours never touch.
+ * equal columns, each widget narrower than its column. A long value ("4362,23 KM") shrinks to
+ * that width, which keeps it clear of its neighbours and of the canvas edges.
  */
 function metricsRow(layout: FormatLayout, count: number) {
   const { from, to, y } = layout.metrics;
   const column = (to - from) / count;
   return {
-    maxWidth: column * 0.9,
+    maxWidth: fitWidth(column * 0.88, layout.scale),
     slots: Array.from({ length: count }, (_, i) =>
       slot(from + column * (i + 0.5), y, layout.scale),
     ),
@@ -174,7 +181,7 @@ export function defaultActivityTemplate(
       id: 'name',
       kind: 'info',
       field: 'activityName',
-      maxWidth: layout.titleMaxWidth,
+      maxWidth: fitWidth(layout.titleMaxWidth, layout.title.scale),
       style: textStyle({ bold: true }),
       transform: at(layout.title),
       opacity: 1,
@@ -183,7 +190,7 @@ export function defaultActivityTemplate(
       id: 'date',
       kind: 'info',
       field: 'activityDate',
-      maxWidth: layout.titleMaxWidth,
+      maxWidth: fitWidth(layout.titleMaxWidth, layout.subtitle.scale),
       style: textStyle(),
       transform: at(layout.subtitle),
       opacity: 0.9,
@@ -221,7 +228,7 @@ export function defaultSummaryTemplate(
       id: 'period',
       kind: 'info',
       field: 'periodName',
-      maxWidth: layout.titleMaxWidth,
+      maxWidth: fitWidth(layout.titleMaxWidth, layout.title.scale),
       style: textStyle({ bold: true, uppercase: true }),
       transform: at(layout.title),
       opacity: 1,
@@ -285,12 +292,13 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
       };
     case 'info': {
       const isTitle = item.field !== 'activityDate';
+      const scale = isTitle ? layout.title.scale : layout.subtitle.scale;
       return {
         ...item,
         id,
-        maxWidth: layout.titleMaxWidth,
+        maxWidth: fitWidth(layout.titleMaxWidth, scale),
         style: textStyle({ bold: isTitle, uppercase: item.field === 'periodName' }),
-        transform: centered(isTitle ? layout.title.scale : layout.subtitle.scale),
+        transform: centered(scale),
         opacity: isTitle ? 1 : 0.9,
       };
     }
@@ -298,7 +306,7 @@ export function newLayer(item: NewLayer, id: string, format: CanvasFormat): Laye
       return {
         ...item,
         id,
-        maxWidth: layout.titleMaxWidth,
+        maxWidth: fitWidth(layout.titleMaxWidth, layout.title.scale),
         style: textStyle({ bold: true }),
         transform: centered(layout.title.scale),
         opacity: 1,

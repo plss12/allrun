@@ -36,7 +36,8 @@ describe('defaultActivityTemplate', () => {
     const xs = defaultActivityTemplate(gym).layers.flatMap((layer) =>
       layer.kind === 'metric' ? [layer.transform.x] : [],
     );
-    expect(xs.map((x) => Number(x.toFixed(3)))).toEqual([0.25, 0.75]);
+    // Each in the middle of its half of the row, which spans 0.03..0.97 of the canvas.
+    expect(xs.map((x) => Number(x.toFixed(3)))).toEqual([0.265, 0.735]);
   });
 
   it('uses the requested format', () => {
@@ -87,11 +88,34 @@ describe('default layouts in every format', () => {
           )
           .sort((a, b) => a.transform.x - b.transform.x);
         expect(row).toHaveLength(3);
+        // `maxWidth` applies before the layer's scale.
+        const widthOf = (layer: (typeof row)[number]) =>
+          (layer.maxWidth ?? 1) * layer.transform.scale;
         row.slice(1).forEach((layer, i) => {
           const previous = row[i];
-          const halfWidths = ((layer.maxWidth ?? 1) + (previous.maxWidth ?? 1)) / 2;
+          const halfWidths = (widthOf(layer) + widthOf(previous)) / 2;
           expect(layer.transform.x - previous.transform.x).toBeGreaterThanOrEqual(halfWidths);
         });
+        expect(row[0].transform.x - widthOf(row[0]) / 2).toBeGreaterThan(0);
+        const last = row[row.length - 1];
+        expect(last.transform.x + widthOf(last) / 2).toBeLessThan(1);
+      }
+    }
+  });
+
+  it('keeps every text that may shrink inside the canvas, at its scale', () => {
+    for (const format of formats) {
+      for (const template of [
+        defaultActivityTemplate(makeActivity(), format),
+        defaultSummaryTemplate(makeSummary(), format),
+      ]) {
+        for (const layer of template.layers) {
+          if ('maxWidth' in layer && layer.maxWidth !== undefined) {
+            const half = (layer.maxWidth * layer.transform.scale) / 2;
+            expect(layer.transform.x - half).toBeGreaterThanOrEqual(0);
+            expect(layer.transform.x + half).toBeLessThanOrEqual(1);
+          }
+        }
       }
     }
   });
