@@ -67,7 +67,8 @@ which flashes the previous screen.
 "Add element" opens a gallery, like the templates sheet: every widget the activity or period can
 show, drawn live with the user's data and in the design's font, in sections (distance, time, pace
 and speed, elevation, more data, text, route, charts, logos). Each variant is a widget of its own:
-a distance with two, one or no decimals, each time and pace notation, each date format, a period's
+each time notation (never rounded: distances keep their two decimals and times their
+seconds), each pace notation, each date format, a period's
 name in each format that writes it differently, the route solid, glowing, dashed or dotted,
 splits without values, with their pace, or with their pace and change in altitude, and the logo's name,
 monogram or both. A tap adds the one shown, centered. The variants of a widget are drawn at one

@@ -6,7 +6,6 @@ import { availableSummaryMetrics, summaryHasDistance } from './summary-metrics';
 import {
   type ActivityChartSeries,
   DATE_FORMATS,
-  DISTANCE_DECIMALS,
   type Layer,
   type LayerKind,
   PERIOD_FORMATS,
@@ -18,7 +17,7 @@ import {
  * The widgets the user can add to the canvas, grouped in sections for the editor's gallery. Only
  * what the current activity or period can show is offered: metrics the activity has a value for,
  * the route when there is one, the charts it recorded data for. Each way of writing or drawing a
- * widget is a widget of its own (a distance with 2, 1 or no decimals; a dashed route; splits as
+ * widget is a widget of its own (a time as a clock or in units; a dashed route; splits as
  * rows; a chart with its average line), so the gallery shows every variant ready-made and the
  * style panel keeps only the look (color, font, opacity…). To change a variant, the user replaces
  * the widget. `default-layout.ts` turns a pick into a layer with the default look.
@@ -26,7 +25,7 @@ import {
 
 type LayerOf<K extends LayerKind> = Extract<Layer, { kind: K }>;
 type LineStyle = NonNullable<LayerOf<'route'>['stroke']['line']>;
-type DataFormat = 'decimals' | 'timeNotation' | 'paceNotation';
+type DataFormat = 'timeNotation' | 'paceNotation';
 type LineLook = { readonly line?: LineStyle; readonly glow?: boolean };
 
 /**
@@ -83,7 +82,7 @@ export interface CatalogSection {
 }
 
 /**
- * The widget an item is a variant of: the same for a distance with 2, 1 or no decimals, or for
+ * The widget an item is a variant of: the same for a time as a clock or in units, or for
  * every line of a route. The gallery draws the variants of a widget at one size, so they compare.
  */
 export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
@@ -117,7 +116,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
     switch (item.kind) {
       case 'metric':
       case 'summaryMetric':
-        return [item.decimals, item.timeNotation, item.paceNotation];
+        return [item.timeNotation, item.paceNotation];
       case 'info':
         return [item.dateFormat, item.periodFormat];
       case 'logo':
@@ -149,7 +148,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
 }
 
 type DataItem = Extract<CatalogItem, { kind: 'metric' | 'summaryMetric' }>;
-type Writing = 'distance' | 'time' | 'pace' | 'plain';
+type Writing = 'time' | 'pace' | 'plain';
 
 /** A catalog item and the section it goes in. */
 type Entry = readonly [CatalogSectionId, CatalogItem];
@@ -158,9 +157,9 @@ type Entry = readonly [CatalogSectionId, CatalogItem];
 const METRIC_GROUPS: Readonly<
   Record<MetricId | SummaryMetricId, readonly [CatalogSectionId, Writing]>
 > = {
-  distance: ['distance', 'distance'],
-  totalDistance: ['distance', 'distance'],
-  longestDistance: ['distance', 'distance'],
+  distance: ['distance', 'plain'],
+  totalDistance: ['distance', 'plain'],
+  longestDistance: ['distance', 'plain'],
   movingTime: ['time', 'time'],
   elapsedTime: ['time', 'time'],
   totalMovingTime: ['time', 'time'],
@@ -181,19 +180,18 @@ const METRIC_GROUPS: Readonly<
 };
 
 /**
- * A data widget in each way its value can be written (its decimals, its time or pace notation),
- * in its section. The first is the default, which the layer leaves out.
+ * A data widget in each way its value can be written (its time or pace notation), in its
+ * section. The first is the default, which the layer leaves out. Nothing is rounded: distances
+ * keep their two decimals and times their seconds (ADR 009).
  */
 function dataEntries(plain: DataItem): Entry[] {
   const [section, writing] = METRIC_GROUPS[plain.metric];
   const variants: DataItem[] =
-    writing === 'distance'
-      ? [plain, ...DISTANCE_DECIMALS.slice(1).map((decimals) => ({ ...plain, decimals }))]
-      : writing === 'time'
-        ? [plain, ...TIME_NOTATIONS.slice(1).map((timeNotation) => ({ ...plain, timeNotation }))]
-        : writing === 'pace'
-          ? [plain, { ...plain, paceNotation: 'marks' }]
-          : [plain];
+    writing === 'time'
+      ? [plain, ...TIME_NOTATIONS.slice(1).map((timeNotation) => ({ ...plain, timeNotation }))]
+      : writing === 'pace'
+        ? [plain, { ...plain, paceNotation: 'marks' }]
+        : [plain];
   return variants.map((item) => [section, item]);
 }
 

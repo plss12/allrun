@@ -264,7 +264,7 @@ export function setTextStyle(
 
 /**
  * Whether a metric shows its name above the value and its unit after it. How its value reads (a
- * pace's marks, a time's notation, a distance's decimals) is chosen in the gallery.
+ * pace's marks, a time's notation) is chosen in the gallery.
  */
 export function setDataLabels(
   template: Template,

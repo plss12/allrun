@@ -47,6 +47,9 @@ comes later.
   widgets.
 - **Variants scroll inside their tile**, with dots, instead of filling the gallery with one tile
   each (date formats, data shown, logo versions…).
+- **Nothing rounded:** distances keep their two decimals and an activity's times their seconds,
+  in every widget, chart and design. A period's total time drops the seconds, which say nothing
+  over a week or more. Designs saved with rounded data read without the rounding.
 - **Sport icons** are vectors drawn with Skia, from an icon set with a free license; SF Symbols
   cannot be drawn into an exported image.
 - **Calories** come from the activity's detail (Strava only gives them there), fetched on demand

@@ -94,10 +94,10 @@ export const DATE_FORMATS = [
 export type DateFormat = (typeof DATE_FORMATS)[number];
 
 /**
- * How a time reads: `clock` "1:40:30" (a period's total "280:40 h"), `units` "1h 40min 30s"
- * ("280h 40min") and `rounded`, one unit less precise: "1h 41min" ("281h").
+ * How a time reads: `clock` "1:40:30" (a period's total "280:40 h") or `units` "1h 40min 30s"
+ * ("280h 40min"). Never rounded: an activity keeps its seconds (ADR 009).
  */
-export const TIME_NOTATIONS = ['clock', 'units', 'rounded'] as const;
+export const TIME_NOTATIONS = ['clock', 'units'] as const;
 
 export type TimeNotation = (typeof TIME_NOTATIONS)[number];
 
@@ -117,9 +117,6 @@ export type ActivityChartSeries = (typeof ACTIVITY_CHART_SERIES)[number];
 export const PERIOD_FORMATS = ['full', 'noYear', 'short', 'numeric'] as const;
 
 export type PeriodFormat = (typeof PERIOD_FORMATS)[number];
-
-/** Decimals a distance can show: `10,02`, `10,0` or `10` km. */
-export const DISTANCE_DECIMALS = [2, 1, 0] as const;
 
 /**
  * What goes behind a text, as in story editors: nothing, or a box of the color opposite to the
@@ -208,10 +205,14 @@ const dataLabels = {
   paceNotation: z.enum(['colon', 'marks']).optional(),
   /**
    * How a time reads (see `TIME_NOTATIONS`); `clock` when absent. Other metrics ignore it.
+   * Templates saved while times could be rounded (`rounded`) read in units, with their seconds;
+   * those saved while distances could drop decimals (`decimals`) read with both: the field is
+   * dropped.
    */
-  timeNotation: z.enum(TIME_NOTATIONS).optional(),
-  /** Decimals of a distance (see `DISTANCE_DECIMALS`); 2 when absent. Others ignore it. */
-  decimals: z.union([z.literal(2), z.literal(1), z.literal(0)]).optional(),
+  timeNotation: z
+    .enum([...TIME_NOTATIONS, 'rounded'])
+    .transform((notation) => (notation === 'rounded' ? 'units' : notation))
+    .optional(),
 };
 
 export const layerSchema = z.discriminatedUnion('kind', [

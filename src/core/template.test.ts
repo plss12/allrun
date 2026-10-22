@@ -92,13 +92,22 @@ describe('parseTemplate', () => {
   });
 
   it('reads a time notation, optional so older templates still read', () => {
-    const time = { ...distance, metric: 'movingTime', timeNotation: 'rounded' };
+    const time = { ...distance, metric: 'movingTime', timeNotation: 'units' };
     expect(parseTemplate({ ...activityTemplate, layers: [time] }).layers[0]).toMatchObject({
-      timeNotation: 'rounded',
+      timeNotation: 'units',
     });
     expect(() =>
       parseTemplate({ ...activityTemplate, layers: [{ ...time, timeNotation: 'words' }] }),
     ).toThrow(/timeNotation/);
+  });
+
+  it('reads rounded data saved before as they were recorded: times in units, all decimals', () => {
+    const rounded = { ...distance, metric: 'movingTime', timeNotation: 'rounded' };
+    expect(parseTemplate({ ...activityTemplate, layers: [rounded] }).layers[0]).toMatchObject({
+      timeNotation: 'units',
+    });
+    const short = parseTemplate({ ...activityTemplate, layers: [{ ...distance, decimals: 0 }] });
+    expect(short.layers[0]).not.toHaveProperty('decimals');
   });
 
   it('reads a date format, optional so older templates still read', () => {
@@ -122,7 +131,6 @@ describe('parseTemplate', () => {
   it('reads the newer style options, all optional, and rejects unknown values', () => {
     const styled = {
       ...distance,
-      decimals: 1,
       style: { ...textStyle, backdrop: 'soft', letterSpacing: 'wide' },
     };
     const lined = {
@@ -134,7 +142,6 @@ describe('parseTemplate', () => {
       lined,
     ]);
     for (const broken of [
-      { ...styled, decimals: 3 },
       { ...styled, style: { ...textStyle, backdrop: 'neon' } },
       { ...lined, stroke: { ...route.stroke, line: 'wavy' } },
     ]) {

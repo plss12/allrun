@@ -14,7 +14,6 @@ import {
   chartValueText,
   type EditorData,
   hasUnit,
-  isDistanceLayer,
   isPaceLayer,
   isTimeLayer,
   layerText,
@@ -104,7 +103,7 @@ describe('layerText for an activity', () => {
     );
   });
 
-  it('writes a time in words or rounded when the layer asks for it', () => {
+  it('writes a time in words, to the second, when the layer asks for it', () => {
     const time = layer('metric-movingTime', layers);
     if (time.kind !== 'metric') {
       throw new Error('Expected a metric layer');
@@ -115,7 +114,6 @@ describe('layerText for an activity', () => {
       value: '1h 40min 30seg',
       unit: null,
     });
-    expect(layerText({ ...time, timeNotation: 'rounded' }, long, context)?.value).toBe('1h 41min');
     // Other metrics ignore it.
     const distance = layer('metric-distance', layers);
     expect(
@@ -125,17 +123,6 @@ describe('layerText for an activity', () => {
         context,
       )?.value,
     ).toBe('10,00');
-  });
-
-  it('writes a distance with the decimals the layer asks for, alongside other options', () => {
-    const distance = layer('metric-distance', layers);
-    if (distance.kind !== 'metric') {
-      throw new Error('Expected a metric layer');
-    }
-    expect(layerText({ ...distance, decimals: 1 }, activityData, context)?.value).toBe('10,0');
-    expect(
-      layerText({ ...distance, decimals: 0, paceNotation: 'marks' }, activityData, context)?.value,
-    ).toBe('10');
   });
 
   it('returns nothing for summary layers and non-text layers', () => {
@@ -174,7 +161,6 @@ describe('layerText for a summary', () => {
       value: '1h 40min',
       unit: null,
     });
-    expect(layerText({ ...total, timeNotation: 'rounded' }, data, context)?.value).toBe('2h');
     expect(layerText(layer('period', layers), data, context)?.value).toBe('12 oct – 18 oct 2026');
     const period = layer('period', layers);
     expect(
@@ -248,14 +234,14 @@ describe('lineAxisLabels', () => {
   it("label the ends of a line with how far it runs, in the user's unit", () => {
     expect(lineAxisLabels({ axis: 'distance', axisEnd: 16_080 }, context)).toEqual([
       '0',
-      '16,1 km',
+      '16,08 km',
     ]);
     expect(
       lineAxisLabels(
         { axis: 'distance', axisEnd: 16_093.44 },
         { ...context, unit: 'mi', locale: 'en' },
       ),
-    ).toEqual(['0', '10.0 mi']);
+    ).toEqual(['0', '10.00 mi']);
     expect(lineAxisLabels({ axis: 'time', axisEnd: 2700 }, context)).toEqual(['0:00', '45:00']);
   });
 });
@@ -303,21 +289,6 @@ describe('chart texts', () => {
     expect(splitRowTexts({ ...row, elevationDifference: 0.2 }, 'pace', context).elevation).toBe(
       '0 m',
     );
-  });
-});
-
-describe('isDistanceLayer', () => {
-  it('is true for the distance of an activity and the distances of a period', () => {
-    const distance = layer('metric-distance', defaultActivityTemplate(activity).layers);
-    const total = layer('total-totalDistance', defaultSummaryTemplate(makeSummary()).layers);
-    if (distance.kind !== 'metric' || total.kind !== 'summaryMetric') {
-      throw new Error('Expected data layers');
-    }
-    expect(isDistanceLayer(distance)).toBe(true);
-    expect(isDistanceLayer({ ...distance, metric: 'pace' })).toBe(false);
-    expect(isDistanceLayer(total)).toBe(true);
-    expect(isDistanceLayer({ ...total, metric: 'longestDistance' })).toBe(true);
-    expect(isDistanceLayer({ ...total, metric: 'activityCount' })).toBe(false);
   });
 });
 

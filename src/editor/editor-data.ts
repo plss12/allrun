@@ -194,23 +194,9 @@ export function layerText(layer: Layer, data: EditorData, context: TextContext):
   return null;
 }
 
-/**
- * A data widget's value in the notation it asks for: paces with marks (`5'28"`) or not, and
- * distances with the decimals it wants.
- */
+/** A data widget's value in the notation it asks for: paces with marks (`5'28"`) or not. */
 function inNotation(layer: DataLayer, display: DisplayMetric): DisplayMetric {
-  // Each option only touches its own kind of value, so all of them apply.
-  const marked = layer.paceNotation === 'marks' ? withPaceMarks(display) : display;
-  return marked.kind === 'number' && isDistanceLayer(layer)
-    ? { ...marked, fractionDigits: layer.decimals ?? 2 }
-    : marked;
-}
-
-const DISTANCES: ReadonlySet<string> = new Set(['distance', 'totalDistance', 'longestDistance']);
-
-/** Whether a data widget shows a distance, which can be written with 2, 1 or no decimals. */
-export function isDistanceLayer(layer: DataLayer): boolean {
-  return DISTANCES.has(layer.metric);
+  return layer.paceNotation === 'marks' ? withPaceMarks(display) : display;
 }
 
 type DataLayer = Extract<Layer, { kind: 'metric' | 'summaryMetric' }>;
@@ -226,24 +212,16 @@ export function isTimeLayer(layer: DataLayer): boolean {
 }
 
 /**
- * A time written in words, when the widget asks for it: "1h 40min 30s" for an activity, or
- * rounded to the minute ("1h 41min"); a period's total, which drops the seconds anyway, to the
- * minute ("280h 40min") or rounded to the hour ("281h"). `null` for the clock notation and for
- * widgets that don't show a time. The words carry the units, so the widget's own unit is left out.
+ * A time written in words, when the widget asks for it: "1h 40min 30s" for an activity, and to
+ * the minute for a period's total, whose seconds say nothing ("280h 40min"). `null` for the clock
+ * notation and for widgets that don't show a time. The words carry the units, so the widget's own
+ * unit is left out.
  */
 function timeInWords(layer: DataLayer, seconds: number, context: TextContext): string | null {
-  const notation = layer.timeNotation ?? 'clock';
-  if (notation === 'clock' || !isTimeLayer(layer)) {
+  if ((layer.timeNotation ?? 'clock') === 'clock' || !isTimeLayer(layer)) {
     return null;
   }
-  const smallest: DurationUnit =
-    layer.kind === 'metric'
-      ? notation === 'units'
-        ? 'seconds'
-        : 'minutes'
-      : notation === 'units'
-        ? 'minutes'
-        : 'hours';
+  const smallest: DurationUnit = layer.kind === 'metric' ? 'seconds' : 'minutes';
   return durationParts(seconds, smallest)
     .map(({ amount, unit }) => `${amount}${context.durationUnits[unit]}`)
     .join(' ');
@@ -320,7 +298,7 @@ export function activityChartTitleKey(series: ActivityChartSeries): ActivityChar
 
 /**
  * Labels at both ends of a line chart: where it starts and how far it runs, in distance
- * ("0", "16,1 km") or, without one, in time ("0:00", "45:00").
+ * ("0", "16,08 km") or, without one, in time ("0:00", "45:00").
  */
 export function lineAxisLabels(
   series: Pick<LineSeries, 'axis' | 'axisEnd'>,
@@ -333,11 +311,7 @@ export function lineAxisLabels(
     unit: context.unit,
     sportFamily: 'run',
   });
-  const end = formatMetric(
-    display.kind === 'number' ? { ...display, fractionDigits: 1 } : display,
-    context.locale,
-  );
-  return ['0', withUnit(end, context)];
+  return ['0', withUnit(formatMetric(display, context.locale), context)];
 }
 
 /** How a sport writes how fast it went: a pace, a swimming pace or a speed. */

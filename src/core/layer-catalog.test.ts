@@ -67,19 +67,14 @@ describe('activityCatalog', () => {
   });
 
   it('offers each way of writing a value as a widget, the default first', () => {
-    expect(sectionKeys(trail, 'distance')).toEqual([
-      'metric-distance',
-      'metric-distance-1',
-      'metric-distance-0',
-    ]);
+    // Never rounded: distances keep their two decimals, and times their seconds.
+    expect(sectionKeys(trail, 'distance')).toEqual(['metric-distance']);
     // In the sport's order: a trail run's moving time before its elapsed time.
     expect(sectionKeys(trail, 'time')).toEqual([
       'metric-movingTime',
       'metric-movingTime-units',
-      'metric-movingTime-rounded',
       'metric-elapsedTime',
       'metric-elapsedTime-units',
-      'metric-elapsedTime-rounded',
     ]);
     expect(sectionKeys(trail, 'pace')).toEqual(['metric-pace', 'metric-pace-marks']);
     expect(sectionKeys(trail, 'elevation')).toEqual([
@@ -184,8 +179,8 @@ describe('activityCatalog', () => {
   );
 
   it('carries each variant into its layer', () => {
-    expect(layerOf({ kind: 'metric', metric: 'distance', decimals: 0 })).toMatchObject({
-      decimals: 0,
+    expect(layerOf({ kind: 'metric', metric: 'movingTime', timeNotation: 'units' })).toMatchObject({
+      timeNotation: 'units',
     });
     expect(layerOf({ kind: 'metric', metric: 'pace', paceNotation: 'marks' })).toMatchObject({
       paceNotation: 'marks',
@@ -210,7 +205,7 @@ describe('activityCatalog', () => {
 
   it('leaves the optional fields out of the default variants, as layers were before', () => {
     const newDistance = layerOf({ kind: 'metric', metric: 'distance' });
-    expect(newDistance).not.toHaveProperty('decimals');
+    expect(newDistance).not.toHaveProperty('timeNotation');
     const route = layerOf({ kind: 'route' });
     expect(route).toMatchObject({ stroke: { color: '#FFFFFF', width: 8 } });
     expect(route).not.toHaveProperty('stroke.line');
@@ -239,16 +234,11 @@ describe('summaryCatalog', () => {
       'timeChart',
       'brand',
     ]);
-    expect(keys(catalog).slice(0, 13)).toEqual([
+    expect(keys(catalog).slice(0, 8)).toEqual([
       'summaryMetric-totalDistance',
-      'summaryMetric-totalDistance-1',
-      'summaryMetric-totalDistance-0',
       'summaryMetric-longestDistance',
-      'summaryMetric-longestDistance-1',
-      'summaryMetric-longestDistance-0',
       'summaryMetric-totalMovingTime',
       'summaryMetric-totalMovingTime-units',
-      'summaryMetric-totalMovingTime-rounded',
       'summaryMetric-averagePace',
       'summaryMetric-averagePace-marks',
       'summaryMetric-totalElevationGain',
@@ -313,7 +303,6 @@ describe('summaryCatalog', () => {
     expect(keys(catalog).filter((key) => key.startsWith('summaryMetric'))).toEqual([
       'summaryMetric-totalMovingTime',
       'summaryMetric-totalMovingTime-units',
-      'summaryMetric-totalMovingTime-rounded',
       'summaryMetric-activityCount',
     ]);
     expect(catalog.map((section) => section.id)).not.toContain('distanceChart');
