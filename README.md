@@ -43,3 +43,7 @@ releases write an incomplete `package-lock.json` that breaks `npm ci`.
 Source available under the [PolyForm Strict License 1.0.0](LICENSE.md) © Pedro Luis Soto Santos:
 you may read and use the code for noncommercial purposes, but not change, build on or
 distribute it. The AllRun name and logo are not licensed; all rights reserved.
+
+The sport icons drawn into images are [Material Symbols](https://fonts.google.com/icons) by Google,
+under the [Apache License 2.0](https://github.com/google/material-design-icons/blob/master/LICENSE)
+(`npm run icons` regenerates them).

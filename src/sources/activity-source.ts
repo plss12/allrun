@@ -1,6 +1,7 @@
 import type { Activity } from '@/core/activity';
 import type { ActivityDetail } from '@/core/activity-detail';
 import type { DateRange } from '@/core/dates';
+import type { HeartRateZones } from '@/core/heart-rate-zones';
 
 /**
  * Where activities come from: synthetic fixtures during development, Strava in production, and
@@ -19,4 +20,9 @@ export interface ActivitySource {
    * when an activity is opened in the editor. `null` if the source has no such activity.
    */
   getActivityDetail(id: string): Promise<ActivityDetail | null>;
+  /**
+   * The athlete's heart rate zones, for the zones of a heart rate chart; `null` when the source
+   * has none (an athlete without a heart rate monitor).
+   */
+  getHeartRateZones(): Promise<HeartRateZones | null>;
 }

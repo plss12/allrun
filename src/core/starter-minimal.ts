@@ -161,7 +161,7 @@ export function minimalTemplate(data: TemplateData, format: CanvasFormat): Templ
       value: summaryHasDistance(data.summary) ? 'distance' : 'movingTime',
       color: WHITE,
       axisLabels: false,
-      title: false,
+      header: false,
       font: FONT,
       bold: true,
       uppercase: true,

@@ -75,12 +75,15 @@ export interface SplitRow {
   readonly speed: number;
   /** Change in altitude over the row's splits, in meters. */
   readonly elevationDifference: number;
+  /** Beats per minute over the row's splits, or `null` when none of them has a heart rate. */
+  readonly heartRate: number | null;
 }
 
 /**
  * The rows of splits drawn one under another: one per split, or, when there are more than
  * `maxRows`, as few groups of consecutive splits as fit (km 1–3, 4–6…), each with its overall
- * speed. Time and space O(s) for s splits.
+ * speed and its heart rate averaged over the time of the splits that have one. Time and space
+ * O(s) for s splits.
  */
 export function splitRows(splits: readonly ActivitySplit[], maxRows: number): SplitRow[] {
   const size = Math.max(1, Math.ceil(splits.length / maxRows));
@@ -89,11 +92,20 @@ export function splitRows(splits: readonly ActivitySplit[], maxRows: number): Sp
     const group = splits.slice(start, start + size);
     const meters = group.reduce((sum, split) => sum + split.distanceMeters, 0);
     const seconds = group.reduce((sum, split) => sum + split.movingTimeSeconds, 0);
+    const timed = group.filter((split) => split.averageHeartRate !== null);
+    const timedSeconds = timed.reduce((sum, split) => sum + split.movingTimeSeconds, 0);
     rows.push({
       first: start + 1,
       last: start + group.length,
       speed: seconds > 0 ? meters / seconds : 0,
       elevationDifference: group.reduce((sum, split) => sum + split.elevationDifferenceMeters, 0),
+      heartRate:
+        timedSeconds > 0
+          ? timed.reduce(
+              (sum, split) => sum + (split.averageHeartRate ?? 0) * split.movingTimeSeconds,
+              0,
+            ) / timedSeconds
+          : null,
     });
   }
   return rows;

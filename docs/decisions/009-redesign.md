@@ -46,8 +46,33 @@ comes later.
   AllRun's templates: a good-looking set of data in one tap. The gallery keeps fewer single
   widgets.
 - **Variants scroll inside their tile**, with dots, instead of filling the gallery with one tile
-  each (date formats, data shown, logo versions…). Close data share a tile (moving and elapsed
-  time, average and highest heart rate…). Tiles go two per row; charts take the whole width.
+  each (date formats, data shown, logo versions…). Tiles go two per row, mixed widgets too, as in
+  AURA; only charts take the whole width.
+- **The gallery leads with the mixed widgets**, the ones people will use most. The basics follow
+  in one section: every single datum in one tile (the distance first, then the rest of the
+  sport's data, each followed by its other ways of writing it), the route, free text, the name,
+  the date and the place. Columns of data start at two (distance and time): one datum alone is
+  the data tile. Mixed widgets with the route draw it over, beside or between the data.
+- **Charts in AURA's style:** two data over every chart, big, as their data widgets write them
+  (an elevation's distance and climb; average and fastest pace; average and highest heart rate or
+  power; the splits' average pace and fastest split; a period's total and average per bar), and a
+  line over an area that fades out downwards. The title under the chart, the labels at the ends
+  of a line and its marked peak go: the header says it, and an average is a dashed line without
+  text (its value is in the header), so nothing covers the data. The header is centered over the
+  chart by default. Each chart also comes without its two data, under its name ("DESNIVEL", "KM
+  POR SEMANA"), so it still says what it shows. Splits are a table as on Strava: number and pace,
+  a bar per split, then the change in altitude and the heart rate (Strava gives each split's),
+  right-aligned and without units, under short names of the columns ("Desn.", "FC"); no average.
+  The splits that write each pace come first and have no header (it would repeat them); only the
+  splits without paces carry the average pace and the fastest split over them.
+- **Cards with depth:** the activity and summary cards and the gallery's tiles share one surface,
+  dark and lit from above like the charts' areas, with a faint edge and a soft shadow; an
+  activity's route glows softly. In the gallery each chart fills its own page (a zones table no
+  longer shrinks its neighbours), and the dots of a carousel follow the finger.
+- **Heart rate zones:** the heart rate line colored by zone, with a table of the time in each zone
+  (bar, time, range), or the table alone. The time is counted from the heart rate stream; the
+  zones are the athlete's, from Strava's `GET /athlete/zones`, which needs the `profile:read_all`
+  scope when connecting (milestone 4). Until then the fixtures have synthetic zones.
 - **Nothing rounded:** distances keep their two decimals and an activity's times their seconds,
   in every widget, chart and design. A period's total time drops the seconds, which say nothing
   over a week or more. Designs saved with rounded data read without the rounding.

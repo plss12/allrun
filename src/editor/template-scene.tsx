@@ -1,19 +1,18 @@
 import {
   BlurMask,
-  Circle,
   DashPathEffect,
   FilterMode,
   FontWeight,
   Group,
   Line,
   Image,
+  LinearGradient,
   MipmapMode,
   Paint,
   Paragraph,
   Path,
   Rect,
   RoundedRect,
-  Shadow,
   Skia,
   type SkImage,
   type SkParagraph,
@@ -28,6 +27,8 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity-charts';
 import { castsShadow, contrastingInk } from '@/core/layer-style';
+import type { Activity } from '@/core/activity';
+import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
 import type { LayerTransform } from '@/core/layer-transform';
 import type { PhotoPlacement, Size } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
@@ -40,27 +41,29 @@ import {
   type Layer,
   type Template,
 } from '@/core/template';
+import { formatDuration } from '@/core/units';
 import { formatBucketLabels } from '@/ui/format';
 
 import {
-  activityChartTitleKey,
+  activityChartHeader,
   chartBuckets,
-  type ChartMeasure,
-  chartTitleKey,
   chartValueText,
   type EditorData,
+  type HeaderDatum,
   type LabelKey,
   layerText,
-  lineAxisLabels,
   type ParagraphContent,
+  periodChartHeader,
   speedMeasure,
   splitRowTexts,
   type TextContext,
   textRuns,
 } from './editor-data';
+import { prepareActivityBlock } from './activity-blocks';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
 import { FONT_FAMILIES } from './fonts';
+import { DropShadow, LETTER_SPACING, textShadows } from './scene-text';
 
 /**
  * A layer filled with data and measured, ready to draw. Its content is centered on (0, 0); the
@@ -320,7 +323,7 @@ function prepareLayer(
       const values = buckets.map((bucket) =>
         layer.value === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds,
       );
-      // Axis labels are already initials and numbers: capitals only apply to the title.
+      // Axis labels are already initials and numbers: capitals only apply to the header.
       const chartText = {
         ...LABEL_STYLE,
         color: layer.color,
@@ -339,18 +342,21 @@ function prepareLayer(
                 }),
           )
         : null;
-      const title = layer.title
-        ? buildParagraph(
-            fonts,
-            { ...chartText, uppercase: layer.uppercase },
-            {
-              label: null,
-              value: translate(chartTitleKey(layer.value, size), { unit: textContext.unit }),
-              unit: null,
-              valueSize: AXIS_LABEL_SIZE,
-            },
-          )
-        : null;
+      const headerStyle = { ...chartText, uppercase: layer.uppercase, align: layer.align };
+      // Without its two data, the chart says what it shows.
+      const header =
+        (layer.header ?? true)
+          ? prepareHeader(
+              periodChartHeader(layer.value, size, values, textContext),
+              fonts,
+              headerStyle,
+              translate,
+            )
+          : prepareCaption(
+              translate(`chartCaptions.${layer.value}.${size}`, { unit: textContext.unit }),
+              fonts,
+              headerStyle,
+            );
       const measure = layer.value === 'distance' ? 'periodDistance' : 'periodTime';
       const texts =
         layer.barValues === true
@@ -367,20 +373,21 @@ function prepareLayer(
                 }),
             )
           : null;
+      const bodyHeight = barsHeight(labels !== null, texts?.band ?? 0);
       return {
         layer,
         width: CHART_WIDTH,
-        height: chartHeight(labels !== null, title !== null, texts?.band ?? 0),
+        height: framedHeight(header, bodyHeight),
         content: (
-          <BarChart
-            values={values}
-            color={layer.color}
-            labels={labels}
-            title={title}
-            titleAlign={layer.align}
-            averageLine={layer.averageLine ?? false}
-            texts={texts}
-          />
+          <ChartFrame header={header} align={layer.align} bodyHeight={bodyHeight}>
+            <BarsBody
+              values={values}
+              color={layer.color}
+              labels={labels}
+              averageLine={layer.averageLine ?? false}
+              texts={texts}
+            />
+          </ChartFrame>
         ),
       };
     }
@@ -392,81 +399,137 @@ function prepareLayer(
       if (series === null) {
         return null;
       }
-      // Axis labels are numbers: capitals only apply to the title.
+      // Numbers have no capitals: they only apply to the header and the names of columns.
       const chartText = { ...LABEL_STYLE, color: layer.color, font: layer.font, bold: layer.bold };
-      const paragraph = (value: string, uppercase = false, size = AXIS_LABEL_SIZE) =>
+      const paragraph = (value: string, uppercase: boolean, size: number) =>
         buildParagraph(
           fonts,
           { ...chartText, uppercase },
           { label: null, value, unit: null, valueSize: size },
         );
-      // How fast the activity went is written as its sport does: pace, pace per 100 or speed.
-      const speed = speedMeasure(data.activity.sportFamily);
-      const title = layer.title
-        ? paragraph(
-            translate(activityChartTitleKey(layer.series), { unit: textContext.unit }),
-            layer.uppercase,
-          )
-        : null;
-      const averageLine = layer.averageLine ?? false;
-      if (series.kind === 'bars') {
-        const rows = splitRows(series.splits, MAX_SPLIT_ROWS).map((row) => {
-          const texts = splitRowTexts(row, speed, textContext);
-          return {
-            speed: row.speed,
-            number: paragraph(texts.number, false, ROW_TEXT_SIZE),
-            value: (layer.splitPace ?? true) ? paragraph(texts.value, false, ROW_TEXT_SIZE) : null,
-            elevation:
-              layer.splitElevation === true
-                ? paragraph(texts.elevation, false, ROW_TEXT_SIZE)
-                : null,
-          };
-        });
-        return {
-          layer,
-          width: CHART_WIDTH,
-          height: rowsHeight(rows.length, title !== null),
-          content: (
-            <SplitRows
-              rows={rows}
-              average={series.average}
-              color={layer.color}
-              title={title}
-              titleAlign={layer.align}
-              averageLine={averageLine}
-            />
-          ),
-        };
-      }
-      const ends = layer.axisLabels
-        ? lineAxisLabels(series, textContext).map((label) => paragraph(label))
-        : null;
-      const peak =
-        layer.maxLabel === true
-          ? paragraph(
-              chartValueText(
-                layer.series === 'pace' ? speed : (LINE_MEASURES[layer.series] ?? 'elevation'),
-                series.max,
-                textContext,
-              ),
-            )
-          : null;
-      return {
+      const headerStyle = { ...chartText, uppercase: layer.uppercase, align: layer.align };
+      // Splits that write each pace need no header: their paces and column names say it all.
+      // Without its two data, any other chart says what it shows.
+      const header =
+        series.kind === 'bars' && (layer.splitPace ?? true)
+          ? null
+          : (layer.header ?? true)
+            ? prepareHeader(
+                activityChartHeader(layer.series, data.activity, series, textContext),
+                fonts,
+                headerStyle,
+                translate,
+              )
+            : prepareCaption(
+                translate(`chartCaptions.activity.${layer.series}`, { unit: textContext.unit }),
+                fonts,
+                headerStyle,
+              );
+      const frame = (bodyHeight: number, body: ReactElement): PreparedLayer => ({
         layer,
         width: CHART_WIDTH,
-        height: chartHeight(ends !== null, title !== null, peak === null ? 0 : PEAK_BAND),
+        height: framedHeight(header, bodyHeight),
         content: (
-          <LineChart
-            series={series}
-            color={layer.color}
-            ends={ends === null ? null : [ends[0], ends[1]]}
-            title={title}
-            titleAlign={layer.align}
-            averageLine={averageLine}
-            peak={peak}
-          />
+          <ChartFrame header={header} align={layer.align} bodyHeight={bodyHeight}>
+            {body}
+          </ChartFrame>
         ),
-      };
+      });
+      // How fast the activity went is written as its sport does: pace, pace per 100 or speed.
+      const speed = speedMeasure(data.activity.sportFamily);
+      if (series.kind === 'bars') {
+        // Splits read against each other: they have no average line (templates that ask for one
+        // draw without it).
+        const showPace = layer.splitPace ?? true;
+        const showElevation = layer.splitElevation === true;
+        const showHeartRate = layer.splitHeartRate === true;
+        const rows = splitRows(series.splits, MAX_SPLIT_ROWS).map((row) => {
+          const texts = splitRowTexts(row, speed, textContext);
+          const text = (value: string) => paragraph(value, false, ROW_TEXT_SIZE);
+          return {
+            speed: row.speed,
+            number: text(texts.number),
+            value: showPace ? text(texts.value) : null,
+            elevation: showElevation ? text(texts.elevation) : null,
+            heartRate: showHeartRate ? text(texts.heartRate) : null,
+          };
+        });
+        const name = (text: string) => paragraph(text, layer.uppercase, COLUMN_NAME_SIZE);
+        return frame(
+          rowsHeight(rows.length),
+          <SplitRows
+            rows={rows}
+            columns={{
+              number: name(textContext.unitLabel(textContext.unit)),
+              value: showPace ? name(translate(`metrics.${speed}`)) : null,
+              elevation: showElevation ? name(translate('splitHeaders.elevation')) : null,
+              heartRate: showHeartRate ? name(translate('splitHeaders.heartRate')) : null,
+            }}
+            color={layer.color}
+          />,
+        );
+      }
+      // The zones need the athlete's zones and the heart rate along the way.
+      const streams = data.detail.streams;
+      const zones =
+        layer.series === 'heartRate' &&
+        layer.zones !== undefined &&
+        data.zones !== null &&
+        streams !== null &&
+        streams.heartRate !== null
+          ? {
+              view: layer.zones,
+              zones: data.zones,
+              time: streams.time,
+              heartRate: streams.heartRate,
+            }
+          : null;
+      const table =
+        zones === null || zones.view === 'line'
+          ? null
+          : timeInZones(zones.time, zones.heartRate, zones.zones).map((seconds, i) => ({
+              seconds,
+              // Each zone's name in its color.
+              name: buildParagraph(
+                fonts,
+                { ...chartText, color: zoneColor(i) },
+                { label: null, value: `Z${i + 1}`, unit: null, valueSize: ZONE_TEXT_SIZE },
+              ),
+              time: paragraph(formatDuration(seconds), false, ZONE_TEXT_SIZE),
+              range: paragraph(zoneRange(i, zones.zones), false, ZONE_RANGE_SIZE),
+            }));
+      const line = zones === null || zones.view !== 'table';
+      const lineHeight = line ? CHART_HEIGHT : 0;
+      const tableTop = line && table !== null ? lineHeight + ZONE_TABLE_GAP : lineHeight;
+      return frame(
+        table === null ? lineHeight : tableTop + table.length * ZONE_ROW_HEIGHT,
+        <Group>
+          {line ? (
+            <LineBody
+              series={series}
+              color={layer.color}
+              average={
+                layer.averageLine === true
+                  ? lineAverage(layer.series, data.activity, series.average)
+                  : null
+              }
+              zones={zones === null ? null : zones.zones}
+            />
+          ) : null}
+          {table === null ? null : (
+            <Group transform={[{ translateY: tableTop }]}>
+              <ZonesTable rows={table} color={layer.color} />
+            </Group>
+          )}
+        </Group>,
+      );
+    }
+    case 'activityBlock': {
+      if (data.mode !== 'activity') {
+        return null;
+      }
+      const block = prepareActivityBlock(layer, data, { fonts, textContext, translate });
+      return block === null ? null : { layer, ...block };
     }
     case 'logo': {
       const { width, height } = watermarkLayout(layer.variant);
@@ -570,24 +633,17 @@ const ROUTES_WIDTH = 800;
 const ROUTES_HEIGHT = 560;
 const CHART_WIDTH = 880;
 const CHART_HEIGHT = 240;
-/** Room under the bars for the axis labels, and under those for the title. */
+/** Room under the bars for their axis labels. */
 const LABEL_BAND = 54;
-const TITLE_BAND = 58;
 
 /** Left edge of a block of `width` aligned within `span`, both starting at 0. */
 function alignedX(align: 'left' | 'center' | 'right', width: number, span: number): number {
   return align === 'left' ? 0 : align === 'right' ? span - width : (span - width) / 2;
 }
 
-/** Room over a line chart for its highest value. */
-const PEAK_BAND = 62;
-
-/**
- * Height of a chart with or without its axis labels and its title, and with `top` pixels over it
- * (its highest value, or each bar's).
- */
-function chartHeight(labels: boolean, title: boolean, top = 0): number {
-  return top + CHART_HEIGHT + (labels ? LABEL_BAND : 0) + (title ? TITLE_BAND : 0);
+/** Height of a period's bars, with or without their axis labels, and `top` pixels over them. */
+function barsHeight(labels: boolean, top: number): number {
+  return top + CHART_HEIGHT + (labels ? LABEL_BAND : 0);
 }
 
 /** Room left between the texts over the bars and the chart. */
@@ -640,13 +696,6 @@ function fitBarTexts(
   return { paragraphs, turned, band: band + BAR_TEXT_GAP };
 }
 
-/** The measure each line chart's highest value is written in (pace depends on the sport). */
-const LINE_MEASURES: Partial<Record<ActivityChartSeries, ChartMeasure>> = {
-  elevation: 'elevation',
-  heartRate: 'heartRate',
-  power: 'power',
-};
-
 /** Most rows of splits drawn one under another; more are grouped (km 1–3…). */
 const MAX_SPLIT_ROWS = 20;
 /** Height of a row of splits and thickness of its bar, before the layer's scale. */
@@ -654,36 +703,25 @@ const ROW_HEIGHT = 54;
 const ROW_BAR = 32;
 /** Size of the texts of a row of splits: the content itself, bigger than axis labels. */
 const ROW_TEXT_SIZE = 38;
-/** Room between a row's number, its bar and its texts. */
-const ROW_GAP = 14;
+/** Size of the column names over the rows ("KM", "PACE"), and the height of their line. */
+const COLUMN_NAME_SIZE = 30;
+const COLUMN_NAMES_HEIGHT = 50;
+/** Room between the columns of the splits, and around their bars. */
+const COLUMN_GAP = 30;
+/** Room between the columns after the bars, whose numbers are shorter. */
+const TRAILING_GAP = 32;
 /** Share of the room the slowest split's bar takes: the differences between splits show. */
 const ROW_MIN_SHARE = 0.45;
 
-/** Height of the splits as rows, with or without their title. */
-function rowsHeight(rows: number, title: boolean): number {
-  return rows * ROW_HEIGHT + (title ? TITLE_BAND : 0);
+/** Height of the splits as rows, under the names of their columns. */
+function rowsHeight(rows: number): number {
+  return COLUMN_NAMES_HEIGHT + rows * ROW_HEIGHT;
 }
 const MAX_TEXT_WIDTH = 1000;
 /** A layout width no text reaches: lines only break where the text does. */
 const NO_WRAP_WIDTH = 1_000_000;
 
 type TextStyle = Extract<Layer, { kind: 'text' }>['style'];
-
-/**
- * The soft shadow under texts, routes and bars. It keeps white widgets readable on bright
- * photos and lifts the top one off the layers below it: without it, a white route over white
- * text would merge with it. It has no setting: only light and bright colors cast it (see
- * `castsShadow`), since under black it would just blur the edges.
- */
-const SHADOW_COLOR = 'rgba(0, 0, 0, 0.45)';
-const SHADOW_OFFSET_Y = 3;
-const SHADOW_BLUR_RADIUS = 10;
-/** Paragraph shadows take a blur radius, image filters a sigma; this is Skia's conversion. */
-const SHADOW_SIGMA = 0.57735 * SHADOW_BLUR_RADIUS + 0.5;
-
-function DropShadow() {
-  return <Shadow dx={0} dy={SHADOW_OFFSET_Y} blur={SHADOW_SIGMA} color={SHADOW_COLOR} />;
-}
 
 const LABEL_STYLE: TextStyle = {
   font: 'inter',
@@ -695,9 +733,6 @@ const LABEL_STYLE: TextStyle = {
 };
 
 const ALIGN = { left: TextAlign.Left, center: TextAlign.Center, right: TextAlign.Right } as const;
-
-/** Room added after each letter, as a fraction of the font size. */
-const LETTER_SPACING = { normal: 0, wide: 0.08, wider: 0.2 } as const;
 
 /**
  * Lays out a text widget, wrapping lines longer than `wrapWidth` (line breaks in the text always
@@ -715,16 +750,7 @@ function buildParagraph(
     fontSize,
     fontStyle: { weight: bold ? FontWeight.Bold : FontWeight.Normal },
     letterSpacing: fontSize * LETTER_SPACING[style.letterSpacing ?? 'normal'],
-    shadows:
-      style.shadow && castsShadow(style.color)
-        ? [
-            {
-              color: Skia.Color(SHADOW_COLOR),
-              offset: { x: 0, y: SHADOW_OFFSET_Y },
-              blurRadius: SHADOW_BLUR_RADIUS,
-            },
-          ]
-        : [],
+    shadows: style.shadow ? textShadows(style.color) : [],
   });
   const builder = Skia.ParagraphBuilder.Make({ textAlign: ALIGN[style.align] }, fonts);
   for (const run of textRuns(style, content)) {
@@ -848,34 +874,164 @@ function RouteLines({ routes, box, boxHeight, stroke }: RouteLinesProps) {
 const LINE_FLOOR = 0.15;
 /** Width of a chart's line, in canvas pixels before the layer's scale. */
 const LINE_WIDTH = 6;
-/** How opaque the area under a line is. */
-const AREA_OPACITY = 0.35;
+/** How opaque the area under a line is at its top; it fades out to nothing at the bottom. */
+const AREA_OPACITY = 0.55;
+/** Width of a chart's average line, in canvas pixels before the layer's scale. */
+const AVERAGE_LINE_WIDTH = 4;
+
+/** `color` with its opacity set to `alpha`, as Skia takes it. */
+function withAlpha(color: string, alpha: number) {
+  const value = Skia.Color(color);
+  value[3] = alpha;
+  return value;
+}
+
+/** A dashed line across a chart's whole width at height `y`. */
+function DashedLine({ y, color }: { readonly y: number; readonly color: string }) {
+  return (
+    <Line
+      p1={{ x: 0, y }}
+      p2={{ x: CHART_WIDTH, y }}
+      color={color}
+      strokeWidth={AVERAGE_LINE_WIDTH}
+      strokeCap="round"
+    >
+      <DashPathEffect intervals={[3 * AVERAGE_LINE_WIDTH, 2.5 * AVERAGE_LINE_WIDTH]} />
+    </Line>
+  );
+}
 
 /**
- * A line over a translucent area, the shape of an activity's elevation, pace, heart rate or
- * power along the way, between the lowest and the highest values (with some room below the
- * lowest, so the area keeps some body). Under it, optionally, where it starts and how far it
- * runs, and its title.
+ * Colors of the heart rate zones, Z1 to Z5, as sports apps paint them: grey, blue, green, orange
+ * and red. Zones past the fifth take the red.
  */
-function LineChart({
+const ZONE_COLORS = ['#A1A1A6', '#3D8BFD', '#34C759', '#FF9F0A', '#FF453A'] as const;
+
+const zoneColor = (index: number): string => ZONE_COLORS[Math.min(index, ZONE_COLORS.length - 1)];
+
+/** A chart's header laid out: its two data, side by side, each its name over its value. */
+interface PreparedHeader {
+  readonly cells: readonly SkParagraph[];
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Size of a header's values (their names are a third of it), and the room between the two. */
+const HEADER_VALUE_SIZE = 76;
+const HEADER_CELL_GAP = 64;
+/** Room between the header and the chart under it. */
+const HEADER_GAP = 34;
+
+/**
+ * Lays out a chart's header in `style`, each datum's name over its value aligned as the chart's
+ * header is, smaller when the two data don't fit the chart's width side by side.
+ */
+function prepareHeader(
+  data: readonly HeaderDatum[],
+  fonts: SkTypefaceFontProvider,
+  style: TextStyle,
+  translate: (key: LabelKey) => string,
+): PreparedHeader {
+  const build = (size: number) =>
+    data.map((datum) =>
+      buildParagraph(
+        fonts,
+        style,
+        { label: translate(datum.label), value: datum.value, unit: datum.unit, valueSize: size },
+        NO_WRAP_WIDTH,
+      ),
+    );
+  const widthOf = (cells: readonly SkParagraph[]) =>
+    cells.reduce((sum, cell) => sum + Math.ceil(cell.getLongestLine()) + 1, 0);
+  const gaps = HEADER_CELL_GAP * (data.length - 1);
+  const natural = build(HEADER_VALUE_SIZE);
+  const cells =
+    widthOf(natural) + gaps <= CHART_WIDTH
+      ? natural
+      : build((HEADER_VALUE_SIZE * (CHART_WIDTH - gaps)) / widthOf(natural));
+  return {
+    cells,
+    width: widthOf(cells) + gaps,
+    height: Math.max(...cells.map((cell) => cell.getHeight())),
+  };
+}
+
+/** Size of a chart's name, written over it in place of its header. */
+const CAPTION_SIZE = 34;
+
+/** A chart's name ("ELEVATION") as its header, spaced out, shrunk to the chart's width if longer. */
+function prepareCaption(
+  text: string,
+  fonts: SkTypefaceFontProvider,
+  style: TextStyle,
+): PreparedHeader {
+  const caption = buildFittedParagraph(
+    fonts,
+    { ...style, letterSpacing: 'wide' },
+    { label: null, value: text, unit: null, valueSize: CAPTION_SIZE },
+    CHART_WIDTH,
+  );
+  return {
+    cells: [caption],
+    width: Math.ceil(caption.getLongestLine()) + 1,
+    height: caption.getHeight(),
+  };
+}
+
+/** Height of a chart: its header, when it has one, over its body. */
+function framedHeight(header: PreparedHeader | null, bodyHeight: number): number {
+  return (header === null ? 0 : header.height + HEADER_GAP) + bodyHeight;
+}
+
+/**
+ * A chart centered on (0, 0): its header on top, aligned as the layer asks, and its body (drawn
+ * from its top-left corner, {@link CHART_WIDTH} wide and `bodyHeight` tall) under it.
+ */
+function ChartFrame({
+  header,
+  align,
+  bodyHeight,
+  children,
+}: {
+  readonly header: PreparedHeader | null;
+  readonly align: 'left' | 'center' | 'right';
+  readonly bodyHeight: number;
+  readonly children: ReactElement;
+}) {
+  const top = header === null ? 0 : header.height + HEADER_GAP;
+  const totalHeight = framedHeight(header, bodyHeight);
+  let left = header === null ? 0 : alignedX(align, header.width, CHART_WIDTH);
+  return (
+    <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
+      {header?.cells.map((cell, i) => {
+        const width = Math.ceil(cell.getLongestLine()) + 1;
+        const x = left;
+        left += width + HEADER_CELL_GAP;
+        return <Paragraph key={i} paragraph={cell} x={x} y={0} width={width} />;
+      })}
+      <Group transform={[{ translateY: top }]}>{children}</Group>
+    </Group>
+  );
+}
+
+/**
+ * A line over an area that fades out downwards, the shape of an activity's elevation, pace, heart
+ * rate or power along the way, between the lowest and the highest values (with some room below
+ * the lowest, so the area keeps some body). Optionally, a dashed line at the `average`, and the
+ * line colored by heart rate `zones`.
+ */
+function LineBody({
   series,
   color,
-  ends,
-  title,
-  titleAlign,
-  averageLine,
-  peak,
+  average,
+  zones,
 }: {
   readonly series: LineSeries;
   readonly color: string;
-  /** Labels under the start and the end of the line, or `null` for none. */
-  readonly ends: readonly [SkParagraph, SkParagraph] | null;
-  readonly title: SkParagraph | null;
-  readonly titleAlign: 'left' | 'center' | 'right';
-  /** A dashed line across at the average. */
-  readonly averageLine: boolean;
-  /** The highest value, written over a dot at the highest point; `null` for none. */
-  readonly peak: SkParagraph | null;
+  /** Where the dashed average line goes, in the series' units; `null` for none. */
+  readonly average: number | null;
+  /** The athlete's zones, to paint each stretch of the line in its zone's color. */
+  readonly zones: HeartRateZones | null;
 }) {
   const range = series.max - series.min;
   const floor = series.min - range * LINE_FLOOR;
@@ -884,160 +1040,246 @@ function LineChart({
   const yOf = (value: number) =>
     span > 0 ? CHART_HEIGHT - ((value - floor) / span) * CHART_HEIGHT : CHART_HEIGHT / 2;
   const points = series.points.map((point) => ({ x: point.x * CHART_WIDTH, y: yOf(point.y) }));
-  const line = Skia.PathBuilder.Make();
-  points.forEach((point, i) =>
-    i === 0 ? line.moveTo(point.x, point.y) : line.lineTo(point.x, point.y),
-  );
-  const linePath = line.detach();
-  const area = Skia.PathBuilder.Make();
-  points.forEach((point, i) =>
-    i === 0 ? area.moveTo(point.x, point.y) : area.lineTo(point.x, point.y),
-  );
+  const pathOf = (stretch: readonly Point[]) => {
+    const builder = Skia.PathBuilder.Make();
+    stretch.forEach((point, i) =>
+      i === 0 ? builder.moveTo(point.x, point.y) : builder.lineTo(point.x, point.y),
+    );
+    return builder;
+  };
+  const area = pathOf(points);
   area.lineTo(points[points.length - 1].x, CHART_HEIGHT);
   area.lineTo(points[0].x, CHART_HEIGHT);
   area.close();
-  const totalHeight = chartHeight(ends !== null, title !== null, peak === null ? 0 : PEAK_BAND);
-  const titleTop = CHART_HEIGHT + (ends === null ? 0 : LABEL_BAND);
-  const averageY = yOf(series.average);
-  const top = points.reduce((best, point) => (point.y < best.y ? point : best), points[0]);
+  const top = Math.min(...points.map((point) => point.y));
+  // The activity's own average may fall outside the line's range: it stays within the chart.
+  const averageY = average === null ? null : Math.min(CHART_HEIGHT, Math.max(0, yOf(average)));
+  const stroke = {
+    style: 'stroke',
+    strokeWidth: LINE_WIDTH,
+    strokeCap: 'round',
+    strokeJoin: 'round',
+  } as const;
   return (
-    <Group
-      transform={[
-        { translateX: -CHART_WIDTH / 2 },
-        { translateY: -totalHeight / 2 + (peak === null ? 0 : PEAK_BAND) },
-      ]}
-    >
-      <Path path={area.detach()} color={color} opacity={AREA_OPACITY} />
-      <Path
-        path={linePath}
-        style="stroke"
-        strokeWidth={LINE_WIDTH}
-        strokeCap="round"
-        strokeJoin="round"
-        color={color}
-      >
-        {castsShadow(color) ? <DropShadow /> : null}
-      </Path>
-      {averageLine ? (
-        <Line
-          p1={{ x: 0, y: averageY }}
-          p2={{ x: CHART_WIDTH, y: averageY }}
-          color={color}
-          strokeWidth={AVERAGE_LINE_WIDTH}
-          strokeCap="round"
-        >
-          <DashPathEffect intervals={[3 * AVERAGE_LINE_WIDTH, 2.5 * AVERAGE_LINE_WIDTH]} />
-        </Line>
-      ) : null}
-      {peak === null ? null : (
-        <>
-          <Circle c={top} r={PEAK_DOT} color={color}>
-            {castsShadow(color) ? <DropShadow /> : null}
-          </Circle>
-          <PeakLabel paragraph={peak} x={top.x} bottom={top.y - PEAK_DOT - 6} />
-        </>
-      )}
-      {ends === null
-        ? null
-        : ends.map((label, i) => {
-            const width = Math.ceil(label.getLongestLine()) + 1;
-            return (
-              <Paragraph
-                key={i === 0 ? 'start' : 'end'}
-                paragraph={label}
-                x={i === 0 ? 0 : CHART_WIDTH - width}
-                y={CHART_HEIGHT + (LABEL_BAND - label.getHeight()) / 2 + 4}
-                width={width}
-              />
-            );
-          })}
-      {title === null ? null : (
-        <Paragraph
-          paragraph={title}
-          x={alignedX(titleAlign, Math.ceil(title.getLongestLine()) + 1, CHART_WIDTH)}
-          y={titleTop + (TITLE_BAND - title.getHeight()) / 2 + 4}
-          width={Math.ceil(title.getLongestLine()) + 1}
+    <Group>
+      <Path path={area.detach()}>
+        <LinearGradient
+          start={{ x: 0, y: top }}
+          end={{ x: 0, y: CHART_HEIGHT }}
+          colors={[withAlpha(color, AREA_OPACITY), withAlpha(color, 0)]}
         />
-      )}
+      </Path>
+      <Group
+        layer={
+          castsShadow(color) || zones !== null ? (
+            <Paint>
+              <DropShadow />
+            </Paint>
+          ) : undefined
+        }
+      >
+        {zones === null ? (
+          <Path path={pathOf(points).detach()} color={color} {...stroke} />
+        ) : (
+          zoneStretches(series.points, zones).map(({ zone, from, to }) => (
+            <Path
+              key={from}
+              path={pathOf(points.slice(from, to + 1)).detach()}
+              color={zoneColor(zone)}
+              {...stroke}
+            />
+          ))
+        )}
+      </Group>
+      {averageY === null ? null : <DashedLine y={averageY} color={color} />}
     </Group>
   );
 }
 
-/** Radius of the dot at a line's highest point. */
-const PEAK_DOT = 9;
+/**
+ * The stretches of a heart rate line in one zone: from point `from` to point `to`, both included,
+ * so they join. Each step between two points takes the zone of its middle. Time O(n · z) for n
+ * points and z zones.
+ */
+function zoneStretches(
+  points: readonly Point[],
+  zones: HeartRateZones,
+): { readonly zone: number; readonly from: number; readonly to: number }[] {
+  const stretches: { zone: number; from: number; to: number }[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const zone = zoneIndex((points[i - 1].y + points[i].y) / 2, zones);
+    const last = stretches[stretches.length - 1];
+    if (last !== undefined && last.zone === zone) {
+      last.to = i;
+    } else {
+      stretches.push({ zone, from: i - 1, to: i });
+    }
+  }
+  return stretches;
+}
+
+/** Sizes of the texts of the zones table, its rows, its bars and the room around it. */
+const ZONE_TEXT_SIZE = 32;
+const ZONE_RANGE_SIZE = 26;
+const ZONE_ROW_HEIGHT = 48;
+const ZONE_BAR = 10;
+const ZONE_GAP = 24;
+const ZONE_TABLE_GAP = 30;
+
+/** One zone of the table: its time and its texts, laid out. */
+interface ZoneRow {
+  readonly seconds: number;
+  /** "Z1"… in the zone's color. */
+  readonly name: SkParagraph;
+  readonly time: SkParagraph;
+  /** The beats per minute it spans: "<112", "112–130", "168+". */
+  readonly range: SkParagraph;
+}
 
 /**
- * A chart's highest value, centered over `x` with its bottom at `bottom`, kept within the
- * chart's width.
+ * The time spent in each heart rate zone, a row per zone: its name in its color, a bar as long as
+ * its share of the most time spent in one zone (over a faint track), the time and the range of
+ * the zone, both right-aligned so their digits line up.
  */
-function PeakLabel({
-  paragraph,
-  x,
-  bottom,
+function ZonesTable({
+  rows,
+  color,
 }: {
-  readonly paragraph: SkParagraph;
-  readonly x: number;
-  readonly bottom: number;
+  readonly rows: readonly ZoneRow[];
+  readonly color: string;
 }) {
-  const width = Math.ceil(paragraph.getLongestLine()) + 1;
-  const left = Math.min(Math.max(0, x - width / 2), CHART_WIDTH - width);
+  const widthOf = (paragraph: SkParagraph) => Math.ceil(paragraph.getLongestLine()) + 1;
+  const nameWidth = Math.max(...rows.map((row) => widthOf(row.name)));
+  const timeWidth = Math.max(...rows.map((row) => widthOf(row.time)));
+  const rangeWidth = Math.max(...rows.map((row) => widthOf(row.range)));
+  const trackStart = nameWidth + ZONE_GAP;
+  const rangeRight = CHART_WIDTH;
+  const timeRight = rangeRight - rangeWidth - ZONE_GAP;
+  const trackWidth = timeRight - timeWidth - ZONE_GAP - trackStart;
+  const most = Math.max(...rows.map((row) => row.seconds));
+  const middleOf = (i: number) => i * ZONE_ROW_HEIGHT + ZONE_ROW_HEIGHT / 2;
+  const at = (paragraph: SkParagraph, x: number, i: number) => (
+    <Paragraph
+      paragraph={paragraph}
+      x={x}
+      y={middleOf(i) - paragraph.getHeight() / 2}
+      width={widthOf(paragraph)}
+    />
+  );
   return (
-    <Paragraph paragraph={paragraph} x={left} y={bottom - paragraph.getHeight()} width={width} />
+    <Group>
+      {rows.map((row, i) => (
+        <Group key={i}>
+          {at(row.name, 0, i)}
+          <RoundedRect
+            x={trackStart}
+            y={middleOf(i) - ZONE_BAR / 2}
+            width={trackWidth}
+            height={ZONE_BAR}
+            r={ZONE_BAR / 2}
+            color={withAlpha(color, 0.2)}
+          />
+          {most > 0 && row.seconds > 0 ? (
+            <RoundedRect
+              x={trackStart}
+              y={middleOf(i) - ZONE_BAR / 2}
+              width={Math.max(ZONE_BAR, (trackWidth * row.seconds) / most)}
+              height={ZONE_BAR}
+              r={ZONE_BAR / 2}
+              color={zoneColor(i)}
+            />
+          ) : null}
+          {at(row.time, timeRight - widthOf(row.time), i)}
+          <Group layer={<Paint opacity={0.7} />}>
+            {at(row.range, rangeRight - widthOf(row.range), i)}
+          </Group>
+        </Group>
+      ))}
+    </Group>
   );
 }
 
-/** One row of splits ready to draw. */
+/**
+ * The average an activity's line chart marks: the activity's own (its average pace, heart rate or
+ * power, as its data widgets write it) when it has one, or else the line's.
+ */
+function lineAverage(series: ActivityChartSeries, activity: Activity, ofLine: number): number {
+  const own =
+    series === 'pace'
+      ? activity.averageSpeed
+      : series === 'heartRate'
+        ? activity.averageHeartRate
+        : series === 'power'
+          ? activity.averagePowerWatts
+          : null;
+  return own !== null && own > 0 ? own : ofLine;
+}
+
+/** One row of splits ready to draw; a text is `null` when its column is hidden. */
 interface PreparedRow {
   readonly speed: number;
   readonly number: SkParagraph;
-  /** The pace or speed, or `null` when hidden. */
   readonly value: SkParagraph | null;
-  /** The change in altitude, or `null` when hidden. */
   readonly elevation: SkParagraph | null;
+  readonly heartRate: SkParagraph | null;
+}
+
+/** The names of the columns of the splits ("KM", "PACE", "ELEV.", "HR"); `null` when hidden. */
+interface SplitColumns {
+  readonly number: SkParagraph;
+  readonly value: SkParagraph | null;
+  readonly elevation: SkParagraph | null;
+  readonly heartRate: SkParagraph | null;
 }
 
 /**
- * Splits one under another: each row with its number, a bar as long as it was fast (the slowest
- * still takes {@link ROW_MIN_SHARE} of the room, so the differences show) and, on the far right,
- * its pace or speed and its change in altitude when shown, in columns that keep the digits in
- * line. Optionally, a dashed line down the bars at the average, and the title under them.
+ * Splits as a table, as Strava shows them: under the names of its columns, each row with its
+ * number and its pace or speed (left-aligned), a bar as long as it was fast (the slowest still
+ * takes {@link ROW_MIN_SHARE} of the room, so the differences show), and then its change in
+ * altitude and its heart rate when shown, right-aligned so their digits line up.
  */
 function SplitRows({
   rows,
-  average,
+  columns,
   color,
-  title,
-  titleAlign,
-  averageLine,
 }: {
   readonly rows: readonly PreparedRow[];
-  /** Average speed of the splits, for the average line. */
-  readonly average: number;
+  readonly columns: SplitColumns;
   readonly color: string;
-  readonly title: SkParagraph | null;
-  readonly titleAlign: 'left' | 'center' | 'right';
-  /** A dashed line down the bars at the average speed. */
-  readonly averageLine: boolean;
 }) {
   const widthOf = (paragraph: SkParagraph) => Math.ceil(paragraph.getLongestLine()) + 1;
-  const columnWidth = (column: (row: PreparedRow) => SkParagraph | null) =>
-    Math.max(
-      0,
-      ...rows.map((row) => {
-        const paragraph = column(row);
-        return paragraph === null ? 0 : widthOf(paragraph);
-      }),
-    );
-  const numberWidth = columnWidth((row) => row.number);
-  const valueWidth = columnWidth((row) => row.value);
-  const elevationWidth = columnWidth((row) => row.elevation);
-  // The texts sit in columns on the right, each right-aligned so their digits line up.
-  const elevationRight = CHART_WIDTH;
-  const valueRight = elevationRight - (elevationWidth > 0 ? elevationWidth + ROW_GAP : 0);
-  const textsWidth = (valueWidth > 0 ? valueWidth : 0) + (elevationWidth > 0 ? elevationWidth : 0);
-  const textsGap = valueWidth > 0 && elevationWidth > 0 ? ROW_GAP : 0;
-  const barStart = numberWidth + ROW_GAP;
-  const room = CHART_WIDTH - barStart - (textsWidth > 0 ? ROW_GAP + textsGap + textsWidth : 0);
+  /** Width of a column: its widest text, its name included; 0 when hidden. */
+  const columnWidth = (
+    name: SkParagraph | null,
+    column: (row: PreparedRow) => SkParagraph | null,
+  ) =>
+    name === null
+      ? 0
+      : Math.max(
+          widthOf(name),
+          ...rows.map((row) => {
+            const paragraph = column(row);
+            return paragraph === null ? 0 : widthOf(paragraph);
+          }),
+        );
+  const numberWidth = columnWidth(columns.number, (row) => row.number);
+  const valueWidth = columnWidth(columns.value, (row) => row.value);
+  const elevationWidth = columnWidth(columns.elevation, (row) => row.elevation);
+  const heartRateWidth = columnWidth(columns.heartRate, (row) => row.heartRate);
+  // Left of the bars: the number and the pace. Right of them: altitude, then heart rate.
+  const valueX = numberWidth + COLUMN_GAP;
+  const barStart = valueX + (valueWidth > 0 ? valueWidth + COLUMN_GAP : 0);
+  const heartRateRight = CHART_WIDTH;
+  const elevationRight = heartRateRight - (heartRateWidth > 0 ? heartRateWidth + TRAILING_GAP : 0);
+  // Where the columns after the bars start, if any.
+  const trailingStart =
+    elevationWidth > 0
+      ? elevationRight - elevationWidth
+      : heartRateWidth > 0
+        ? heartRateRight - heartRateWidth
+        : null;
+  const barEnd = trailingStart === null ? CHART_WIDTH : trailingStart - COLUMN_GAP;
+  const room = barEnd - barStart;
   const speeds = rows.map((row) => row.speed);
   const slowest = Math.min(...speeds);
   const fastest = Math.max(...speeds);
@@ -1045,86 +1287,69 @@ function SplitRows({
     fastest > slowest
       ? room * (ROW_MIN_SHARE + ((1 - ROW_MIN_SHARE) * (speed - slowest)) / (fastest - slowest))
       : room;
-  const totalHeight = rowsHeight(rows.length, title !== null);
-  const rowsBottom = rows.length * ROW_HEIGHT;
-  const averageX = barStart + lengthOf(average);
   const shadow = castsShadow(color) ? (
     <Paint>
       <DropShadow />
     </Paint>
   ) : undefined;
-  /** A text right-aligned at `right`, centered on its row. */
-  const rightAligned = (paragraph: SkParagraph, right: number, middle: number, key: string) => (
+  /** A text starting at `x`, centered on `middle`. */
+  const fromLeft = (paragraph: SkParagraph, x: number, middle: number, key: string) => (
     <Paragraph
       key={key}
       paragraph={paragraph}
-      x={right - widthOf(paragraph)}
+      x={x}
       y={middle - paragraph.getHeight() / 2}
       width={widthOf(paragraph)}
     />
   );
+  /** A text ending at `right`, centered on `middle`. */
+  const fromRight = (paragraph: SkParagraph, right: number, middle: number, key: string) =>
+    fromLeft(paragraph, right - widthOf(paragraph), middle, key);
+  /** Middle of the line of row `i`, under the names of the columns. */
+  const middleOf = (i: number) => COLUMN_NAMES_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2;
+  /** The texts of a line: the column names' or a row's, each in its column. */
+  const line = (texts: SplitColumns, middle: number, key: string) => (
+    <Group key={key}>
+      {fromLeft(texts.number, 0, middle, 'number')}
+      {texts.value === null ? null : fromLeft(texts.value, valueX, middle, 'value')}
+      {texts.elevation === null
+        ? null
+        : fromRight(texts.elevation, elevationRight, middle, 'elevation')}
+      {texts.heartRate === null
+        ? null
+        : fromRight(texts.heartRate, heartRateRight, middle, 'heartRate')}
+    </Group>
+  );
   return (
-    <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
+    <Group>
       <Group layer={shadow}>
         {rows.map((row, i) => (
           <RoundedRect
             key={i}
             x={barStart}
-            y={i * ROW_HEIGHT + (ROW_HEIGHT - ROW_BAR) / 2}
+            y={middleOf(i) - ROW_BAR / 2}
             width={lengthOf(row.speed)}
             height={ROW_BAR}
-            r={ROW_BAR / 2}
+            r={ROW_BAR / 4}
             color={color}
           />
         ))}
-        {averageLine ? (
-          <Line
-            p1={{ x: averageX, y: 0 }}
-            p2={{ x: averageX, y: rowsBottom }}
-            color={color}
-            strokeWidth={AVERAGE_LINE_WIDTH}
-            strokeCap="round"
-          >
-            <DashPathEffect intervals={[3 * AVERAGE_LINE_WIDTH, 2.5 * AVERAGE_LINE_WIDTH]} />
-          </Line>
-        ) : null}
       </Group>
-      {rows.map((row, i) => {
-        const middle = i * ROW_HEIGHT + ROW_HEIGHT / 2;
-        return (
-          <Group key={`texts-${i}`}>
-            {rightAligned(row.number, numberWidth, middle, 'number')}
-            {row.value === null ? null : rightAligned(row.value, valueRight, middle, 'value')}
-            {row.elevation === null ? null : (
-              // The change in altitude reads as secondary.
-              <Group layer={<Paint opacity={0.75} />}>
-                {rightAligned(row.elevation, elevationRight, middle, 'elevation')}
-              </Group>
-            )}
-          </Group>
-        );
-      })}
-      {title === null ? null : (
-        <Paragraph
-          paragraph={title}
-          x={alignedX(titleAlign, widthOf(title), CHART_WIDTH)}
-          y={rowsBottom + (TITLE_BAND - title.getHeight()) / 2 + 4}
-          width={widthOf(title)}
-        />
-      )}
+      {line(columns, COLUMN_NAMES_HEIGHT / 2, 'columns')}
+      {rows.map((row, i) => line(row, middleOf(i), `row-${i}`))}
     </Group>
   );
 }
 
-/** Width of a chart's average line, in canvas pixels before the layer's scale. */
-const AVERAGE_LINE_WIDTH = 4;
-
-function BarChart({
+/**
+ * A period's bars, drawn from their top-left corner: each bar's value over them when shown, the
+ * bars (empty ones as a faint mark), an optional dashed line at their average (empty bars count),
+ * and the axis labels under them.
+ */
+function BarsBody({
   values,
   color,
   labels,
-  title,
-  titleAlign,
   averageLine,
   texts,
 }: {
@@ -1132,11 +1357,6 @@ function BarChart({
   readonly color: string;
   /** One paragraph per bar (`null` for unlabelled bars), or `null` for no axis labels. */
   readonly labels: readonly (SkParagraph | null)[] | null;
-  /** What the bars measure, under them, or `null` for no title. */
-  readonly title: SkParagraph | null;
-  /** Where the title sits: under the first bar, centered, or under the last bar. */
-  readonly titleAlign: 'left' | 'center' | 'right';
-  /** A dashed line across the bars at their average (empty bars count). */
   readonly averageLine: boolean;
   /** Each bar's value, in a row over the chart; `null` for none. */
   readonly texts: BarTexts | null;
@@ -1150,13 +1370,10 @@ function BarChart({
   // Empty days still get a small mark so the time axis stays readable.
   const minHeight = Math.min(8, barWidth);
   const top = texts?.band ?? 0;
-  const totalHeight = chartHeight(labels !== null, title !== null, top);
-  const titleTop = CHART_HEIGHT + (labels === null ? 0 : LABEL_BAND);
-  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   const heightOf = (value: number) => (max <= 0 ? 0 : (value / max) * CHART_HEIGHT);
-  const averageY = max > 0 ? CHART_HEIGHT - heightOf(average) : CHART_HEIGHT;
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   return (
-    <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 + top }]}>
+    <Group transform={[{ translateY: top }]}>
       {/* One shadow for all the bars, drawn as a layer, instead of one blur per bar. */}
       <Group
         layer={
@@ -1182,18 +1399,10 @@ function BarChart({
             />
           );
         })}
-        {averageLine && max > 0 ? (
-          <Line
-            p1={{ x: 0, y: averageY }}
-            p2={{ x: CHART_WIDTH, y: averageY }}
-            color={color}
-            strokeWidth={AVERAGE_LINE_WIDTH}
-            strokeCap="round"
-          >
-            <DashPathEffect intervals={[3 * AVERAGE_LINE_WIDTH, 2.5 * AVERAGE_LINE_WIDTH]} />
-          </Line>
-        ) : null}
       </Group>
+      {averageLine && max > 0 ? (
+        <DashedLine y={CHART_HEIGHT - heightOf(average)} color={color} />
+      ) : null}
       {texts?.paragraphs.map((paragraph, i) => {
         if (paragraph === null) {
           return null;
@@ -1237,14 +1446,6 @@ function BarChart({
           />
         );
       })}
-      {title === null ? null : (
-        <Paragraph
-          paragraph={title}
-          x={alignedX(titleAlign, Math.ceil(title.getLongestLine()) + 1, CHART_WIDTH)}
-          y={titleTop + (TITLE_BAND - title.getHeight()) / 2 + 4}
-          width={Math.ceil(title.getLongestLine()) + 1}
-        />
-      )}
     </Group>
   );
 }

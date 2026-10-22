@@ -199,7 +199,7 @@ export function posterTemplate(data: TemplateData, format: CanvasFormat): Templa
         color: WHITE,
         axisLabels: false,
         // Too small to read at a graphic's size: the bars speak for themselves.
-        title: false,
+        header: false,
         font: FONT,
         bold: false,
         uppercase: true,

@@ -159,6 +159,29 @@ export function Watermark({
   );
 }
 
+/** Height of the AllRun name drawn `width` wide. */
+export function wordmarkHeight(width: number): number {
+  return (BRAND_GEOMETRY.wordmark.height * width) / BRAND_GEOMETRY.wordmark.width;
+}
+
+/**
+ * The AllRun name in one `color`, `width` wide, with its top-left corner at (0, 0): the signature
+ * of a mixed widget, in the widget's own color.
+ */
+export function PlainWordmark({
+  color,
+  width,
+}: {
+  readonly color: string;
+  readonly width: number;
+}) {
+  return (
+    <Group transform={[{ scale: width / BRAND_GEOMETRY.wordmark.width }]}>
+      <WordmarkShape palette={{ all: color, run: color }} />
+    </Group>
+  );
+}
+
 /** The monogram as an interface element (e.g. a header), adapted to light and dark mode. */
 export function BrandMark({ height }: { readonly height: number }) {
   const scheme = useColorScheme();

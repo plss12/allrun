@@ -1,14 +1,17 @@
 import type { Activity } from '@/core/activity';
 import type { ActivityDetail } from '@/core/activity-detail';
+import type { HeartRateZones } from '@/core/heart-rate-zones';
 import type { DateRange } from '@/core/dates';
 import { selectActivities } from '@/core/summary';
 import type { ActivitySource } from '@/sources/activity-source';
 import { parseStravaDetail } from '@/sources/strava/detail';
 import { parseStravaActivities } from '@/sources/strava/schema';
+import { parseStravaZones } from '@/sources/strava/zones';
 
 import { generateStravaDetail } from './detail';
 
 import { type FixtureOptions, generateStravaFixtures } from './generate';
+import { generateStravaZones } from './zones';
 
 /**
  * {@link ActivitySource} backed by synthetic Strava-shaped data. The data goes through the same
@@ -49,6 +52,11 @@ export class FixtureActivitySource implements ActivitySource {
     // Through the same validation and mapping as Strava's responses.
     const { streams, splits } = generateStravaDetail(activity, seedOf(id));
     return parseStravaDetail(JSON.parse(JSON.stringify(streams)), splits);
+  }
+
+  /** The synthetic athlete's zones, through the same validation as Strava's. */
+  async getHeartRateZones(): Promise<HeartRateZones | null> {
+    return parseStravaZones(generateStravaZones());
   }
 }
 

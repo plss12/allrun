@@ -60,44 +60,60 @@ describe('activityCatalog', () => {
   const trail = activityCatalog(makeActivity({ sportType: 'TrailRun' }));
 
   it('groups the widgets in sections, in the gallery order', () => {
-    expect(trail.map((section) => section.id)).toEqual(['data', 'text', 'route', 'brand']);
+    expect(trail.map((section) => section.id)).toEqual(['mixed', 'basic', 'brand']);
   });
 
-  it('gives each datum a tile, in the sport order, close data sharing one', () => {
-    expect(tileKeys(trail, 'data')).toEqual([
-      'data-distance',
-      'data-elevation',
-      'data-time',
-      'data-pace',
-      'data-heartRate',
-      'data-averageCadence',
-      'data-calories',
+  it('opens with the mixed widgets, a tile per design with its versions', () => {
+    expect(tileKeys(trail, 'mixed')).toEqual([
+      'block-headline',
+      'block-columns',
+      'block-route',
+      'block-day',
+      'block-sport',
+    ]);
+    expect(variantKeys(trail, 'block-headline')).toEqual([
+      'block-headline-stacked',
+      'block-headline-inline',
+      'block-headline-condensed',
+    ]);
+    expect(variantKeys(trail, 'block-columns')).toEqual([
+      'block-columns-2',
+      'block-columns-3',
+      'block-columns-4',
+      'block-columns-6',
     ]);
   });
 
-  it('scrolls through each way of writing a value in its tile, the default first, never rounded', () => {
-    // Distances keep their two decimals, and times their seconds.
-    expect(variantKeys(trail, 'data-distance')).toEqual(['metric-distance']);
-    // In the sport's order: a trail run's moving time before its elapsed time.
-    expect(variantKeys(trail, 'data-time')).toEqual([
+  it('puts the basics in order: data, route, free text, name, date', () => {
+    expect(tileKeys(trail, 'basic')).toEqual([
+      'data',
+      'route',
+      'text',
+      'info-activityName',
+      'info-activityDate',
+    ]);
+  });
+
+  it('scrolls through every datum in one tile, in the sport order, each way of writing it after it', () => {
+    // Distances keep their two decimals, and times their seconds: nothing is rounded.
+    expect(variantKeys(trail, 'data')).toEqual([
+      'metric-distance',
+      'metric-elevationGain',
       'metric-movingTime',
       'metric-movingTime-units',
+      'metric-maxElevation',
+      'metric-pace',
+      'metric-pace-marks',
+      'metric-averageHeartRate',
+      'metric-maxHeartRate',
+      'metric-averageCadence',
+      'metric-calories',
       'metric-elapsedTime',
       'metric-elapsedTime-units',
     ]);
-    expect(variantKeys(trail, 'data-pace')).toEqual(['metric-pace', 'metric-pace-marks']);
-    expect(variantKeys(trail, 'data-elevation')).toEqual([
-      'metric-elevationGain',
-      'metric-maxElevation',
-    ]);
-    expect(variantKeys(trail, 'data-heartRate')).toEqual([
-      'metric-averageHeartRate',
-      'metric-maxHeartRate',
-    ]);
   });
 
-  it('offers free text, the name and the date, with every date format in its tile', () => {
-    expect(tileKeys(trail, 'text')).toEqual(['text', 'info-activityName', 'info-activityDate']);
+  it('offers every date format in its tile', () => {
     // Every format but the weekday with the start time; the start time alone stays.
     expect(variantKeys(trail, 'info-activityDate')).toEqual([
       'info-activityDate',
@@ -127,34 +143,58 @@ describe('activityCatalog', () => {
     ]);
   });
 
-  it('offers each line chart plain, with its peak or with its average, in its own section', () => {
+  it('offers each line chart under its header, with its average, and alone', () => {
     const catalog = activityCatalog(makeActivity(), ['elevation', 'heartRate']);
     expect(tileKeys(catalog, 'charts')).toEqual(['chart-elevation', 'chart-heartRate']);
     expect(variantKeys(catalog, 'chart-elevation')).toEqual([
       'chart-elevation',
-      'chart-elevation-max',
       'chart-elevation-average',
+      'chart-elevation-noheader',
     ]);
     expect(variantKeys(catalog, 'chart-heartRate')).toEqual([
       'chart-heartRate',
-      'chart-heartRate-max',
       'chart-heartRate-average',
+      'chart-heartRate-noheader',
     ]);
   });
 
-  it('offers splits without values, with the pace, with the pace and elevation, or with the average', () => {
+  it("offers a heart rate's zones as a colored line, with their table, or the table alone", () => {
+    const catalog = activityCatalog(makeActivity(), ['elevation', 'heartRate'], false, true);
+    expect(variantKeys(catalog, 'chart-heartRate')).toEqual([
+      'chart-heartRate',
+      'chart-heartRate-average',
+      'chart-heartRate-zones-line',
+      'chart-heartRate-zones-lineAndTable',
+      'chart-heartRate-zones-table',
+      'chart-heartRate-noheader',
+    ]);
+    // Only a heart rate has zones.
+    expect(variantKeys(catalog, 'chart-elevation')).toHaveLength(3);
+  });
+
+  it('offers splits with their paces first, then more columns, and last under their header', () => {
     const catalog = activityCatalog(makeActivity(), ['splits']);
     expect(variantKeys(catalog, 'chart-splits')).toEqual([
-      'chart-splits-nopace',
       'chart-splits',
       'chart-splits-elevation',
-      'chart-splits-average',
+      'chart-splits-heartRate',
+      'chart-splits-elevation-heartRate',
+      'chart-splits-nopace',
+    ]);
+    // Without a heart rate monitor, no column of heart rates.
+    const unmonitored = activityCatalog(makeActivity({ averageHeartRate: null }), ['splits']);
+    expect(variantKeys(unmonitored, 'chart-splits')).toEqual([
+      'chart-splits',
+      'chart-splits-elevation',
+      'chart-splits-nopace',
     ]);
   });
 
   it('offers the place after the date, in each format, only when it can be named', () => {
     const named = activityCatalog(makeActivity(), [], true);
-    expect(tileKeys(named, 'text')).toEqual([
+    expect(tileKeys(named, 'basic')).toEqual([
+      'data',
+      'route',
       'text',
       'info-activityName',
       'info-activityDate',
@@ -165,12 +205,13 @@ describe('activityCatalog', () => {
       'info-activityPlace-cityRegion',
       'info-activityPlace-cityCountry',
     ]);
-    expect(tileKeys(activityCatalog(makeActivity()), 'text')).not.toContain('info-activityPlace');
+    expect(tileKeys(activityCatalog(makeActivity()), 'basic')).not.toContain('info-activityPlace');
   });
 
   it('leaves out the route of an activity without GPS', () => {
     const catalog = activityCatalog(makeActivity({ sportType: 'Yoga', routePolyline: null }));
-    expect(catalog.map((section) => section.id)).not.toContain('route');
+    expect(tileKeys(catalog, 'basic')).not.toContain('route');
+    expect(tileKeys(catalog, 'mixed')).not.toContain('block-route');
   });
 
   it('gives every item and every tile its own key, and the variants of a widget one widget key', () => {
@@ -242,34 +283,30 @@ describe('summaryCatalog', () => {
 
   it('offers every total as written each way, the texts, the routes, the charts and the logo', () => {
     const catalog = summaryCatalog(summarize(activities, week), 'day');
-    expect(catalog.map((section) => section.id)).toEqual([
+    expect(catalog.map((section) => section.id)).toEqual(['basic', 'charts', 'brand']);
+    expect(tileKeys(catalog, 'basic')).toEqual([
       'data',
+      'summaryRoutes',
       'text',
-      'route',
-      'charts',
-      'brand',
+      'info-periodName',
     ]);
-    expect(tileKeys(catalog, 'data')).toEqual([
-      'data-totalDistance',
-      'data-totalMovingTime',
-      'data-activityCount',
-      'data-totalElevationGain',
-      'data-averagePace',
-      'data-longestDistance',
-    ]);
-    expect(variantKeys(catalog, 'data-totalMovingTime')).toEqual([
+    expect(variantKeys(catalog, 'data')).toEqual([
+      'summaryMetric-totalDistance',
       'summaryMetric-totalMovingTime',
       'summaryMetric-totalMovingTime-units',
+      'summaryMetric-activityCount',
+      'summaryMetric-totalElevationGain',
+      'summaryMetric-averagePace',
+      'summaryMetric-averagePace-marks',
+      'summaryMetric-longestDistance',
     ]);
-    expect(variantKeys(catalog, 'data-totalDistance')).toEqual(['summaryMetric-totalDistance']);
-    expect(tileKeys(catalog, 'text')).toEqual(['text', 'info-periodName']);
     expect(variantKeys(catalog, 'info-periodName')).toEqual([
       'info-periodName',
       ...PERIOD_FORMATS.slice(1).map((format) => `info-periodName-${format}`),
     ]);
   });
 
-  it("offers each chart plain, with each bar's value or with the average", () => {
+  it("offers each chart plain, with each bar's value or with the average, and alone", () => {
     // A week only has days.
     const catalog = summaryCatalog(summarize(activities, week), 'day');
     expect(tileKeys(catalog, 'charts')).toEqual([
@@ -280,11 +317,13 @@ describe('summaryCatalog', () => {
       'summaryChart-distance',
       'summaryChart-distance-values',
       'summaryChart-distance-average',
+      'summaryChart-distance-noheader',
     ]);
     expect(variantKeys(catalog, 'summaryChart-movingTime')).toEqual([
       'summaryChart-movingTime',
       'summaryChart-movingTime-values',
       'summaryChart-movingTime-average',
+      'summaryChart-movingTime-noheader',
     ]);
   });
 
@@ -298,6 +337,7 @@ describe('summaryCatalog', () => {
       'summaryChart-movingTime-week',
       'summaryChart-movingTime-week-values',
       'summaryChart-movingTime-week-average',
+      'summaryChart-movingTime-noheader',
     ]);
     // The period's own size stays on `auto`, so a saved design suits any period.
     const buckets = items(catalog).flatMap((item) =>

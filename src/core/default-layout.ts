@@ -78,8 +78,8 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     subtitle: slot(0.5, 0.14, 0.546),
     titleMaxWidth: 0.86,
     route: slot(0.5, 0.485, 0.69),
-    routes: slot(0.5, 0.36, 0.6),
-    chart: slot(0.5, 0.615, 0.6),
+    routes: slot(0.5, 0.35, 0.6),
+    chart: slot(0.5, 0.625, 0.6),
     metrics: { y: 0.79, from: 0.03, to: 0.97 },
     scale: 0.66,
     logo: slot(0.5, 0.93, 0.85),
@@ -197,7 +197,8 @@ export function defaultSummaryTemplate(
       value: summaryHasDistance(summary) ? 'distance' : 'movingTime',
       color: WHITE,
       axisLabels: true,
-      title: true,
+      // The totals are right under it: a header would repeat them.
+      header: false,
       font: DEFAULT_FONT,
       bold: true,
       uppercase: true,
@@ -293,7 +294,6 @@ export function newLayer(
         id,
         color: WHITE,
         axisLabels: true,
-        title: true,
         font,
         bold: true,
         uppercase: true,
@@ -306,8 +306,6 @@ export function newLayer(
         ...item,
         id,
         color: WHITE,
-        axisLabels: true,
-        title: true,
         font,
         bold: true,
         uppercase: true,
@@ -322,6 +320,16 @@ export function newLayer(
         id,
         transform: centered(layout.logo.scale),
         opacity: 0.95,
+      };
+    case 'activityBlock':
+      // Blocks are designed for a story, and shrink with the other widgets in smaller formats.
+      return {
+        ...item,
+        id,
+        logo: false,
+        style: { font, color: WHITE, bold: true, uppercase: true },
+        transform: centered(layout.scale / LAYOUTS.story.scale),
+        opacity: 1,
       };
   }
 }
@@ -356,6 +364,7 @@ function textFont(layer: Layer): FontId | null {
     case 'summaryMetric':
     case 'info':
     case 'text':
+    case 'activityBlock':
       return layer.style.font;
     case 'summaryChart':
     case 'activityChart':

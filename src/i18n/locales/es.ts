@@ -87,9 +87,8 @@ export const es: Translations = {
   },
   widgets: {
     sections: {
-      data: 'Datos',
-      text: 'Texto',
-      route: 'Ruta',
+      mixed: 'Mixtos',
+      basic: 'Básicos',
       charts: 'Gráficas',
       brand: 'Logo',
     },
@@ -104,6 +103,13 @@ export const es: Translations = {
     summaryRoutes: 'Rutas del periodo',
     summaryChart: 'Gráfico de barras',
     allrunLogo: 'Logo de AllRun',
+    blocks: {
+      headline: 'Titular',
+      columns: 'Columnas',
+      route: 'Ruta y datos',
+      day: 'Día y datos',
+      sport: 'Deporte y datos',
+    },
   },
   style: {
     color: 'Color',
@@ -122,6 +128,7 @@ export const es: Translations = {
     },
     showLabel: 'Etiqueta',
     showUnit: 'Unidad',
+    logo: 'Logo',
     backdrop: 'Fondo',
     backdrops: {
       none: 'Sin fondo',
@@ -135,7 +142,6 @@ export const es: Translations = {
       wider: 'Muy abierto',
     },
     axisLabels: 'Etiquetas',
-    chartTitle: 'Título',
     widths: {
       thin: 'Fino',
       medium: 'Medio',
@@ -197,9 +203,15 @@ export const es: Translations = {
     glow: 'Brillo',
     noValues: 'Sin datos',
     pace: 'Ritmo',
-    paceAndElevation: 'Ritmo y desnivel',
+    elevation: 'Desnivel',
+    heartRate: 'Frecuencia cardiaca',
     values: 'Con datos',
-    peak: 'Máximo',
+    named: 'Con su nombre',
+    zones: {
+      line: 'Zonas',
+      lineAndTable: 'Zonas y tabla',
+      table: 'Tabla de zonas',
+    },
     average: 'Media',
     buckets: {
       day: 'Por días',
@@ -211,18 +223,15 @@ export const es: Translations = {
       mark: 'Monograma',
       lockup: 'Ambos',
     },
-  },
-  chartTitles: {
-    distance: {
-      day: '{{unit}} por día',
-      week: '{{unit}} por semana',
-      month: '{{unit}} por mes',
+    blockLayouts: {
+      stacked: 'Apilado',
+      inline: 'En paralelo',
+      condensed: 'En una línea',
+      centered: 'Centrado',
+      list: 'Lista',
+      between: 'Entre datos',
     },
-    movingTime: {
-      day: 'Horas por día',
-      week: 'Horas por semana',
-      month: 'Horas por mes',
-    },
+    dataCount: 'Datos: {{count}}',
   },
   metrics: {
     distance: 'Distancia',
@@ -312,12 +321,45 @@ export const es: Translations = {
     power: 'Gráfica de potencia',
     splits: 'Parciales',
   },
-  activityChartTitles: {
-    elevation: 'Desnivel',
-    pace: 'Ritmo',
-    heartRate: 'Frecuencia cardiaca',
-    power: 'Potencia',
-    splits: 'Parciales por {{unit}}',
+  chartCaptions: {
+    activity: {
+      elevation: 'Desnivel',
+      pace: 'Ritmo',
+      heartRate: 'Frecuencia cardiaca',
+      power: 'Potencia',
+      splits: 'Parciales por {{unit}}',
+    },
+    distance: {
+      day: '{{unit}} por día',
+      week: '{{unit}} por semana',
+      month: '{{unit}} por mes',
+    },
+    movingTime: {
+      day: 'Horas por día',
+      week: 'Horas por semana',
+      month: 'Horas por mes',
+    },
+  },
+  chartHeaders: {
+    averagePace: 'Ritmo medio',
+    fastestPace: 'Ritmo más rápido',
+    averageSpeed: 'Velocidad media',
+    maxSpeed: 'Velocidad máxima',
+    averageHeartRate: 'FC media',
+    maxHeartRate: 'FC máxima',
+    averagePower: 'Potencia media',
+    maxPower: 'Potencia máxima',
+    fastestSplit: 'Parcial más rápido',
+    total: 'Total',
+    averagePer: {
+      day: 'Media por día',
+      week: 'Media por semana',
+      month: 'Media por mes',
+    },
+  },
+  splitHeaders: {
+    elevation: 'Desn.',
+    heartRate: 'FC',
   },
   durationUnits: {
     hours: 'h',

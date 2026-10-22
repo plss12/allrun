@@ -9,15 +9,15 @@ import { makeSummary } from '@/test-utils/make-summary';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import {
+  activityChartHeader,
   chartBuckets,
-  chartTitleKey,
   chartValueText,
   type EditorData,
   hasUnit,
   isPaceLayer,
   isTimeLayer,
   layerText,
-  lineAxisLabels,
+  periodChartHeader,
   MISSING_VALUE,
   speedMeasure,
   splitRowTexts,
@@ -32,7 +32,13 @@ const context = {
   unitLabel: testUnitLabel,
 } as const;
 const activity = makeActivity({ name: 'Rodaje suave', startLocal: '2026-10-14T08:00:00' });
-const activityData: EditorData = { mode: 'activity', activity, detail: null, place: null };
+const activityData: EditorData = {
+  mode: 'activity',
+  activity,
+  detail: null,
+  place: null,
+  zones: null,
+};
 
 const layer = (id: string, layers: readonly Layer[]): Layer => {
   const found = layers.find((candidate) => candidate.id === id);
@@ -245,19 +251,80 @@ describe('textRuns', () => {
   });
 });
 
-describe('lineAxisLabels', () => {
-  it("label the ends of a line with how far it runs, in the user's unit", () => {
-    expect(lineAxisLabels({ axis: 'distance', axisEnd: 16_080 }, context)).toEqual([
-      '0',
-      '16,08 km',
+describe('activityChartHeader', () => {
+  /** A line whose highest value is `max`; its points don't matter to the header. */
+  const line = (max: number, average = max / 2) =>
+    ({
+      kind: 'line',
+      points: [],
+      min: 0,
+      max,
+      average,
+      axis: 'distance',
+      axisEnd: 10_000,
+    }) as const;
+  const run = makeActivity({ sportType: 'Run' });
+
+  it("writes an elevation's distance and climb as their data widgets do", () => {
+    expect(activityChartHeader('elevation', run, line(30), context)).toEqual([
+      { label: 'metrics.distance', value: '10,00', unit: 'km' },
+      { label: 'metrics.elevationGain', value: '50', unit: 'm' },
     ]);
-    expect(
-      lineAxisLabels(
-        { axis: 'distance', axisEnd: 16_093.44 },
-        { ...context, unit: 'mi', locale: 'en' },
-      ),
-    ).toEqual(['0', '10.00 mi']);
-    expect(lineAxisLabels({ axis: 'time', axisEnd: 2700 }, context)).toEqual(['0:00', '45:00']);
+  });
+
+  it("writes a pace's average (the activity's own) and fastest, or a ride's speeds", () => {
+    expect(activityChartHeader('pace', run, line(4, 3), context)).toEqual([
+      { label: 'chartHeaders.averagePace', value: '5:00', unit: 'min/km' },
+      { label: 'chartHeaders.fastestPace', value: '4:10', unit: 'min/km' },
+    ]);
+    const ride = makeActivity({ sportType: 'Ride', averageSpeed: 30 / 3.6 });
+    expect(activityChartHeader('pace', ride, line(50 / 3.6), context)).toEqual([
+      { label: 'chartHeaders.averageSpeed', value: '30,0', unit: 'km/h' },
+      { label: 'chartHeaders.maxSpeed', value: '50,0', unit: 'km/h' },
+    ]);
+  });
+
+  it("writes a heart rate's average and highest, the chart's when the activity has none", () => {
+    expect(activityChartHeader('heartRate', run, line(180), context)).toEqual([
+      { label: 'chartHeaders.averageHeartRate', value: '150', unit: 'ppm' },
+      { label: 'chartHeaders.maxHeartRate', value: '172', unit: 'ppm' },
+    ]);
+    const unmeasured = makeActivity({ maxHeartRate: null });
+    expect(activityChartHeader('heartRate', unmeasured, line(180), context)[1].value).toBe('180');
+  });
+
+  it("writes the splits' average pace and fastest split", () => {
+    const split = (averageSpeed: number) => ({
+      distanceMeters: 1000,
+      movingTimeSeconds: 1000 / averageSpeed,
+      elevationDifferenceMeters: 0,
+      averageSpeed,
+      averageHeartRate: null,
+    });
+    const bars = {
+      kind: 'bars',
+      values: [3, 4],
+      average: 3.5,
+      splits: [split(3), split(4)],
+    } as const;
+    expect(activityChartHeader('splits', run, bars, context)).toEqual([
+      { label: 'chartHeaders.averagePace', value: '5:00', unit: 'min/km' },
+      { label: 'chartHeaders.fastestSplit', value: '4:10', unit: 'min/km' },
+    ]);
+  });
+});
+
+describe('periodChartHeader', () => {
+  it("writes the period's total and its average per bar, empty bars included", () => {
+    const week = [10_000, 0, 5000, 0, 0, 0, 0];
+    expect(periodChartHeader('distance', 'week', week, context)).toEqual([
+      { label: 'chartHeaders.total', value: '15,00', unit: 'km' },
+      { label: 'chartHeaders.averagePer.week', value: '2,14', unit: 'km' },
+    ]);
+    expect(periodChartHeader('movingTime', 'day', [3600, 7200], context)).toEqual([
+      { label: 'chartHeaders.total', value: '3:00', unit: 'h' },
+      { label: 'chartHeaders.averagePer.day', value: '1:30', unit: 'h' },
+    ]);
   });
 });
 
@@ -289,20 +356,30 @@ describe('chart texts', () => {
     expect(chartValueText('heartRate', 158, context)).toBe('158 ppm');
   });
 
-  it('write a row of splits: its number, its pace alone and its change in altitude', () => {
-    const row = { first: 1, last: 1, speed: 1000 / 450, elevationDifference: 110.4 };
+  it('write a row of splits without units, as a table: number, pace, altitude, heart rate', () => {
+    const row = {
+      first: 1,
+      last: 1,
+      speed: 1000 / 450,
+      elevationDifference: 110.4,
+      heartRate: 151.6,
+    };
     expect(splitRowTexts(row, 'pace', context)).toEqual({
       number: '1',
       value: '7:30',
-      elevation: '+110 m',
+      elevation: '110',
+      heartRate: '152',
     });
-    expect(splitRowTexts({ ...row, last: 3, elevationDifference: -72 }, 'speed', context)).toEqual({
-      number: '1–3',
-      value: '8,0',
-      elevation: '−72 m',
-    });
-    expect(splitRowTexts({ ...row, elevationDifference: 0.2 }, 'pace', context).elevation).toBe(
-      '0 m',
+    expect(
+      splitRowTexts(
+        { ...row, last: 3, elevationDifference: -72, heartRate: null },
+        'speed',
+        context,
+      ),
+    ).toEqual({ number: '1–3', value: '8,0', elevation: '−72', heartRate: '—' });
+    // A descent that rounds to nothing has no minus.
+    expect(splitRowTexts({ ...row, elevationDifference: -0.2 }, 'pace', context).elevation).toBe(
+      '0',
     );
   });
 });
@@ -370,18 +447,5 @@ describe('isPaceLayer', () => {
     expect(isPaceLayer(total)).toBe(false);
     expect(isPaceLayer({ ...total, metric: 'averagePace' })).toBe(true);
     expect(isPaceLayer({ ...total, metric: 'totalMovingTime' })).toBe(false);
-  });
-});
-
-describe('chartTitleKey', () => {
-  it('names a translated title for every value and bar size', () => {
-    for (const value of ['distance', 'movingTime'] as const) {
-      for (const size of ['day', 'week', 'month'] as const) {
-        const key = chartTitleKey(value, size);
-        expect(key).toBe(`chartTitles.${value}.${size}`);
-        expect(en.chartTitles[value][size]).toEqual(expect.any(String));
-      }
-    }
-    expect(en.chartTitles.distance.week).toBe('{{unit}} per week');
   });
 });

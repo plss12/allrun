@@ -87,7 +87,7 @@ async function render(change: (layer: Layer) => Layer, id: string): Promise<SkIm
   }
   const template: Template = { ...base, layers: [change(layer)] };
   const context: LayerContext = {
-    data: { mode: 'activity', activity, detail: null, place: null },
+    data: { mode: 'activity', activity, detail: null, place: null, zones: null },
     fonts: interFonts(),
     textContext: {
       unit: 'km',
@@ -138,6 +138,7 @@ describe('prepareLayers', () => {
             activity: { ...activity, name: activityName },
             detail: null,
             place: null,
+            zones: null,
           },
           fonts: interFonts(),
           textContext: {
@@ -245,19 +246,22 @@ describe('activity charts', () => {
     };
     for (const series of ACTIVITY_CHART_SERIES) {
       const { layers, pixels } = await drawn(
-        { mode: 'activity', activity: ride, detail, place: null },
+        { mode: 'activity', activity: ride, detail, place: null, zones: null },
         series,
       );
       expect(layers).toHaveLength(1);
       expect(pixels).toBeGreaterThan(5000);
     }
     const { layers } = await drawn(
-      { mode: 'activity', activity: ride, detail: null, place: null },
+      { mode: 'activity', activity: ride, detail: null, place: null, zones: null },
       'pace',
     );
     expect(layers).toEqual([]);
     // The splits draw as rows, as tall as their rows.
-    const rows = await drawn({ mode: 'activity', activity: ride, detail, place: null }, 'splits');
+    const rows = await drawn(
+      { mode: 'activity', activity: ride, detail, place: null, zones: null },
+      'splits',
+    );
     expect(rows.layers[0].height).toBeGreaterThan(400);
   });
 });

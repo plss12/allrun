@@ -45,6 +45,7 @@ const splitSchema = z.object({
   moving_time: z.number().nonnegative(),
   elevation_difference: z.number().nullish(),
   average_speed: z.number().nonnegative(),
+  average_heartrate: z.number().positive().nullish(),
 });
 
 export const stravaSplitsSchema = z.object({
@@ -92,6 +93,7 @@ function toSplit(split: z.infer<typeof splitSchema>): ActivitySplit {
     movingTimeSeconds: split.moving_time,
     elevationDifferenceMeters: split.elevation_difference ?? 0,
     averageSpeed: split.average_speed,
+    averageHeartRate: split.average_heartrate ?? null,
   };
 }
 

@@ -88,9 +88,8 @@ export const en = {
   },
   widgets: {
     sections: {
-      data: 'Data',
-      text: 'Text',
-      route: 'Route',
+      mixed: 'Mixed',
+      basic: 'Basics',
       charts: 'Charts',
       brand: 'Logo',
     },
@@ -105,6 +104,13 @@ export const en = {
     summaryRoutes: 'Routes of the period',
     summaryChart: 'Bar chart',
     allrunLogo: 'AllRun logo',
+    blocks: {
+      headline: 'Headline',
+      columns: 'Columns',
+      route: 'Route and data',
+      day: 'Day and data',
+      sport: 'Sport and data',
+    },
   },
   style: {
     color: 'Color',
@@ -123,6 +129,7 @@ export const en = {
     },
     showLabel: 'Label',
     showUnit: 'Unit',
+    logo: 'Logo',
     backdrop: 'Background',
     backdrops: {
       none: 'None',
@@ -136,7 +143,6 @@ export const en = {
       wider: 'Wide open',
     },
     axisLabels: 'Labels',
-    chartTitle: 'Title',
     widths: {
       thin: 'Thin',
       medium: 'Medium',
@@ -198,9 +204,15 @@ export const en = {
     glow: 'Glow',
     noValues: 'No values',
     pace: 'Pace',
-    paceAndElevation: 'Pace and elevation',
+    elevation: 'Elevation',
+    heartRate: 'Heart rate',
     values: 'With values',
-    peak: 'Peak',
+    named: 'With its name',
+    zones: {
+      line: 'Zones',
+      lineAndTable: 'Zones and table',
+      table: 'Table of zones',
+    },
     average: 'Average',
     buckets: {
       day: 'By day',
@@ -212,18 +224,15 @@ export const en = {
       mark: 'Monogram',
       lockup: 'Both',
     },
-  },
-  chartTitles: {
-    distance: {
-      day: '{{unit}} per day',
-      week: '{{unit}} per week',
-      month: '{{unit}} per month',
+    blockLayouts: {
+      stacked: 'Stacked',
+      inline: 'Side by side',
+      condensed: 'In one line',
+      centered: 'Centered',
+      list: 'List',
+      between: 'Between data',
     },
-    movingTime: {
-      day: 'Hours per day',
-      week: 'Hours per week',
-      month: 'Hours per month',
-    },
+    dataCount: 'Data: {{count}}',
   },
   metrics: {
     distance: 'Distance',
@@ -315,12 +324,48 @@ export const en = {
     power: 'Power chart',
     splits: 'Splits',
   },
-  activityChartTitles: {
-    elevation: 'Elevation',
-    pace: 'Pace',
-    heartRate: 'Heart rate',
-    power: 'Power',
-    splits: 'Splits per {{unit}}',
+  /** A period's chart's name, over its bars when it has no header; `{{unit}}` is "km" or "mi". */
+  chartCaptions: {
+    activity: {
+      elevation: 'Elevation',
+      pace: 'Pace',
+      heartRate: 'Heart rate',
+      power: 'Power',
+      splits: 'Splits per {{unit}}',
+    },
+    distance: {
+      day: '{{unit}} per day',
+      week: '{{unit}} per week',
+      month: '{{unit}} per month',
+    },
+    movingTime: {
+      day: 'Hours per day',
+      week: 'Hours per week',
+      month: 'Hours per month',
+    },
+  },
+  /** The two data over a chart (see `activityChartHeader` and `periodChartHeader`). */
+  chartHeaders: {
+    averagePace: 'Avg pace',
+    fastestPace: 'Fastest pace',
+    averageSpeed: 'Avg speed',
+    maxSpeed: 'Max speed',
+    averageHeartRate: 'Avg HR',
+    maxHeartRate: 'Max HR',
+    averagePower: 'Avg power',
+    maxPower: 'Max power',
+    fastestSplit: 'Fastest split',
+    total: 'Total',
+    averagePer: {
+      day: 'Avg per day',
+      week: 'Avg per week',
+      month: 'Avg per month',
+    },
+  },
+  /** Names of the columns of the splits that follow the bars, short as on Strava. */
+  splitHeaders: {
+    elevation: 'Elev.',
+    heartRate: 'HR',
   },
   durationUnits: {
     hours: 'h',

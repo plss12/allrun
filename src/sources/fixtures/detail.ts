@@ -87,8 +87,8 @@ export function generateStravaDetail(
       distance === null
         ? { splits_metric: null, splits_standard: null }
         : {
-            splits_metric: splits(distance, time, altitude, 1000),
-            splits_standard: splits(distance, time, altitude, METERS_PER_MILE),
+            splits_metric: splits(distance, time, altitude, heartRate, 1000),
+            splits_standard: splits(distance, time, altitude, heartRate, METERS_PER_MILE),
           },
   };
 }
@@ -187,12 +187,14 @@ function powers(effort: readonly number[], average: number, random: Random): num
 
 /**
  * Splits every `length` meters, measured on the streams the way Strava does: the time to cover
- * each stretch, its average speed and its change in altitude, plus the shorter last one.
+ * each stretch, its average speed, its change in altitude and its average heart rate, plus the
+ * shorter last one.
  */
 function splits(
   distance: readonly number[],
   time: readonly number[],
   altitude: readonly number[] | null,
+  heartRate: readonly number[] | null,
   length: number,
 ) {
   const total = distance[distance.length - 1];
@@ -207,6 +209,10 @@ function splits(
       moving_time: Math.round(seconds),
       elevation_difference: altitude === null ? null : round(end.altitude - start.altitude, 1),
       average_speed: seconds > 0 ? round((at - start.meters) / seconds, 3) : 0,
+      average_heartrate:
+        heartRate === null
+          ? null
+          : round(meanBetween(time, heartRate, start.seconds, end.seconds), 1),
     });
     start = end;
   }
@@ -227,6 +233,27 @@ function sampleAt(
   const share = span > 0 ? (meters - distance[j]) / span : 0;
   const lerp = (values: readonly number[]) => values[j] + (values[i] - values[j]) * share;
   return { meters, seconds: lerp(time), altitude: altitude === null ? 0 : lerp(altitude) };
+}
+
+/**
+ * Mean of the `values` sampled from `from` to `to` seconds, or of the nearest sample when none
+ * falls in between (a split shorter than the sampling).
+ */
+function meanBetween(
+  time: readonly number[],
+  values: readonly number[],
+  from: number,
+  to: number,
+): number {
+  const inside = values.filter((_, i) => time[i] >= from && time[i] <= to);
+  if (inside.length > 0) {
+    return mean(inside);
+  }
+  const nearest = time.reduce(
+    (best, seconds, i) => (Math.abs(seconds - to) < Math.abs(time[best] - to) ? i : best),
+    0,
+  );
+  return values[nearest];
 }
 
 const mean = (values: readonly number[]) =>

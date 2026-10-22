@@ -1,4 +1,5 @@
 import type { Activity } from './activity';
+import { activityBlocks } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
 import { chartBucketOptions } from './periods';
 import { PLACE_FORMATS } from './place';
@@ -7,6 +8,7 @@ import { availableSummaryMetrics, summaryHasDistance } from './summary-metrics';
 import {
   type ActivityChartSeries,
   DATE_FORMATS,
+  HEART_RATE_ZONE_VIEWS,
   type Layer,
   type LayerKind,
   PERIOD_FORMATS,
@@ -21,8 +23,9 @@ import {
  * gallery, and every way of writing or drawing it is a variant that scrolls inside the tile (a
  * time as a clock or in units; a dashed route; a chart with its average line), so the
  * gallery stays short and shows every variant ready-made, while the style panel keeps only the
- * look (color, font, opacity…). Close data share a tile: the moving and elapsed times, the
- * average and highest heart rates (ADR 009). To change a variant, the user replaces the widget.
+ * look (color, font, opacity…). The mixed widgets lead the gallery; the single data all share
+ * one tile, each followed by its other ways of writing it, so the basics fit in a few tiles
+ * (ADR 009). To change a variant, the user replaces the widget.
  * `default-layout.ts` turns a pick into a layer with the default look.
  */
 
@@ -45,24 +48,32 @@ export type CatalogItem =
   | ({ readonly kind: 'route' } & LineLook)
   | ({ readonly kind: 'summaryRoutes' } & LineLook)
   | Readonly<
-      Pick<LayerOf<'summaryChart'>, 'kind' | 'value' | 'barValues' | 'averageLine'> &
+      Pick<LayerOf<'summaryChart'>, 'kind' | 'value' | 'barValues' | 'averageLine' | 'header'> &
         Partial<Pick<LayerOf<'summaryChart'>, 'bucket'>>
     >
   | Readonly<
       Pick<
         LayerOf<'activityChart'>,
-        'kind' | 'series' | 'splitPace' | 'splitElevation' | 'maxLabel' | 'averageLine'
+        | 'kind'
+        | 'series'
+        | 'splitPace'
+        | 'splitElevation'
+        | 'splitHeartRate'
+        | 'header'
+        | 'zones'
+        | 'averageLine'
       >
     >
   | Readonly<
       Pick<LayerOf<'logo'>, 'kind' | 'brand' | 'variant'> & Partial<Pick<LayerOf<'logo'>, 'tone'>>
-    >;
+    >
+  | Readonly<Pick<LayerOf<'activityBlock'>, 'kind' | 'block'>>;
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
 export type NewLayer =
   Exclude<CatalogItem, { kind: 'text' }> | { readonly kind: 'text'; readonly content: string };
 
-export type CatalogSectionId = 'data' | 'text' | 'route' | 'charts' | 'brand';
+export type CatalogSectionId = 'mixed' | 'basic' | 'charts' | 'brand';
 
 /** A tile of the gallery: one widget, whose variants scroll inside it, the default first. */
 export interface CatalogWidget {
@@ -92,6 +103,8 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
       return `chart-${item.series}`;
     case 'summaryChart':
       return `summaryChart-${item.value}`;
+    case 'activityBlock':
+      return `block-${item.block.design}`;
     case 'text':
     case 'route':
     case 'summaryRoutes':
@@ -122,18 +135,24 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         return [
           item.splitPace === false ? 'nopace' : undefined,
           flag(item.splitElevation, 'elevation'),
-          flag(item.maxLabel, 'max'),
+          flag(item.splitHeartRate, 'heartRate'),
+          item.zones === undefined ? undefined : `zones-${item.zones}`,
           flag(item.averageLine, 'average'),
+          item.header === false ? 'noheader' : undefined,
         ];
       case 'summaryChart':
         return [
           item.bucket === 'auto' ? undefined : item.bucket,
           flag(item.barValues, 'values'),
           flag(item.averageLine, 'average'),
+          item.header === false ? 'noheader' : undefined,
         ];
       case 'route':
       case 'summaryRoutes':
         return [item.line, flag(item.glow, 'glow')];
+      case 'activityBlock':
+        // Every version is named, the first too: they are designs, not options of one.
+        return [item.block.design === 'columns' ? item.block.count : item.block.layout];
       case 'text':
         return [];
     }
@@ -171,33 +190,23 @@ const WRITINGS: Readonly<Record<MetricId | SummaryMetricId, Writing>> = {
   activityCount: 'plain',
 };
 
-/** Metrics that share a tile with a close one: two times, two heart rates, two altitudes. */
-const SHARED_TILES: Partial<Record<MetricId | SummaryMetricId, string>> = {
-  movingTime: 'time',
-  elapsedTime: 'time',
-  averageHeartRate: 'heartRate',
-  maxHeartRate: 'heartRate',
-  elevationGain: 'elevation',
-  maxElevation: 'elevation',
-  averagePower: 'power',
-  weightedAveragePower: 'power',
-};
+/** The one tile every single datum scrolls in. */
+const DATA_TILE = 'data';
 
 /**
- * A data widget in each way its value can be written (its time or pace notation), in its tile.
- * The first is the default, which the layer leaves out. Nothing is rounded: distances keep their
- * two decimals and times their seconds (ADR 009).
+ * A data widget in each way its value can be written (its time or pace notation), one after
+ * another in the data tile. The first is the default, which the layer leaves out. Nothing is
+ * rounded: distances keep their two decimals and times their seconds (ADR 009).
  */
 function dataEntries(plain: DataItem): Entry[] {
   const writing = WRITINGS[plain.metric];
-  const tile = `data-${SHARED_TILES[plain.metric] ?? plain.metric}`;
   const variants: DataItem[] =
     writing === 'time'
       ? [plain, ...TIME_NOTATIONS.slice(1).map((timeNotation) => ({ ...plain, timeNotation }))]
       : writing === 'pace'
         ? [plain, { ...plain, paceNotation: 'marks' }]
         : [plain];
-  return variants.map((item) => ['data', tile, item]);
+  return variants.map((item) => ['basic', DATA_TILE, item]);
 }
 
 /** Entries of one widget's variants, in their section. */
@@ -212,7 +221,7 @@ const OFFERED_DATE_FORMATS = DATE_FORMATS.filter((format) => format !== 'weekday
 
 /** Route lines, solid, solid with a glow, dashed and dotted. */
 function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {
-  return tileEntries('route', [
+  return tileEntries('basic', [
     { kind },
     { kind, glow: true },
     { kind, line: 'dashed' },
@@ -221,23 +230,40 @@ function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {
 }
 
 /**
- * An activity chart's variants. A line: plain, with its highest point marked, or with its average.
- * Splits: without values, with each split's pace (their default), with its pace and change in
- * altitude, or with the average.
+ * An activity chart's variants. A line, under its header: plain or with its average; a heart
+ * rate, when the athlete's zones are known (`withZones`), also colored by zone, with a table of
+ * the time in each, or the table alone; and last the line under its name only. Splits: with each
+ * split's pace (their default), with its change in altitude, and, for an activity with a heart
+ * rate, with it too; and last without values, under the header that the paces would repeat
+ * otherwise. Each row already reads against the others, so splits have no average.
  */
-function chartEntries(series: ActivityChartSeries): Entry[] {
+function chartEntries(
+  series: ActivityChartSeries,
+  withHeartRate: boolean,
+  withZones: boolean,
+): Entry[] {
   const items: CatalogItem[] =
     series === 'splits'
       ? [
-          { kind: 'activityChart', series, splitPace: false },
           { kind: 'activityChart', series },
           { kind: 'activityChart', series, splitElevation: true },
-          { kind: 'activityChart', series, averageLine: true },
+          ...(withHeartRate
+            ? ([
+                { kind: 'activityChart', series, splitHeartRate: true },
+                { kind: 'activityChart', series, splitElevation: true, splitHeartRate: true },
+              ] as const)
+            : []),
+          { kind: 'activityChart', series, splitPace: false },
         ]
       : [
           { kind: 'activityChart', series },
-          { kind: 'activityChart', series, maxLabel: true },
           { kind: 'activityChart', series, averageLine: true },
+          ...(series === 'heartRate' && withZones
+            ? HEART_RATE_ZONE_VIEWS.map(
+                (zones) => ({ kind: 'activityChart', series, zones }) as const,
+              )
+            : []),
+          { kind: 'activityChart', series, header: false },
         ];
   return tileEntries('charts', items);
 }
@@ -245,7 +271,8 @@ function chartEntries(series: ActivityChartSeries): Entry[] {
 /**
  * A period's bar charts: of distance (only when it has some) and of time, each with its bars of
  * every size the period offers (its own size first, on `auto`, so the design suits any period),
- * plain, with each bar's value, or with the average.
+ * plain, with each bar's value, or with the average, all under their header; and last the
+ * bars alone, without it.
  */
 function periodChartEntries(summary: PeriodSummary, autoBucket: BucketSize): Entry[] {
   const values = summaryHasDistance(summary)
@@ -258,14 +285,16 @@ function periodChartEntries(summary: PeriodSummary, autoBucket: BucketSize): Ent
   return values.flatMap((value) =>
     tileEntries(
       'charts',
-      buckets.flatMap((bucket): CatalogItem[] => {
-        const chart = {
-          kind: 'summaryChart',
-          value,
-          ...(bucket === undefined ? {} : { bucket }),
-        } as const;
-        return [chart, { ...chart, barValues: true }, { ...chart, averageLine: true }];
-      }),
+      buckets
+        .flatMap((bucket): CatalogItem[] => {
+          const chart = {
+            kind: 'summaryChart',
+            value,
+            ...(bucket === undefined ? {} : { bucket }),
+          } as const;
+          return [chart, { ...chart, barValues: true }, { ...chart, averageLine: true }];
+        })
+        .concat({ kind: 'summaryChart', value, header: false }),
     ),
   );
 }
@@ -284,7 +313,7 @@ const BRAND: readonly Entry[] = tileEntries(
   })),
 );
 
-const SECTION_ORDER: readonly CatalogSectionId[] = ['data', 'text', 'route', 'charts', 'brand'];
+const SECTION_ORDER: readonly CatalogSectionId[] = ['mixed', 'basic', 'charts', 'brand'];
 
 /**
  * Puts the items in their tiles and the tiles in their sections, in the gallery's order, leaving
@@ -305,23 +334,29 @@ function sections(entries: readonly Entry[]): CatalogSection[] {
 }
 
 /**
- * Widgets for one activity: the metrics of its sport it has values for (in the sport's order
- * within each section), free text and its name, its date, its place when it can be named
- * (`withPlace`), the route when it has GPS, the `charts` it recorded data for (see
- * `availableActivityCharts`), and the logo. Time O(m + c) for the m metrics of the sport and c
- * charts.
+ * Widgets for one activity: its mixed widgets (see `activityBlocks`); its basics: the metrics of
+ * its sport it has values for (in the sport's order, all in one tile), the route when it has GPS,
+ * free text, its name, its date and its place when it can be named (`withPlace`); then the
+ * `charts` it recorded data for (see `availableActivityCharts`), and the logo. Time O(m + c) for
+ * the m metrics of the sport and c charts.
  */
 export function activityCatalog(
   activity: Activity,
   charts: readonly ActivityChartSeries[] = [],
   withPlace = false,
+  withZones = false,
 ): CatalogSection[] {
   return sections([
+    ...tileEntries(
+      'mixed',
+      activityBlocks(activity).map((block) => ({ kind: 'activityBlock', block })),
+    ),
     ...availableMetrics(activity).flatMap((metric) => dataEntries({ kind: 'metric', metric })),
-    ...tileEntries('text', [{ kind: 'text' }, { kind: 'info', field: 'activityName' }]),
+    ...(activity.routePolyline === null ? [] : lineEntries('route')),
+    ...tileEntries('basic', [{ kind: 'text' }, { kind: 'info', field: 'activityName' }]),
     // The first format is the default, which the layer leaves out.
     ...tileEntries(
-      'text',
+      'basic',
       OFFERED_DATE_FORMATS.map((dateFormat, i) => ({
         kind: 'info',
         field: 'activityDate',
@@ -330,7 +365,7 @@ export function activityCatalog(
     ),
     ...(withPlace
       ? tileEntries(
-          'text',
+          'basic',
           PLACE_FORMATS.map((placeFormat, i) => ({
             kind: 'info',
             field: 'activityPlace',
@@ -338,15 +373,16 @@ export function activityCatalog(
           })),
         )
       : []),
-    ...(activity.routePolyline === null ? [] : lineEntries('route')),
-    ...charts.flatMap(chartEntries),
+    ...charts.flatMap((series) =>
+      chartEntries(series, activity.averageHeartRate !== null, withZones),
+    ),
     ...BRAND,
   ]);
 }
 
 /**
- * Widgets for a period summary: every total, free text, the period name in each format, the
- * overlaid routes when any activity has GPS, the bar charts (`autoBucket` is the period's own bar
+ * Widgets for a period summary: its basics (every total in one tile, the overlaid routes when any
+ * activity has GPS, free text, the period name in each format), the bar charts (`autoBucket` is the period's own bar
  * size, see `bucketForPeriod`), and the logo. Formats of the name that write a period the same
  * (all of them, for a year) are one widget for the user: the gallery drops the repeats. Time O(1).
  */
@@ -355,16 +391,16 @@ export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): 
     ...availableSummaryMetrics(summary).flatMap((metric) =>
       dataEntries({ kind: 'summaryMetric', metric }),
     ),
-    ...tileEntries('text', [{ kind: 'text' }]),
+    ...(summary.routes.length === 0 ? [] : lineEntries('summaryRoutes')),
+    ...tileEntries('basic', [{ kind: 'text' }]),
     ...tileEntries(
-      'text',
+      'basic',
       PERIOD_FORMATS.map((periodFormat, i) => ({
         kind: 'info',
         field: 'periodName',
         ...(i === 0 ? {} : { periodFormat }),
       })),
     ),
-    ...(summary.routes.length === 0 ? [] : lineEntries('summaryRoutes')),
     ...periodChartEntries(summary, autoBucket),
     ...BRAND,
   ]);

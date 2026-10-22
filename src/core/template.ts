@@ -129,8 +129,51 @@ export const BACKDROPS = ['none', 'soft', 'solid'] as const;
 /** Room between letters: none, open, or wide open (as a fraction of the font size). */
 export const LETTER_SPACINGS = ['normal', 'wide', 'wider'] as const;
 
+/**
+ * How a heart rate chart shows the athlete's zones: its line colored by zone, the line and a
+ * table of the time spent in each zone, or the table alone.
+ */
+export const HEART_RATE_ZONE_VIEWS = ['line', 'lineAndTable', 'table'] as const;
+
+export type HeartRateZoneView = (typeof HEART_RATE_ZONE_VIEWS)[number];
+
 /** How a route's line is drawn. */
 export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
+
+/**
+ * Mixed widgets of one activity: several of its data in one designed block (ADR 009), which the
+ * editor fills with the data that suit its sport (see `blockMetrics`). Each design comes in a few
+ * versions, the pages of its tile in the gallery:
+ * - `headline`: one big datum with two more under it (`stacked`), beside it (`inline`), or the
+ *   three in one line (`condensed`);
+ * - `columns`: 2, 3, 4 or 6 data, each with its name over it, in columns (one datum alone is a
+ *   data widget);
+ * - `route`: the route with data under it (`stacked`), beside it (`inline`), or between two data
+ *   (`between`); only for activities with a route;
+ * - `day`: the weekday written big, its date and three data under it (`stacked`) or beside it
+ *   (`inline`);
+ * - `sport`: the sport's icon and name over its data, one under another (`centered`) or as a list
+ *   of names and values (`list`).
+ */
+export const ACTIVITY_BLOCK_DESIGNS = ['headline', 'columns', 'route', 'day', 'sport'] as const;
+
+export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
+
+export const HEADLINE_LAYOUTS = ['stacked', 'inline', 'condensed'] as const;
+export const BLOCK_COLUMN_COUNTS = [2, 3, 4, 6] as const;
+export const ROUTE_LAYOUTS = ['stacked', 'inline', 'between'] as const;
+export const DAY_LAYOUTS = ['stacked', 'inline'] as const;
+export const SPORT_LAYOUTS = ['centered', 'list'] as const;
+
+const activityBlockSchema = z.discriminatedUnion('design', [
+  z.object({ design: z.literal('headline'), layout: z.enum(HEADLINE_LAYOUTS) }),
+  z.object({ design: z.literal('columns'), count: z.literal(BLOCK_COLUMN_COUNTS) }),
+  z.object({ design: z.literal('route'), layout: z.enum(ROUTE_LAYOUTS) }),
+  z.object({ design: z.literal('day'), layout: z.enum(DAY_LAYOUTS) }),
+  z.object({ design: z.literal('sport'), layout: z.enum(SPORT_LAYOUTS) }),
+]);
+
+export type ActivityBlock = z.infer<typeof activityBlockSchema>;
 
 /** Most layers a template can hold. */
 export const MAX_LAYERS = 50;
@@ -167,6 +210,17 @@ const textStyleSchema = z.object({
   backdrop: z.enum(BACKDROPS).optional(),
   /** Room between letters (see `LETTER_SPACINGS`); `normal` when absent. */
   letterSpacing: z.enum(LETTER_SPACINGS).optional(),
+});
+
+/**
+ * How a mixed widget's texts look: one font and color for the whole block, which sets its names
+ * and secondary data apart by size and weight. Its shadow follows its color (see `castsShadow`).
+ */
+const blockStyleSchema = textStyleSchema.pick({
+  font: true,
+  color: true,
+  bold: true,
+  uppercase: true,
 });
 
 const strokeStyleSchema = z.object({
@@ -270,16 +324,21 @@ export const layerSchema = z.discriminatedUnion('kind', [
     color: colorSchema,
     /** Day, date or month initial under each bar. */
     axisLabels: z.boolean().default(false),
-    /** A line under the chart saying what the bars measure and over what ("KM PER WEEK"). */
-    title: z.boolean().default(true),
-    /** Font of the axis labels and the title. */
+    // Templates saved while charts had a title under them (`title`) still read: the field is
+    // dropped, and the header over the chart takes its place.
+    /**
+     * Two data over the chart, the period's total and its average per bar (shown when absent);
+     * without them, the chart's name ("KM PER WEEK"), so it still says what it shows.
+     */
+    header: z.boolean().optional(),
+    /** Font of the header and the axis labels. */
     font: z.enum(FONT_IDS).default('inter'),
     bold: z.boolean().default(true),
-    /** Whether the title is in capitals (axis labels are initials and numbers already). */
+    /** Whether the header is in capitals (axis labels are initials and numbers already). */
     uppercase: z.boolean().default(true),
-    /** Where the title sits under the bars. */
+    /** Where the header sits over the bars. */
     align: z.enum(['left', 'center', 'right']).default('center'),
-    /** A dashed line across the bars at their average. */
+    /** A dashed line across the bars at their average (written in the header). */
     averageLine: z.boolean().optional(),
     /**
      * Each bar's value, in a row over the chart. Templates saved when the highest bar could be
@@ -292,27 +351,46 @@ export const layerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('activityChart'),
     series: z.enum(ACTIVITY_CHART_SERIES),
     color: colorSchema,
-    /** Distance (or time) at both ends of a line. Splits ignore it: each row has its number. */
-    axisLabels: z.boolean(),
-    /** A line under the chart saying what it shows ("ELEVATION", "SPLITS PER KM"). */
-    title: z.boolean(),
-    /** Font of the axis labels and the title. */
+    // Templates saved while charts had a title under them (`title`), labels at the ends of a
+    // line (`axisLabels`) or its highest point marked (`maxLabel`) still read: the fields are
+    // dropped, and the header over the chart writes what they said.
+    /**
+     * Two data over the chart ("AVG PACE 5:44 /KM · FASTEST PACE 4:01 /KM"; see
+     * `activityChartHeader`), shown when absent; without them, the chart's name ("ELEVATION"),
+     * so it still says what it shows. Splits that write each pace have neither: the paces and the
+     * names of their columns say it all.
+     */
+    header: z.boolean().optional(),
+    /** Font of the header and the texts of the splits. */
     font: z.enum(FONT_IDS),
     bold: z.boolean(),
     uppercase: z.boolean(),
-    /** Where the title sits under the chart. */
+    /** Where the header sits over the chart. */
     align: z.enum(['left', 'center', 'right']),
-    /** A dashed line across the chart at the average. */
+    /** A dashed line across the chart at the average (written in the header). Splits ignore it. */
     averageLine: z.boolean().optional(),
-    /** The highest point of a line marked, with its value. Splits ignore it. */
-    maxLabel: z.boolean().optional(),
-    // Splits are rows one under another, each with its number before the bar and its texts in a
-    // column on the right. Templates saved while they could also be columns (`orientation`) still
-    // read: the field is dropped, and they draw as rows.
-    /** Each split's pace ("5:12"), at the end of its row; shown when absent. */
+    /**
+     * The heart rate zones (see `HEART_RATE_ZONE_VIEWS`): the line colored by zone, the line and
+     * a table of the time in each, or the table alone. Other series ignore it.
+     */
+    zones: z.enum(HEART_RATE_ZONE_VIEWS).optional(),
+    // Splits are a table, as on Strava: the number and pace of each split, its bar, then its
+    // change in altitude and heart rate. Templates saved while they could also be columns
+    // (`orientation`) still read: the field is dropped, and they draw as rows.
+    /** Each split's pace ("5:12"), after its number; shown when absent. */
     splitPace: z.boolean().optional(),
-    /** Each split's change in altitude ("+12 m"), next to its pace; hidden when absent. */
+    /** Each split's change in altitude ("12", "−3"), after its bar; hidden when absent. */
     splitElevation: z.boolean().optional(),
+    /** Each split's average heart rate ("152"), at the end of its row; hidden when absent. */
+    splitHeartRate: z.boolean().optional(),
+  }),
+  z.object({
+    ...layerBase,
+    kind: z.literal('activityBlock'),
+    block: activityBlockSchema,
+    /** The AllRun name at the foot of the block, in its color, as Strava signs its own. */
+    logo: z.boolean(),
+    style: blockStyleSchema,
   }),
   z.object({
     ...layerBase,
@@ -336,7 +414,12 @@ export type Layer = z.infer<typeof layerSchema>;
 export type LayerKind = Layer['kind'];
 
 /** Layer kinds that only make sense with one activity or with a period summary. */
-const ACTIVITY_ONLY: ReadonlySet<LayerKind> = new Set(['metric', 'route', 'activityChart']);
+const ACTIVITY_ONLY: ReadonlySet<LayerKind> = new Set([
+  'metric',
+  'route',
+  'activityChart',
+  'activityBlock',
+]);
 const SUMMARY_ONLY: ReadonlySet<LayerKind> = new Set([
   'summaryMetric',
   'summaryRoutes',

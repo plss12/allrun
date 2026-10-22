@@ -14,6 +14,7 @@ import {
 
 import type { CatalogSection, NewLayer } from '@/core/layer-catalog';
 import type { CanvasFormat, FontId } from '@/core/template';
+import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
 import { layerText } from './editor-data';
@@ -41,9 +42,6 @@ interface LayerSheetProps {
   readonly onAddText: () => void;
   readonly onClose: () => void;
 }
-
-/** Behind each widget: dark, like the editor's checkerboard, so the white widgets read. */
-const TILE_BACKGROUND = '#1C1C1E';
 
 /**
  * Sheet to add a widget: a gallery of every widget drawn live with the user's data, in sections,
@@ -177,22 +175,33 @@ function pageLabel(
             : t(`gallery.buckets.${item.bucket}`),
           flag(item.barValues, t('gallery.values')),
           flag(item.averageLine, t('gallery.average')),
+          flag(item.header === false, t('gallery.named')),
         ];
       case 'activityChart':
         return [
           t(`activityCharts.${item.series}`),
-          ...(item.series === 'splits'
-            ? [
-                item.splitPace === false
-                  ? t('gallery.noValues')
-                  : t(item.splitElevation === true ? 'gallery.paceAndElevation' : 'gallery.pace'),
-              ]
-            : []),
-          flag(item.maxLabel, t('gallery.peak')),
+          ...(item.series !== 'splits'
+            ? []
+            : item.splitPace === false
+              ? [t('gallery.noValues')]
+              : [
+                  t('gallery.pace'),
+                  flag(item.splitElevation, t('gallery.elevation')),
+                  flag(item.splitHeartRate, t('gallery.heartRate')),
+                ]),
+          item.zones === undefined ? '' : t(`gallery.zones.${item.zones}`),
           flag(item.averageLine, t('gallery.average')),
+          flag(item.header === false, t('gallery.named')),
         ];
       case 'logo':
         return [t('widgets.allrunLogo'), t(`gallery.variants.${item.variant}`)];
+      case 'activityBlock':
+        return [
+          t(`widgets.blocks.${item.block.design}`),
+          item.block.design === 'columns'
+            ? t('gallery.dataCount', { count: item.block.count })
+            : t(`gallery.blockLayouts.${item.block.layout}`),
+        ];
     }
   })();
   return parts.filter((part) => part !== '').join(', ');
@@ -221,12 +230,10 @@ function WidgetTile({
   return (
     <View
       style={{
+        ...cardSurface(14),
         width,
         height,
-        borderRadius: 10,
-        borderCurve: 'continuous',
         overflow: 'hidden',
-        backgroundColor: TILE_BACKGROUND,
       }}
     >
       <ScrollView
@@ -234,8 +241,10 @@ function WidgetTile({
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         scrollEnabled={several}
-        onMomentumScrollEnd={(event) =>
-          setShown(Math.round(event.nativeEvent.contentOffset.x / width))
+        // The dot follows the finger, not only the end of the swipe.
+        scrollEventThrottle={16}
+        onScroll={(event) =>
+          setShown(pageAt(event.nativeEvent.contentOffset.x, width, widget.pages.length))
         }
       >
         {widget.pages.map((page, i) => (
@@ -308,4 +317,9 @@ function PageCanvas({
       </Group>
     </Canvas>
   );
+}
+
+/** The page of a pager `width` wide mostly on screen at `offset`, within its `count` pages. */
+function pageAt(offset: number, width: number, count: number): number {
+  return Math.min(count - 1, Math.max(0, Math.round(offset / width)));
 }

@@ -6,6 +6,8 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import {
   colorPageOf,
   layerColor,
+  setAxisLabels,
+  setBlockOptions,
   setChartOptions,
   setDataLabels,
   setLayerColor,
@@ -41,6 +43,7 @@ type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
 /** A period's chart or an activity's: they share how their texts look. */
 type AnyChartLayer = Extract<Layer, { kind: 'summaryChart' | 'activityChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
+type BlockLayer = Extract<Layer, { kind: 'activityBlock' }>;
 
 function isTextLayer(layer: Layer): layer is TextLayer {
   return (
@@ -68,6 +71,7 @@ function tabsFor(layer: Layer): readonly Tab[] {
       return ['color', 'width', 'opacity'];
     case 'summaryChart':
     case 'activityChart':
+    case 'activityBlock':
       return ['color', 'font', 'format', 'opacity'];
     case 'logo':
       return ['tone', 'opacity'];
@@ -227,10 +231,18 @@ function FormatRow({
 }
 
 /** The format a widget's panel edits, and how to apply a change to it. */
-function formatOf(layer: TextLayer | AnyChartLayer): {
+function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
   readonly format: Format;
   readonly change: (patch: Partial<Format>) => StyleChange;
 } {
+  if (layer.kind === 'activityBlock') {
+    // A block lays out its own texts: no alignment, backdrop or spacing.
+    const { font, bold, uppercase } = layer.style;
+    return {
+      format: { font, bold, uppercase },
+      change: (patch) => (template) => setBlockOptions(template, layer.id, patch),
+    };
+  }
   if (layer.kind === 'summaryChart' || layer.kind === 'activityChart') {
     return {
       format: {
@@ -267,12 +279,18 @@ function TabContent({
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
 }) {
+  const { t } = useTranslation();
   switch (tab) {
     case 'color':
       return <ColorPager layer={layer} onChange={onChange} />;
     case 'font':
     case 'format': {
-      if (!isTextLayer(layer) && layer.kind !== 'summaryChart' && layer.kind !== 'activityChart') {
+      if (
+        !isTextLayer(layer) &&
+        layer.kind !== 'summaryChart' &&
+        layer.kind !== 'activityChart' &&
+        layer.kind !== 'activityBlock'
+      ) {
         return null;
       }
       const { format, change } = formatOf(layer);
@@ -282,8 +300,22 @@ function TabContent({
         <FormatRow format={format} onPatch={(patch) => onChange(change(patch))}>
           {layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (
             <DataOptions layer={layer} onChange={onChange} />
-          ) : layer.kind === 'summaryChart' || layer.kind === 'activityChart' ? (
-            <ChartOptions layer={layer} onChange={onChange} />
+          ) : layer.kind === 'summaryChart' ? (
+            <Chip
+              label={t('style.axisLabels')}
+              selected={layer.axisLabels}
+              onPress={() =>
+                onChange((template) => setAxisLabels(template, layer.id, !layer.axisLabels))
+              }
+            />
+          ) : layer.kind === 'activityBlock' ? (
+            <Chip
+              label={t('style.logo')}
+              selected={layer.logo}
+              onPress={() =>
+                onChange((template) => setBlockOptions(template, layer.id, { logo: !layer.logo }))
+              }
+            />
           ) : undefined}
         </FormatRow>
       );
@@ -497,36 +529,6 @@ function LineRow({
         />
       ))}
     </Row>
-  );
-}
-
-/** Whether a chart writes its labels (under it; rows of splits have none) and its title. */
-function ChartOptions({
-  layer,
-  onChange,
-}: {
-  readonly layer: AnyChartLayer;
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const { t } = useTranslation();
-  const rows = layer.kind === 'activityChart' && layer.series === 'splits';
-  const toggle = (option: 'axisLabels' | 'title', value: boolean) =>
-    onChange((template) => setChartOptions(template, layer.id, { [option]: !value }));
-  return (
-    <>
-      {rows ? null : (
-        <Chip
-          label={t('style.axisLabels')}
-          selected={layer.axisLabels}
-          onPress={() => toggle('axisLabels', layer.axisLabels)}
-        />
-      )}
-      <Chip
-        label={t('style.chartTitle')}
-        selected={layer.title}
-        onPress={() => toggle('title', layer.title)}
-      />
-    </>
   );
 }
 

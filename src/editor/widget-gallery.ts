@@ -34,6 +34,13 @@ const TILE_INSET = 0.08;
  */
 const MAX_CANVAS_SPAN = 0.45;
 
+/** Widgets whose every version fills its page, instead of all sharing one scale. */
+const FILLS_PAGE: ReadonlySet<CatalogItem['kind']> = new Set([
+  'info',
+  'activityChart',
+  'summaryChart',
+]);
+
 /** Height of a tile over its width, by how many tiles share a row. */
 const TILE_RATIO = { 1: 0.5, 2: 0.6 } as const;
 
@@ -123,8 +130,10 @@ function measureWidget(
     if (prepared === null) {
       return [];
     }
+    // Two data can read alike ("150" beats and steps): their names tell them apart.
     const text = layerText(prepared.layer, context.data, context.textContext);
-    const written = text?.value ?? catalogItemKey(item);
+    const written =
+      text === null ? catalogItemKey(item) : [text.label, text.value, text.unit].join(' ');
     if (seen.has(written)) {
       return [];
     }
@@ -148,7 +157,9 @@ function measureWidget(
     key: catalogItemKey(item),
     item,
     prepared,
-    scale: item.kind === 'info' ? fill(prepared) : shared,
+    // Dates and names differ a lot in length, and a chart's versions in height (a heart rate's
+    // zones table): each fills its own page instead of shrinking the others.
+    scale: FILLS_PAGE.has(item.kind) ? fill(prepared) : shared,
   }));
   return { key: widget.key, pages };
 }

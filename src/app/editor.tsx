@@ -146,10 +146,15 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
   const data = useAsync(async (): Promise<EditorData> => {
     if (params.mode === 'activity') {
       // The charts' data comes along; without it the editor still works, just without charts.
-      const [activity, detail] = await Promise.all([
+      const [activity, detail, zones] = await Promise.all([
         source.getActivity(params.activityId),
         source.getActivityDetail(params.activityId).catch((error: unknown) => {
           logError('Could not load the activity detail for its charts', error);
+          return null;
+        }),
+        // Without them the heart rate chart just has no zones.
+        source.getHeartRateZones().catch((error: unknown) => {
+          logError('Could not load the heart rate zones', error);
           return null;
         }),
       ]);
@@ -157,7 +162,7 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
         throw new ActivityNotFoundError(`No activity with id ${params.activityId}`);
       }
       // Its place is named once the editor is open: it doesn't hold up the loading.
-      return { mode: 'activity', activity, detail, place: null };
+      return { mode: 'activity', activity, detail, place: null, zones };
     }
     const range = customRange(params.start, params.end);
     const activities = await source.listInRange(range);
@@ -296,6 +301,7 @@ function EditorWorkspace({
           data.activity,
           data.detail === null ? [] : availableActivityCharts(data.detail, unit),
           placeLookup.status !== 'unknown',
+          data.zones !== null,
         )
       : summaryCatalog(data.summary, data.bucketSize);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);

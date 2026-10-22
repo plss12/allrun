@@ -29,6 +29,8 @@ export interface ActivitySplit {
   readonly elevationDifferenceMeters: number;
   /** Meters per second over the split. */
   readonly averageSpeed: number;
+  /** Beats per minute over the split; `null` without a heart rate monitor. */
+  readonly averageHeartRate: number | null;
 }
 
 export interface ActivityDetail {

@@ -7,13 +7,20 @@ const streams = {
 };
 const splits = {
   splits_metric: [
-    { distance: 1000, moving_time: 300, elevation_difference: 4.2, average_speed: 3.33 },
+    {
+      distance: 1000,
+      moving_time: 300,
+      elevation_difference: 4.2,
+      average_speed: 3.33,
+      average_heartrate: 151.4,
+    },
+    { distance: 1000, moving_time: 310, elevation_difference: null, average_speed: 3.22 },
   ],
   splits_standard: null,
 };
 
 describe('parseStravaDetail', () => {
-  it('maps streams and splits, a missed sample becoming NaN', () => {
+  it('maps streams and splits, a missed sample or heart rate becoming NaN or null', () => {
     const detail = parseStravaDetail(streams, splits);
     expect(detail.streams).toEqual({
       time: [0, 1, 2],
@@ -30,6 +37,14 @@ describe('parseStravaDetail', () => {
           movingTimeSeconds: 300,
           elevationDifferenceMeters: 4.2,
           averageSpeed: 3.33,
+          averageHeartRate: 151.4,
+        },
+        {
+          distanceMeters: 1000,
+          movingTimeSeconds: 310,
+          elevationDifferenceMeters: 0,
+          averageSpeed: 3.22,
+          averageHeartRate: null,
         },
       ],
       imperial: [],

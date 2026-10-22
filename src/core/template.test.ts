@@ -203,9 +203,15 @@ describe('parseTemplate', () => {
       parseTemplate({ ...activityTemplate, layers: [{ ...chart, series: 'cadence' }] }),
     ).toThrow(/series/);
     const rows = { ...chart, splitElevation: true, maxLabel: true };
-    expect(parseTemplate({ ...activityTemplate, layers: [rows] }).layers[0]).toMatchObject({
-      splitElevation: true,
-    });
+    const read = parseTemplate({ ...activityTemplate, layers: [rows] }).layers[0];
+    expect(read).toMatchObject({ splitElevation: true });
+    // Charts saved with a title, end labels or their peak marked read with a header instead.
+    expect(read).not.toHaveProperty('title');
+    expect(read).not.toHaveProperty('axisLabels');
+    expect(read).not.toHaveProperty('maxLabel');
+    expect(() =>
+      parseTemplate({ ...activityTemplate, layers: [{ ...chart, zones: 'bars' }] }),
+    ).toThrow(/zones/);
     // Splits saved while they could be columns read as rows.
     const columns = parseTemplate({
       ...activityTemplate,
@@ -228,11 +234,17 @@ describe('parseTemplate', () => {
       transform: center,
       opacity: 1,
     };
-    const template = parseTemplate({ ...activityTemplate, mode: 'summary', layers: [chart] });
+    const template = parseTemplate({
+      ...activityTemplate,
+      mode: 'summary',
+      layers: [{ ...chart, title: true }],
+    });
+    // The title it had gives way to the header, shown when absent.
+    expect(template.layers[0]).not.toHaveProperty('title');
+    expect(template.layers[0]).not.toHaveProperty('header');
     expect(template.layers[0]).toMatchObject({
       bucket: 'auto',
       axisLabels: false,
-      title: true,
       font: 'inter',
       bold: true,
       uppercase: true,

@@ -1,6 +1,7 @@
 import type { Activity } from '@/core/activity';
-import type { LineSeries, SplitRow } from '@/core/activity-charts';
+import type { BarSeries, LineSeries, SplitRow } from '@/core/activity-charts';
 import type { ActivityDetail } from '@/core/activity-detail';
+import type { HeartRateZones } from '@/core/heart-rate-zones';
 import {
   type DisplayMetric,
   isPace,
@@ -12,11 +13,11 @@ import {
 } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
 import { formatPlace, type Place } from '@/core/place';
-import type { SportFamily } from '@/core/sports';
+import type { SportFamily, SportModality } from '@/core/sports';
 import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type { ActivityChartSeries, Layer, SummaryMetricId } from '@/core/template';
-import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
+import { type DistanceUnit, durationParts, type DurationUnit } from '@/core/units';
 import {
   formatActivityDate,
   type FormattedMetric,
@@ -43,6 +44,8 @@ export interface ActivityData {
   readonly detail: ActivityDetail | null;
   /** Where it started, for its place widget; `null` without a route or when it can't be named. */
   readonly place: Place | null;
+  /** The athlete's heart rate zones, for the zones of its heart rate chart; `null` without them. */
+  readonly zones: HeartRateZones | null;
 }
 
 /** What the editor fills the template with: one activity, or a period summary. */
@@ -52,14 +55,6 @@ export type EditorData = ActivityData | SummaryData;
  * Bars of a summary chart and their size: the chart's own size, or the period's for `auto`.
  * Time O(b + n) for b bars and n activities, space O(b).
  */
-/** Key of the title of a chart measuring `value` in bars of `size` ("km per week"). */
-export function chartTitleKey(
-  value: Extract<Layer, { kind: 'summaryChart' }>['value'],
-  size: BucketSize,
-): ChartTitleKey {
-  return `chartTitles.${value}.${size}`;
-}
-
 export function chartBuckets(
   layer: Extract<Layer, { kind: 'summaryChart' }>,
   data: SummaryData,
@@ -68,20 +63,29 @@ export function chartBuckets(
   return { size, buckets: bucketize(data.activities, data.summary.range, size) };
 }
 
-/** Translation key of a data widget's label. */
-/** Translation key of a chart's title, which takes the distance unit as `{{unit}}`. */
-export type ChartTitleKey =
-  `chartTitles.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
-
-/** Key of the title of an activity chart; the splits' takes the distance unit as `{{unit}}`. */
-export type ActivityChartTitleKey = `activityChartTitles.${ActivityChartSeries}`;
+/** Names of the data a chart's header writes, besides a metric's own ("Distance"). */
+export type ChartHeaderName =
+  | 'averagePace'
+  | 'fastestPace'
+  | 'averageSpeed'
+  | 'maxSpeed'
+  | 'averageHeartRate'
+  | 'maxHeartRate'
+  | 'averagePower'
+  | 'maxPower'
+  | 'fastestSplit'
+  | 'total'
+  | `averagePer.${BucketSize}`;
 
 /** Translation key of a label the canvas draws. */
 export type LabelKey =
   | `metrics.${MetricId}`
   | `summaryMetrics.${SummaryMetricId}`
-  | ChartTitleKey
-  | ActivityChartTitleKey;
+  | `modalities.${SportModality}`
+  | `splitHeaders.${'elevation' | 'heartRate'}`
+  | `chartHeaders.${ChartHeaderName}`
+  | `chartCaptions.activity.${ActivityChartSeries}`
+  | `chartCaptions.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
 
 /** Text content of a text-like layer, before translation and styling. */
 export interface LayerText {
@@ -106,6 +110,26 @@ function withUnit({ value, unit }: FormattedMetric, context: TextContext): strin
 
 /** Shown in place of a value the activity or period doesn't have. */
 export const MISSING_VALUE = '—';
+
+/**
+ * A datum of `activity` as its data widget writes it by default (a time as a clock, a pace with a
+ * colon), with its unit apart: "10,52" "km". Without a value, a dash and no unit.
+ */
+export function metricText(
+  activity: Activity,
+  metric: MetricId,
+  context: TextContext,
+): FormattedMetric {
+  const value = metricValue(activity, metric);
+  if (value === null || value <= 0) {
+    return { value: MISSING_VALUE, unit: null };
+  }
+  const display = toDisplayMetric(metric, value, {
+    unit: context.unit,
+    sportFamily: activity.sportFamily,
+  });
+  return formatMetric(display, context.locale);
+}
 
 /**
  * Text a layer displays for the given data, or `null` for layers that aren't text (route,
@@ -302,29 +326,6 @@ export function isPaceLayer(layer: Extract<Layer, { kind: 'metric' | 'summaryMet
   );
 }
 
-/** Key of the title of an activity chart ("ELEVATION", "SPLITS PER KM"). */
-export function activityChartTitleKey(series: ActivityChartSeries): ActivityChartTitleKey {
-  return `activityChartTitles.${series}`;
-}
-
-/**
- * Labels at both ends of a line chart: where it starts and how far it runs, in distance
- * ("0", "16,08 km") or, without one, in time ("0:00", "45:00").
- */
-export function lineAxisLabels(
-  series: Pick<LineSeries, 'axis' | 'axisEnd'>,
-  context: TextContext,
-): readonly [string, string] {
-  if (series.axis === 'time') {
-    return ['0:00', formatDuration(series.axisEnd)];
-  }
-  const display = toDisplayMetric('distance', series.axisEnd, {
-    unit: context.unit,
-    sportFamily: 'run',
-  });
-  return ['0', withUnit(formatMetric(display, context.locale), context)];
-}
-
 /** How a sport writes how fast it went: a pace, a swimming pace or a speed. */
 export type SpeedMeasure = 'pace' | 'swimPace' | 'speed';
 
@@ -353,6 +354,11 @@ export type ChartMeasure =
  * units (meters, m/s, bpm, watts, seconds).
  */
 export function chartValueText(measure: ChartMeasure, value: number, context: TextContext): string {
+  return withUnit(chartValue(measure, value, context), context);
+}
+
+/** Like {@link chartValueText}, with the unit apart, untranslated: "52,30" and "km". */
+function chartValue(measure: ChartMeasure, value: number, context: TextContext): FormattedMetric {
   const display =
     measure === 'periodDistance'
       ? toDisplaySummaryMetric('totalDistance', value, context.unit)
@@ -362,7 +368,7 @@ export function chartValueText(measure: ChartMeasure, value: number, context: Te
             unit: context.unit,
             sportFamily: 'run',
           });
-  return withUnit(formatMetric(display, context.locale), context);
+  return formatMetric(display, context.locale);
 }
 
 const CHART_METRICS = {
@@ -374,14 +380,19 @@ const CHART_METRICS = {
   power: 'averagePower',
 } as const satisfies Record<Exclude<ChartMeasure, 'periodDistance' | 'periodTime'>, MetricId>;
 
-/** The texts of a row of splits: its number, how fast it went and its change in altitude. */
+/**
+ * The texts of a row of splits: its number, how fast it went, its change in altitude and its
+ * heart rate. Like Strava's table, they go without units: the names of the columns say them.
+ */
 export interface SplitRowTexts {
   /** "3", or "1–3" for a row of several splits. */
   readonly number: string;
-  /** The pace or speed alone, without its unit: "5:12", "34,2". */
+  /** The pace or speed alone: "5:12", "34,2". */
   readonly value: string;
-  /** "+12 m", "−3 m". */
+  /** In meters or feet, a descent with a minus: "12", "−3". */
   readonly elevation: string;
+  /** Beats per minute, "152", or a dash for a row without them. */
+  readonly heartRate: string;
 }
 
 /** Writes a row of splits in the user's units and locale. */
@@ -401,10 +412,145 @@ export function splitRowTexts(
     }),
     context.locale,
   );
-  const sign = climb.value === '0' ? '' : row.elevationDifference < 0 ? '−' : '+';
+  const sign = climb.value !== '0' && row.elevationDifference < 0 ? '−' : '';
   return {
     number: row.first === row.last ? String(row.first) : `${row.first}–${row.last}`,
     value: speed.value,
-    elevation: `${sign}${withUnit(climb, context)}`,
+    elevation: `${sign}${climb.value}`,
+    heartRate:
+      row.heartRate === null
+        ? MISSING_VALUE
+        : formatMetric(
+            toDisplayMetric('averageHeartRate', row.heartRate, {
+              unit: context.unit,
+              sportFamily: 'run',
+            }),
+            context.locale,
+          ).value,
   };
+}
+
+/** One of the two data over a chart: its name, and its value with its unit apart. */
+export interface HeaderDatum {
+  readonly label: LabelKey;
+  readonly value: string;
+  /** The unit in the app language ("min/km", "ppm"), or `null` for a time. */
+  readonly unit: string | null;
+}
+
+/** A value of a chart's `measure` as a datum of its header. */
+function headerDatum(
+  label: LabelKey,
+  measure: ChartMeasure,
+  value: number,
+  context: TextContext,
+): HeaderDatum {
+  const written = chartValue(measure, value, context);
+  return {
+    label,
+    value: written.value,
+    unit: written.unit === null ? null : context.unitLabel(written.unit),
+  };
+}
+
+/** The activity's own value of a datum when it has one, or else the chart's. */
+const own = (value: number | null, ofChart: number): number =>
+  value !== null && value > 0 ? value : ofChart;
+
+/**
+ * The two data over an activity's chart (AURA's style): its distance and elevation gain over its
+ * elevation; its average and fastest pace (or speed, as its sport writes it) over its pace; its
+ * average and highest heart rate or power over those; its average pace and fastest split over
+ * its splits. Averages are the activity's own, as its data widgets write them; highest values
+ * are the activity's when it has them, or else the chart's. Time O(s) for s splits.
+ */
+export function activityChartHeader(
+  series: ActivityChartSeries,
+  activity: Activity,
+  chart: LineSeries | BarSeries,
+  context: TextContext,
+): readonly [HeaderDatum, HeaderDatum] {
+  const speed = speedMeasure(activity.sportFamily);
+  const label = (name: ChartHeaderName): LabelKey => `chartHeaders.${name}`;
+  const averageSpeed = headerDatum(
+    label(speed === 'speed' ? 'averageSpeed' : 'averagePace'),
+    speed,
+    own(activity.averageSpeed, chart.average),
+    context,
+  );
+  const fromMetric = (metric: MetricId): HeaderDatum => {
+    const written = metricText(activity, metric, context);
+    return {
+      label: `metrics.${metric}`,
+      value: written.value,
+      unit: written.unit === null ? null : context.unitLabel(written.unit),
+    };
+  };
+  if (chart.kind === 'bars') {
+    const fastest = Math.max(...chart.splits.map((split) => split.averageSpeed));
+    return [averageSpeed, headerDatum(label('fastestSplit'), speed, fastest, context)];
+  }
+  switch (series) {
+    case 'elevation':
+      return [fromMetric('distance'), fromMetric('elevationGain')];
+    case 'pace':
+    case 'splits':
+      return [
+        averageSpeed,
+        headerDatum(
+          label(speed === 'speed' ? 'maxSpeed' : 'fastestPace'),
+          speed,
+          chart.max,
+          context,
+        ),
+      ];
+    case 'heartRate':
+      return [
+        headerDatum(
+          label('averageHeartRate'),
+          'heartRate',
+          own(activity.averageHeartRate, chart.average),
+          context,
+        ),
+        headerDatum(
+          label('maxHeartRate'),
+          'heartRate',
+          own(activity.maxHeartRate, chart.max),
+          context,
+        ),
+      ];
+    case 'power':
+      return [
+        headerDatum(
+          label('averagePower'),
+          'power',
+          own(activity.averagePowerWatts, chart.average),
+          context,
+        ),
+        headerDatum(label('maxPower'), 'power', chart.max, context),
+      ];
+  }
+}
+
+/**
+ * The two data over a period's bars: their total, and their average per bar of `size` (empty
+ * bars count: a week's average is over its seven days). Time O(b) for b bars.
+ */
+export function periodChartHeader(
+  value: Extract<Layer, { kind: 'summaryChart' }>['value'],
+  size: BucketSize,
+  values: readonly number[],
+  context: TextContext,
+): readonly [HeaderDatum, HeaderDatum] {
+  const measure = value === 'distance' ? 'periodDistance' : 'periodTime';
+  const total = values.reduce((sum, bar) => sum + bar, 0);
+  return [
+    headerDatum('chartHeaders.total', measure, total, context),
+    headerDatum(
+      `chartHeaders.averagePer.${size}`,
+      measure,
+      values.length === 0 ? 0 : total / values.length,
+      context,
+    ),
+  ];
 }

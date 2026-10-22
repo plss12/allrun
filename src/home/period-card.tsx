@@ -24,6 +24,7 @@ import {
 } from '@/core/summary-metrics';
 import type { DistanceUnit } from '@/core/units';
 import { useActivitySource } from '@/data/activity-source';
+import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { DateRangeField } from '@/ui/date-range-field';
 import { formatBucketLabels, formatChartValue, formatMetric, formatPeriodName } from '@/ui/format';
@@ -75,10 +76,8 @@ export function PeriodCard({
   return (
     <View
       style={{
+        ...cardSurface(20),
         width,
-        borderRadius: 20,
-        borderCurve: 'continuous',
-        backgroundColor: colors.secondarySystemBackground,
         overflow: 'hidden',
       }}
     >
@@ -189,8 +188,15 @@ function Pages({
         showsHorizontalScrollIndicator={false}
         data={pages}
         keyExtractor={(item) => item}
-        onMomentumScrollEnd={(event) =>
-          onPage(Math.round(event.nativeEvent.contentOffset.x / width))
+        // The dot follows the finger, not only the end of the swipe.
+        scrollEventThrottle={16}
+        onScroll={(event) =>
+          onPage(
+            Math.min(
+              pages.length - 1,
+              Math.max(0, Math.round(event.nativeEvent.contentOffset.x / width)),
+            ),
+          )
         }
         renderItem={({ item }) => (
           <SportPage

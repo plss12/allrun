@@ -130,12 +130,14 @@ type TextLayer = LayerOf<'metric' | 'summaryMetric' | 'info' | 'text'>;
 export type TextStyle = TextLayer['style'];
 type ChartLayer = LayerOf<'summaryChart'>;
 type LogoLayer = LayerOf<'logo'>;
+type BlockLayer = LayerOf<'activityBlock'>;
 
 const TEXT_KINDS = ['metric', 'summaryMetric', 'info', 'text'] as const;
 const DATA_KINDS = ['metric', 'summaryMetric'] as const;
 const LINE_KINDS = ['route', 'summaryRoutes'] as const;
 const CHART_KINDS = ['summaryChart', 'activityChart'] as const;
-const ALL_KINDS = [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS, 'logo'] as const;
+const BLOCK_KINDS = ['activityBlock'] as const;
+const ALL_KINDS = [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS, ...BLOCK_KINDS, 'logo'] as const;
 
 function isKind<K extends LayerKind>(layer: Layer, kinds: readonly K[]): layer is LayerOf<K> {
   return (kinds as readonly LayerKind[]).includes(layer.kind);
@@ -183,6 +185,7 @@ export function layerColor(layer: Layer): string | null {
     case 'summaryMetric':
     case 'info':
     case 'text':
+    case 'activityBlock':
       return layer.style.color;
     case 'route':
     case 'summaryRoutes':
@@ -196,7 +199,7 @@ export function layerColor(layer: Layer): string | null {
 }
 
 /**
- * Sets the color of a text, line or chart layer.
+ * Sets the color of a text, line, chart or mixed layer.
  *
  * @throws Error for the logo, which has tones instead, or a color that is not `#RRGGBB(AA)`.
  */
@@ -205,7 +208,7 @@ export function setLayerColor(template: Template, id: string, color: string): Te
   return editLayer(
     template,
     id,
-    [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS],
+    [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS, ...BLOCK_KINDS],
     'color',
     (layer) => {
       if (layerColor(layer) === color) {
@@ -216,6 +219,8 @@ export function setLayerColor(template: Template, id: string, color: string): Te
         case 'summaryMetric':
         case 'info':
         case 'text':
+          return { ...layer, style: { ...layer.style, color } };
+        case 'activityBlock':
           return { ...layer, style: { ...layer.style, color } };
         case 'route':
         case 'summaryRoutes':
@@ -304,16 +309,13 @@ export function setStrokeWidth(template: Template, id: string, width: number): T
   );
 }
 
-/** What a chart's texts look like and whether it has them. */
-type ChartLooks = Pick<
-  ChartLayer,
-  'axisLabels' | 'title' | 'font' | 'bold' | 'uppercase' | 'align'
->;
+/** What a chart's texts look like. */
+type ChartLooks = Pick<ChartLayer, 'font' | 'bold' | 'uppercase' | 'align'>;
 
 /**
- * Whether a chart has labels and a title, and how its texts are written (font, bold, capitals,
- * alignment of the title). What it measures and draws (bar size, average line, highest value,
- * each bar's value) is chosen in the gallery.
+ * How a chart's texts are written (font, bold, capitals, where its header sits). What it measures
+ * and draws (its header, bar size, average line, zones, each bar's value) is chosen in the
+ * gallery.
  */
 export function setChartOptions(
   template: Template,
@@ -333,5 +335,35 @@ export function setLogoOptions(
 ): Template {
   return editLayer(template, id, ['logo'], 'logo options', (layer) =>
     unchanged(layer, patch) ? layer : { ...layer, ...patch },
+  );
+}
+
+/** What a mixed widget's panel sets: its texts' font, weight and case, and its logo. */
+export type BlockOptions = Pick<BlockLayer['style'], 'font' | 'bold' | 'uppercase'> &
+  Pick<BlockLayer, 'logo'>;
+
+/**
+ * Font, weight and case of a mixed widget's texts, and whether it signs with the AllRun name.
+ * Its design and version are chosen in the gallery; its color goes through `setLayerColor`.
+ */
+export function setBlockOptions(
+  template: Template,
+  id: string,
+  patch: Partial<BlockOptions>,
+): Template {
+  return editLayer(template, id, BLOCK_KINDS, 'block options', (layer) => {
+    const { logo, ...style } = patch;
+    const current = { ...layer.style, logo: layer.logo };
+    if (unchanged(current, patch)) {
+      return layer;
+    }
+    return { ...layer, logo: logo ?? layer.logo, style: { ...layer.style, ...style } };
+  });
+}
+
+/** Whether a period's chart writes the day, date or month under each bar. */
+export function setAxisLabels(template: Template, id: string, axisLabels: boolean): Template {
+  return editLayer(template, id, ['summaryChart'], 'axis labels', (layer) =>
+    layer.axisLabels === axisLabels ? layer : { ...layer, axisLabels },
   );
 }

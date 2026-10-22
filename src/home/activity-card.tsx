@@ -1,4 +1,4 @@
-import { Canvas, Path, Skia } from '@shopify/react-native-skia';
+import { BlurMask, Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo } from 'react';
@@ -12,6 +12,7 @@ import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Box, largestFit, projectRoutes, routeSpan } from '@/core/route-projection';
 import type { DistanceUnit } from '@/core/units';
+import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { formatMetric, formatRelativeDay } from '@/ui/format';
 
@@ -87,11 +88,9 @@ export function ActivityCard({
         router.push({ pathname: '/editor', params: { mode: 'activity', activityId: activity.id } })
       }
       style={({ pressed }) => ({
+        ...cardSurface(20),
         width,
         height,
-        borderRadius: 20,
-        borderCurve: 'continuous',
-        backgroundColor: colors.secondarySystemBackground,
         overflow: 'hidden',
         opacity: pressed ? 0.7 : 1,
       })}
@@ -116,6 +115,18 @@ export function ActivityCard({
         </View>
       ) : (
         <Canvas style={{ position: 'absolute', width, height }}>
+          {/* A soft glow under the line, as the editor's glowing route. */}
+          <Path
+            path={route}
+            style="stroke"
+            strokeWidth={7}
+            strokeCap="round"
+            strokeJoin="round"
+            color="#FFFFFF"
+            opacity={0.35}
+          >
+            <BlurMask blur={6} style="normal" />
+          </Path>
           <Path
             path={route}
             style="stroke"

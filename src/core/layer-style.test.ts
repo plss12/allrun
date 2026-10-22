@@ -12,12 +12,15 @@ import {
   setDataLabels,
   setLayerColor,
   setLayerOpacity,
+  setAxisLabels,
+  setBlockOptions,
   setLogoOptions,
   setStrokeWidth,
   setTextStyle,
   STYLE_COLOR_PAGES,
 } from './layer-style';
 import { type Layer, parseTemplate, type Template } from './template';
+import { addLayer } from './template-edit';
 
 const activity = defaultActivityTemplate(makeActivity(), 'story');
 const summary = defaultSummaryTemplate(makeSummary(), 'story');
@@ -171,8 +174,10 @@ describe('the options of the format tab', () => {
         newLayer({ kind: 'activityChart', series: 'elevation' }, 'chart', 'story'),
       ],
     });
-    const styled = setChartOptions(withChart, 'chart', { axisLabels: false, title: false });
-    expect(find(styled, 'chart')).toMatchObject({ axisLabels: false, title: false });
+    const styled = setChartOptions(withChart, 'chart', { font: 'orbitron', align: 'center' });
+    expect(find(styled, 'chart')).toMatchObject({ font: 'orbitron', align: 'center' });
+    // Only a period's bars have axis labels.
+    expect(() => setAxisLabels(withChart, 'chart', true)).toThrow(/axis labels/);
     expect(find(setLayerColor(styled, 'chart', '#C94A2E'), 'chart')).toMatchObject({
       color: '#C94A2E',
     });
@@ -191,8 +196,6 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
 
   it('sets chart and logo options', () => {
     const chart = setChartOptions(summary, 'chart', {
-      axisLabels: false,
-      title: false,
       font: 'orbitron',
       bold: false,
       uppercase: false,
@@ -200,16 +203,51 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
     });
     expect(find(chart, 'chart')).toMatchObject({
       align: 'left',
-      axisLabels: false,
-      title: false,
       font: 'orbitron',
       bold: false,
       uppercase: false,
     });
     expect(parseTemplate(chart)).toEqual(chart);
-    expect(setChartOptions(summary, 'chart', { title: true })).toBe(summary);
+    expect(setChartOptions(summary, 'chart', { bold: true })).toBe(summary);
+    expect(find(setAxisLabels(summary, 'chart', false), 'chart')).toMatchObject({
+      axisLabels: false,
+    });
+    expect(setAxisLabels(summary, 'chart', true)).toBe(summary);
     const logo = setLogoOptions(activity, 'logo', { tone: 'color' });
     expect(find(logo, 'logo')).toMatchObject({ tone: 'color' });
     expect(() => setLogoOptions(activity, 'name', { tone: 'dark' })).toThrow(/logo options/);
+  });
+});
+
+describe('setBlockOptions', () => {
+  const withBlock = addLayer(
+    activity,
+    newLayer(
+      { kind: 'activityBlock', block: { design: 'headline', layout: 'stacked' } },
+      'block',
+      'story',
+    ),
+  );
+
+  it("sets a mixed widget's font, weight, case, logo and color", () => {
+    const styled = setBlockOptions(withBlock, 'block', {
+      font: 'orbitron',
+      bold: false,
+      uppercase: false,
+      logo: true,
+    });
+    expect(find(styled, 'block')).toMatchObject({
+      logo: true,
+      style: { font: 'orbitron', bold: false, uppercase: false, color: '#FFFFFF' },
+    });
+    expect(parseTemplate(styled)).toEqual(styled);
+    expect(find(setLayerColor(styled, 'block', '#C94A2E'), 'block')).toMatchObject({
+      style: { color: '#C94A2E', font: 'orbitron' },
+    });
+  });
+
+  it('changes nothing when the options are already set, and only fits mixed widgets', () => {
+    expect(setBlockOptions(withBlock, 'block', { bold: true, logo: false })).toBe(withBlock);
+    expect(() => setBlockOptions(withBlock, 'name', { logo: true })).toThrow(/block options/);
   });
 });

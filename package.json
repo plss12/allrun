@@ -25,7 +25,8 @@
     "doctor": "npx expo-doctor",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "brand": "node scripts/brand/build-brand.mjs"
+    "brand": "node scripts/brand/build-brand.mjs",
+    "icons": "node scripts/icons/build-sport-icons.mjs"
   },
   "jest": {
     "preset": "jest-expo"

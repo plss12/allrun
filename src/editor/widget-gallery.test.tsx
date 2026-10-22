@@ -58,7 +58,13 @@ function contextFor(data: EditorData): LayerContext {
 }
 
 const activity = makeActivity({ sportType: 'Run', movingTimeSeconds: 6030 });
-const activityData: EditorData = { mode: 'activity', activity, detail: null, place: null };
+const activityData: EditorData = {
+  mode: 'activity',
+  activity,
+  detail: null,
+  place: null,
+  zones: null,
+};
 
 function summaryData(kind: 'week' | 'year'): EditorData {
   const range = kind === 'week' ? weekRange('2026-10-14') : yearRange('2026-10-14');
@@ -115,8 +121,16 @@ describe('gallerySections', () => {
     );
     const scalesOf = (key: string) =>
       new Set(widgets.find((widget) => widget.key === key)?.pages.map((page) => page.scale));
-    expect(scalesOf('data-distance').size).toBe(1);
-    expect(scalesOf('data-time').size).toBe(1);
+    // Every datum, each way it is written, compares page to page in the data tile.
+    expect(scalesOf('data').size).toBe(1);
+    expect(scalesOf('route').size).toBe(1);
+  });
+
+  it('keeps two data that write the same number: their names and units differ', () => {
+    // 172 beats at most and 172 steps per minute (86 per leg) share the data tile.
+    const keys = pagesOf(activitySections()).map((page) => page.key);
+    expect(keys).toContain('metric-maxHeartRate');
+    expect(keys).toContain('metric-averageCadence');
   });
 
   it('fills each date page with its own date: the short ones are not shrunk to the long one', () => {

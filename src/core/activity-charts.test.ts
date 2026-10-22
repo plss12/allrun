@@ -28,11 +28,13 @@ const split = (
   distanceMeters: number,
   averageSpeed: number,
   elevationDifferenceMeters = 0,
+  averageHeartRate: number | null = null,
 ): ActivitySplit => ({
   distanceMeters,
   movingTimeSeconds: distanceMeters / averageSpeed,
   elevationDifferenceMeters,
   averageSpeed,
+  averageHeartRate,
 });
 
 function detail(overrides: Partial<ActivityDetail> = {}): ActivityDetail {
@@ -106,10 +108,16 @@ describe('availableActivityCharts', () => {
 
 describe('splitRows', () => {
   it('makes a row per split while they fit', () => {
-    expect(splitRows([split(1000, 4, 10), split(1000, 5, -4)], 20)).toEqual([
-      { first: 1, last: 1, speed: 4, elevationDifference: 10 },
-      { first: 2, last: 2, speed: 5, elevationDifference: -4 },
+    expect(splitRows([split(1000, 4, 10, 150), split(1000, 5, -4)], 20)).toEqual([
+      { first: 1, last: 1, speed: 4, elevationDifference: 10, heartRate: 150 },
+      { first: 2, last: 2, speed: 5, elevationDifference: -4, heartRate: null },
     ]);
+  });
+
+  it("averages a group's heart rate over the time of the splits that have one", () => {
+    // 250 s at 140 and 200 s at 160; the split without a heart rate doesn't count.
+    const [row] = splitRows([split(1000, 4, 0, 140), split(1000, 5, 0, 160), split(1000, 5)], 1);
+    expect(row.heartRate).toBeCloseTo((250 * 140 + 200 * 160) / 450);
   });
 
   it('groups consecutive splits of a long activity, with their overall speed', () => {
@@ -118,7 +126,13 @@ describe('splitRows', () => {
       20,
     );
     expect(rows).toHaveLength(20);
-    expect(rows[0]).toEqual({ first: 1, last: 3, speed: 10, elevationDifference: 3 });
+    expect(rows[0]).toEqual({
+      first: 1,
+      last: 3,
+      speed: 10,
+      elevationDifference: 3,
+      heartRate: null,
+    });
     expect(rows[19]).toMatchObject({ first: 58, last: 59, elevationDifference: 2 });
   });
 });
