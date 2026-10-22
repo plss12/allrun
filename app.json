@@ -50,7 +50,8 @@
           "savePhotosPermission": "AllRun saves the images you create to your photos.",
           "granularPermissions": ["photo"]
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,
