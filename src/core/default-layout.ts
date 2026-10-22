@@ -1,5 +1,5 @@
 import type { Activity } from './activity';
-import { blockLettering } from './activity-block';
+import { blockLettering, framesCanvas } from './activity-block';
 import type { NewLayer } from './layer-catalog';
 import { at, fitWidth, logoLayer, row, type Slot, slot, textStyle, WHITE } from './layout-kit';
 import { availableMetrics } from './metrics';
@@ -323,14 +323,15 @@ export function newLayer(
         opacity: 0.95,
       };
     case 'activityBlock':
-      // Blocks are designed for a story, and shrink with the other widgets in smaller formats.
-      // Each comes in the font that suits it, not the design's (see `blockLettering`).
+      // Blocks are designed for a story, and shrink with the other widgets in smaller formats,
+      // but the camera, which is as big as the canvas. Each comes in the font that suits it, not
+      // the design's (see `blockLettering`).
       return {
         ...item,
         id,
         logo: false,
-        style: { ...blockLettering(item.block), color: WHITE, uppercase: true },
-        transform: centered(layout.scale / LAYOUTS.story.scale),
+        style: { ...blockLettering(item.block), color: WHITE },
+        transform: centered(framesCanvas(item.block) ? 1 : layout.scale / LAYOUTS.story.scale),
         opacity: 1,
       };
   }

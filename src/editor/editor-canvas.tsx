@@ -187,11 +187,12 @@ export function EditorCanvas({
   const photoSize: Size | null =
     photo === null ? null : { width: photo.width(), height: photo.height() };
   const layers = prepareLayers(template, layerContext);
-  const boxes: LayerBox[] = layers.map(({ layer, width, height }) => ({
+  const boxes: LayerBox[] = layers.map(({ layer, width, height, hole }) => ({
     id: layer.id,
     transform: layer.transform,
     width,
     height,
+    ...(hole === undefined ? {} : { hole }),
   }));
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
   /** Layers a finger can grab: none while they are locked. */

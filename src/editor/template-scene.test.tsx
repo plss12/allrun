@@ -23,6 +23,8 @@ import {
 } from '@/core/template';
 import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 import { makeActivity } from '@/test-utils/make-activity';
+import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
+import { loadTestFonts } from '@/test-utils/skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import { FONT_FAMILIES } from './fonts';
@@ -158,6 +160,52 @@ describe('prepareLayers', () => {
     // One line, so no taller than a short name.
     expect(long.height).toBeLessThanOrEqual(prepareName('Morning Run').height);
   });
+
+  it.each([
+    ['its own italic', 'inter'],
+    ['leaned letters', 'anton'],
+  ] as const)(
+    'measures slanted texts with %s whole: nothing leans out of the box',
+    async (_name, font) => {
+      const template = defaultActivityTemplate(activity, 'story');
+      const texts = [
+        ...template.layers.filter((layer) => layer.kind === 'metric' || layer.kind === 'info'),
+        newLayer({ kind: 'text', content: 'Long run\nWith friends' }, 'text', 'story'),
+      ];
+      const prepare = (italic: boolean) =>
+        scene.prepareLayers(
+          {
+            ...template,
+            layers: texts.map((layer) =>
+              'style' in layer && layer.kind !== 'activityBlock'
+                ? { ...layer, style: { ...layer.style, font, italic } }
+                : layer,
+            ),
+          },
+          {
+            data: { mode: 'activity', activity, detail: null, place: null, zones: null },
+            fonts: loadTestFonts([font]),
+            textContext: {
+              unit: 'km',
+              locale: 'en',
+              durationUnits: TEST_DURATION_UNITS,
+              unitLabel: testUnitLabel,
+            },
+            translate: (key) => key,
+          },
+        );
+      const upright = prepare(false);
+      const slanted = prepare(true);
+      expect(slanted).toHaveLength(texts.length);
+      for (const [i, prepared] of slanted.entries()) {
+        // The room for the lean, but no line more.
+        expect(prepared.width).toBeGreaterThan(upright[i].width);
+        expect(prepared.height).toBeLessThanOrEqual(upright[i].height + 1);
+        expect(await alphaOutside(prepared)).toBeLessThanOrEqual(DRAWN_ALPHA);
+      }
+    },
+    60_000,
+  );
 });
 
 /** How many pixels of an image are more opaque than `alpha` (0..255). */

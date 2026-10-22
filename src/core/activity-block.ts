@@ -9,8 +9,12 @@ import {
   DAY_LAYOUTS,
   type FontId,
   HEADLINE_LAYOUTS,
+  BRAND_COVERS,
   ROUTE_LAYOUTS,
   SPORT_LAYOUTS,
+  TALL_LAYOUTS,
+  WEEKDAY_LAYOUTS,
+  WIDE_LAYOUTS,
 } from './template';
 
 /**
@@ -55,13 +59,21 @@ export function blockDataCount(block: ActivityBlock): number {
       return block.layout === 'list' ? 4 : 3;
     case 'route':
       return block.layout === 'between' ? 2 : 3;
-    case 'message':
+    case 'wide':
+      return block.layout === 'pair' ? 3 : 4;
+    case 'weekday':
+      return 4;
+    case 'music':
       return 2;
     case 'notes':
       return 1;
     case 'headline':
     case 'day':
     case 'poster':
+    case 'tall':
+    case 'serif':
+    case 'message':
+    case 'camera':
       return 3;
   }
 }
@@ -85,11 +97,22 @@ export function activityBlocks(activity: Activity, withSplits = false): Activity
     ...(activity.routePolyline === null
       ? []
       : ROUTE_LAYOUTS.map((layout) => ({ design: 'route', layout }) as const)),
+    ...TALL_LAYOUTS.map((layout) => ({ design: 'tall', layout }) as const),
+    ...WIDE_LAYOUTS.map((layout) => ({ design: 'wide', layout }) as const),
     ...DAY_LAYOUTS.map((layout) => ({ design: 'day', layout }) as const),
+    ...WEEKDAY_LAYOUTS.map((layout) => ({ design: 'weekday', layout }) as const),
     ...SPORT_LAYOUTS.map((layout) => ({ design: 'sport', layout }) as const),
     { design: 'poster' } as const,
+    { design: 'serif' } as const,
     ...(withSplits ? APP_MODES.map((layout) => ({ design: 'notes', layout }) as const) : []),
     ...APP_MODES.map((layout) => ({ design: 'message', layout }) as const),
+    ...APP_MODES.flatMap((layout) =>
+      BRAND_COVERS.map((cover) => ({ design: 'music', layout, cover }) as const),
+    ),
+    // The camera's thumbnail is the route: without one, there is a single camera.
+    ...(activity.routePolyline === null
+      ? [{ design: 'camera', cover: BRAND_COVERS[0] } as const]
+      : BRAND_COVERS.map((cover) => ({ design: 'camera', cover }) as const)),
   ];
 }
 
@@ -102,7 +125,12 @@ export function sportIcon(activity: Activity): SportIconId {
 }
 
 /** Mixed widgets that recreate another app: their look is fixed, not the user's to style. */
-const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set(['notes', 'message']);
+const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set([
+  'notes',
+  'message',
+  'music',
+  'camera',
+]);
 
 /**
  * Whether a design recreates another app (a note, a chat message): its colors, font and icons are
@@ -112,35 +140,63 @@ export function isAppReplica(design: ActivityBlockDesign): boolean {
   return APP_REPLICAS.has(design);
 }
 
-/** The font a mixed widget starts in, and whether in bold. */
+/**
+ * Whether a design frames the whole canvas, as the camera does around the photo: it is as big as
+ * the canvas, not a widget scaled to the format.
+ */
+export function framesCanvas(block: ActivityBlock): boolean {
+  return block.design === 'camera';
+}
+
+/** How a mixed widget's texts start: their font, and whether bold, italic and in capitals. */
 export interface BlockLettering {
   readonly font: FontId;
   readonly bold: boolean;
+  readonly italic: boolean;
+  readonly uppercase: boolean;
 }
 
+/** Capitals, upright, in `font`. */
+const lettering = (font: FontId, bold: boolean): BlockLettering => ({
+  font,
+  bold,
+  italic: false,
+  uppercase: true,
+});
+
 /**
- * The font that suits each version of a mixed widget, as AURA gives each its own: thin and tall,
- * wide, condensed and heavy, heavy and stretched for the day, a poster face for the poster. Replicas write in the
- * system-like font of the apps they recreate.
+ * The lettering that suits each version of a mixed widget, as AURA gives each its own: thin and
+ * tall, wide, condensed and heavy, heavy and stretched for the day, a poster face for the poster,
+ * a serif italic in small letters for the serif. Replicas write in the system-like font of the
+ * apps they recreate.
  */
 export function blockLettering(block: ActivityBlock): BlockLettering {
   switch (block.design) {
     case 'headline':
       return block.layout === 'stacked'
-        ? { font: 'bigShoulders', bold: false }
+        ? lettering('bigShoulders', false)
         : block.layout === 'inline'
-          ? { font: 'unbounded', bold: true }
-          : { font: 'anton', bold: false };
+          ? lettering('unbounded', true)
+          : lettering('anton', false);
+    case 'tall':
+      return lettering('bigShoulders', block.layout === 'heavy');
+    case 'wide':
+      return lettering('unbounded', true);
     case 'day':
-      return { font: 'bowlbyOneSC', bold: false };
+    case 'weekday':
+      return lettering('bowlbyOneSC', false);
     case 'poster':
-      return { font: 'anton', bold: false };
+      return lettering('anton', false);
+    case 'serif':
+      return { font: 'playfairDisplay', bold: false, italic: true, uppercase: false };
     case 'notes':
     case 'message':
-      return { font: 'inter', bold: false };
+    case 'music':
+    case 'camera':
+      return lettering('inter', false);
     case 'columns':
     case 'route':
     case 'sport':
-      return { font: 'barlowCondensed', bold: true };
+      return lettering('barlowCondensed', true);
   }
 }

@@ -40,11 +40,14 @@ export const FONT_IDS = [
   'anton',
   'unbounded',
   'bowlbyOneSC',
+  'graduate',
   'playfairDisplay',
   'spaceMono',
   'permanentMarker',
+  'sacramento',
   'bangers',
   'orbitron',
+  'doto',
   'rubikGlitch',
 ] as const;
 
@@ -179,10 +182,22 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * - `sport`: the sport's icon and name over its data, one under another (`centered`) or as a list
  *   of names and values (`list`);
  * - `poster`: the main datum huge and turned upright, the sport and two more data beside it;
+ * - `tall`: the main datum tall, unit and all, two more data under it without names, in a thin
+ *   (`thin`) or a heavy (`heavy`) letter;
+ * - `wide`: the main datum wide and heavy, unit and all, with two data under it at its ends
+ *   (`pair`), three spread under it (`trio`), or under the weekday, as wide (`weekday`);
+ * - `weekday`: the weekday's short name, heavy and stretched, over four data without names in
+ *   two columns (`grid`), or between them, two on each side (`inline`);
+ * - `serif`: the activity's name and date over three data with their names, in a serif italic;
  * - `notes` (replica): the splits as a note of the iPhone's Notes, the fastest in its yellow, in
  *   dark or light mode; only for activities with splits;
  * - `message` (replica): two data as a sent chat message, the sport and start time where the
- *   time and the read ticks go, in dark or light mode.
+ *   time and the read ticks go, in dark or light mode;
+ * - `music` (replica): the activity as the song playing on a phone's lock screen: the route as its
+ *   cover, its name and date as the song's, two data at the ends of the progress bar, in dark or
+ *   light mode;
+ * - `camera` (replica): a phone camera's controls, with three data as its zoom buttons and the
+ *   sport as the mode chosen, over the red record button.
  */
 export const ACTIVITY_BLOCK_DESIGNS = [
   'headline',
@@ -191,8 +206,14 @@ export const ACTIVITY_BLOCK_DESIGNS = [
   'day',
   'sport',
   'poster',
+  'tall',
+  'wide',
+  'weekday',
+  'serif',
   'notes',
   'message',
+  'music',
+  'camera',
 ] as const;
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
@@ -202,8 +223,16 @@ export const BLOCK_COLUMN_COUNTS = [2, 3, 4, 6] as const;
 export const ROUTE_LAYOUTS = ['stacked', 'inline', 'between'] as const;
 export const DAY_LAYOUTS = ['stacked', 'inline'] as const;
 export const SPORT_LAYOUTS = ['centered', 'list'] as const;
+export const TALL_LAYOUTS = ['thin', 'heavy'] as const;
+export const WIDE_LAYOUTS = ['pair', 'trio', 'weekday'] as const;
+export const WEEKDAY_LAYOUTS = ['grid', 'inline'] as const;
 /** The two looks of an app replica, as the app shows them in dark and light mode. */
 export const APP_MODES = ['dark', 'light'] as const;
+/**
+ * What a replica draws the route on (the song's cover, the camera's last photo): AllRun's red or
+ * its night ink. A version in one brand color always comes with one in the other.
+ */
+export const BRAND_COVERS = ['red', 'ink'] as const;
 
 const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('headline'), layout: z.enum(HEADLINE_LAYOUTS) }),
@@ -212,8 +241,18 @@ const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('day'), layout: z.enum(DAY_LAYOUTS) }),
   z.object({ design: z.literal('sport'), layout: z.enum(SPORT_LAYOUTS) }),
   z.object({ design: z.literal('poster') }),
+  z.object({ design: z.literal('tall'), layout: z.enum(TALL_LAYOUTS) }),
+  z.object({ design: z.literal('wide'), layout: z.enum(WIDE_LAYOUTS) }),
+  z.object({ design: z.literal('weekday'), layout: z.enum(WEEKDAY_LAYOUTS) }),
+  z.object({ design: z.literal('serif') }),
   z.object({ design: z.literal('notes'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('message'), layout: z.enum(APP_MODES) }),
+  z.object({
+    design: z.literal('music'),
+    layout: z.enum(APP_MODES),
+    cover: z.enum(BRAND_COVERS),
+  }),
+  z.object({ design: z.literal('camera'), cover: z.enum(BRAND_COVERS) }),
 ]);
 
 export type ActivityBlock = z.infer<typeof activityBlockSchema>;
@@ -246,6 +285,8 @@ const textStyleSchema = z.object({
   font: fontSchema,
   color: colorSchema,
   bold: z.boolean(),
+  /** Slanted: the font's own italic, or its letters leaned when it has none; upright when absent. */
+  italic: z.boolean().optional(),
   uppercase: z.boolean(),
   align: z.enum(['left', 'center', 'right']),
   shadow: z.boolean(),
@@ -263,6 +304,7 @@ const blockStyleSchema = textStyleSchema.pick({
   font: true,
   color: true,
   bold: true,
+  italic: true,
   uppercase: true,
 });
 
@@ -377,6 +419,8 @@ export const layerSchema = z.discriminatedUnion('kind', [
     /** Font of the header and the axis labels. */
     font: fontSchema.default('inter'),
     bold: z.boolean().default(true),
+    /** Texts slanted (see the text style's `italic`); upright when absent. */
+    italic: z.boolean().optional(),
     /** Whether the header is in capitals (axis labels are initials and numbers already). */
     uppercase: z.boolean().default(true),
     /** Where the header sits over the bars. */
@@ -407,6 +451,8 @@ export const layerSchema = z.discriminatedUnion('kind', [
     /** Font of the header and the texts of the splits. */
     font: fontSchema,
     bold: z.boolean(),
+    /** Texts slanted (see the text style's `italic`); upright when absent. */
+    italic: z.boolean().optional(),
     uppercase: z.boolean(),
     /** Where the header sits over the chart. */
     align: z.enum(['left', 'center', 'right']),

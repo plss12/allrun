@@ -54,14 +54,25 @@ comes later.
   the date and the place. Columns of data start at two (distance and time): one datum alone is
   the data tile. Mixed widgets with the route draw it over, beside or between the data.
 - **Two families of mixed widgets.** Typographic ones (headline, columns, route, day, sport,
-  poster…) start each in the font that suits it, as AURA does (thin and tall, wide, block-like,
-  puffy for the day, a poster face for the poster), and the user can still change their font and
-  color. Replicas of other apps (the iPhone's Notes with the splits, a sent chat message, and
-  later a music player, the camera, a receipt and a boarding pass) keep the app's colors, font and
-  icons, since recognizing the app is the point: only their opacity changes, their dark and light
-  modes are versions in the carousel, and they carry no AllRun signature.
+  poster, tall, wide, short weekday, serif…) start each in the font that suits it, as AURA does
+  (thin and tall, wide, block-like, puffy for the day, a poster face for the poster, a serif
+  italic in small letters for the serif), and the user can still change their font, color,
+  weight, slant and case. Replicas of other apps (the iPhone's Notes with the splits, a sent chat
+  message with the data, and the sport and the activity's time where its time goes, the lock
+  screen's player of iOS 26 copied place by place, with the route as its cover (in AllRun's red
+  or night ink) and the distance and time at the ends of its bar, and the camera, and later a receipt and a
+  boarding pass) keep the app's colors, font and icons, since recognizing the app is the point:
+  only their opacity changes, their dark and light modes are versions in the carousel, and they
+  carry no AllRun signature. A version in one brand color (the route's cover, in red or
+  night ink) always comes with one in the other. The player's glass is a see-through tint with an edge, not a blur
+  of the photo behind it. The camera frames the whole canvas, as the phone's screen does: the
+  data where its settings go, the sport's icon on its f button, the route as the last photo's
+  thumbnail (none without a route), and its view of the photo see-through, so touches there reach the photo and the
+  widgets under it (`HitHole`). New widgets are built with the fonts the app already has.
 - **Fonts:** Anton, Unbounded, Big Shoulders Display, Bowlby One SC (the day's heavy face,
-  stretched upwards and set tight, as AURA's "WED") and Rubik Glitch, all with open licenses.
+  stretched upwards and set tight, as AURA's "WED") and Rubik Glitch, and then three styles the
+  set lacked: a varsity jersey's letters (Graduate), a scoreboard's dot matrix (Doto) and a
+  signature (Sacramento), all with open licenses. Fifteen in all.
   Paid fonts are left out: an app bundles its fonts, which needs an app license. Fonts too close
   to another or unfit for sport images go (Archivo Black, Dela Gothic One, Fredoka, Dancing
   Script): designs saved with them read with the closest one left.

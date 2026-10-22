@@ -58,6 +58,16 @@ export function formatActivityDate(
   );
 }
 
+/**
+ * The weekday of an activity's start, short and without the abbreviation's dot: "Wed", "Mié".
+ */
+export function formatShortWeekday(startLocal: string, locale: string): string {
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(
+    asUtc(startLocal),
+  );
+  return capitalize(weekday.replace(/\.$/, ''));
+}
+
 /** Short date for lists, e.g. "Oct 15". */
 export function formatShortDate(date: LocalDate, locale: string): string {
   return new Intl.DateTimeFormat(locale, {

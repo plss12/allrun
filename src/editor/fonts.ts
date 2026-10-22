@@ -19,55 +19,86 @@ export const FONT_FAMILIES: Readonly<Record<FontId, string>> = {
   bigShoulders: 'Big Shoulders Display',
   bowlbyOneSC: 'Bowlby One SC',
   rubikGlitch: 'Rubik Glitch',
+  graduate: 'Graduate',
+  sacramento: 'Sacramento',
+  doto: 'Doto',
 };
 
+/** A font's files: its regular face, and its bold and italics when it ships them. */
+interface FontFaces {
+  readonly regular: number;
+  readonly bold?: number;
+  readonly italic?: number;
+  readonly boldItalic?: number;
+}
+
 // Fonts with a single weight are display fonts that are already heavy (or, for the marker,
-// hand-drawn), so they have no bold.
-const FONT_FILES = {
-  [FONT_FAMILIES.inter]: [
-    require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
-    require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.barlowCondensed]: [
-    require('@expo-google-fonts/barlow-condensed/400Regular/BarlowCondensed_400Regular.ttf'),
-    require('@expo-google-fonts/barlow-condensed/700Bold/BarlowCondensed_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.playfairDisplay]: [
-    require('@expo-google-fonts/playfair-display/400Regular/PlayfairDisplay_400Regular.ttf'),
-    require('@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.spaceMono]: [
-    require('@expo-google-fonts/space-mono/400Regular/SpaceMono_400Regular.ttf'),
-    require('@expo-google-fonts/space-mono/700Bold/SpaceMono_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.orbitron]: [
-    require('@expo-google-fonts/orbitron/400Regular/Orbitron_400Regular.ttf'),
-    require('@expo-google-fonts/orbitron/700Bold/Orbitron_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.bangers]: [
-    require('@expo-google-fonts/bangers/400Regular/Bangers_400Regular.ttf'),
-  ],
-  [FONT_FAMILIES.permanentMarker]: [
-    require('@expo-google-fonts/permanent-marker/400Regular/PermanentMarker_400Regular.ttf'),
-  ],
-  [FONT_FAMILIES.anton]: [require('@expo-google-fonts/anton/400Regular/Anton_400Regular.ttf')],
+// hand-drawn), so they have no bold. Fonts without an italic are slanted by Skia instead.
+const FONT_FACES: Readonly<Record<FontId, FontFaces>> = {
+  inter: {
+    regular: require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
+    bold: require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
+    italic: require('@expo-google-fonts/inter/400Regular_Italic/Inter_400Regular_Italic.ttf'),
+    boldItalic: require('@expo-google-fonts/inter/700Bold_Italic/Inter_700Bold_Italic.ttf'),
+  },
+  barlowCondensed: {
+    regular: require('@expo-google-fonts/barlow-condensed/400Regular/BarlowCondensed_400Regular.ttf'),
+    bold: require('@expo-google-fonts/barlow-condensed/700Bold/BarlowCondensed_700Bold.ttf'),
+    italic: require('@expo-google-fonts/barlow-condensed/400Regular_Italic/BarlowCondensed_400Regular_Italic.ttf'),
+    boldItalic: require('@expo-google-fonts/barlow-condensed/700Bold_Italic/BarlowCondensed_700Bold_Italic.ttf'),
+  },
+  playfairDisplay: {
+    regular: require('@expo-google-fonts/playfair-display/400Regular/PlayfairDisplay_400Regular.ttf'),
+    bold: require('@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf'),
+    italic: require('@expo-google-fonts/playfair-display/400Regular_Italic/PlayfairDisplay_400Regular_Italic.ttf'),
+    boldItalic: require('@expo-google-fonts/playfair-display/700Bold_Italic/PlayfairDisplay_700Bold_Italic.ttf'),
+  },
+  spaceMono: {
+    regular: require('@expo-google-fonts/space-mono/400Regular/SpaceMono_400Regular.ttf'),
+    bold: require('@expo-google-fonts/space-mono/700Bold/SpaceMono_700Bold.ttf'),
+    italic: require('@expo-google-fonts/space-mono/400Regular_Italic/SpaceMono_400Regular_Italic.ttf'),
+    boldItalic: require('@expo-google-fonts/space-mono/700Bold_Italic/SpaceMono_700Bold_Italic.ttf'),
+  },
+  orbitron: {
+    regular: require('@expo-google-fonts/orbitron/400Regular/Orbitron_400Regular.ttf'),
+    bold: require('@expo-google-fonts/orbitron/700Bold/Orbitron_700Bold.ttf'),
+  },
+  bangers: { regular: require('@expo-google-fonts/bangers/400Regular/Bangers_400Regular.ttf') },
+  permanentMarker: {
+    regular: require('@expo-google-fonts/permanent-marker/400Regular/PermanentMarker_400Regular.ttf'),
+  },
+  anton: { regular: require('@expo-google-fonts/anton/400Regular/Anton_400Regular.ttf') },
   // Its bold is the black weight, the very wide and heavy one of AURA's widgets.
-  [FONT_FAMILIES.unbounded]: [
-    require('@expo-google-fonts/unbounded/400Regular/Unbounded_400Regular.ttf'),
-    require('@expo-google-fonts/unbounded/900Black/Unbounded_900Black.ttf'),
-  ],
+  unbounded: {
+    regular: require('@expo-google-fonts/unbounded/400Regular/Unbounded_400Regular.ttf'),
+    bold: require('@expo-google-fonts/unbounded/900Black/Unbounded_900Black.ttf'),
+  },
   // Tall and thin: its regular is the thin weight, which is what it is for.
-  [FONT_FAMILIES.bigShoulders]: [
-    require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_100Thin.ttf'),
-    require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.bowlbyOneSC]: [
-    require('@expo-google-fonts/bowlby-one-sc/400Regular/BowlbyOneSC_400Regular.ttf'),
-  ],
-  [FONT_FAMILIES.rubikGlitch]: [
-    require('@expo-google-fonts/rubik-glitch/400Regular/RubikGlitch_400Regular.ttf'),
-  ],
+  bigShoulders: {
+    regular: require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_100Thin.ttf'),
+    bold: require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_700Bold.ttf'),
+  },
+  bowlbyOneSC: {
+    regular: require('@expo-google-fonts/bowlby-one-sc/400Regular/BowlbyOneSC_400Regular.ttf'),
+  },
+  rubikGlitch: {
+    regular: require('@expo-google-fonts/rubik-glitch/400Regular/RubikGlitch_400Regular.ttf'),
+  },
+  graduate: { regular: require('@expo-google-fonts/graduate/400Regular/Graduate_400Regular.ttf') },
+  sacramento: {
+    regular: require('@expo-google-fonts/sacramento/400Regular/Sacramento_400Regular.ttf'),
+  },
+  // A scoreboard's dot matrix: its thinner weights have dots too small to read on a photo.
+  doto: {
+    regular: require('@expo-google-fonts/doto/700Bold/Doto_700Bold.ttf'),
+    bold: require('@expo-google-fonts/doto/900Black/Doto_900Black.ttf'),
+  },
 };
+
+/** Every face of each family, for Skia, which picks the one a text's weight and slant ask for. */
+const FONT_FILES = Object.fromEntries(
+  FONT_IDS.map((font) => [FONT_FAMILIES[font], Object.values(FONT_FACES[font])]),
+);
 
 /** Loads every bundled font into a Skia font provider; `null` while loading. */
 export function useEditorFonts() {
@@ -87,7 +118,15 @@ export function isCapsOnly(font: FontId): boolean {
 
 /** Whether a font ships a bold weight; without one, bold text would look the same. */
 export function hasBold(font: FontId): boolean {
-  return FONT_FILES[FONT_FAMILIES[font]].length > 1;
+  return FONT_FACES[font].bold !== undefined;
+}
+
+/**
+ * Whether a font ships its own italic. Those without one are still slanted on the canvas: Skia
+ * leans their letters.
+ */
+export function hasItalic(font: FontId): boolean {
+  return FONT_FACES[font].italic !== undefined;
 }
 
 /** Family name of each font's regular weight in React Native, for the interface. */
@@ -104,24 +143,46 @@ export const PREVIEW_FAMILIES: Readonly<Record<FontId, string>> = {
   bigShoulders: 'AllRunPreview-BigShoulders',
   bowlbyOneSC: 'AllRunPreview-BowlbyOneSC',
   rubikGlitch: 'AllRunPreview-RubikGlitch',
+  graduate: 'AllRunPreview-Graduate',
+  sacramento: 'AllRunPreview-Sacramento',
+  doto: 'AllRunPreview-Doto',
+};
+
+const FACES = ['regular', 'bold', 'italic', 'boldItalic'] as const;
+
+/** What each face adds to its font's family name in React Native. */
+const FACE_SUFFIXES: Readonly<Record<keyof FontFaces, string>> = {
+  regular: '',
+  bold: '-Bold',
+  italic: '-Italic',
+  boldItalic: '-BoldItalic',
 };
 
 /**
- * React Native family of a font in a weight: custom fonts register each weight as a family of
- * its own. Fonts without a bold weight stay regular, as on the canvas.
+ * React Native family of a font in a weight and slant: custom fonts register each face as a
+ * family of its own. Fonts without a bold weight stay regular, as on the canvas; those without an
+ * italic stay upright (the text being typed leans them itself, see `hasItalic`).
  */
-export function previewFamily(font: FontId, bold: boolean): string {
-  return bold && hasBold(font) ? `${PREVIEW_FAMILIES[font]}-Bold` : PREVIEW_FAMILIES[font];
+export function previewFamily(font: FontId, bold: boolean, italic = false): string {
+  const faces = FONT_FACES[font];
+  const face: keyof FontFaces =
+    bold && faces.bold !== undefined
+      ? italic && faces.boldItalic !== undefined
+        ? 'boldItalic'
+        : 'bold'
+      : italic && faces.italic !== undefined
+        ? 'italic'
+        : 'regular';
+  return `${PREVIEW_FAMILIES[font]}${FACE_SUFFIXES[face]}`;
 }
 
 const PREVIEW_FILES = Object.fromEntries(
-  FONT_IDS.flatMap((font) => {
-    const [regular, bold] = FONT_FILES[FONT_FAMILIES[font]];
-    return [
-      [previewFamily(font, false), regular],
-      ...(bold === undefined ? [] : [[previewFamily(font, true), bold]]),
-    ];
-  }),
+  FONT_IDS.flatMap((font) =>
+    FACES.flatMap((face) => {
+      const file = FONT_FACES[font][face];
+      return file === undefined ? [] : [[`${PREVIEW_FAMILIES[font]}${FACE_SUFFIXES[face]}`, file]];
+    }),
+  ),
 );
 
 /**

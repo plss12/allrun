@@ -11,6 +11,8 @@ const FILES: Partial<Record<FontId, readonly string[]>> = {
   spaceMono: [
     'space-mono/400Regular/SpaceMono_400Regular.ttf',
     'space-mono/700Bold/SpaceMono_700Bold.ttf',
+    'space-mono/400Regular_Italic/SpaceMono_400Regular_Italic.ttf',
+    'space-mono/700Bold_Italic/SpaceMono_700Bold_Italic.ttf',
   ],
   orbitron: [
     'orbitron/400Regular/Orbitron_400Regular.ttf',
@@ -29,14 +31,26 @@ const FILES: Partial<Record<FontId, readonly string[]>> = {
   ],
   bowlbyOneSC: ['bowlby-one-sc/400Regular/BowlbyOneSC_400Regular.ttf'],
   rubikGlitch: ['rubik-glitch/400Regular/RubikGlitch_400Regular.ttf'],
-  inter: ['inter/400Regular/Inter_400Regular.ttf', 'inter/700Bold/Inter_700Bold.ttf'],
+  graduate: ['graduate/400Regular/Graduate_400Regular.ttf'],
+  sacramento: ['sacramento/400Regular/Sacramento_400Regular.ttf'],
+  doto: ['doto/700Bold/Doto_700Bold.ttf', 'doto/900Black/Doto_900Black.ttf'],
+  inter: [
+    'inter/400Regular/Inter_400Regular.ttf',
+    'inter/700Bold/Inter_700Bold.ttf',
+    'inter/400Regular_Italic/Inter_400Regular_Italic.ttf',
+    'inter/700Bold_Italic/Inter_700Bold_Italic.ttf',
+  ],
   barlowCondensed: [
     'barlow-condensed/400Regular/BarlowCondensed_400Regular.ttf',
     'barlow-condensed/700Bold/BarlowCondensed_700Bold.ttf',
+    'barlow-condensed/400Regular_Italic/BarlowCondensed_400Regular_Italic.ttf',
+    'barlow-condensed/700Bold_Italic/BarlowCondensed_700Bold_Italic.ttf',
   ],
   playfairDisplay: [
     'playfair-display/400Regular/PlayfairDisplay_400Regular.ttf',
     'playfair-display/700Bold/PlayfairDisplay_700Bold.ttf',
+    'playfair-display/400Regular_Italic/PlayfairDisplay_400Regular_Italic.ttf',
+    'playfair-display/700Bold_Italic/PlayfairDisplay_700Bold_Italic.ttf',
   ],
 };
 

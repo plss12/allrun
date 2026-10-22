@@ -111,9 +111,19 @@ export const en = {
       day: 'Day and data',
       sport: 'Sport and data',
       poster: 'Poster',
+      tall: 'Tall',
+      wide: 'Wide',
+      weekday: 'Weekday',
+      serif: 'Elegant',
       notes: 'Notes',
       message: 'Message',
+      music: 'Music',
+      camera: 'Camera',
     },
+    /** The camera's modes, as the iPhone writes them: photo is the one chosen. */
+    cameraModes: { video: 'VIDEO', photo: 'PHOTO' },
+    /** The camera's zoom buttons, as the iPhone writes them: the main lens is the one chosen. */
+    cameraZoom: { wide: '.5', main: '1×', tele: '2' },
     /** A chat message's line where the time goes: the sport and its start time. */
     chatLine: '{{sport}} {{time}}',
   },
@@ -125,6 +135,7 @@ export const en = {
     opacity: 'Opacity',
     tone: 'Tone',
     bold: 'Bold',
+    italic: 'Italic',
     uppercase: 'Uppercase',
     alignment: 'Alignment',
     align: {
@@ -238,6 +249,12 @@ export const en = {
       between: 'Between data',
       dark: 'Dark',
       light: 'Light',
+      thin: 'Thin',
+      heavy: 'Heavy',
+      pair: 'Two data',
+      trio: 'Three data',
+      weekday: 'With the day',
+      grid: 'Grid',
     },
     dataCount: 'Data: {{count}}',
   },
@@ -415,6 +432,9 @@ export const en = {
     bangers: 'Comic',
     orbitron: 'Futuristic',
     rubikGlitch: 'Glitch',
+    graduate: 'Varsity',
+    sacramento: 'Signature',
+    doto: 'Scoreboard',
   },
 };
 

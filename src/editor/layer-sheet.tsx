@@ -201,7 +201,7 @@ function pageLabel(
         if (block.design === 'columns') {
           return [name, t('gallery.dataCount', { count: block.count })];
         }
-        if (block.design === 'poster') {
+        if (!('layout' in block)) {
           return [name];
         }
         return [name, t(`gallery.blockLayouts.${block.layout}`)];

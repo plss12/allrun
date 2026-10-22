@@ -138,6 +138,15 @@ describe('setTextStyle and setDataLabels', () => {
     expect(() => setTextStyle(activity, 'route', { bold: true })).toThrow(/has no text style/);
   });
 
+  it('slants a text, which starts upright', () => {
+    const slanted = setTextStyle(activity, 'name', { italic: true });
+    expect(find(slanted, 'name')).toMatchObject({ style: { italic: true } });
+    expect(parseTemplate(slanted)).toEqual(slanted);
+    // Without the field a text is upright: making it upright changes nothing.
+    expect(setTextStyle(activity, 'name', { italic: false })).toBe(activity);
+    expect(setTextStyle(slanted, 'name', { italic: false })).not.toBe(slanted);
+  });
+
   it('hides the label or the unit of a metric', () => {
     const edited = setDataLabels(activity, 'metric-distance', { showUnit: false });
     expect(find(edited, 'metric-distance')).toMatchObject({ showLabel: true, showUnit: false });
@@ -209,6 +218,10 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
     });
     expect(parseTemplate(chart)).toEqual(chart);
     expect(setChartOptions(summary, 'chart', { bold: true })).toBe(summary);
+    expect(setChartOptions(summary, 'chart', { italic: false })).toBe(summary);
+    expect(find(setChartOptions(summary, 'chart', { italic: true }), 'chart')).toMatchObject({
+      italic: true,
+    });
     expect(find(setAxisLabels(summary, 'chart', false), 'chart')).toMatchObject({
       axisLabels: false,
     });
@@ -233,12 +246,13 @@ describe('setBlockOptions', () => {
     const styled = setBlockOptions(withBlock, 'block', {
       font: 'orbitron',
       bold: false,
+      italic: true,
       uppercase: false,
       logo: true,
     });
     expect(find(styled, 'block')).toMatchObject({
       logo: true,
-      style: { font: 'orbitron', bold: false, uppercase: false, color: '#FFFFFF' },
+      style: { font: 'orbitron', bold: false, italic: true, uppercase: false, color: '#FFFFFF' },
     });
     expect(parseTemplate(styled)).toEqual(styled);
     expect(find(setLayerColor(styled, 'block', '#C94A2E'), 'block')).toMatchObject({
@@ -249,6 +263,7 @@ describe('setBlockOptions', () => {
   it('changes nothing when the options are already set, and only fits mixed widgets', () => {
     // A stacked headline starts in a thin font, not bold.
     expect(setBlockOptions(withBlock, 'block', { bold: false, logo: false })).toBe(withBlock);
+    expect(setBlockOptions(withBlock, 'block', { italic: false })).toBe(withBlock);
     expect(() => setBlockOptions(withBlock, 'name', { logo: true })).toThrow(/block options/);
   });
 });

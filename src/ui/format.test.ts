@@ -8,6 +8,7 @@ import {
   formatMetric,
   formatPeriodName,
   formatRelativeDay,
+  formatShortWeekday,
 } from './format';
 
 describe('formatMetric', () => {
@@ -46,6 +47,14 @@ describe('formatActivityDate', () => {
     expect(es('time')).toBe('7:05');
     expect(formatActivityDate(start, 'en', 'numeric')).toBe('10/14/2026');
     expect(formatActivityDate(start, 'en', 'time')).toMatch(/^7:05\sAM$/);
+  });
+});
+
+describe('formatShortWeekday', () => {
+  it('writes the short weekday of the local start, without a dot', () => {
+    expect(formatShortWeekday('2026-10-14T23:30:00', 'en')).toBe('Wed');
+    expect(formatShortWeekday('2026-10-14T23:30:00', 'es')).toBe('Mié');
+    expect(formatShortWeekday('2026-10-18T07:00:00', 'es')).toBe('Dom');
   });
 });
 

@@ -1,4 +1,12 @@
-import { Shadow, Skia, type SkTextShadow } from '@shopify/react-native-skia';
+import {
+  FontSlant,
+  PlaceholderAlignment,
+  Shadow,
+  Skia,
+  type SkParagraphBuilder,
+  type SkTextShadow,
+  TextBaseline,
+} from '@shopify/react-native-skia';
 
 import { castsShadow } from '@/core/layer-style';
 
@@ -34,3 +42,27 @@ export function textShadows(color: string): SkTextShadow[] {
 
 /** Room added after each letter, as a fraction of the font size. */
 export const LETTER_SPACING = { normal: 0, wide: 0.08, wider: 0.2 } as const;
+
+/**
+ * How far a slanted letter leans out past its own width, as a share of the font size. Fonts
+ * without an italic are leaned by Skia a quarter of their height; those with one lean less.
+ */
+const ITALIC_LEAN = 0.22;
+
+/** The slant of a text: upright, or italic (the font's own, or its letters leaned). */
+export const slantOf = (italic: boolean | undefined): FontSlant =>
+  italic === true ? FontSlant.Italic : FontSlant.Upright;
+
+/**
+ * Adds an empty room at the end of a slanted line whose last letter is `fontSize` big, so the
+ * paragraph measures the top of that letter leaning past its width: a widget is grabbed, framed
+ * and snapped by what it measures.
+ */
+export function addLeanRoom(builder: SkParagraphBuilder, fontSize: number): void {
+  builder.addPlaceholder(
+    Math.ceil(fontSize * ITALIC_LEAN),
+    0,
+    PlaceholderAlignment.Baseline,
+    TextBaseline.Alphabetic,
+  );
+}

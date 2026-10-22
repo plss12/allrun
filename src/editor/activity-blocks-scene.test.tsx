@@ -10,7 +10,7 @@ import { activityBlocks } from '@/core/activity-block';
 import type { Activity } from '@/core/activity';
 import type { ActivityDetail } from '@/core/activity-detail';
 import { newLayer } from '@/core/default-layout';
-import type { FontId, Layer } from '@/core/template';
+import { CANVAS_FORMATS, type CanvasFormat, type FontId, type Layer } from '@/core/template';
 import { es } from '@/i18n/locales/es';
 import { generateStravaDetail } from '@/sources/fixtures/detail';
 import { parseStravaDetail } from '@/sources/strava/detail';
@@ -59,9 +59,9 @@ function translate(key: string): string {
 /**
  * The blocks of `activity`, signed with the logo, filled in and measured: each in its own font
  * (see `blockLettering`), or all in `font` as if the user had changed it (but the replicas, which
- * keep their apps' look).
+ * keep their apps' look), slanted when `italic`.
  */
-function prepareBlocks(activity: Activity, font: FontId | null): PreparedLayer[] {
+function prepareBlocks(activity: Activity, font: FontId | null, italic = false): PreparedLayer[] {
   const context: LayerContext = {
     data: { mode: 'activity', activity, detail: detailOf(activity), place: null, zones: null },
     fonts: loadTestFonts(
@@ -83,7 +83,7 @@ function prepareBlocks(activity: Activity, font: FontId | null): PreparedLayer[]
     return {
       ...layer,
       logo: true,
-      style: font === null ? layer.style : { ...layer.style, font },
+      style: { ...layer.style, ...(font === null ? {} : { font }), italic },
     };
   });
   return scene.prepareLayers(
@@ -117,13 +117,15 @@ const GYM = makeActivity({ sportType: 'WeightTraining', distanceMeters: 0, avera
 
 describe('prepareActivityBlock', () => {
   it.each([
-    ['a marathon', 'its own font', null, RUN],
-    ['a marathon', 'a wide font', 'unbounded', RUN],
-    ['a gym session', 'its own font', null, GYM],
+    ['a marathon', 'its own font', null, false, RUN],
+    ['a marathon', 'a wide font', 'unbounded', false, RUN],
+    ['a marathon', 'its own fonts slanted', null, true, RUN],
+    ['a marathon', 'a font without an italic, leaned', 'anton', true, RUN],
+    ['a gym session', 'its own font', null, false, GYM],
   ] as const)(
     'draws every block of %s in %s within the size it measures',
-    async (_name, _fontName, font, activity) => {
-      const blocks = prepareBlocks(activity, font);
+    async (_name, _fontName, font, italic, activity) => {
+      const blocks = prepareBlocks(activity, font, italic);
       expect(blocks).toHaveLength(blocksOf(activity).length);
       const overflowing: { readonly id: string; readonly alpha: number }[] = [];
       for (const block of blocks) {
@@ -172,4 +174,41 @@ describe('prepareActivityBlock', () => {
       ),
     ).toEqual([]);
   });
+});
+
+describe('the camera', () => {
+  it.each(Object.keys(CANVAS_FORMATS) as CanvasFormat[])(
+    'frames the whole canvas of a %s, its view of the photo see-through to touches',
+    async (format) => {
+      const layer = newLayer(
+        { kind: 'activityBlock', block: { design: 'camera', cover: 'red' } },
+        'camera',
+        format,
+      );
+      const [camera] = scene.prepareLayers(
+        { version: 1, id: 'camera', mode: 'activity', format, layers: [layer] },
+        {
+          data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },
+          fonts: loadTestFonts(['inter']),
+          textContext: {
+            unit: 'km',
+            locale: 'es',
+            durationUnits: TEST_DURATION_UNITS,
+            unitLabel: testUnitLabel,
+          },
+          translate,
+        },
+      );
+      const canvas = CANVAS_FORMATS[format];
+      expect(camera.layer.transform.scale).toBe(1);
+      expect([camera.width, camera.height]).toEqual([canvas.width, canvas.height]);
+      // The view lies between the bands, across the whole width.
+      const { hole } = camera;
+      expect(hole).toMatchObject({ x: 0, width: canvas.width });
+      expect(hole?.y).toBeGreaterThan(0);
+      expect((hole?.y ?? 0) + (hole?.height ?? 0)).toBeLessThan(canvas.height);
+      expect(await alphaOutside(camera)).toBeLessThanOrEqual(DRAWN_ALPHA);
+    },
+    60_000,
+  );
 });

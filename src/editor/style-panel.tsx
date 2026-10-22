@@ -155,6 +155,7 @@ const ALIGN_ICONS: Readonly<Record<TextStyle['align'], SymbolViewProps['name']>>
 interface Format {
   readonly font: FontId;
   readonly bold: boolean;
+  readonly italic: boolean;
   readonly uppercase?: boolean;
   readonly align?: TextStyle['align'];
   readonly backdrop?: NonNullable<TextStyle['backdrop']>;
@@ -162,7 +163,7 @@ interface Format {
 }
 
 /**
- * Bold, uppercase and an alignment button that cycles left, center and right, when they apply:
+ * Bold, italic, uppercase and an alignment button that cycles left, center and right, when they apply:
  * free text has no uppercase (the user types the capitals they want). After them, `children`:
  * the widget's own options of what it shows and how.
  */
@@ -176,7 +177,7 @@ function FormatRow({
   readonly children?: ReactNode;
 }) {
   const { t } = useTranslation();
-  const { font, bold, uppercase, align, backdrop, letterSpacing } = format;
+  const { font, bold, italic, uppercase, align, backdrop, letterSpacing } = format;
   return (
     <Row>
       <IconToggle
@@ -185,6 +186,13 @@ function FormatRow({
         selected={bold}
         disabled={!hasBold(font)}
         onPress={() => onPatch({ bold: !bold })}
+      />
+      {/* Every font can slant: those without an italic have their letters leaned. */}
+      <IconToggle
+        icon={{ ios: 'italic', android: 'format_italic' }}
+        label={t('style.italic')}
+        selected={italic}
+        onPress={() => onPatch({ italic: !italic })}
       />
       {uppercase === undefined ? null : (
         <IconToggle
@@ -242,9 +250,9 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
 } {
   if (layer.kind === 'activityBlock') {
     // A block lays out its own texts: no alignment, backdrop or spacing.
-    const { font, bold, uppercase } = layer.style;
+    const { font, bold, italic, uppercase } = layer.style;
     return {
-      format: { font, bold, uppercase },
+      format: { font, bold, italic: italic ?? false, uppercase },
       change: (patch) => (template) => setBlockOptions(template, layer.id, patch),
     };
   }
@@ -253,17 +261,19 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
       format: {
         font: layer.font,
         bold: layer.bold,
+        italic: layer.italic ?? false,
         uppercase: layer.uppercase,
         align: layer.align,
       },
       change: (patch) => (template) => setChartOptions(template, layer.id, patch),
     };
   }
-  const { font, bold, uppercase, align, backdrop, letterSpacing } = layer.style;
+  const { font, bold, italic, uppercase, align, backdrop, letterSpacing } = layer.style;
   return {
     format: {
       font,
       bold,
+      italic: italic ?? false,
       uppercase: layer.kind === 'text' ? undefined : uppercase,
       align,
       backdrop: backdrop ?? 'none',

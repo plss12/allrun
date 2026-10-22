@@ -86,6 +86,8 @@ export type LabelKey =
   | `chartHeaders.${ChartHeaderName}`
   | `chartCaptions.activity.${ActivityChartSeries}`
   | 'widgets.chatLine'
+  | `widgets.cameraModes.${'video' | 'photo'}`
+  | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`
   | `chartCaptions.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
 
 /** Text content of a text-like layer, before translation and styling. */

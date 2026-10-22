@@ -29,7 +29,7 @@ import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { Activity } from '@/core/activity';
 import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
-import type { LayerTransform } from '@/core/layer-transform';
+import type { HitHole, LayerTransform } from '@/core/layer-transform';
 import type { PhotoPlacement, Size } from '@/core/photo-framing';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
@@ -63,7 +63,7 @@ import { prepareActivityBlock } from './activity-blocks';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
 import { FONT_FAMILIES } from './fonts';
-import { DropShadow, LETTER_SPACING, textShadows } from './scene-text';
+import { addLeanRoom, DropShadow, LETTER_SPACING, slantOf, textShadows } from './scene-text';
 
 /**
  * A layer filled with data and measured, ready to draw. Its content is centered on (0, 0); the
@@ -76,6 +76,8 @@ export interface PreparedLayer {
   readonly width: number;
   readonly height: number;
   readonly content: ReactElement;
+  /** Its see-through part, which touches go through (see `HitHole`). */
+  readonly hole?: HitHole;
 }
 
 /** What layers need to be filled in and measured. */
@@ -92,9 +94,9 @@ export interface LayerContext {
  * for this data (a route-less activity, a value of the other mode) are left out.
  */
 export function prepareLayers(template: Template, context: LayerContext): PreparedLayer[] {
-  const canvasWidth = CANVAS_FORMATS[template.format].width;
+  const canvas = CANVAS_FORMATS[template.format];
   return template.layers.flatMap((layer) => {
-    const prepared = prepareLayer(layer, context, canvasWidth);
+    const prepared = prepareLayer(layer, context, canvas);
     return prepared === null ? [] : [prepared];
   });
 }
@@ -259,8 +261,9 @@ export function TemplateScene({ format, layers, background, live = null }: Templ
 function prepareLayer(
   layer: Layer,
   { data, fonts, textContext, translate }: LayerContext,
-  canvasWidth: number,
+  canvas: Size,
 ): PreparedLayer | null {
+  const canvasWidth = canvas.width;
   switch (layer.kind) {
     case 'metric':
     case 'summaryMetric':
@@ -329,6 +332,7 @@ function prepareLayer(
         color: layer.color,
         font: layer.font,
         bold: layer.bold,
+        italic: layer.italic,
       };
       const labels = layer.axisLabels
         ? formatBucketLabels(buckets, size, textContext.locale).map((label) =>
@@ -400,7 +404,13 @@ function prepareLayer(
         return null;
       }
       // Numbers have no capitals: they only apply to the header and the names of columns.
-      const chartText = { ...LABEL_STYLE, color: layer.color, font: layer.font, bold: layer.bold };
+      const chartText = {
+        ...LABEL_STYLE,
+        color: layer.color,
+        font: layer.font,
+        bold: layer.bold,
+        italic: layer.italic,
+      };
       const paragraph = (value: string, uppercase: boolean, size: number) =>
         buildParagraph(
           fonts,
@@ -528,7 +538,7 @@ function prepareLayer(
       if (data.mode !== 'activity') {
         return null;
       }
-      const block = prepareActivityBlock(layer, data, { fonts, textContext, translate });
+      const block = prepareActivityBlock(layer, data, { fonts, textContext, translate, canvas });
       return block === null ? null : { layer, ...block };
     }
     case 'logo': {
@@ -748,13 +758,34 @@ function buildParagraph(
     color: Skia.Color(style.color),
     fontFamilies: [FONT_FAMILIES[style.font]],
     fontSize,
-    fontStyle: { weight: bold ? FontWeight.Bold : FontWeight.Normal },
+    fontStyle: {
+      weight: bold ? FontWeight.Bold : FontWeight.Normal,
+      slant: slantOf(style.italic),
+    },
     letterSpacing: fontSize * LETTER_SPACING[style.letterSpacing ?? 'normal'],
     shadows: style.shadow ? textShadows(style.color) : [],
   });
   const builder = Skia.ParagraphBuilder.Make({ textAlign: ALIGN[style.align] }, fonts);
-  for (const run of textRuns(style, content)) {
-    builder.pushStyle(textStyle(run.fontSize, run.bold)).addText(run.text).pop();
+  const runs = textRuns(style, content);
+  for (const run of runs) {
+    builder.pushStyle(textStyle(run.fontSize, run.bold));
+    if (style.italic === true) {
+      // Room for the lean at the end of each line the text breaks (soft wraps can't be known
+      // before the layout) and of the last one.
+      run.text.split('\n').forEach((line, i, lines) => {
+        builder.addText(line);
+        if (i < lines.length - 1) {
+          addLeanRoom(builder, run.fontSize);
+          builder.addText('\n');
+        }
+      });
+    } else {
+      builder.addText(run.text);
+    }
+    builder.pop();
+  }
+  if (style.italic === true && runs.length > 0) {
+    addLeanRoom(builder, runs[runs.length - 1].fontSize);
   }
   const paragraph = builder.build();
   // Lay out once to measure, then shrink to the longest line so the block centers on (0, 0).

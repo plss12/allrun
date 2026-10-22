@@ -68,10 +68,16 @@ describe('activityCatalog', () => {
       'block-headline',
       'block-columns',
       'block-route',
+      'block-tall',
+      'block-wide',
       'block-day',
+      'block-weekday',
       'block-sport',
       'block-poster',
+      'block-serif',
       'block-message',
+      'block-music',
+      'block-camera',
     ]);
     // A design of a single version is its tile's only page.
     expect(variantKeys(trail, 'block-poster')).toEqual(['block-poster']);

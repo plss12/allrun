@@ -23,7 +23,7 @@ import { castsShadow } from '@/core/layer-style';
 import { type Layer, MAX_TEXT_LENGTH } from '@/core/template';
 import { colors } from '@/theme/colors';
 
-import { previewFamily, usePreviewFonts } from './fonts';
+import { hasItalic, previewFamily, usePreviewFonts } from './fonts';
 import { TEXT_SIZE } from './template-scene';
 
 /** Where the text sits on the canvas, in the editor's coordinates (screen points). */
@@ -49,6 +49,8 @@ interface TypingOverlayProps {
 const MIN_SCALE = 0.45;
 /** …nor bigger than this, so a few words fit on a line: about 48 pt. */
 const MAX_SCALE = 0.8;
+/** How Skia leans a font that has no italic: a quarter of the height, about 14 degrees. */
+const SKIA_LEAN = `${(-Math.atan(0.25) * 180) / Math.PI}deg`;
 /** Room at the top for the "Done" button. */
 const TOP_ROOM = 60;
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
@@ -181,8 +183,16 @@ export function TypingOverlay({ layer, origin, onChangeText, onDone }: TypingOve
             padding: 0,
             color: style.color,
             opacity: layer.opacity,
-            fontFamily: previews ? previewFamily(style.font, style.bold) : undefined,
+            fontFamily: previews
+              ? previewFamily(style.font, style.bold, style.italic === true)
+              : undefined,
             fontWeight: previews ? undefined : style.bold ? '700' : '400',
+            fontStyle: !previews && style.italic === true ? 'italic' : 'normal',
+            // A font without an italic is leaned as Skia leans it on the canvas.
+            transform:
+              previews && style.italic === true && !hasItalic(style.font)
+                ? [{ skewX: SKIA_LEAN }]
+                : [],
             fontSize: TEXT_SIZE * editScale,
             textAlign: style.align,
             textShadowColor: shadow ? 'rgba(0, 0, 0, 0.45)' : 'transparent',

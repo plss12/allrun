@@ -43,7 +43,8 @@ Accepted risk: a missed drag on a widget moves the photo, and that can't be undo
 ### Gestures
 
 What a gesture moves is decided when it starts: the layer under the fingers (with a 44 pt
-minimum touch area), else the photo. A tap selects a layer or clears the selection. Layers snap
+minimum touch area; a see-through part of a layer, as the camera's view, lets the touch through
+to what is under it), else the photo. A tap selects a layer or clears the selection. Layers snap
 to the canvas center lines, to its edges (keeping a 24 px margin) and to straight angles within
 4°, with guides and a light haptic; the photo snaps to straight angles too and always covers the
 canvas, rotated or not (no empty corners, unlike Instagram). Dragging a layer shows a trash at
@@ -86,8 +87,11 @@ a widget whose color has a WCAG luminance above 0.1 casts a soft dark shadow so 
 photo; darker colors go without, since a dark shadow would only blur them. Default designs use
 one font for every widget; each starter template brings its own (ADR 007).
 
-What a widget shows and how its value is written sit in its Format tab, after bold, case and
-alignment. First how the value is written, in one chip that shows the widget's own value written
+What a widget shows and how its value is written sit in its Format tab, after bold, italic, case
+and alignment. Italic is offered in every font, so it adds variety without adding fonts: the four
+that ship an italic (Inter, Barlow Condensed, Playfair Display, Space Mono) use it, and Skia
+leans the letters of the rest, as sports graphics do; a slanted text measures the room its last
+letter leans out, so it is grabbed and framed whole. First how the value is written, in one chip that shows the widget's own value written
 the current way (never a made-up sample) and moves to the next way on each tap, like the
 alignment button: a pace with a colon or with minute and second marks (`5:28`, `5'28"`, as on
 sports watches; an hour or more reads `1h 05'30"`), a time as a clock, with units or rounded

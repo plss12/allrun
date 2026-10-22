@@ -160,4 +160,19 @@ describe('hitTestLayers', () => {
     expect(hitTestLayers(thin, { x: 540, y: 990 }, story, 0)).toBeNull();
     expect(hitTestLayers(thin, { x: 540, y: 990 }, story, 88)).toBe('a');
   });
+
+  it("lets a touch in a layer's hole through to the layer under it, or the photo", () => {
+    // A frame as big as the story, its view 1080 × 1200 from 200 px down, at half its size.
+    const frame: LayerBox = {
+      ...box('frame', { scale: 0.5 }, 1080, 1920),
+      hole: { x: 0, y: 200, width: 1080, height: 1200 },
+    };
+    const boxes = [box('under', {}), frame];
+    expect(hitTestLayers(boxes, { x: 540, y: 960 }, story, 0)).toBe('under');
+    expect(hitTestLayers(boxes, { x: 400, y: 900 }, story, 0)).toBeNull();
+    // The frame's top band: from 480 to 580 px down once scaled.
+    expect(hitTestLayers(boxes, { x: 540, y: 530 }, story, 0)).toBe('frame');
+    // Its bottom band: from 1180 px down to its end, 1440.
+    expect(hitTestLayers(boxes, { x: 540, y: 1300 }, story, 0)).toBe('frame');
+  });
 });

@@ -248,8 +248,8 @@ export function setLayerOpacity(template: Template, id: string, opacity: number)
 }
 
 /**
- * Font, weight, case, alignment, backdrop or letter spacing of a text layer; the color goes
- * through `setLayerColor`.
+ * Font, weight, slant, case, alignment, backdrop or letter spacing of a text layer; the color
+ * goes through `setLayerColor`.
  */
 export function setTextStyle(
   template: Template,
@@ -257,9 +257,11 @@ export function setTextStyle(
   patch: Partial<Omit<TextStyle, 'color' | 'shadow'>>,
 ): Template {
   return editLayer(template, id, TEXT_KINDS, 'text style', (layer) => {
-    // Without them a text has no backdrop and normal spacing: choosing that changes nothing.
+    // Without them a text is upright, has no backdrop and normal spacing: choosing that changes
+    // nothing.
     const current = {
       ...layer.style,
+      italic: layer.style.italic ?? false,
       backdrop: layer.style.backdrop ?? 'none',
       letterSpacing: layer.style.letterSpacing ?? 'normal',
     };
@@ -310,10 +312,10 @@ export function setStrokeWidth(template: Template, id: string, width: number): T
 }
 
 /** What a chart's texts look like. */
-type ChartLooks = Pick<ChartLayer, 'font' | 'bold' | 'uppercase' | 'align'>;
+type ChartLooks = Pick<ChartLayer, 'font' | 'bold' | 'italic' | 'uppercase' | 'align'>;
 
 /**
- * How a chart's texts are written (font, bold, capitals, where its header sits). What it measures
+ * How a chart's texts are written (font, bold, italic, capitals, where its header sits). What it measures
  * and draws (its header, bar size, average line, zones, each bar's value) is chosen in the
  * gallery.
  */
@@ -323,7 +325,8 @@ export function setChartOptions(
   patch: Partial<ChartLooks>,
 ): Template {
   return editLayer(template, id, CHART_KINDS, 'chart options', (layer) =>
-    unchanged(layer, patch) ? layer : { ...layer, ...patch },
+    // Without it a chart's texts are upright: choosing that changes nothing.
+    unchanged({ ...layer, italic: layer.italic ?? false }, patch) ? layer : { ...layer, ...patch },
   );
 }
 
@@ -338,12 +341,12 @@ export function setLogoOptions(
   );
 }
 
-/** What a mixed widget's panel sets: its texts' font, weight and case, and its logo. */
-export type BlockOptions = Pick<BlockLayer['style'], 'font' | 'bold' | 'uppercase'> &
+/** What a mixed widget's panel sets: its texts' font, weight, slant and case, and its logo. */
+export type BlockOptions = Pick<BlockLayer['style'], 'font' | 'bold' | 'italic' | 'uppercase'> &
   Pick<BlockLayer, 'logo'>;
 
 /**
- * Font, weight and case of a mixed widget's texts, and whether it signs with the AllRun name.
+ * Font, weight, slant and case of a mixed widget's texts, and whether it signs with the AllRun name.
  * Its design and version are chosen in the gallery; its color goes through `setLayerColor`.
  */
 export function setBlockOptions(
@@ -353,7 +356,7 @@ export function setBlockOptions(
 ): Template {
   return editLayer(template, id, BLOCK_KINDS, 'block options', (layer) => {
     const { logo, ...style } = patch;
-    const current = { ...layer.style, logo: layer.logo };
+    const current = { ...layer.style, italic: layer.style.italic ?? false, logo: layer.logo };
     if (unchanged(current, patch)) {
       return layer;
     }

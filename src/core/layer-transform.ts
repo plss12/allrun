@@ -163,12 +163,39 @@ export function snapLayer(
   };
 }
 
-/** A layer as the hit test sees it: its transform and its size before scaling (canvas pixels). */
+/**
+ * A see-through part of a layer that touches go through, to the layers under it and the photo
+ * (the camera's view): a rectangle from the layer's top-left corner, before scaling.
+ */
+export interface HitHole {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * A layer as the hit test sees it: its transform, its size before scaling (canvas pixels), and
+ * the hole touches go through, if it has one.
+ */
 export interface LayerBox {
   readonly id: string;
   readonly transform: LayerTransform;
   readonly width: number;
   readonly height: number;
+  readonly hole?: HitHole;
+}
+
+/** Whether a point of a layer's frame (from its center, scaled) is in its hole. */
+function inHole(box: LayerBox, localX: number, localY: number): boolean {
+  'worklet';
+  const { hole, transform, width, height } = box;
+  if (hole === undefined) {
+    return false;
+  }
+  const x = localX / transform.scale + width / 2;
+  const y = localY / transform.scale + height / 2;
+  return x > hole.x && x < hole.x + hole.width && y > hole.y && y < hole.y + hole.height;
 }
 
 /**
@@ -177,7 +204,8 @@ export interface LayerBox {
  *
  * The point is taken into each layer's own frame (undoing its rotation) and compared with its
  * scaled half-size. Every layer is at least `minSize` canvas pixels wide and tall for touching,
- * so thin text or a small logo stay easy to grab. Time O(n) for n layers, space O(1).
+ * so thin text or a small logo stay easy to grab. A touch in a layer's hole goes through it. Time
+ * O(n) for n layers, space O(1).
  */
 export function hitTestLayers(
   boxes: readonly LayerBox[],
@@ -196,7 +224,11 @@ export function hitTestLayers(
     const localY = dx * sin + dy * cos;
     const halfWidth = Math.max(width * transform.scale, minSize) / 2;
     const halfHeight = Math.max(height * transform.scale, minSize) / 2;
-    if (Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight) {
+    if (
+      Math.abs(localX) <= halfWidth &&
+      Math.abs(localY) <= halfHeight &&
+      !inHole(boxes[i], localX, localY)
+    ) {
       return boxes[i].id;
     }
   }

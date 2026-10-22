@@ -152,13 +152,14 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         return [item.line, flag(item.glow, 'glow')];
       case 'activityBlock':
         // Every version is named, the first too: they are designs, not options of one. A
-        // design of a single version has nothing to add.
+        // design of a single version has nothing to add; a cover adds its color.
         return [
           item.block.design === 'columns'
             ? item.block.count
             : 'layout' in item.block
               ? item.block.layout
               : undefined,
+          'cover' in item.block ? item.block.cover : undefined,
         ];
       case 'text':
         return [];
