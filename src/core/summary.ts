@@ -1,6 +1,6 @@
 import type { Activity } from './activity';
 import { addDays, type DateRange, isInRange, monthRange, toEpochDay } from './dates';
-import type { SportFamily, SportModality } from './sports';
+import { SPORT_FAMILIES, type SportFamily, type SportModality } from './sports';
 
 /**
  * Which sports a summary includes: an activity passes when its family or its modality is listed,
@@ -66,6 +66,28 @@ function matchesSport(activity: Activity, { families, modalities }: SummaryFilte
     (families?.includes(activity.sportFamily) ?? false) ||
     (modalities?.includes(activity.sportModality) ?? false)
   );
+}
+
+/**
+ * The families the activities belong to, in the usual order (running, cycling, walking,
+ * swimming, training, other), each once. Time O(n), space O(1).
+ */
+export function familiesOf(activities: readonly Activity[]): SportFamily[] {
+  const present = new Set(activities.map((activity) => activity.sportFamily));
+  return SPORT_FAMILIES.filter((family) => present.has(family));
+}
+
+/** A page of a period's summary card: all sports together, or one family. */
+export type SummaryPage = 'all' | SportFamily;
+
+/**
+ * The pages a period's summary card scrolls through: all sports first, then each family done in
+ * the period. With a single family, only its page, since "all" would repeat it; with none, the
+ * empty "all". Time O(n), space O(1).
+ */
+export function summaryPages(activities: readonly Activity[], range: DateRange): SummaryPage[] {
+  const families = familiesOf(selectActivities(activities, range));
+  return families.length === 1 ? families : ['all', ...families];
 }
 
 /**

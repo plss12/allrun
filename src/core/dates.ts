@@ -96,3 +96,19 @@ export function isInRange(date: LocalDate, range: DateRange): boolean {
 export function rangeLength(range: DateRange): number {
   return toEpochDay(range.end) - toEpochDay(range.start) + 1;
 }
+
+/** How a past date is named: today, yesterday, or its date. */
+export type RelativeDay = 'today' | 'yesterday' | 'date';
+
+/**
+ * How near a past date is to `today`, to name it as people do: "Today", "Yesterday", or the date
+ * itself further back (a weekday name would make the reader count back). A future date (a clock
+ * that moved) is named by its date. Time and space O(1).
+ */
+export function relativeDay(date: LocalDate, today: LocalDate): RelativeDay {
+  const daysAgo = toEpochDay(today) - toEpochDay(date);
+  if (daysAgo === 0) {
+    return 'today';
+  }
+  return daysAgo === 1 ? 'yesterday' : 'date';
+}

@@ -1,8 +1,9 @@
-import type { DateRange, LocalDate } from '@/core/dates';
+import { type DateRange, type LocalDate, relativeDay } from '@/core/dates';
 import type { DisplayMetric, MetricUnit } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
 import type { BucketSize, SummaryBucket } from '@/core/summary';
 import type { DateFormat, PeriodFormat } from '@/core/template';
+import { type DistanceUnit, metersToUnit } from '@/core/units';
 
 /** A metric as text: the value and its unit label. */
 export interface FormattedMetric {
@@ -187,5 +188,51 @@ export function formatBucketLabels(
         return shown ? String(day) : '';
       });
     }
+  }
+}
+
+/** What a period's chart measures: the distance of each day (week, month), or its time. */
+export type ChartQuantity = 'distance' | 'time';
+
+/**
+ * A value on a period's chart, short enough for its axis and its peak: a distance in whole km or
+ * miles ("61 km"), with a decimal below 10 ("4.5 km"); a time in whole hours ("3 h"), or in
+ * minutes below an hour ("45 min").
+ */
+export function formatChartValue(
+  value: number,
+  quantity: ChartQuantity,
+  unit: DistanceUnit,
+  locale: string,
+): string {
+  const number = (amount: number) =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: amount < 10 ? 1 : 0 }).format(amount);
+  if (quantity === 'distance') {
+    return `${number(metersToUnit(value, unit))} ${unit}`;
+  }
+  return value < 3600
+    ? `${Math.round(value / 60)} min`
+    : `${number(Math.round((value / 3600) * 10) / 10)} h`;
+}
+
+/**
+ * A past day named as people do (see `relativeDay`): the translated words for today and
+ * yesterday, or the short date further back ("Oct 20"), with its year when it isn't this one.
+ */
+export function formatRelativeDay(
+  date: LocalDate,
+  today: LocalDate,
+  locale: string,
+  words: { readonly today: string; readonly yesterday: string },
+): string {
+  switch (relativeDay(date, today)) {
+    case 'today':
+      return words.today;
+    case 'yesterday':
+      return words.yesterday;
+    case 'date':
+      return date.slice(0, 4) === today.slice(0, 4)
+        ? formatShortDate(date, locale)
+        : formatDate(date, locale);
   }
 }

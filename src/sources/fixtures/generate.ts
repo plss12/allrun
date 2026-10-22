@@ -64,8 +64,11 @@ const paceSpeed = (secondsPerKm: number) => 1000 / secondsPerKm;
 function planFor(weekday: number, random: Random): SessionPlan | null {
   const roll = random();
   switch (weekday) {
-    case 0: // Monday: gym or rest
-      return roll < 0.5 ? gym('WeightTraining', between(random, 2700, 4200)) : null;
+    case 0: // Monday: gym, now and then climbing (a sport without a family of its own), or rest
+      if (roll < 0.5) {
+        return gym('WeightTraining', between(random, 2700, 4200));
+      }
+      return roll < 0.65 ? gym('RockClimbing', between(random, 3600, 6000)) : null;
     case 1: // Tuesday: easy run
       return run('Run', between(random, 7000, 11_000), between(random, 310, 340), random);
     case 2: // Wednesday: cross-training
@@ -164,6 +167,7 @@ const HEART_RATE: Readonly<Record<string, readonly [number, number]>> = {
   Walk: [95, 110],
   Hike: [110, 125],
   WeightTraining: [100, 120],
+  RockClimbing: [110, 135],
 };
 
 const LABELS: Readonly<Record<string, string>> = {
@@ -175,6 +179,7 @@ const LABELS: Readonly<Record<string, string>> = {
   Walk: 'Walk',
   Hike: 'Hike',
   WeightTraining: 'Weight Training',
+  RockClimbing: 'Climbing',
 };
 
 function buildActivity(
@@ -242,6 +247,7 @@ function caloriesPerSecond(sportType: string): number {
     case 'Hike':
       return 0.08;
     case 'WeightTraining':
+    case 'RockClimbing':
       return 0.09;
     default:
       return 0.2;

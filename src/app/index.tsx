@@ -1,22 +1,59 @@
-import { router } from 'expo-router';
+import { SegmentedControl } from '@expo/ui/community/segmented-control';
+import { Stack } from 'expo-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, ScrollView, Text, useWindowDimensions } from 'react-native';
 
 import type { Activity } from '@/core/activity';
-import { toDisplayMetric } from '@/core/metrics';
+import type { PeriodKind } from '@/core/periods';
+import type { SportFamily } from '@/core/sports';
+import { familiesOf } from '@/core/summary';
 import { useActivitySource } from '@/data/activity-source';
+import { ActivityCard } from '@/home/activity-card';
+import { PeriodCard } from '@/home/period-card';
+import { SPORT_SYMBOLS } from '@/home/sport-symbols';
 import { colors } from '@/theme/colors';
-import { formatMetric, formatShortDate } from '@/ui/format';
 import { useDisplaySettings } from '@/ui/settings';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
+import { todayLocal } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
 
 const RECENT_LIMIT = 50;
+const TABS = ['activities', 'summaries'] as const;
+const PERIODS: readonly PeriodKind[] = ['week', 'month', 'year', 'custom'];
+const PADDING = 16;
+const GAP = 12;
 
+type Tab = (typeof TABS)[number];
+
+/** Home: the activities as a gallery, or the summaries of each period (ADR 009). */
 export default function Home() {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<Tab>('activities');
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerTitle: () => (
+            <SegmentedControl
+              values={TABS.map((option) => t(`home.tabs.${option}`))}
+              selectedIndex={TABS.indexOf(tab)}
+              onChange={(event) => setTab(TABS[event.nativeEvent.selectedSegmentIndex])}
+              style={{ width: 230 }}
+            />
+          ),
+        }}
+      />
+      {tab === 'activities' ? <Activities /> : <Summaries />}
+    </>
+  );
+}
+
+function Activities() {
   const { t } = useTranslation();
   const source = useActivitySource();
   const recent = useAsync(() => source.listRecent(RECENT_LIMIT), 'recent');
+  const [sport, setSport] = useState<SportFamily | 'all'>('all');
 
   if (recent.status === 'loading') {
     return <LoadingView />;
@@ -24,103 +61,97 @@ export default function Home() {
   if (recent.status === 'error') {
     return <ErrorView message={t('home.error')} onRetry={recent.retry} />;
   }
+  const families = familiesOf(recent.data);
+  // A sport chosen before the list changed may no longer be there: show them all.
+  const shown = sport !== 'all' && families.includes(sport) ? sport : 'all';
+  return (
+    <>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu
+          icon={
+            shown === 'all'
+              ? 'line.3.horizontal.decrease.circle'
+              : 'line.3.horizontal.decrease.circle.fill'
+          }
+          accessibilityLabel={t('home.filter')}
+          title={t('home.filter')}
+        >
+          <Stack.Toolbar.MenuAction
+            icon={SPORT_SYMBOLS.all.ios}
+            isOn={shown === 'all'}
+            onPress={() => setSport('all')}
+          >
+            {t('summary.allSports')}
+          </Stack.Toolbar.MenuAction>
+          {families.map((family) => (
+            <Stack.Toolbar.MenuAction
+              key={family}
+              icon={SPORT_SYMBOLS[family].ios}
+              isOn={shown === family}
+              onPress={() => setSport(family)}
+            >
+              {t(`families.${family}`)}
+            </Stack.Toolbar.MenuAction>
+          ))}
+        </Stack.Toolbar.Menu>
+      </Stack.Toolbar>
+      <Gallery
+        activities={
+          shown === 'all'
+            ? recent.data
+            : recent.data.filter((activity) => activity.sportFamily === shown)
+        }
+      />
+    </>
+  );
+}
+
+/** The activities, one per row, newest first. */
+function Gallery({ activities }: { readonly activities: readonly Activity[] }) {
+  const { t } = useTranslation();
+  const { unit, locale } = useDisplaySettings();
+  const { width } = useWindowDimensions();
+  const cardWidth = width - 2 * PADDING;
+  const today = todayLocal();
   return (
     <FlatList
       contentInsetAdjustmentBehavior="automatic"
-      data={recent.data}
+      data={activities}
       keyExtractor={(activity) => activity.id}
-      contentContainerStyle={{ padding: 16, gap: 8, flexGrow: 1 }}
-      ListHeaderComponent={<SummaryCard />}
+      contentContainerStyle={{ padding: PADDING, gap: GAP, flexGrow: 1 }}
+      ListHeaderComponent={
+        <Text style={{ color: colors.secondaryLabel, fontSize: 13, paddingBottom: 4 }}>
+          {t('home.sampleData')}
+        </Text>
+      }
       ListEmptyComponent={<EmptyView message={t('home.empty')} />}
-      renderItem={({ item }) => <ActivityRow activity={item} />}
+      renderItem={({ item }) => (
+        <ActivityCard activity={item} width={cardWidth} today={today} unit={unit} locale={locale} />
+      )}
     />
   );
 }
 
-function SummaryCard() {
-  const { t } = useTranslation();
-  return (
-    <View style={{ gap: 8, paddingBottom: 8 }}>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push('/summary')}
-        style={({ pressed }) => ({
-          backgroundColor: colors.tint,
-          borderRadius: 16,
-          borderCurve: 'continuous',
-          padding: 16,
-          gap: 4,
-          opacity: pressed ? 0.8 : 1,
-        })}
-      >
-        <Text style={{ color: colors.onTint, fontSize: 20, fontWeight: '700' }}>
-          {t('home.createSummary')}
-        </Text>
-        <Text style={{ color: colors.onTint, fontSize: 15, opacity: 0.9 }}>
-          {t('home.createSummaryHint')}
-        </Text>
-      </Pressable>
-      <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>{t('home.sampleData')}</Text>
-    </View>
-  );
-}
-
-function ActivityRow({ activity }: { readonly activity: Activity }) {
-  const { t } = useTranslation();
+/** A card per period: this week, month and year, and a custom range. */
+function Summaries() {
   const { unit, locale } = useDisplaySettings();
-  const headline = formatMetric(
-    activity.distanceMeters > 0
-      ? toDisplayMetric('distance', activity.distanceMeters, {
-          unit,
-          sportFamily: activity.sportFamily,
-        })
-      : toDisplayMetric('movingTime', activity.movingTimeSeconds, {
-          unit,
-          sportFamily: activity.sportFamily,
-        }),
-    locale,
-  );
-  const subtitle = `${t(`modalities.${activity.sportModality}`)} · ${formatShortDate(
-    activity.localDate,
-    locale,
-  )}`;
+  const { width } = useWindowDimensions();
+  const today = todayLocal();
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${activity.name}, ${subtitle}, ${headline.value} ${headline.unit ?? ''}`}
-      onPress={() =>
-        router.push({ pathname: '/editor', params: { mode: 'activity', activityId: activity.id } })
-      }
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        padding: 14,
-        borderRadius: 14,
-        borderCurve: 'continuous',
-        backgroundColor: colors.secondarySystemBackground,
-        opacity: pressed ? 0.7 : 1,
-      })}
+    <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{ padding: PADDING, gap: 16 }}
     >
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text numberOfLines={1} style={{ color: colors.label, fontSize: 17, fontWeight: '600' }}>
-          {activity.name}
-        </Text>
-        <Text numberOfLines={1} style={{ color: colors.secondaryLabel, fontSize: 14 }}>
-          {subtitle}
-        </Text>
-      </View>
-      <Text
-        style={{
-          color: colors.label,
-          fontSize: 17,
-          fontWeight: '600',
-          fontVariant: ['tabular-nums'],
-        }}
-      >
-        {headline.value}
-        {headline.unit === null ? '' : ` ${headline.unit}`}
-      </Text>
-    </Pressable>
+      {PERIODS.map((kind) => (
+        <PeriodCard
+          key={kind}
+          kind={kind}
+          width={width - 2 * PADDING}
+          today={today}
+          unit={unit}
+          locale={locale}
+        />
+      ))}
+    </ScrollView>
   );
 }

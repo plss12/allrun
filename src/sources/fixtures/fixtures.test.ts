@@ -27,7 +27,7 @@ describe('generateStravaFixtures', () => {
   it('mixes sports, including sessions without distance or GPS', () => {
     const activities = parseStravaActivities(generateStravaFixtures(options));
     const groups = new Set(activities.map((activity) => activity.sportFamily));
-    expect([...groups].sort()).toEqual(['other', 'ride', 'run', 'swim', 'training']);
+    expect([...groups].sort()).toEqual(['other', 'ride', 'run', 'swim', 'training', 'walk']);
     expect(activities.some((a) => a.sportType === 'WeightTraining' && a.distanceMeters === 0)).toBe(
       true,
     );

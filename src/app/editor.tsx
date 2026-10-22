@@ -38,6 +38,7 @@ import {
 } from '@/core/layer-catalog';
 import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
+import { SPORT_FAMILIES } from '@/core/sports';
 import { selectActivities, summarize } from '@/core/summary';
 import { type CanvasFormat, CANVAS_FORMATS, type Layer, type Template } from '@/core/template';
 import {
@@ -91,7 +92,7 @@ const paramsSchema = z.discriminatedUnion('mode', [
     families: z
       .string()
       .transform((value) => (value === '' ? [] : value.split(',')))
-      .pipe(z.array(z.enum(['run', 'ride', 'swim', 'training', 'other']))),
+      .pipe(z.array(z.enum(SPORT_FAMILIES))),
   }),
 ]);
 

@@ -1,7 +1,7 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
 import { customRange, monthRange, weekRange } from './dates';
-import { bucketize, summarize } from './summary';
+import { bucketize, familiesOf, summarize, summaryPages } from './summary';
 
 const week = weekRange('2026-10-14'); // Mon 12 to Sun 18 October 2026
 
@@ -158,5 +158,31 @@ describe('bucketize', () => {
 
   it('makes one bar per day for a whole month', () => {
     expect(bucketize([], monthRange('2026-02-10'), 'day')).toHaveLength(28);
+  });
+});
+
+describe('familiesOf and summaryPages', () => {
+  const run = makeActivity({ localDate: '2026-10-13', sportType: 'Run' });
+  const hike = makeActivity({ localDate: '2026-10-14', sportType: 'Hike' });
+  const yoga = makeActivity({ localDate: '2026-10-15', sportType: 'Yoga' });
+  const climb = makeActivity({ localDate: '2026-10-19', sportType: 'RockClimbing' });
+
+  it('lists each family once, in the usual order', () => {
+    expect(familiesOf([yoga, climb, run, hike, run])).toEqual(['run', 'walk', 'training', 'other']);
+    expect(familiesOf([])).toEqual([]);
+  });
+
+  it('pages all sports first, then each family of the period', () => {
+    expect(summaryPages([yoga, run, hike, climb], week)).toEqual([
+      'all',
+      'run',
+      'walk',
+      'training',
+    ]);
+  });
+
+  it('pages a single family alone, and an empty period as all sports', () => {
+    expect(summaryPages([run, run], week)).toEqual(['run']);
+    expect(summaryPages([climb], week)).toEqual(['all']);
   });
 });

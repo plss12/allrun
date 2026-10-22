@@ -1,6 +1,12 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
-import { availableMetrics, metricValue, toDisplayMetric, withPaceMarks } from './metrics';
+import {
+  availableMetrics,
+  cardMetrics,
+  metricValue,
+  toDisplayMetric,
+  withPaceMarks,
+} from './metrics';
 
 describe('availableMetrics', () => {
   it('offers pace, not speed, for road runs, leading with distance, time and pace', () => {
@@ -196,5 +202,62 @@ describe('withPaceMarks', () => {
     ]) {
       expect(withPaceMarks(display)).toBe(display);
     }
+  });
+});
+
+describe('cardMetrics', () => {
+  it('shows the distance, how fast as the sport writes it, and the time', () => {
+    expect(cardMetrics(makeActivity({ sportType: 'Run' }))).toEqual([
+      'distance',
+      'pace',
+      'movingTime',
+    ]);
+    expect(cardMetrics(makeActivity({ sportType: 'Hike' }))).toEqual([
+      'distance',
+      'pace',
+      'movingTime',
+    ]);
+    expect(cardMetrics(makeActivity({ sportType: 'Ride' }))).toEqual([
+      'distance',
+      'speed',
+      'movingTime',
+    ]);
+    expect(cardMetrics(makeActivity({ sportType: 'Swim' }))).toEqual([
+      'distance',
+      'swimPace',
+      'movingTime',
+    ]);
+  });
+
+  it('shows the time, heart rate and calories without a distance', () => {
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      averageSpeed: null,
+      averageHeartRate: 128,
+      maxHeartRate: 160,
+      calories: 300,
+    });
+    expect(cardMetrics(gym)).toEqual(['movingTime', 'averageHeartRate', 'calories']);
+  });
+
+  it('makes up missing data without repeating the time or the heart rate', () => {
+    const climb = makeActivity({
+      sportType: 'RockClimbing',
+      distanceMeters: 0,
+      averageSpeed: null,
+      elevationGainMeters: 120,
+      averageHeartRate: null,
+      maxHeartRate: null,
+      calories: 400,
+    });
+    expect(cardMetrics(climb)).toEqual(['movingTime', 'calories', 'elevationGain']);
+  });
+
+  it('leaves out how fast when the activity has no speed', () => {
+    expect(cardMetrics(makeActivity({ sportType: 'Run', averageSpeed: null }))).toEqual([
+      'distance',
+      'movingTime',
+    ]);
   });
 });

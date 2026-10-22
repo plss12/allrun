@@ -1,7 +1,14 @@
 import { customRange, monthRange, weekRange, yearRange } from '@/core/dates';
 import { bucketize } from '@/core/summary';
 
-import { formatActivityDate, formatBucketLabels, formatMetric, formatPeriodName } from './format';
+import {
+  formatActivityDate,
+  formatBucketLabels,
+  formatChartValue,
+  formatMetric,
+  formatPeriodName,
+  formatRelativeDay,
+} from './format';
 
 describe('formatMetric', () => {
   const distance = { kind: 'number', amount: 21.0975, fractionDigits: 2, unit: 'km' } as const;
@@ -142,5 +149,34 @@ describe('formatBucketLabels', () => {
     // the one from 5 February is February's first.
     expect(labels[4]).toBe('');
     expect(labels[5]).toBe('F');
+  });
+});
+
+describe('formatChartValue', () => {
+  it('writes distances in whole units, with a decimal for small ones', () => {
+    expect(formatChartValue(61_400, 'distance', 'km', 'en')).toBe('61 km');
+    expect(formatChartValue(4_520, 'distance', 'km', 'es')).toBe('4,5 km');
+    expect(formatChartValue(16_093.44, 'distance', 'mi', 'en')).toBe('10 mi');
+    expect(formatChartValue(0, 'distance', 'km', 'en')).toBe('0 km');
+  });
+
+  it('writes times in hours, or in minutes below an hour', () => {
+    expect(formatChartValue(13_860, 'time', 'km', 'en')).toBe('3.9 h');
+    expect(formatChartValue(43_200, 'time', 'km', 'en')).toBe('12 h');
+    expect(formatChartValue(2_700, 'time', 'km', 'en')).toBe('45 min');
+  });
+});
+
+describe('formatRelativeDay', () => {
+  const words = { today: 'Hoy', yesterday: 'Ayer' };
+  it('names today and yesterday, and dates older days', () => {
+    expect(formatRelativeDay('2026-10-22', '2026-10-22', 'es', words)).toBe('Hoy');
+    expect(formatRelativeDay('2026-10-21', '2026-10-22', 'es', words)).toBe('Ayer');
+    expect(formatRelativeDay('2026-10-20', '2026-10-22', 'en', words)).toBe('Oct 20');
+    expect(formatRelativeDay('2026-10-01', '2026-10-22', 'en', words)).toBe('Oct 1');
+  });
+
+  it('adds the year to days of another year', () => {
+    expect(formatRelativeDay('2025-12-30', '2026-01-02', 'en', words)).toBe('Dec 30, 2025');
   });
 });

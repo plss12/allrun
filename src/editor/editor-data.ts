@@ -347,6 +347,7 @@ export type SpeedMeasure = 'pace' | 'swimPace' | 'speed';
 export function speedMeasure(family: SportFamily): SpeedMeasure {
   switch (family) {
     case 'run':
+    case 'walk':
       return 'pace';
     case 'swim':
       return 'swimPace';

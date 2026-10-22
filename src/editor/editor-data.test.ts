@@ -263,6 +263,7 @@ describe('lineAxisLabels', () => {
 describe('chart texts', () => {
   it('write a speed as each sport does', () => {
     expect(speedMeasure('run')).toBe('pace');
+    expect(speedMeasure('walk')).toBe('pace');
     expect(speedMeasure('swim')).toBe('swimPace');
     expect(speedMeasure('ride')).toBe('speed');
   });

@@ -1,4 +1,4 @@
-import { projectRoutes } from './route-projection';
+import { largestFit, projectRoutes, routeSpan } from './route-projection';
 
 describe('projectRoutes', () => {
   it('fits a route into the box, centered, with north up', () => {
@@ -66,5 +66,43 @@ describe('projectRoutes', () => {
   it('centers single points and keeps empty routes empty', () => {
     expect(projectRoutes([[[40, -3]]], 200, 100)).toEqual([[{ x: 100, y: 50 }]]);
     expect(projectRoutes([[], []], 100, 100)).toEqual([[], []]);
+  });
+});
+
+describe('routeSpan', () => {
+  it('measures the routes as they are drawn', () => {
+    const span = routeSpan([
+      [
+        [0, 0],
+        [1, 2],
+      ],
+    ]);
+    expect(span.width).toBeCloseTo(2, 3);
+    expect(span.height).toBeCloseTo(1, 3);
+    expect(routeSpan([[]])).toEqual({ width: 0, height: 0 });
+  });
+});
+
+describe('largestFit', () => {
+  const above = { x: 0, y: 0, width: 300, height: 100 };
+  const beside = { x: 100, y: 0, width: 200, height: 200 };
+
+  it('puts a wide route where it is widest, and a tall one where it is tallest', () => {
+    expect(largestFit({ width: 3, height: 1 }, [above, beside])).toBe(above);
+    expect(largestFit({ width: 1, height: 2 }, [above, beside])).toBe(beside);
+  });
+
+  it('keeps the first box on a tie, and for a single point', () => {
+    const twin = { ...above, x: 50 };
+    expect(largestFit({ width: 3, height: 1 }, [above, twin])).toBe(above);
+    expect(largestFit({ width: 0, height: 0 }, [beside, above])).toBe(beside);
+  });
+
+  it('fits a straight line by its length alone', () => {
+    expect(largestFit({ width: 1, height: 0 }, [beside, above])).toBe(above);
+  });
+
+  it('needs at least one box', () => {
+    expect(() => largestFit({ width: 1, height: 1 }, [])).toThrow(RangeError);
   });
 });

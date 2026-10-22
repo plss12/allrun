@@ -6,6 +6,7 @@ import {
   isInRange,
   monthRange,
   rangeLength,
+  relativeDay,
   toEpochDay,
   weekRange,
   yearRange,
@@ -64,5 +65,19 @@ describe('period ranges', () => {
     expect(isInRange('2026-10-01', range)).toBe(true);
     expect(isInRange('2026-10-31', range)).toBe(true);
     expect(isInRange('2026-11-01', range)).toBe(false);
+  });
+});
+
+describe('relativeDay', () => {
+  const today = '2026-10-22'; // Thursday
+  it('names today and yesterday', () => {
+    expect(relativeDay('2026-10-22', today)).toBe('today');
+    expect(relativeDay('2026-10-21', today)).toBe('yesterday');
+  });
+
+  it('dates the day before yesterday and earlier, and the future', () => {
+    expect(relativeDay('2026-10-20', today)).toBe('date');
+    expect(relativeDay('2025-10-22', today)).toBe('date');
+    expect(relativeDay('2026-10-23', today)).toBe('date');
   });
 });

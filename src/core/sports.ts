@@ -4,14 +4,17 @@
  * - **Modality** decides which metrics an activity offers and in which order (a trail run puts
  *   elevation before pace; a treadmill run has no route or elevation).
  * - **Family** groups modalities for summaries ("everything I ran this month" includes trail and
- *   treadmill runs). Summaries put the triathlon sports first (run, ride, swim), then training
- *   (gym, yoga, cardio machines: time and heart rate, no distance); walks, hikes and everything
- *   else count as `other`.
+ *   treadmill runs) and is what the user filters by: running, cycling, walking (walks and
+ *   hikes), swimming, training (gym, yoga, cardio machines: time and heart rate, no distance),
+ *   and `other` for everything else.
  *
  * `other` is the generic fallback on both levels: any sport type without a curated modality
  * (climbing, golf, a type Strava adds tomorrow) still works and shows whatever data it has.
  */
-export type SportFamily = 'run' | 'ride' | 'swim' | 'training' | 'other';
+/** Every family, in the order filters and summaries list them; `other` last. */
+export const SPORT_FAMILIES = ['run', 'ride', 'walk', 'swim', 'training', 'other'] as const;
+
+export type SportFamily = (typeof SPORT_FAMILIES)[number];
 
 export type SportModality =
   | 'roadRun'
@@ -33,8 +36,8 @@ export const FAMILY_OF_MODALITY: Readonly<Record<SportModality, SportFamily>> = 
   roadRun: 'run',
   trailRun: 'run',
   treadmillRun: 'run',
-  walk: 'other',
-  hike: 'other',
+  walk: 'walk',
+  hike: 'walk',
   roadRide: 'ride',
   mountainBikeRide: 'ride',
   gravelRide: 'ride',

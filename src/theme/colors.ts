@@ -13,6 +13,11 @@ export const colors = {
     android: Color.android.dynamic.onSurfaceVariant,
     default: '#3c3c43',
   }),
+  tertiaryLabel: Platform.select({
+    ios: Color.ios.tertiaryLabel,
+    android: Color.android.dynamic.outline,
+    default: '#48484a',
+  }),
   separator: Platform.select({
     ios: Color.ios.separator,
     android: Color.android.dynamic.outlineVariant,
@@ -27,6 +32,12 @@ export const colors = {
     ios: Color.ios.secondarySystemBackground,
     android: Color.android.dynamic.surfaceVariant,
     default: '#f2f2f7',
+  }),
+  /** Controls laid on a `secondarySystemBackground` card. */
+  tertiarySystemBackground: Platform.select({
+    ios: Color.ios.tertiarySystemBackground,
+    android: Color.android.dynamic.surfaceContainerHighest,
+    default: '#2c2c2e',
   }),
   // Brand: Track Red. White text on it has a 4.7:1 contrast (WCAG AA for text and buttons).
   tint: '#C94A2E',

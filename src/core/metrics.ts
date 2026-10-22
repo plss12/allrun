@@ -193,6 +193,34 @@ export function availableMetrics(activity: Activity): MetricId[] {
   });
 }
 
+/** Metrics that say how fast an activity went, as its sport writes it. */
+const SPEED_METRICS: readonly MetricId[] = ['pace', 'swimPace', 'speed'];
+/** What a card says of an activity without distance: how long, how hard and how much it burnt. */
+const EFFORT_METRICS: readonly MetricId[] = ['movingTime', 'averageHeartRate', 'calories'];
+/** Second readings of a datum a card already shows, which would only repeat it. */
+const REPEATED_METRICS: readonly MetricId[] = ['elapsedTime', 'maxHeartRate'];
+
+/**
+ * The three data an activity's card shows: its distance, how fast it went and its time when it
+ * has a distance; otherwise its time, average heart rate and calories, the missing ones made up
+ * with other data of its sport that don't repeat these. Time and space O(1).
+ */
+export function cardMetrics(activity: Activity): MetricId[] {
+  const available = availableMetrics(activity);
+  if (!available.includes('distance')) {
+    const others = available.filter(
+      (metric) => !EFFORT_METRICS.includes(metric) && !REPEATED_METRICS.includes(metric),
+    );
+    return [...EFFORT_METRICS.filter((metric) => available.includes(metric)), ...others].slice(
+      0,
+      3,
+    );
+  }
+  const speed = available.find((metric) => SPEED_METRICS.includes(metric));
+  const shown: MetricId[] = ['distance', ...(speed === undefined ? [] : [speed]), 'movingTime'];
+  return shown.filter((metric) => available.includes(metric));
+}
+
 /**
  * Every unit a displayed metric can carry, as a key the interface translates (`metricUnits` in
  * the locales): most read the same in every language, but heart rate is "bpm" in English and
