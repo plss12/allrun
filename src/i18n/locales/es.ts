@@ -68,6 +68,7 @@ export const es: Translations = {
     templates: 'Plantillas',
     formatChangeTitle: '¿Cambiar de formato?',
     formatChangeMessage: 'Los elementos volverán a su sitio por defecto en el nuevo formato.',
+    placeUnavailable: 'No se ha podido saber el lugar de esta actividad',
     formatChangeConfirm: 'Cambiar',
     export: 'Exportar',
   },
@@ -96,6 +97,7 @@ export const es: Translations = {
     timeChart: 'Gráfica de tiempo',
     activityName: 'Nombre de la actividad',
     activityDate: 'Fecha',
+    activityPlace: 'Lugar',
     periodName: 'Periodo',
     text: 'Texto propio',
     route: 'Ruta',
@@ -182,6 +184,11 @@ export const es: Translations = {
   gallery: {
     textSample: 'Texto',
     moreVariants: 'Desliza para ver otras versiones',
+    placeSample: {
+      city: 'Ciudad',
+      region: 'Región',
+      country: 'País',
+    },
     lineStyles: {
       solid: 'Continua',
       dashed: 'Discontinua',

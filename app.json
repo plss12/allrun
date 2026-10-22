@@ -51,7 +51,13 @@
           "granularPermissions": ["photo"]
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AllRun uses your location only to name the city where your activities started."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

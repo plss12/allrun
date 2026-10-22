@@ -51,6 +51,10 @@ comes later.
 - **Nothing rounded:** distances keep their two decimals and an activity's times their seconds,
   in every widget, chart and design. A period's total time drops the seconds, which say nothing
   over a week or more. Designs saved with rounded data read without the rounding.
+- **The activity's place** ("Sevilla", "Sevilla, Andalucía", "Sevilla, España"), a text widget
+  named from where the route starts. Until milestone 4 the device's geocoder names it
+  (`expo-location`): iOS asks for nothing; Android needs the location permission, asked for only
+  when the user picks the widget. Milestone 4 moves it to the map provider, without permissions.
 - **Sport icons** are vectors drawn with Skia, from an icon set with a free license; SF Symbols
   cannot be drawn into an exported image.
 - **Calories** come from the activity's detail (Strava only gives them there), fetched on demand

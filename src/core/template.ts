@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { MetricId } from './metrics';
+import { PLACE_FORMATS } from './place';
 
 /**
  * A template is a design: a canvas format plus an ordered list of layers (bottom to top). It holds
@@ -235,12 +236,14 @@ export const layerSchema = z.discriminatedUnion('kind', [
   z.object({
     ...layerBase,
     kind: z.literal('info'),
-    /** Activity name or date, or the period name ("October 2026"). */
-    field: z.enum(['activityName', 'activityDate', 'periodName']),
+    /** Activity name, date or place ("Sevilla"), or the period name ("October 2026"). */
+    field: z.enum(['activityName', 'activityDate', 'activityPlace', 'periodName']),
     /** How the activity's date reads; `full` when absent. Other fields ignore it. */
     dateFormat: z.enum(DATE_FORMATS).optional(),
     /** How the period's name reads; `full` when absent. Other fields ignore it. */
     periodFormat: z.enum(PERIOD_FORMATS).optional(),
+    /** How the activity's place reads; `city` when absent. Other fields ignore it. */
+    placeFormat: z.enum(PLACE_FORMATS).optional(),
     ...textFit,
     style: textStyleSchema,
   }),

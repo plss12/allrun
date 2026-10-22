@@ -152,6 +152,22 @@ describe('activityCatalog', () => {
     ]);
   });
 
+  it('offers the place after the date, in each format, only when it can be named', () => {
+    const named = activityCatalog(makeActivity(), [], true);
+    expect(tileKeys(named, 'text')).toEqual([
+      'text',
+      'info-activityName',
+      'info-activityDate',
+      'info-activityPlace',
+    ]);
+    expect(variantKeys(named, 'info-activityPlace')).toEqual([
+      'info-activityPlace',
+      'info-activityPlace-cityRegion',
+      'info-activityPlace-cityCountry',
+    ]);
+    expect(tileKeys(activityCatalog(makeActivity()), 'text')).not.toContain('info-activityPlace');
+  });
+
   it('leaves out the route of an activity without GPS', () => {
     const catalog = activityCatalog(makeActivity({ sportType: 'Yoga', routePolyline: null }));
     expect(catalog.map((section) => section.id)).not.toContain('route');

@@ -57,6 +57,7 @@
     "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.13",
     "expo-localization": "~57.0.2",
+    "expo-location": "~57.0.22",
     "expo-media-library": "~57.0.5",
     "expo-router": "~57.0.29",
     "expo-sharing": "~57.0.24",

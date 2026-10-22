@@ -1,6 +1,7 @@
 import type { Activity } from './activity';
 import { availableMetrics, type MetricId } from './metrics';
 import { chartBucketOptions } from './periods';
+import { PLACE_FORMATS } from './place';
 import type { BucketSize, PeriodSummary } from './summary';
 import { availableSummaryMetrics, summaryHasDistance } from './summary-metrics';
 import {
@@ -37,7 +38,9 @@ type LineLook = { readonly line?: LineStyle; readonly glow?: boolean };
 export type CatalogItem =
   | Readonly<Pick<LayerOf<'metric'>, 'kind' | 'metric' | DataFormat>>
   | Readonly<Pick<LayerOf<'summaryMetric'>, 'kind' | 'metric' | DataFormat>>
-  | Readonly<Pick<LayerOf<'info'>, 'kind' | 'field' | 'dateFormat' | 'periodFormat'>>
+  | Readonly<
+      Pick<LayerOf<'info'>, 'kind' | 'field' | 'dateFormat' | 'periodFormat' | 'placeFormat'>
+    >
   | { readonly kind: 'text' }
   | ({ readonly kind: 'route' } & LineLook)
   | ({ readonly kind: 'summaryRoutes' } & LineLook)
@@ -109,7 +112,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
       case 'summaryMetric':
         return [item.timeNotation, item.paceNotation];
       case 'info':
-        return [item.dateFormat, item.periodFormat];
+        return [item.dateFormat, item.periodFormat, item.placeFormat];
       case 'logo':
         return [
           item.variant === 'wordmark' ? undefined : item.variant,
@@ -303,13 +306,15 @@ function sections(entries: readonly Entry[]): CatalogSection[] {
 
 /**
  * Widgets for one activity: the metrics of its sport it has values for (in the sport's order
- * within each section), free text and its name, its date, the route when it has GPS, the
- * `charts` it recorded data for (see `availableActivityCharts`), and the logo. Time O(m + c) for
- * the m metrics of the sport and c charts.
+ * within each section), free text and its name, its date, its place when it can be named
+ * (`withPlace`), the route when it has GPS, the `charts` it recorded data for (see
+ * `availableActivityCharts`), and the logo. Time O(m + c) for the m metrics of the sport and c
+ * charts.
  */
 export function activityCatalog(
   activity: Activity,
   charts: readonly ActivityChartSeries[] = [],
+  withPlace = false,
 ): CatalogSection[] {
   return sections([
     ...availableMetrics(activity).flatMap((metric) => dataEntries({ kind: 'metric', metric })),
@@ -323,6 +328,16 @@ export function activityCatalog(
         ...(i === 0 ? {} : { dateFormat }),
       })),
     ),
+    ...(withPlace
+      ? tileEntries(
+          'text',
+          PLACE_FORMATS.map((placeFormat, i) => ({
+            kind: 'info',
+            field: 'activityPlace',
+            ...(i === 0 ? {} : { placeFormat }),
+          })),
+        )
+      : []),
     ...(activity.routePolyline === null ? [] : lineEntries('route')),
     ...charts.flatMap(chartEntries),
     ...BRAND,

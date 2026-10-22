@@ -32,7 +32,7 @@ const context = {
   unitLabel: testUnitLabel,
 } as const;
 const activity = makeActivity({ name: 'Rodaje suave', startLocal: '2026-10-14T08:00:00' });
-const activityData: EditorData = { mode: 'activity', activity, detail: null };
+const activityData: EditorData = { mode: 'activity', activity, detail: null, place: null };
 
 const layer = (id: string, layers: readonly Layer[]): Layer => {
   const found = layers.find((candidate) => candidate.id === id);
@@ -123,6 +123,21 @@ describe('layerText for an activity', () => {
         context,
       )?.value,
     ).toBe('10,00');
+  });
+
+  it("writes the activity's place in the format the layer asks for, and nothing without one", () => {
+    const date = layer('date', layers);
+    if (date.kind !== 'info') {
+      throw new Error('Expected an info layer');
+    }
+    const placeLayer = { ...date, field: 'activityPlace' } as const;
+    const seville = { city: 'Sevilla', region: 'Andalucía', country: 'España' };
+    const known = { ...activityData, place: seville };
+    expect(layerText(placeLayer, known, context)?.value).toBe('Sevilla');
+    expect(layerText({ ...placeLayer, placeFormat: 'cityCountry' }, known, context)?.value).toBe(
+      'Sevilla, España',
+    );
+    expect(layerText(placeLayer, activityData, context)).toBeNull();
   });
 
   it('returns nothing for summary layers and non-text layers', () => {

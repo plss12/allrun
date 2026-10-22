@@ -87,7 +87,7 @@ async function render(change: (layer: Layer) => Layer, id: string): Promise<SkIm
   }
   const template: Template = { ...base, layers: [change(layer)] };
   const context: LayerContext = {
-    data: { mode: 'activity', activity, detail: null },
+    data: { mode: 'activity', activity, detail: null, place: null },
     fonts: interFonts(),
     textContext: {
       unit: 'km',
@@ -133,7 +133,12 @@ describe('prepareLayers', () => {
       const [prepared] = scene.prepareLayers(
         { ...template, layers: [plain] },
         {
-          data: { mode: 'activity', activity: { ...activity, name: activityName }, detail: null },
+          data: {
+            mode: 'activity',
+            activity: { ...activity, name: activityName },
+            detail: null,
+            place: null,
+          },
           fonts: interFonts(),
           textContext: {
             unit: 'km',
@@ -239,14 +244,20 @@ describe('activity charts', () => {
       return { layers, pixels: countAbove(image, 128) };
     };
     for (const series of ACTIVITY_CHART_SERIES) {
-      const { layers, pixels } = await drawn({ mode: 'activity', activity: ride, detail }, series);
+      const { layers, pixels } = await drawn(
+        { mode: 'activity', activity: ride, detail, place: null },
+        series,
+      );
       expect(layers).toHaveLength(1);
       expect(pixels).toBeGreaterThan(5000);
     }
-    const { layers } = await drawn({ mode: 'activity', activity: ride, detail: null }, 'pace');
+    const { layers } = await drawn(
+      { mode: 'activity', activity: ride, detail: null, place: null },
+      'pace',
+    );
     expect(layers).toEqual([]);
     // The splits draw as rows, as tall as their rows.
-    const rows = await drawn({ mode: 'activity', activity: ride, detail }, 'splits');
+    const rows = await drawn({ mode: 'activity', activity: ride, detail, place: null }, 'splits');
     expect(rows.layers[0].height).toBeGreaterThan(400);
   });
 });

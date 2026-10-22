@@ -38,6 +38,7 @@ import {
 } from '@/core/layer-catalog';
 import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
 import { bucketForPeriod } from '@/core/periods';
+import { startOf } from '@/core/place';
 import { SPORT_FAMILIES } from '@/core/sports';
 import { selectActivities, summarize } from '@/core/summary';
 import { type CanvasFormat, CANVAS_FORMATS, type Layer, type Template } from '@/core/template';
@@ -62,6 +63,7 @@ import { EditorCanvas } from '@/editor/editor-canvas';
 import { ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
 import type { ExportDesign } from '@/editor/export-scene';
+import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
 import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
@@ -154,7 +156,8 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
       if (activity === null) {
         throw new ActivityNotFoundError(`No activity with id ${params.activityId}`);
       }
-      return { mode: 'activity', activity, detail };
+      // Its place is named once the editor is open: it doesn't hold up the loading.
+      return { mode: 'activity', activity, detail, place: null };
     }
     const range = customRange(params.start, params.end);
     const activities = await source.listInRange(range);
@@ -183,7 +186,7 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
 }
 
 function EditorWorkspace({
-  data,
+  data: loaded,
   fonts,
 }: {
   readonly data: EditorData;
@@ -191,6 +194,25 @@ function EditorWorkspace({
 }) {
   const { t } = useTranslation();
   const { unit, locale } = useDisplaySettings();
+  /**
+   * Where the activity was done, for its place widget: named in the background, without asking
+   * for anything; on Android, where naming it needs the location permission, it is asked for only
+   * when the user picks the widget (`askedPlace`).
+   */
+  const lookedUpPlace = useAsync(
+    () =>
+      loaded.mode === 'activity'
+        ? lookUpPlace(startOf(loaded.activity), false)
+        : Promise.resolve(UNKNOWN_PLACE),
+    loaded.mode === 'activity' ? loaded.activity.id : 'summary',
+  );
+  const [askedPlace, setAskedPlace] = useState<PlaceLookup | null>(null);
+  const placeLookup =
+    askedPlace ?? (lookedUpPlace.status === 'success' ? lookedUpPlace.data : UNKNOWN_PLACE);
+  const data: EditorData =
+    loaded.mode === 'activity' && placeLookup.status === 'known'
+      ? { ...loaded, place: placeLookup.place }
+      : loaded;
   const defaultTemplate: DefaultTemplate = (format) =>
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
@@ -273,6 +295,7 @@ function EditorWorkspace({
       ? activityCatalog(
           data.activity,
           data.detail === null ? [] : availableActivityCharts(data.detail, unit),
+          placeLookup.status !== 'unknown',
         )
       : summaryCatalog(data.summary, data.bucketSize);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
@@ -362,6 +385,26 @@ function EditorWorkspace({
 
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
+    // The place needs the permission first (Android): asked now, the widget is added once named.
+    if (
+      item.kind === 'info' &&
+      item.field === 'activityPlace' &&
+      placeLookup.status === 'needsPermission' &&
+      data.mode === 'activity'
+    ) {
+      void lookUpPlace(startOf(data.activity), true).then((result) => {
+        setAskedPlace(result);
+        if (result.status === 'known') {
+          addLayerNow(item);
+        } else {
+          Alert.alert(t('editor.placeUnavailable'));
+        }
+      });
+      return;
+    }
+    addLayerNow(item);
+  };
+  const addLayerNow = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     const id = uniqueLayerId(template, catalogItemKey(item));
     edit((current) =>
       addLayer(current, newLayer(item, id, current.format, designFont(current.layers))),
@@ -567,7 +610,22 @@ function EditorWorkspace({
         catalog={catalog}
         format={template.format}
         font={designFont(template.layers)}
-        layerContext={layerContext}
+        layerContext={
+          // Until the user allows naming the place, the gallery shows it with a sample name.
+          placeLookup.status === 'needsPermission' && data.mode === 'activity'
+            ? {
+                ...layerContext,
+                data: {
+                  ...data,
+                  place: {
+                    city: t('gallery.placeSample.city'),
+                    region: t('gallery.placeSample.region'),
+                    country: t('gallery.placeSample.country'),
+                  },
+                },
+              }
+            : layerContext
+        }
         onAdd={addNewLayer}
         onAddText={addText}
         onClose={() => setSheetOpen(false)}

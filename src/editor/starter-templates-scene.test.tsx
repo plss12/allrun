@@ -82,8 +82,14 @@ async function cases(): Promise<Record<string, EditorData>> {
       mode: 'activity',
       activity: { ...run, name: 'Tirada larga por el río con los amigos del club de atletismo' },
       detail: null,
+      place: null,
     },
-    'an activity without a route': { mode: 'activity', activity: indoor, detail: null },
+    'an activity without a route': {
+      mode: 'activity',
+      activity: indoor,
+      detail: null,
+      place: null,
+    },
     'a year': year(all),
     'a year without distance': year(training),
   };

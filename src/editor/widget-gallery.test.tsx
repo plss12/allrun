@@ -58,7 +58,7 @@ function contextFor(data: EditorData): LayerContext {
 }
 
 const activity = makeActivity({ sportType: 'Run', movingTimeSeconds: 6030 });
-const activityData: EditorData = { mode: 'activity', activity, detail: null };
+const activityData: EditorData = { mode: 'activity', activity, detail: null, place: null };
 
 function summaryData(kind: 'week' | 'year'): EditorData {
   const range = kind === 'week' ? weekRange('2026-10-14') : yearRange('2026-10-14');

@@ -110,6 +110,27 @@ describe('parseTemplate', () => {
     expect(short.layers[0]).not.toHaveProperty('decimals');
   });
 
+  it("reads the activity's place and its format, only in activity templates", () => {
+    const place = {
+      id: 'place',
+      kind: 'info',
+      field: 'activityPlace',
+      placeFormat: 'cityCountry',
+      style: textStyle,
+      transform: center,
+      opacity: 1,
+    };
+    expect(parseTemplate({ ...activityTemplate, layers: [place] }).layers[0]).toMatchObject({
+      placeFormat: 'cityCountry',
+    });
+    expect(() =>
+      parseTemplate({ ...activityTemplate, mode: 'summary', layers: [place] }),
+    ).toThrow();
+    expect(() =>
+      parseTemplate({ ...activityTemplate, layers: [{ ...place, placeFormat: 'street' }] }),
+    ).toThrow(/placeFormat/);
+  });
+
   it('reads a date format, optional so older templates still read', () => {
     const date = {
       id: 'date',

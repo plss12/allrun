@@ -247,7 +247,8 @@ export function newLayer(
         opacity: 1,
       };
     case 'info': {
-      const isTitle = item.field !== 'activityDate';
+      // The date and the place are subtitles under the name.
+      const isTitle = item.field !== 'activityDate' && item.field !== 'activityPlace';
       const scale = isTitle ? layout.title.scale : layout.subtitle.scale;
       return {
         ...item,

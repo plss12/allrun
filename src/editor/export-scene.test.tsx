@@ -52,7 +52,7 @@ const { width, height } = CANVAS_FORMATS.story;
 function layerContext(): LayerContext {
   const { Skia } = getSkiaExports();
   return {
-    data: { mode: 'activity', activity, detail: null },
+    data: { mode: 'activity', activity, detail: null, place: null },
     // No fonts: these tests look at the background, not the text.
     fonts: Skia.TypefaceFontProvider.Make(),
     textContext: {

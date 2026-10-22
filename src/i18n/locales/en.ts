@@ -69,6 +69,7 @@ export const en = {
     templates: 'Templates',
     formatChangeTitle: 'Change the format?',
     formatChangeMessage: 'The elements go back to their default places in the new format.',
+    placeUnavailable: 'The place of this activity could not be named',
     formatChangeConfirm: 'Change',
     export: 'Export',
   },
@@ -97,6 +98,7 @@ export const en = {
     timeChart: 'Time chart',
     activityName: 'Activity name',
     activityDate: 'Date',
+    activityPlace: 'Place',
     periodName: 'Period',
     text: 'Your own text',
     route: 'Route',
@@ -183,6 +185,11 @@ export const en = {
   gallery: {
     textSample: 'Text',
     moreVariants: 'Swipe to see other versions',
+    placeSample: {
+      city: 'City',
+      region: 'Region',
+      country: 'Country',
+    },
     lineStyles: {
       solid: 'Solid',
       dashed: 'Dashed',

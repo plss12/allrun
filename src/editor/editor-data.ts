@@ -11,6 +11,7 @@ import {
   withPaceMarks,
 } from '@/core/metrics';
 import type { PeriodKind } from '@/core/periods';
+import { formatPlace, type Place } from '@/core/place';
 import type { SportFamily } from '@/core/sports';
 import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
@@ -40,6 +41,8 @@ export interface ActivityData {
   readonly activity: Activity;
   /** What it recorded along the way, for its charts; `null` if it couldn't be fetched. */
   readonly detail: ActivityDetail | null;
+  /** Where it started, for its place widget; `null` without a route or when it can't be named. */
+  readonly place: Place | null;
 }
 
 /** What the editor fills the template with: one activity, or a period summary. */
@@ -169,6 +172,14 @@ export function layerText(layer: Layer, data: EditorData, context: TextContext):
                 unit: null,
               }
             : null;
+        case 'activityPlace': {
+          // Without a known place (an indoor session) the widget draws nothing.
+          const place =
+            data.mode === 'activity' && data.place !== null
+              ? formatPlace(data.place, layer.placeFormat ?? 'city')
+              : null;
+          return place === null ? null : { label: null, value: place, unit: null };
+        }
         case 'periodName':
           return data.mode === 'summary'
             ? {
