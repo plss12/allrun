@@ -28,22 +28,44 @@ export type CanvasFormat = keyof typeof CANVAS_FORMATS;
 
 /**
  * Fonts bundled with the app, one of each style (the interface names them by style, not by
- * font). Adding a font is compatible; removing one breaks the templates that use it.
+ * font). Adding a font is compatible; removing one needs its designs to read with another (see
+ * `RETIRED_FONTS`).
  */
 export const FONT_IDS = [
+  // Plain ones first, then the heavy ones, those with a character of their own, the hand-drawn
+  // ones and the techy ones: the order of the style panel.
   'inter',
   'barlowCondensed',
-  'archivoBlack',
+  'bigShoulders',
+  'anton',
+  'unbounded',
+  'bowlbyOneSC',
   'playfairDisplay',
   'spaceMono',
-  'orbitron',
-  'bangers',
-  'fredoka',
-  'dancingScript',
   'permanentMarker',
+  'bangers',
+  'orbitron',
+  'rubikGlitch',
 ] as const;
 
 export type FontId = (typeof FONT_IDS)[number];
+
+/**
+ * Fonts the app no longer bundles (too close to another one, or unfit for sport images), and the
+ * closest one left, which designs saved with them read with.
+ */
+const RETIRED_FONTS: Readonly<Record<string, FontId>> = {
+  archivoBlack: 'unbounded',
+  delaGothicOne: 'unbounded',
+  fredoka: 'inter',
+  dancingScript: 'playfairDisplay',
+};
+
+/** A font of a design, a retired one read as its replacement. */
+const fontSchema = z.preprocess(
+  (font) => (typeof font === 'string' ? (RETIRED_FONTS[font] ?? font) : font),
+  z.enum(FONT_IDS),
+);
 
 /** Whether a template is filled from one activity or from a period summary. */
 export type TemplateMode = 'activity' | 'summary';
@@ -142,8 +164,10 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 
 /**
  * Mixed widgets of one activity: several of its data in one designed block (ADR 009), which the
- * editor fills with the data that suit its sport (see `blockMetrics`). Each design comes in a few
- * versions, the pages of its tile in the gallery:
+ * editor fills with the data that suit its sport (see `blockMetrics`). They come in two families
+ * (see `isAppReplica`): typographic ones, each with a font of its own that the user can change,
+ * and replicas of other apps, whose look (colors, font, icons) is fixed because recognizing the
+ * app is the point. Each design comes in a few versions, the pages of its tile in the gallery:
  * - `headline`: one big datum with two more under it (`stacked`), beside it (`inline`), or the
  *   three in one line (`condensed`);
  * - `columns`: 2, 3, 4 or 6 data, each with its name over it, in columns (one datum alone is a
@@ -153,9 +177,23 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * - `day`: the weekday written big, its date and three data under it (`stacked`) or beside it
  *   (`inline`);
  * - `sport`: the sport's icon and name over its data, one under another (`centered`) or as a list
- *   of names and values (`list`).
+ *   of names and values (`list`);
+ * - `poster`: the main datum huge and turned upright, the sport and two more data beside it;
+ * - `notes` (replica): the splits as a note of the iPhone's Notes, the fastest in its yellow, in
+ *   dark or light mode; only for activities with splits;
+ * - `message` (replica): two data as a sent chat message, the sport and start time where the
+ *   time and the read ticks go, in dark or light mode.
  */
-export const ACTIVITY_BLOCK_DESIGNS = ['headline', 'columns', 'route', 'day', 'sport'] as const;
+export const ACTIVITY_BLOCK_DESIGNS = [
+  'headline',
+  'columns',
+  'route',
+  'day',
+  'sport',
+  'poster',
+  'notes',
+  'message',
+] as const;
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
 
@@ -164,6 +202,8 @@ export const BLOCK_COLUMN_COUNTS = [2, 3, 4, 6] as const;
 export const ROUTE_LAYOUTS = ['stacked', 'inline', 'between'] as const;
 export const DAY_LAYOUTS = ['stacked', 'inline'] as const;
 export const SPORT_LAYOUTS = ['centered', 'list'] as const;
+/** The two looks of an app replica, as the app shows them in dark and light mode. */
+export const APP_MODES = ['dark', 'light'] as const;
 
 const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('headline'), layout: z.enum(HEADLINE_LAYOUTS) }),
@@ -171,6 +211,9 @@ const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('route'), layout: z.enum(ROUTE_LAYOUTS) }),
   z.object({ design: z.literal('day'), layout: z.enum(DAY_LAYOUTS) }),
   z.object({ design: z.literal('sport'), layout: z.enum(SPORT_LAYOUTS) }),
+  z.object({ design: z.literal('poster') }),
+  z.object({ design: z.literal('notes'), layout: z.enum(APP_MODES) }),
+  z.object({ design: z.literal('message'), layout: z.enum(APP_MODES) }),
 ]);
 
 export type ActivityBlock = z.infer<typeof activityBlockSchema>;
@@ -200,7 +243,7 @@ const transformSchema = z.object({
 });
 
 const textStyleSchema = z.object({
-  font: z.enum(FONT_IDS),
+  font: fontSchema,
   color: colorSchema,
   bold: z.boolean(),
   uppercase: z.boolean(),
@@ -332,7 +375,7 @@ export const layerSchema = z.discriminatedUnion('kind', [
      */
     header: z.boolean().optional(),
     /** Font of the header and the axis labels. */
-    font: z.enum(FONT_IDS).default('inter'),
+    font: fontSchema.default('inter'),
     bold: z.boolean().default(true),
     /** Whether the header is in capitals (axis labels are initials and numbers already). */
     uppercase: z.boolean().default(true),
@@ -362,7 +405,7 @@ export const layerSchema = z.discriminatedUnion('kind', [
      */
     header: z.boolean().optional(),
     /** Font of the header and the texts of the splits. */
-    font: z.enum(FONT_IDS),
+    font: fontSchema,
     bold: z.boolean(),
     uppercase: z.boolean(),
     /** Where the header sits over the chart. */

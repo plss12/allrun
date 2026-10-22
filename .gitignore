@@ -55,3 +55,6 @@ supabase/.branches/
 
 # Product notes with personal photos and third-party screenshots (summarized in ADR 009)
 docs/AllRun Ideas.pdf
+
+# Font files kept for reference: the app only bundles fonts with open licenses (OFL)
+docs/*.ttf

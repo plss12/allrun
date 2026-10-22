@@ -75,7 +75,7 @@ describe('new texts', () => {
     const draft = { layerId: 'text', isNew: true, content: 'PB!' };
     for (const template of [previewTextDraft(poster, draft), commitTextDraft(poster, draft)]) {
       const added = template.layers[template.layers.length - 1];
-      expect(added.kind === 'text' && added.style.font).toBe('archivoBlack');
+      expect(added.kind === 'text' && added.style.font).toBe('unbounded');
     }
   });
 });

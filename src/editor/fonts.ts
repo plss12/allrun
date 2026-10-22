@@ -9,14 +9,16 @@ import { logError } from '@/ui/log';
 export const FONT_FAMILIES: Readonly<Record<FontId, string>> = {
   inter: 'Inter',
   barlowCondensed: 'Barlow Condensed',
-  archivoBlack: 'Archivo Black',
   playfairDisplay: 'Playfair Display',
   spaceMono: 'Space Mono',
   orbitron: 'Orbitron',
   bangers: 'Bangers',
-  fredoka: 'Fredoka',
-  dancingScript: 'Dancing Script',
   permanentMarker: 'Permanent Marker',
+  anton: 'Anton',
+  unbounded: 'Unbounded',
+  bigShoulders: 'Big Shoulders Display',
+  bowlbyOneSC: 'Bowlby One SC',
+  rubikGlitch: 'Rubik Glitch',
 };
 
 // Fonts with a single weight are display fonts that are already heavy (or, for the marker,
@@ -29,9 +31,6 @@ const FONT_FILES = {
   [FONT_FAMILIES.barlowCondensed]: [
     require('@expo-google-fonts/barlow-condensed/400Regular/BarlowCondensed_400Regular.ttf'),
     require('@expo-google-fonts/barlow-condensed/700Bold/BarlowCondensed_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.archivoBlack]: [
-    require('@expo-google-fonts/archivo-black/400Regular/ArchivoBlack_400Regular.ttf'),
   ],
   [FONT_FAMILIES.playfairDisplay]: [
     require('@expo-google-fonts/playfair-display/400Regular/PlayfairDisplay_400Regular.ttf'),
@@ -48,16 +47,25 @@ const FONT_FILES = {
   [FONT_FAMILIES.bangers]: [
     require('@expo-google-fonts/bangers/400Regular/Bangers_400Regular.ttf'),
   ],
-  [FONT_FAMILIES.fredoka]: [
-    require('@expo-google-fonts/fredoka/400Regular/Fredoka_400Regular.ttf'),
-    require('@expo-google-fonts/fredoka/700Bold/Fredoka_700Bold.ttf'),
-  ],
-  [FONT_FAMILIES.dancingScript]: [
-    require('@expo-google-fonts/dancing-script/400Regular/DancingScript_400Regular.ttf'),
-    require('@expo-google-fonts/dancing-script/700Bold/DancingScript_700Bold.ttf'),
-  ],
   [FONT_FAMILIES.permanentMarker]: [
     require('@expo-google-fonts/permanent-marker/400Regular/PermanentMarker_400Regular.ttf'),
+  ],
+  [FONT_FAMILIES.anton]: [require('@expo-google-fonts/anton/400Regular/Anton_400Regular.ttf')],
+  // Its bold is the black weight, the very wide and heavy one of AURA's widgets.
+  [FONT_FAMILIES.unbounded]: [
+    require('@expo-google-fonts/unbounded/400Regular/Unbounded_400Regular.ttf'),
+    require('@expo-google-fonts/unbounded/900Black/Unbounded_900Black.ttf'),
+  ],
+  // Tall and thin: its regular is the thin weight, which is what it is for.
+  [FONT_FAMILIES.bigShoulders]: [
+    require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_100Thin.ttf'),
+    require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_700Bold.ttf'),
+  ],
+  [FONT_FAMILIES.bowlbyOneSC]: [
+    require('@expo-google-fonts/bowlby-one-sc/400Regular/BowlbyOneSC_400Regular.ttf'),
+  ],
+  [FONT_FAMILIES.rubikGlitch]: [
+    require('@expo-google-fonts/rubik-glitch/400Regular/RubikGlitch_400Regular.ttf'),
   ],
 };
 
@@ -86,14 +94,16 @@ export function hasBold(font: FontId): boolean {
 export const PREVIEW_FAMILIES: Readonly<Record<FontId, string>> = {
   inter: 'AllRunPreview-Inter',
   barlowCondensed: 'AllRunPreview-BarlowCondensed',
-  archivoBlack: 'AllRunPreview-ArchivoBlack',
   playfairDisplay: 'AllRunPreview-PlayfairDisplay',
   spaceMono: 'AllRunPreview-SpaceMono',
   orbitron: 'AllRunPreview-Orbitron',
   bangers: 'AllRunPreview-Bangers',
-  fredoka: 'AllRunPreview-Fredoka',
-  dancingScript: 'AllRunPreview-DancingScript',
   permanentMarker: 'AllRunPreview-PermanentMarker',
+  anton: 'AllRunPreview-Anton',
+  unbounded: 'AllRunPreview-Unbounded',
+  bigShoulders: 'AllRunPreview-BigShoulders',
+  bowlbyOneSC: 'AllRunPreview-BowlbyOneSC',
+  rubikGlitch: 'AllRunPreview-RubikGlitch',
 };
 
 /**

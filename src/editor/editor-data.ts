@@ -85,6 +85,7 @@ export type LabelKey =
   | `splitHeaders.${'elevation' | 'heartRate'}`
   | `chartHeaders.${ChartHeaderName}`
   | `chartCaptions.activity.${ActivityChartSeries}`
+  | 'widgets.chatLine'
   | `chartCaptions.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
 
 /** Text content of a text-like layer, before translation and styling. */

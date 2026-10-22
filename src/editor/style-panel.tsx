@@ -28,6 +28,7 @@ import {
   type Layer,
   type Template,
 } from '@/core/template';
+import { isAppReplica } from '@/core/activity-block';
 import { colors } from '@/theme/colors';
 
 import { hasUnit } from './editor-data';
@@ -71,8 +72,12 @@ function tabsFor(layer: Layer): readonly Tab[] {
       return ['color', 'width', 'opacity'];
     case 'summaryChart':
     case 'activityChart':
-    case 'activityBlock':
       return ['color', 'font', 'format', 'opacity'];
+    case 'activityBlock':
+      // A replica of an app keeps the app's look: only how see-through it is can change.
+      return isAppReplica(layer.block.design)
+        ? ['opacity']
+        : ['color', 'font', 'format', 'opacity'];
     case 'logo':
       return ['tone', 'opacity'];
   }

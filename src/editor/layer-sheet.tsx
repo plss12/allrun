@@ -195,13 +195,17 @@ function pageLabel(
         ];
       case 'logo':
         return [t('widgets.allrunLogo'), t(`gallery.variants.${item.variant}`)];
-      case 'activityBlock':
-        return [
-          t(`widgets.blocks.${item.block.design}`),
-          item.block.design === 'columns'
-            ? t('gallery.dataCount', { count: item.block.count })
-            : t(`gallery.blockLayouts.${item.block.layout}`),
-        ];
+      case 'activityBlock': {
+        const { block } = item;
+        const name: string = t(`widgets.blocks.${block.design}`);
+        if (block.design === 'columns') {
+          return [name, t('gallery.dataCount', { count: block.count })];
+        }
+        if (block.design === 'poster') {
+          return [name];
+        }
+        return [name, t(`gallery.blockLayouts.${block.layout}`)];
+      }
     }
   })();
   return parts.filter((part) => part !== '').join(', ');

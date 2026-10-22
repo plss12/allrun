@@ -18,7 +18,7 @@ import type { CanvasFormat, FontId, Layer, Template } from './template';
  * the name small on top and, where there is room, the route or the bars as a small graphic.
  */
 
-const FONT: FontId = 'archivoBlack';
+const FONT: FontId = 'unbounded';
 
 interface PosterLayout {
   readonly title: Slot;

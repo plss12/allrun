@@ -63,7 +63,7 @@ describe('starterTemplate', () => {
       expect(used.size).toBe(1);
       return [...used][0];
     });
-    expect(fonts).toEqual(['barlowCondensed', 'archivoBlack', 'playfairDisplay', 'inter']);
+    expect(fonts).toEqual(['barlowCondensed', 'unbounded', 'playfairDisplay', 'inter']);
   });
 
   it('keeps every text that may shrink inside the canvas, at its scale', () => {
@@ -129,7 +129,7 @@ describe('starterTemplate', () => {
 
 describe('designFont', () => {
   it('is the font most texts of the design are in', () => {
-    expect(designFont(starterTemplate('poster', activity, 'story').layers)).toBe('archivoBlack');
+    expect(designFont(starterTemplate('poster', activity, 'story').layers)).toBe('unbounded');
     const classic = starterTemplate('classic', summary, 'square').layers;
     expect(designFont(classic)).toBe('playfairDisplay');
   });

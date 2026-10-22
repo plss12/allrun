@@ -8,9 +8,12 @@ import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
 
 import { activityBlocks } from '@/core/activity-block';
 import type { Activity } from '@/core/activity';
+import type { ActivityDetail } from '@/core/activity-detail';
 import { newLayer } from '@/core/default-layout';
 import type { FontId, Layer } from '@/core/template';
 import { es } from '@/i18n/locales/es';
+import { generateStravaDetail } from '@/sources/fixtures/detail';
+import { parseStravaDetail } from '@/sources/strava/detail';
 import { makeActivity } from '@/test-utils/make-activity';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
@@ -53,11 +56,17 @@ function translate(key: string): string {
   return text;
 }
 
-/** The blocks of `activity` in `font`, signed with the logo, filled in and measured. */
-function prepareBlocks(activity: Activity, font: FontId): PreparedLayer[] {
+/**
+ * The blocks of `activity`, signed with the logo, filled in and measured: each in its own font
+ * (see `blockLettering`), or all in `font` as if the user had changed it (but the replicas, which
+ * keep their apps' look).
+ */
+function prepareBlocks(activity: Activity, font: FontId | null): PreparedLayer[] {
   const context: LayerContext = {
-    data: { mode: 'activity', activity, detail: null, place: null, zones: null },
-    fonts: loadTestFonts([font]),
+    data: { mode: 'activity', activity, detail: detailOf(activity), place: null, zones: null },
+    fonts: loadTestFonts(
+      font === null ? BLOCK_FONTS : [font, ...BLOCK_FONTS.filter((other) => other !== font)],
+    ),
     textContext: {
       unit: 'km',
       locale: 'es',
@@ -66,9 +75,16 @@ function prepareBlocks(activity: Activity, font: FontId): PreparedLayer[] {
     },
     translate,
   };
-  const layers = activityBlocks(activity).map((block, i): Layer => {
-    const layer = newLayer({ kind: 'activityBlock', block }, `block-${i}`, 'story', font);
-    return layer.kind === 'activityBlock' ? { ...layer, logo: true } : layer;
+  const layers = blocksOf(activity).map((block, i): Layer => {
+    const layer = newLayer({ kind: 'activityBlock', block }, `block-${i}`, 'story');
+    if (layer.kind !== 'activityBlock') {
+      throw new Error('Expected a mixed widget');
+    }
+    return {
+      ...layer,
+      logo: true,
+      style: font === null ? layer.style : { ...layer.style, font },
+    };
   });
   return scene.prepareLayers(
     { version: 1, id: 'blocks', mode: 'activity', format: 'story', layers },
@@ -76,19 +92,39 @@ function prepareBlocks(activity: Activity, font: FontId): PreparedLayer[] {
   );
 }
 
+/** Synthetic streams and splits for `activity`, through the same mapping as Strava's. */
+function detailOf(activity: Activity): ActivityDetail {
+  const { streams, splits } = generateStravaDetail(activity, 7);
+  return parseStravaDetail(JSON.parse(JSON.stringify(streams)), splits);
+}
+
+/** Every block of `activity`, its splits too when it has them. */
+const blocksOf = (activity: Activity) =>
+  activityBlocks(activity, detailOf(activity).splits.metric.length > 0);
+
+/** The fonts mixed widgets start in. */
+const BLOCK_FONTS: readonly FontId[] = [
+  'inter',
+  'barlowCondensed',
+  'anton',
+  'unbounded',
+  'bigShoulders',
+  'bowlbyOneSC',
+];
+
 const RUN = makeActivity({ sportType: 'Run', distanceMeters: 42_195, movingTimeSeconds: 12_345 });
 const GYM = makeActivity({ sportType: 'WeightTraining', distanceMeters: 0, averageSpeed: null });
 
 describe('prepareActivityBlock', () => {
   it.each([
-    ['a marathon', 'barlowCondensed', RUN],
-    ['a marathon', 'archivoBlack', RUN],
-    ['a gym session', 'inter', GYM],
+    ['a marathon', 'its own font', null, RUN],
+    ['a marathon', 'a wide font', 'unbounded', RUN],
+    ['a gym session', 'its own font', null, GYM],
   ] as const)(
     'draws every block of %s in %s within the size it measures',
-    async (_name, font, activity) => {
+    async (_name, _fontName, font, activity) => {
       const blocks = prepareBlocks(activity, font);
-      expect(blocks).toHaveLength(activityBlocks(activity).length);
+      expect(blocks).toHaveLength(blocksOf(activity).length);
       const overflowing: { readonly id: string; readonly alpha: number }[] = [];
       for (const block of blocks) {
         expect(block.width).toBeGreaterThan(0);

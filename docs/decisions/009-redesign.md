@@ -53,6 +53,18 @@ comes later.
   sport's data, each followed by its other ways of writing it), the route, free text, the name,
   the date and the place. Columns of data start at two (distance and time): one datum alone is
   the data tile. Mixed widgets with the route draw it over, beside or between the data.
+- **Two families of mixed widgets.** Typographic ones (headline, columns, route, day, sport,
+  poster…) start each in the font that suits it, as AURA does (thin and tall, wide, block-like,
+  puffy for the day, a poster face for the poster), and the user can still change their font and
+  color. Replicas of other apps (the iPhone's Notes with the splits, a sent chat message, and
+  later a music player, the camera, a receipt and a boarding pass) keep the app's colors, font and
+  icons, since recognizing the app is the point: only their opacity changes, their dark and light
+  modes are versions in the carousel, and they carry no AllRun signature.
+- **Fonts:** Anton, Unbounded, Big Shoulders Display, Bowlby One SC (the day's heavy face,
+  stretched upwards and set tight, as AURA's "WED") and Rubik Glitch, all with open licenses.
+  Paid fonts are left out: an app bundles its fonts, which needs an app license. Fonts too close
+  to another or unfit for sport images go (Archivo Black, Dela Gothic One, Fredoka, Dancing
+  Script): designs saved with them read with the closest one left.
 - **Charts in AURA's style:** two data over every chart, big, as their data widgets write them
   (an elevation's distance and climb; average and fastest pace; average and highest heart rate or
   power; the splits' average pace and fastest split; a period's total and average per bar), and a

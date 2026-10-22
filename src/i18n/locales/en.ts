@@ -110,7 +110,12 @@ export const en = {
       route: 'Route and data',
       day: 'Day and data',
       sport: 'Sport and data',
+      poster: 'Poster',
+      notes: 'Notes',
+      message: 'Message',
     },
+    /** A chat message's line where the time goes: the sport and its start time. */
+    chatLine: '{{sport}} {{time}}',
   },
   style: {
     color: 'Color',
@@ -231,6 +236,8 @@ export const en = {
       centered: 'Centered',
       list: 'List',
       between: 'Between data',
+      dark: 'Dark',
+      light: 'Light',
     },
     dataCount: 'Data: {{count}}',
   },
@@ -398,14 +405,16 @@ export const en = {
   fonts: {
     inter: 'Modern',
     barlowCondensed: 'Sport',
-    archivoBlack: 'Strong',
+    bigShoulders: 'Slim',
+    anton: 'Poster',
+    unbounded: 'Wide',
+    bowlbyOneSC: 'Heavy',
     playfairDisplay: 'Classic',
     spaceMono: 'Typewriter',
-    orbitron: 'Future',
-    bangers: 'Comic',
-    fredoka: 'Bubble',
-    dancingScript: 'Signature',
     permanentMarker: 'Marker',
+    bangers: 'Comic',
+    orbitron: 'Futuristic',
+    rubikGlitch: 'Glitch',
   },
 };
 

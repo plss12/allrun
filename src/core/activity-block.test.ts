@@ -1,6 +1,13 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
-import { activityBlocks, blockDataCount, blockMetrics, sportIcon } from './activity-block';
+import {
+  activityBlocks,
+  blockDataCount,
+  blockLettering,
+  blockMetrics,
+  isAppReplica,
+  sportIcon,
+} from './activity-block';
 
 describe('blockMetrics', () => {
   it("leads with the card's data, then the sport's, then second readings", () => {
@@ -78,7 +85,22 @@ describe('activityBlocks', () => {
       { design: 'day', layout: 'inline' },
       { design: 'sport', layout: 'centered' },
       { design: 'sport', layout: 'list' },
+      { design: 'poster' },
+      { design: 'message', layout: 'dark' },
+      { design: 'message', layout: 'light' },
     ]);
+  });
+
+  it('offers the note of splits only for an activity with them, before the message', () => {
+    const designs = activityBlocks(makeActivity(), true).map((block) => block.design);
+    expect(designs.slice(designs.indexOf('poster'))).toEqual([
+      'poster',
+      'notes',
+      'notes',
+      'message',
+      'message',
+    ]);
+    expect(activityBlocks(makeActivity()).map((block) => block.design)).not.toContain('notes');
   });
 
   it('offers columns only up to the data the activity has', () => {
@@ -121,6 +143,10 @@ describe('blockDataCount', () => {
     expect(blockDataCount({ design: 'sport', layout: 'list' })).toBe(4);
     expect(blockDataCount({ design: 'sport', layout: 'centered' })).toBe(3);
     expect(blockDataCount({ design: 'route', layout: 'between' })).toBe(2);
+    expect(blockDataCount({ design: 'message', layout: 'dark' })).toBe(2);
+    expect(blockDataCount({ design: 'poster' })).toBe(3);
+    // A note lists the splits under the distance.
+    expect(blockDataCount({ design: 'notes', layout: 'light' })).toBe(1);
     expect(blockDataCount({ design: 'headline', layout: 'condensed' })).toBe(3);
   });
 });
@@ -131,5 +157,30 @@ describe('sportIcon', () => {
     expect(sportIcon(makeActivity({ sportType: 'Hike' }))).toBe('hike');
     expect(sportIcon(makeActivity({ sportType: 'Walk' }))).toBe('walk');
     expect(sportIcon(makeActivity({ sportType: 'RockClimbing' }))).toBe('other');
+  });
+});
+
+describe('isAppReplica and blockLettering', () => {
+  it('tells the replicas of apps from the typographic widgets', () => {
+    expect(isAppReplica('notes')).toBe(true);
+    expect(isAppReplica('message')).toBe(true);
+    expect(isAppReplica('poster')).toBe(false);
+    expect(isAppReplica('headline')).toBe(false);
+  });
+
+  it("gives each version the font that suits it, and replicas the apps' one", () => {
+    expect(blockLettering({ design: 'poster' })).toEqual({ font: 'anton', bold: false });
+    expect(blockLettering({ design: 'day', layout: 'inline' }).font).toBe('bowlbyOneSC');
+    expect(blockLettering({ design: 'headline', layout: 'stacked' })).toEqual({
+      font: 'bigShoulders',
+      bold: false,
+    });
+    expect(blockLettering({ design: 'headline', layout: 'inline' }).font).toBe('unbounded');
+    expect(blockLettering({ design: 'headline', layout: 'condensed' }).font).toBe('anton');
+    expect(blockLettering({ design: 'notes', layout: 'dark' }).font).toBe('inter');
+    expect(blockLettering({ design: 'columns', count: 3 })).toEqual({
+      font: 'barlowCondensed',
+      bold: true,
+    });
   });
 });

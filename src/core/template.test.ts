@@ -220,6 +220,19 @@ describe('parseTemplate', () => {
     expect(columns).not.toHaveProperty('orientation');
   });
 
+  it('reads designs saved in a retired font with the closest one left, and rejects unknown fonts', () => {
+    const read = (font: string) =>
+      parseTemplate({
+        ...activityTemplate,
+        layers: [{ ...distance, style: { ...textStyle, font } }],
+      }).layers[0];
+    expect(read('archivoBlack')).toMatchObject({ style: { font: 'unbounded' } });
+    expect(read('delaGothicOne')).toMatchObject({ style: { font: 'unbounded' } });
+    expect(read('fredoka')).toMatchObject({ style: { font: 'inter' } });
+    expect(read('dancingScript')).toMatchObject({ style: { font: 'playfairDisplay' } });
+    expect(() => read('comicSans')).toThrow(/font/);
+  });
+
   it('rejects unknown versions and blank names', () => {
     expect(() => parseTemplate({ ...activityTemplate, version: 2 })).toThrow(/version/);
     expect(() => parseTemplate({ ...activityTemplate, name: '   ' })).toThrow(/name/);

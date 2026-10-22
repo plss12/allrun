@@ -3,8 +3,11 @@ import { availableMetrics, cardMetrics, type MetricId } from './metrics';
 import type { SportFamily } from './sports';
 import {
   type ActivityBlock,
+  type ActivityBlockDesign,
+  APP_MODES,
   BLOCK_COLUMN_COUNTS,
   DAY_LAYOUTS,
+  type FontId,
   HEADLINE_LAYOUTS,
   ROUTE_LAYOUTS,
   SPORT_LAYOUTS,
@@ -43,7 +46,7 @@ export function blockMetrics(activity: Activity, count: number): MetricId[] {
   return ordered.slice(0, count);
 }
 
-/** Data each version of a design shows, at most. */
+/** Data each version of a design shows, at most; the splits show splits instead. */
 export function blockDataCount(block: ActivityBlock): number {
   switch (block.design) {
     case 'columns':
@@ -52,8 +55,13 @@ export function blockDataCount(block: ActivityBlock): number {
       return block.layout === 'list' ? 4 : 3;
     case 'route':
       return block.layout === 'between' ? 2 : 3;
+    case 'message':
+      return 2;
+    case 'notes':
+      return 1;
     case 'headline':
     case 'day':
+    case 'poster':
       return 3;
   }
 }
@@ -61,10 +69,10 @@ export function blockDataCount(block: ActivityBlock): number {
 /**
  * Every version of the mixed widgets that `activity` can fill, design by design, in the order of
  * the gallery. Columns are only offered up to the number of data it has (a gym session has fewer
- * than six), the route's only when it has one, and nothing for an activity without data. Time
- * O(m) for the m metrics of its sport.
+ * than six), the route's only when it has one, the splits only `withSplits` (when its detail has
+ * them), and nothing for an activity without data. Time O(m) for the m metrics of its sport.
  */
-export function activityBlocks(activity: Activity): ActivityBlock[] {
+export function activityBlocks(activity: Activity, withSplits = false): ActivityBlock[] {
   const available = blockMetrics(activity, Math.max(...BLOCK_COLUMN_COUNTS)).length;
   if (available === 0) {
     return [];
@@ -79,6 +87,9 @@ export function activityBlocks(activity: Activity): ActivityBlock[] {
       : ROUTE_LAYOUTS.map((layout) => ({ design: 'route', layout }) as const)),
     ...DAY_LAYOUTS.map((layout) => ({ design: 'day', layout }) as const),
     ...SPORT_LAYOUTS.map((layout) => ({ design: 'sport', layout }) as const),
+    { design: 'poster' } as const,
+    ...(withSplits ? APP_MODES.map((layout) => ({ design: 'notes', layout }) as const) : []),
+    ...APP_MODES.map((layout) => ({ design: 'message', layout }) as const),
   ];
 }
 
@@ -88,4 +99,48 @@ export type SportIconId = SportFamily | 'hike';
 /** The icon of an activity's sport: its family's, or the hiker for a hike. */
 export function sportIcon(activity: Activity): SportIconId {
   return activity.sportModality === 'hike' ? 'hike' : activity.sportFamily;
+}
+
+/** Mixed widgets that recreate another app: their look is fixed, not the user's to style. */
+const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set(['notes', 'message']);
+
+/**
+ * Whether a design recreates another app (a note, a chat message): its colors, font and icons are
+ * the app's, since recognizing it is the point, so only its opacity can change.
+ */
+export function isAppReplica(design: ActivityBlockDesign): boolean {
+  return APP_REPLICAS.has(design);
+}
+
+/** The font a mixed widget starts in, and whether in bold. */
+export interface BlockLettering {
+  readonly font: FontId;
+  readonly bold: boolean;
+}
+
+/**
+ * The font that suits each version of a mixed widget, as AURA gives each its own: thin and tall,
+ * wide, condensed and heavy, heavy and stretched for the day, a poster face for the poster. Replicas write in the
+ * system-like font of the apps they recreate.
+ */
+export function blockLettering(block: ActivityBlock): BlockLettering {
+  switch (block.design) {
+    case 'headline':
+      return block.layout === 'stacked'
+        ? { font: 'bigShoulders', bold: false }
+        : block.layout === 'inline'
+          ? { font: 'unbounded', bold: true }
+          : { font: 'anton', bold: false };
+    case 'day':
+      return { font: 'bowlbyOneSC', bold: false };
+    case 'poster':
+      return { font: 'anton', bold: false };
+    case 'notes':
+    case 'message':
+      return { font: 'inter', bold: false };
+    case 'columns':
+    case 'route':
+    case 'sport':
+      return { font: 'barlowCondensed', bold: true };
+  }
 }

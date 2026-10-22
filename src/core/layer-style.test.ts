@@ -247,7 +247,8 @@ describe('setBlockOptions', () => {
   });
 
   it('changes nothing when the options are already set, and only fits mixed widgets', () => {
-    expect(setBlockOptions(withBlock, 'block', { bold: true, logo: false })).toBe(withBlock);
+    // A stacked headline starts in a thin font, not bold.
+    expect(setBlockOptions(withBlock, 'block', { bold: false, logo: false })).toBe(withBlock);
     expect(() => setBlockOptions(withBlock, 'name', { logo: true })).toThrow(/block options/);
   });
 });

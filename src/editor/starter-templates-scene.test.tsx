@@ -115,7 +115,7 @@ const TOLERANCE = 2;
 
 describe('starter templates', () => {
   it('keep every widget inside the canvas and clear of the others', async () => {
-    const fonts = loadTestFonts(['inter', 'barlowCondensed', 'archivoBlack', 'playfairDisplay']);
+    const fonts = loadTestFonts(['inter', 'barlowCondensed', 'unbounded', 'playfairDisplay']);
     const problems: string[] = [];
     for (const [name, data] of Object.entries(await cases())) {
       const context: LayerContext = {

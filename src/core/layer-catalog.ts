@@ -151,8 +151,15 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
       case 'summaryRoutes':
         return [item.line, flag(item.glow, 'glow')];
       case 'activityBlock':
-        // Every version is named, the first too: they are designs, not options of one.
-        return [item.block.design === 'columns' ? item.block.count : item.block.layout];
+        // Every version is named, the first too: they are designs, not options of one. A
+        // design of a single version has nothing to add.
+        return [
+          item.block.design === 'columns'
+            ? item.block.count
+            : 'layout' in item.block
+              ? item.block.layout
+              : undefined,
+        ];
       case 'text':
         return [];
     }
@@ -349,7 +356,10 @@ export function activityCatalog(
   return sections([
     ...tileEntries(
       'mixed',
-      activityBlocks(activity).map((block) => ({ kind: 'activityBlock', block })),
+      activityBlocks(activity, charts.includes('splits')).map((block) => ({
+        kind: 'activityBlock',
+        block,
+      })),
     ),
     ...availableMetrics(activity).flatMap((metric) => dataEntries({ kind: 'metric', metric })),
     ...(activity.routePolyline === null ? [] : lineEntries('route')),

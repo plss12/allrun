@@ -70,7 +70,13 @@ describe('activityCatalog', () => {
       'block-route',
       'block-day',
       'block-sport',
+      'block-poster',
+      'block-message',
     ]);
+    // A design of a single version is its tile's only page.
+    expect(variantKeys(trail, 'block-poster')).toEqual(['block-poster']);
+    // The note of splits comes with the activity's splits.
+    expect(tileKeys(activityCatalog(makeActivity(), ['splits']), 'mixed')).toContain('block-notes');
     expect(variantKeys(trail, 'block-headline')).toEqual([
       'block-headline-stacked',
       'block-headline-inline',
