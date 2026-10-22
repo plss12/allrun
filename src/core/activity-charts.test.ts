@@ -44,6 +44,7 @@ function detail(overrides: Partial<ActivityDetail> = {}): ActivityDetail {
       metric: [split(1000, 3.3), split(1000, 3.5), split(80, 2)],
       imperial: [split(1609.344, 3.4), split(400, 3.4)],
     },
+    laps: [],
     ...overrides,
   };
 }
@@ -109,8 +110,24 @@ describe('availableActivityCharts', () => {
 describe('splitRows', () => {
   it('makes a row per split while they fit', () => {
     expect(splitRows([split(1000, 4, 10, 150), split(1000, 5, -4)], 20)).toEqual([
-      { first: 1, last: 1, speed: 4, elevationDifference: 10, heartRate: 150 },
-      { first: 2, last: 2, speed: 5, elevationDifference: -4, heartRate: null },
+      {
+        first: 1,
+        last: 1,
+        distanceMeters: 1000,
+        movingTimeSeconds: 250,
+        speed: 4,
+        elevationDifference: 10,
+        heartRate: 150,
+      },
+      {
+        first: 2,
+        last: 2,
+        distanceMeters: 1000,
+        movingTimeSeconds: 200,
+        speed: 5,
+        elevationDifference: -4,
+        heartRate: null,
+      },
     ]);
   });
 
@@ -129,6 +146,8 @@ describe('splitRows', () => {
     expect(rows[0]).toEqual({
       first: 1,
       last: 3,
+      distanceMeters: 3000,
+      movingTimeSeconds: 300,
       speed: 10,
       elevationDifference: 3,
       heartRate: null,

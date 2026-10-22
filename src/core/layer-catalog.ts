@@ -152,7 +152,8 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         return [item.line, flag(item.glow, 'glow')];
       case 'activityBlock':
         // Every version is named, the first too: they are designs, not options of one. A
-        // design of a single version has nothing to add; a cover adds its color.
+        // design of a single version has nothing to add; a cover adds its color, and a verse or a
+        // quote its name.
         return [
           item.block.design === 'columns'
             ? item.block.count
@@ -160,6 +161,8 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
               ? item.block.layout
               : undefined,
           'cover' in item.block ? item.block.cover : undefined,
+          'verse' in item.block ? item.block.verse : undefined,
+          'quote' in item.block ? item.block.quote : undefined,
         ];
       case 'text':
         return [];
@@ -342,7 +345,8 @@ function sections(entries: readonly Entry[]): CatalogSection[] {
 }
 
 /**
- * Widgets for one activity: its mixed widgets (see `activityBlocks`); its basics: the metrics of
+ * Widgets for one activity: its mixed widgets (see `activityBlocks`; the location's only
+ * `withPlace`, the laps' only `withLaps`); its basics: the metrics of
  * its sport it has values for (in the sport's order, all in one tile), the route when it has GPS,
  * free text, its name, its date and its place when it can be named (`withPlace`); then the
  * `charts` it recorded data for (see `availableActivityCharts`), and the logo. Time O(m + c) for
@@ -353,11 +357,12 @@ export function activityCatalog(
   charts: readonly ActivityChartSeries[] = [],
   withPlace = false,
   withZones = false,
+  withLaps = false,
 ): CatalogSection[] {
   return sections([
     ...tileEntries(
       'mixed',
-      activityBlocks(activity, charts.includes('splits')).map((block) => ({
+      activityBlocks(activity, charts.includes('splits'), withPlace, withLaps).map((block) => ({
         kind: 'activityBlock',
         block,
       })),

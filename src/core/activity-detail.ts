@@ -1,6 +1,6 @@
 /**
  * What an activity recorded along the way, fetched on demand for its charts (Strava's activity
- * streams and splits). Source-independent and in SI units, like `Activity`.
+ * streams, splits and laps). Source-independent and in SI units, like `Activity`.
  */
 
 /**
@@ -33,6 +33,19 @@ export interface ActivitySplit {
   readonly averageHeartRate: number | null;
 }
 
+/**
+ * One lap: a stretch the athlete marked with the watch's lap button (an interval, its recovery)
+ * or that the watch marked by itself (every kilometer). An activity without either has one lap.
+ */
+export interface ActivityLap {
+  readonly distanceMeters: number;
+  readonly movingTimeSeconds: number;
+  /** Meters per second over the lap. */
+  readonly averageSpeed: number;
+  /** Beats per minute over the lap; `null` without a heart rate monitor. */
+  readonly averageHeartRate: number | null;
+}
+
 export interface ActivityDetail {
   /** `null` when the activity recorded no streams (a manual entry). */
   readonly streams: ActivityStreams | null;
@@ -41,4 +54,6 @@ export interface ActivityDetail {
     readonly metric: readonly ActivitySplit[];
     readonly imperial: readonly ActivitySplit[];
   };
+  /** Its laps, in order; one for an activity nobody split. */
+  readonly laps: readonly ActivityLap[];
 }

@@ -63,7 +63,7 @@ function translate(key: string): string {
  */
 function prepareBlocks(activity: Activity, font: FontId | null, italic = false): PreparedLayer[] {
   const context: LayerContext = {
-    data: { mode: 'activity', activity, detail: detailOf(activity), place: null, zones: null },
+    data: { mode: 'activity', activity, detail: detailOf(activity), place: PLACE, zones: null },
     fonts: loadTestFonts(
       font === null ? BLOCK_FONTS : [font, ...BLOCK_FONTS.filter((other) => other !== font)],
     ),
@@ -92,15 +92,23 @@ function prepareBlocks(activity: Activity, font: FontId | null, italic = false):
   );
 }
 
-/** Synthetic streams and splits for `activity`, through the same mapping as Strava's. */
+/**
+ * Synthetic streams, splits and laps for `activity`, through the same mapping as Strava's; for a
+ * run, an interval session, so its laps are drawn too.
+ */
 function detailOf(activity: Activity): ActivityDetail {
-  const { streams, splits } = generateStravaDetail(activity, 7);
-  return parseStravaDetail(JSON.parse(JSON.stringify(streams)), splits);
+  const { streams, detailed } = generateStravaDetail(activity, 1);
+  return parseStravaDetail(JSON.parse(JSON.stringify(streams)), detailed);
 }
 
-/** Every block of `activity`, its splits too when it has them. */
-const blocksOf = (activity: Activity) =>
-  activityBlocks(activity, detailOf(activity).splits.metric.length > 0);
+/** Every block of `activity`, its splits and laps too when it has them, and its place. */
+const blocksOf = (activity: Activity) => {
+  const detail = detailOf(activity);
+  return activityBlocks(activity, detail.splits.metric.length > 0, true, detail.laps.length > 1);
+};
+
+/** Where the activities started, with a long name. */
+const PLACE = { city: 'San Sebastián de los Reyes', region: 'Madrid', country: 'España' };
 
 /** The fonts mixed widgets start in. */
 const BLOCK_FONTS: readonly FontId[] = [
@@ -110,6 +118,8 @@ const BLOCK_FONTS: readonly FontId[] = [
   'unbounded',
   'bigShoulders',
   'bowlbyOneSC',
+  'playfairDisplay',
+  'spaceMono',
 ];
 
 const RUN = makeActivity({ sportType: 'Run', distanceMeters: 42_195, movingTimeSeconds: 12_345 });
@@ -126,6 +136,10 @@ describe('prepareActivityBlock', () => {
     'draws every block of %s in %s within the size it measures',
     async (_name, _fontName, font, italic, activity) => {
       const blocks = prepareBlocks(activity, font, italic);
+      // The run is an interval session: its tables of laps are among the blocks.
+      if (activity === RUN) {
+        expect(blocksOf(activity).some((block) => block.design === 'laps')).toBe(true);
+      }
       expect(blocks).toHaveLength(blocksOf(activity).length);
       const overflowing: { readonly id: string; readonly alpha: number }[] = [];
       for (const block of blocks) {

@@ -196,8 +196,18 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * - `music` (replica): the activity as the song playing on a phone's lock screen: the route as its
  *   cover, its name and date as the song's, two data at the ends of the progress bar, in dark or
  *   light mode;
- * - `camera` (replica): a phone camera's controls, with three data as its zoom buttons and the
- *   sport as the mode chosen, over the red record button.
+ * - `camera` (replica): the phone's camera framing the whole canvas, three data where its settings
+ *   go, the sport's icon on its f button and the route as the last photo's thumbnail;
+ * - `verse`: a Bible verse from a public-domain translation, with its reference, chosen from a list;
+ * - `quote`: a famous athlete's or writer's motivating quote, with its author, chosen from a list;
+ * - `laps` (replica): the laps as a timing board (`board`) or as a karting's timing sheet
+ *   (`sheet`), the fastest marked in a brand color (`cover`); only for activities with laps;
+ * - `grandPrix` (replica): the splits as a race's timing tower on TV, in lap order, each with its
+ *   pace and its gap to the fastest, which carries the fastest lap's mark, under the distance;
+ * - `alarm` (replica): the start time as an alarm of the iPhone, the sport and distance as its
+ *   label, in dark or light mode;
+ * - `location` (replica): the place and the distance as a location sticker, in light or dark
+ *   mode; only when the place is known.
  */
 export const ACTIVITY_BLOCK_DESIGNS = [
   'headline',
@@ -214,6 +224,12 @@ export const ACTIVITY_BLOCK_DESIGNS = [
   'message',
   'music',
   'camera',
+  'verse',
+  'quote',
+  'laps',
+  'grandPrix',
+  'alarm',
+  'location',
 ] as const;
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
@@ -233,6 +249,37 @@ export const APP_MODES = ['dark', 'light'] as const;
  * its night ink. A version in one brand color always comes with one in the other.
  */
 export const BRAND_COVERS = ['red', 'ink'] as const;
+export const LAPS_LAYOUTS = ['board', 'sheet'] as const;
+/**
+ * Bible verses of the verse widget, from translations in the public domain: the World English
+ * Bible in English, the Reina-Valera 1909 in Spanish. Their texts are in the locales. The first
+ * is the one the gallery shows, under its "Tap to choose" hint: a short one, so the hint covers
+ * little of it (the same goes for the quotes).
+ */
+export const VERSES = [
+  'philippians4v13',
+  'romans8v18',
+  'isaiah40v31',
+  'timothy4v7',
+  'hebrews12v1',
+  'corinthians9v24',
+] as const;
+/** Quotes of the quote widget, by their author; their texts are in the locales. */
+export const QUOTES = [
+  'kipchoge',
+  'prefontaine',
+  'murakami',
+  'zatopek',
+  'karnazes',
+  'bingham',
+  'jordan',
+  'notke',
+  'billieJeanKing',
+  'ali',
+] as const;
+
+export type Verse = (typeof VERSES)[number];
+export type Quote = (typeof QUOTES)[number];
 
 const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('headline'), layout: z.enum(HEADLINE_LAYOUTS) }),
@@ -253,6 +300,16 @@ const activityBlockSchema = z.discriminatedUnion('design', [
     cover: z.enum(BRAND_COVERS),
   }),
   z.object({ design: z.literal('camera'), cover: z.enum(BRAND_COVERS) }),
+  z.object({ design: z.literal('verse'), verse: z.enum(VERSES) }),
+  z.object({ design: z.literal('quote'), quote: z.enum(QUOTES) }),
+  z.object({
+    design: z.literal('laps'),
+    layout: z.enum(LAPS_LAYOUTS),
+    cover: z.enum(BRAND_COVERS),
+  }),
+  z.object({ design: z.literal('grandPrix') }),
+  z.object({ design: z.literal('alarm'), layout: z.enum(APP_MODES) }),
+  z.object({ design: z.literal('location'), layout: z.enum(APP_MODES) }),
 ]);
 
 export type ActivityBlock = z.infer<typeof activityBlockSchema>;

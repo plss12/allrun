@@ -3,9 +3,11 @@ import {
   FontWeight,
   Group,
   Line,
+  LinearGradient,
   Paint,
   Paragraph,
   Path,
+  Rect,
   RoundedRect,
   Skia,
   type SkParagraph,
@@ -18,13 +20,17 @@ import type { ReactElement } from 'react';
 import {
   blockDataCount,
   blockMetrics,
+  fastestIndex,
   isAppReplica,
   sportIcon,
   type SportIconId,
+  type TyreCompound,
+  tyreCompounds,
 } from '@/core/activity-block';
 import { splitRows } from '@/core/activity-charts';
 import { castsShadow } from '@/core/layer-style';
 import type { MetricId } from '@/core/metrics';
+import { formatPlace } from '@/core/place';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
@@ -39,12 +45,13 @@ import {
   type LabelKey,
   metricText,
   speedMeasure,
+  splitGapText,
   splitRowTexts,
   type TextContext,
 } from './editor-data';
 import { FONT_FAMILIES } from './fonts';
 import { SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
-import { addLeanRoom, DropShadow, slantOf, textShadows } from './scene-text';
+import { addLeanRoom, DropShadow, leanRoom, slantOf, textShadows } from './scene-text';
 
 /**
  * The mixed widgets of an activity (ADR 009): several of its data in one designed block, laid out
@@ -104,6 +111,25 @@ type Piece =
        */
       readonly flat?: true;
       readonly edge?: string;
+    }
+  | {
+      /**
+       * A replica's colors fading from top to bottom over a rectangle, kept within the rounded
+       * card it lies on (`card`): the light on a timing tower's header, the shadow under it.
+       */
+      readonly kind: 'shade';
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+      readonly colors: readonly [string, string];
+      readonly card: {
+        readonly x: number;
+        readonly y: number;
+        readonly width: number;
+        readonly height: number;
+        readonly radius: number;
+      };
     }
   | {
       /** A replica's thin line in its own color, without a shadow: the camera's grid. */
@@ -175,7 +201,8 @@ type Piece =
     };
 
 /** The controls of the apps a replica recreates. */
-type AppSymbol = 'backward' | 'pause' | 'forward' | 'airplay' | 'waveform' | 'flip';
+type AppSymbol =
+  'backward' | 'pause' | 'forward' | 'airplay' | 'waveform' | 'flip' | 'pin' | 'stopwatch';
 
 /** A measured part of a block, which places its pieces with its top-left corner at (x, y). */
 interface Box {
@@ -324,6 +351,34 @@ function grid(rows: readonly (readonly Box[])[], gapX: number, gapY: number, ali
     ),
     gapY,
     'start',
+  );
+}
+
+/** Width of each column of a table: its widest cell. */
+const columnWidths = (cells: readonly (readonly Box[])[]): number[] =>
+  cells[0].map((_, i) => Math.max(...cells.map((line) => line[i].width)));
+
+/** Width of a table of `widths` columns, `gap` apart and `pad` inside its edges. */
+const tableWidth = (widths: readonly number[], gap: number, pad: number): number =>
+  widths.reduce((sum, width) => sum + width, 0) + gap * (widths.length - 1) + 2 * pad;
+
+/** A row of a table, `height` tall: each box at the start of its column, centered up and down. */
+function tableRow(
+  boxes: readonly Box[],
+  widths: readonly number[],
+  gap: number,
+  pad: number,
+  height: number,
+): Box {
+  let left = pad;
+  return placed(
+    tableWidth(widths, gap, pad),
+    height,
+    boxes.map((box, i) => {
+      const x = left;
+      left += widths[i] + gap;
+      return { box, x, y: (height - box.height) / 2 };
+    }),
   );
 }
 
@@ -498,6 +553,15 @@ const textBox = (paragraph: SkParagraph): Box => ({
   place: (x, y) => [{ kind: 'text', paragraph, x, y }],
 });
 
+/**
+ * A text of several lines, `fontSize` big, with room at the right for its letters to lean out of
+ * any line when `italic`.
+ */
+const wrappedBox = (laidOut: SkParagraph, fontSize: number, italic: boolean | undefined): Box => {
+  const box = textBox(laidOut);
+  return italic === true ? { ...box, width: box.width + leanRoom(fontSize) } : box;
+};
+
 /** A text turned to read upwards: as tall as the text is long. */
 const turnedBox = (paragraph: SkParagraph): Box => ({
   width: paragraph.getHeight(),
@@ -550,6 +614,8 @@ interface Run {
   readonly text: string;
   readonly size: number;
   readonly bold: boolean;
+  /** Written in the font's light face (see `FontFaces`): a replica's thin text. */
+  readonly light?: boolean;
   /** Written fainter: names of data and other secondary texts. */
   readonly faded?: boolean;
   /** Room after each letter, as a fraction of the size. */
@@ -562,17 +628,33 @@ const RULE_ALPHA = 0.45;
 /** A layout width no text reaches: lines only break where the text does. */
 const NO_WRAP_WIDTH = 1_000_000;
 
+/** A replica's own font and slant, when not the apps' upright system-like one. */
+interface AppLettering {
+  readonly font?: FontId;
+  readonly italic?: boolean;
+}
+
+/** How a text is laid out besides its runs and style (see `paragraph`). */
+interface TextLook {
+  /** With the drop shadow of its color (a text on a bubble needs none). */
+  readonly shadow?: boolean;
+  /** Longest a line is: longer ones are cut short with an ellipsis, as apps cut a long title. */
+  readonly maxWidth?: number;
+  /**
+   * Broken into centered lines no longer than this, as even as they can be, instead of one line.
+   */
+  readonly wrapWidth?: number;
+}
+
 /**
- * Lays out runs in the block's font and color, on one line, shrunk to fit them; with the drop
- * shadow of its color unless `shadow` is off (a text on a bubble needs none). A line longer than
- * `maxWidth` is cut short with an ellipsis, as apps cut a long title.
+ * Lays out runs in the block's font and color, on one line unless it is to wrap, shrunk to fit
+ * them (see `TextLook`).
  */
 function paragraph(
   runs: readonly Run[],
   fonts: SkTypefaceFontProvider,
   style: BlockStyle,
-  shadow = true,
-  maxWidth = NO_WRAP_WIDTH,
+  { shadow = true, maxWidth = NO_WRAP_WIDTH, wrapWidth }: TextLook = {},
 ) {
   const tightening = TIGHT_FONTS[style.font] ?? 0;
   const shadows = shadow ? textShadows(style.color) : [];
@@ -580,7 +662,7 @@ function paragraph(
     const builder = Skia.ParagraphBuilder.Make(
       cut
         ? { textAlign: TextAlign.Left, maxLines: 1, ellipsis: '…' }
-        : { textAlign: TextAlign.Left },
+        : { textAlign: wrapWidth === undefined ? TextAlign.Left : TextAlign.Center },
       fonts,
     );
     for (const run of runs) {
@@ -594,7 +676,12 @@ function paragraph(
           fontFamilies: [FONT_FAMILIES[style.font]],
           fontSize: run.size,
           fontStyle: {
-            weight: run.bold ? FontWeight.Bold : FontWeight.Normal,
+            weight:
+              run.light === true
+                ? FontWeight.ExtraLight
+                : run.bold
+                  ? FontWeight.Bold
+                  : FontWeight.Normal,
             slant: slantOf(style.italic),
           },
           letterSpacing: run.size * ((run.spacing ?? 0) + tightening),
@@ -603,12 +690,33 @@ function paragraph(
         .addText(style.uppercase ? run.text.toLocaleUpperCase() : run.text)
         .pop();
     }
-    if (style.italic === true && runs.length > 0) {
+    // A wrapped text leans out of each of its lines: `wrappedBox` makes room for all of them.
+    if (style.italic === true && runs.length > 0 && wrapWidth === undefined) {
       addLeanRoom(builder, runs[runs.length - 1].size);
     }
     return builder.build();
   };
   const built = build(false);
+  if (wrapWidth !== undefined) {
+    // The narrowest width that keeps as few lines as the widest allowed: even lines, no word left
+    // alone on the last one. Halved down to a pixel, O(log w) layouts.
+    built.layout(wrapWidth);
+    const lines = built.getLineMetrics().length;
+    let low = 1;
+    let high = Math.ceil(built.getLongestLine()) + 1;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      built.layout(middle);
+      if (built.getLineMetrics().length > lines) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    built.layout(high);
+    built.layout(Math.ceil(built.getLongestLine()) + 1);
+    return built;
+  }
   built.layout(NO_WRAP_WIDTH);
   if (built.getLongestLine() > maxWidth) {
     const cut = build(true);
@@ -670,6 +778,7 @@ const SIZES = {
     inline: { weekday: 140, value: 40 },
   },
   serif: { title: 40, label: 34, value: 80 },
+  quotation: { text: 64, width: 820, source: 36 },
   notes: { bar: 34, icon: 40, title: 74, row: 40 },
   message: { text: 50, meta: 26 },
 } as const;
@@ -783,6 +892,116 @@ const CAMERA = {
   modes: { width: 438, size: 34, chosenFrom: -12, chosenTo: 211, inset: 6, videoX: -113 },
 } as const;
 
+/**
+ * Most laps a timing table lists one by one (an interval session's reps and recoveries fit) and
+ * most splits a timing tower lists, a grid's 20; more are grouped, as in the note.
+ */
+const LAPS_ROWS = 24;
+const GRAND_PRIX_ROWS = 20;
+
+/**
+ * A board of laps (`board`), as AURA's: the names of the columns over a grey see-through panel,
+ * every other row lighter; and a karting's timing sheet (`sheet`): white paper, lines between
+ * rows, a typewriter's letters and the title over it. The fastest row is in a brand color.
+ */
+const LAPS = {
+  board: {
+    header: 22,
+    number: 24,
+    value: 40,
+    unit: 0.45,
+    rowHeight: 70,
+    padX: 26,
+    gap: 44,
+    headerGap: 14,
+    colors: {
+      panel: '#636366B3',
+      stripe: '#FFFFFF14',
+      ink: '#FFFFFF',
+      faded: '#FFFFFFB3',
+    },
+  },
+  sheet: {
+    title: 36,
+    text: 30,
+    rowHeight: 52,
+    padX: 18,
+    gap: 30,
+    titleGap: 12,
+    rule: 2,
+    colors: {
+      paper: '#FFFFFF',
+      ink: '#1C1C1E',
+      rule: '#0000002E',
+      title: '#FFFFFF',
+      chosen: '#FFFFFF',
+    },
+  },
+} as const;
+
+/**
+ * A race's timing tower on TV: its dark panel, the sport and how far into the race it is on top,
+ * then a row per split: its number, pace, gap to the fastest and tyre compound, or the purple
+ * stopwatch of the fastest lap.
+ */
+const GRAND_PRIX = {
+  title: 50,
+  icon: 54,
+  lap: 30,
+  row: 36,
+  rowHeight: 58,
+  padX: 24,
+  padY: 22,
+  gap: 26,
+  radius: 18,
+  rule: 2,
+  /** Height of the shadow the header casts on the rows. */
+  shadow: 22,
+  colors: {
+    panel: '#15151EF0',
+    header: ['#3D3D4C', '#262633'],
+    shadow: ['#00000099', '#00000000'],
+    ink: '#FFFFFF',
+    faded: '#FFFFFFA6',
+    rule: '#FFFFFF1F',
+    fastest: '#A13BD4',
+  },
+  tyres: { soft: '#FF3B30', medium: '#FFD60A', hard: '#F2F2F2' },
+} as const;
+/** How a tyre compound is written on the tower, as TV writes it in any language. */
+const TYRE_LETTERS: Readonly<Record<TyreCompound, string>> = { soft: 'S', medium: 'M', hard: 'H' };
+
+/**
+ * An alarm of the iPhone's Clock (iOS 26) in dark and light mode: its card, its time and label,
+ * and its switch, on.
+ */
+const ALARM_COLORS = {
+  dark: { card: '#000000', ink: '#FFFFFF', on: '#30D158', knob: '#FFFFFF' },
+  light: { card: '#FFFFFF', ink: '#000000', on: '#34C759', knob: '#FFFFFF' },
+} as const;
+/** Sizes of an alarm: the time, its AM or PM, the label, the room inside and the switch. */
+const ALARM = {
+  time: 150,
+  meridiem: 64,
+  label: 32,
+  padX: 46,
+  padY: 26,
+  radius: 44,
+  gap: 80,
+  minWidth: 700,
+  toggle: { width: 126, height: 77, inset: 6 },
+} as const;
+
+/**
+ * A location sticker in light and dark mode, as Instagram's: the place and a datum after a pin,
+ * in a typewriter's letters, as AURA writes it.
+ */
+const LOCATION_COLORS = {
+  light: { card: '#FFFFFF', ink: '#000000' },
+  dark: { card: '#1C1C1E', ink: '#FFFFFF' },
+} as const;
+const LOCATION = { text: 40, pin: 1.15, gap: 14, padX: 30, padY: 18, radius: 24 } as const;
+
 /** Width of the AllRun name signing a block, and its room above. */
 const LOGO_WIDTH = 190;
 const LOGO_GAP = 40;
@@ -801,7 +1020,8 @@ export function prepareActivityBlock(
   const { activity } = data;
   const { block, style } = layer;
   const metrics = blockMetrics(activity, blockDataCount(block));
-  if (metrics.length === 0) {
+  // A verse or a quote shows no data: it is drawn for any activity.
+  if (metrics.length === 0 && blockDataCount(block) > 0) {
     return null;
   }
   const text = (runs: readonly Run[]): Box => {
@@ -817,17 +1037,24 @@ export function prepareActivityBlock(
         };
   };
   /**
-   * A replica's text: in the system-like font of the apps, in `color`, without a shadow, cut short
-   * with an ellipsis past `maxWidth`.
+   * A replica's text in `color`: in the system-like font of the apps unless its `font` is another
+   * (a timing sheet's typewriter), upright unless `italic`, and without a shadow unless `look` asks
+   * for one (see `TextLook`).
    */
-  const appText = (runs: readonly Run[], color: string, maxWidth?: number) =>
+  const appText = (
+    runs: readonly Run[],
+    color: string,
+    { font = 'inter', italic = false, ...look }: TextLook & AppLettering = {},
+  ) =>
     textBox(
       paragraph(
         runs,
         fonts,
-        { font: 'inter', color, bold: false, uppercase: false },
-        false,
-        maxWidth,
+        { font, color, bold: false, uppercase: false, italic },
+        {
+          shadow: false,
+          ...look,
+        },
       ),
     );
   /** A datum as one text, its unit after it: "11,34 km". */
@@ -908,6 +1135,43 @@ export function prepareActivityBlock(
         spacing: LABEL_SPACING,
       },
     ]);
+
+  /** The splits in the user's unit, kilometers or miles; none without a detail. */
+  const splits =
+    data.detail === null
+      ? []
+      : textContext.unit === 'mi'
+        ? data.detail.splits.imperial
+        : data.detail.splits.metric;
+  /** Words in quotation marks, wrapped in even lines, and who said them or where, under them. */
+  const quotation = (words: string, source: string): Box => {
+    const sizes = SIZES.quotation;
+    return column(
+      [
+        wrappedBox(
+          paragraph(
+            [
+              {
+                text: translate('widgets.quoted', { text: words }),
+                size: sizes.text,
+                bold: style.bold,
+              },
+            ],
+            fonts,
+            style,
+            { wrapWidth: sizes.width },
+          ),
+          sizes.text,
+          style.italic,
+        ),
+        text([
+          { text: source, size: sizes.source, bold: false, faded: true, spacing: LABEL_SPACING },
+        ]),
+      ],
+      sizes.source * 0.6,
+      'center',
+    );
+  };
 
   let hole: HitHole | undefined;
   const body = ((): Box | null => {
@@ -1045,12 +1309,6 @@ export function prepareActivityBlock(
       }
       case 'notes': {
         // The splits as a note of the iPhone's Notes, in its font and colors.
-        const splits =
-          data.detail === null
-            ? []
-            : textContext.unit === 'mi'
-              ? data.detail.splits.imperial
-              : data.detail.splits.metric;
         const rows = splitRows(splits, NOTES_ROWS);
         if (rows.length === 0) {
           return null;
@@ -1160,13 +1418,11 @@ export function prepareActivityBlock(
             appText(
               [{ text: name === '' ? sport : name, size: song.size, bold: true }],
               colors.ink,
-              textWidth,
+              { maxWidth: textWidth },
             ),
-            appText(
-              [{ text: `${sport} · ${day}`, size: song.size, bold: false }],
-              colors.faded,
-              textWidth,
-            ),
+            appText([{ text: `${sport} · ${day}`, size: song.size, bold: false }], colors.faded, {
+              maxWidth: textWidth,
+            }),
           ],
           0,
           'start',
@@ -1369,6 +1625,371 @@ export function prepareActivityBlock(
           ),
         ]);
       }
+      case 'laps': {
+        // The laps as a table: number, distance, time and pace (or speed).
+        const rows = splitRows(data.detail?.laps ?? [], LAPS_ROWS);
+        if (rows.length === 0) {
+          return null;
+        }
+        const speed = speedMeasure(activity.sportFamily);
+        const unit = textContext.unitLabel(textContext.unit);
+        const fastest = fastestIndex(rows.map((split) => split.speed));
+        const cover = BRAND_COVER_COLORS[block.cover];
+        const texts = rows.map((split) => splitRowTexts(split, speed, textContext));
+        const columnNames = [
+          translate('widgets.laps.lap'),
+          translate('widgets.laps.distance'),
+          translate('widgets.laps.time'),
+          translate(speed === 'speed' ? 'widgets.laps.speed' : 'widgets.laps.pace'),
+        ];
+        if (block.layout === 'board') {
+          const board = LAPS.board;
+          const { colors } = board;
+          // "6:07/km", as AURA writes a pace; a swimmer's pace and a speed with their unit.
+          const imperial = textContext.unit === 'mi';
+          const after =
+            speed === 'pace'
+              ? `/${unit}`
+              : ` ${textContext.unitLabel(speed === 'speed' ? (imperial ? 'mph' : 'km/h') : imperial ? 'min/100yd' : 'min/100m')}`;
+          const value = (amount: string, unitText: string) =>
+            appText(
+              [
+                { text: amount, size: board.value, bold: false },
+                { text: unitText, size: board.value * board.unit, bold: false },
+              ],
+              colors.ink,
+              { font: 'unbounded' },
+            );
+          const names = columnNames.map((name) =>
+            appText(
+              [{ text: name.toLocaleUpperCase(), size: board.header, bold: true }],
+              colors.ink,
+              {
+                shadow: true,
+              },
+            ),
+          );
+          const cells = texts.map((written) => [
+            appText(
+              [{ text: written.number.padStart(2, '0'), size: board.number, bold: false }],
+              colors.faded,
+              { font: 'unbounded' },
+            ),
+            value(written.distance, unit),
+            value(written.time, ''),
+            value(written.value, after),
+          ]);
+          const widths = columnWidths([names, ...cells]);
+          const width = tableWidth(widths, board.gap, board.padX);
+          const body = placed(
+            width,
+            board.rowHeight * rows.length,
+            cells.flatMap((boxes, i) => [
+              ...(i === fastest || i % 2 === 1
+                ? [
+                    {
+                      box: fillBox(
+                        width,
+                        board.rowHeight,
+                        0,
+                        i === fastest ? cover : colors.stripe,
+                        {},
+                      ),
+                      x: 0,
+                      y: board.rowHeight * i,
+                    },
+                  ]
+                : []),
+              {
+                box: tableRow(boxes, widths, board.gap, board.padX, board.rowHeight),
+                x: 0,
+                y: board.rowHeight * i,
+              },
+            ]),
+          );
+          return column(
+            [
+              tableRow(names, widths, board.gap, board.padX, board.header * 1.4),
+              overlay(fillBox(width, body.height, 0, colors.panel, {}), body),
+            ],
+            board.headerGap,
+            'start',
+          );
+        }
+        const sheet = LAPS.sheet;
+        const { colors } = sheet;
+        const cells = texts.map((written, i) => {
+          const ink = i === fastest ? colors.chosen : colors.ink;
+          const mono = (text: string) =>
+            appText([{ text, size: sheet.text, bold: false }], ink, { font: 'spaceMono' });
+          return [
+            mono(written.number),
+            mono(`${written.distance}${unit}`),
+            mono(written.time),
+            // A pace as a timing sheet writes it: 5'42".
+            mono(speed === 'speed' ? written.value : `${written.value.replace(':', "'")}"`),
+          ];
+        });
+        const widths = columnWidths(cells);
+        const width = tableWidth(widths, sheet.gap, sheet.padX);
+        const paper = placed(
+          width,
+          sheet.rowHeight * rows.length,
+          cells.flatMap((boxes, i) => [
+            ...(i === fastest
+              ? [
+                  {
+                    box: fillBox(width, sheet.rowHeight, 0, cover, {}),
+                    x: 0,
+                    y: sheet.rowHeight * i,
+                  },
+                ]
+              : []),
+            ...(i === 0
+              ? []
+              : [
+                  {
+                    box: hairlineBox(width, 0, sheet.rule, colors.rule),
+                    x: 0,
+                    y: sheet.rowHeight * i,
+                  },
+                ]),
+            {
+              box: tableRow(boxes, widths, sheet.gap, sheet.padX, sheet.rowHeight),
+              x: 0,
+              y: sheet.rowHeight * i,
+            },
+          ]),
+        );
+        const title = appText(
+          [{ text: translate('widgets.laps.title'), size: sheet.title, bold: false }],
+          colors.title,
+          { shadow: true },
+        );
+        return column(
+          [title, overlay(fillBox(width, paper.height, 0, colors.paper), paper)],
+          sheet.titleGap,
+          'start',
+        );
+      }
+      case 'grandPrix': {
+        // The splits as a race's timing tower, in lap order: each with its pace and its gap to
+        // the fastest, which carries the fastest lap's purple stopwatch instead of a tyre.
+        const rows = splitRows(splits, GRAND_PRIX_ROWS);
+        if (rows.length === 0) {
+          return null;
+        }
+        const sizes = GRAND_PRIX;
+        const { colors } = sizes;
+        const speed = speedMeasure(activity.sportFamily);
+        const speeds = rows.map((split) => split.speed);
+        const fastest = fastestIndex(speeds);
+        const tyres = tyreCompounds(speeds);
+        const race = (content: string, size: number, color: string, bold = true) =>
+          appText([{ text: content, size, bold }], color, {
+            font: 'barlowCondensed',
+            italic: true,
+          });
+        const cells = rows.map((split, i) => {
+          const written = splitRowTexts(split, speed, textContext);
+          return [
+            race(written.number, sizes.row, colors.ink, false),
+            race(written.value, sizes.row, colors.ink),
+            race(
+              i === fastest
+                ? translate('widgets.grandPrix.leader')
+                : splitGapText(split, rows[fastest], speed, textContext),
+              sizes.row,
+              colors.faded,
+              false,
+            ),
+            i === fastest
+              ? overlay(
+                  discBox(sizes.row * 0.5, colors.fastest),
+                  symbolBox('stopwatch', sizes.row * 0.82, colors.ink),
+                )
+              : race(TYRE_LETTERS[tyres[i]], sizes.row, sizes.tyres[tyres[i]]),
+          ];
+        });
+        const header = column(
+          [
+            row(
+              [
+                iconBox(sportIcon(activity), sizes.icon, colors.ink),
+                race(
+                  translate(`modalities.${activity.sportModality}`).toLocaleUpperCase(),
+                  sizes.title,
+                  colors.ink,
+                ),
+              ],
+              sizes.gap * 0.5,
+              'center',
+            ),
+            // How far the race went, exactly, where TV writes the lap.
+            race(written('distance').toLocaleUpperCase(), sizes.lap, colors.faded, false),
+          ],
+          0,
+          'center',
+        );
+        const widths = columnWidths(cells);
+        const inner = Math.max(header.width, tableWidth(widths, sizes.gap, 0));
+        // The number and the pace at the left, the gap and the tyre at the right end, as on TV.
+        const lines = cells.map((boxes) =>
+          placed(inner, sizes.rowHeight, [
+            { box: boxes[0], x: 0, y: (sizes.rowHeight - boxes[0].height) / 2 },
+            {
+              box: boxes[1],
+              x: widths[0] + sizes.gap,
+              y: (sizes.rowHeight - boxes[1].height) / 2,
+            },
+            {
+              box: boxes[2],
+              x: inner - widths[3] - sizes.gap - boxes[2].width,
+              y: (sizes.rowHeight - boxes[2].height) / 2,
+            },
+            centeredAt(boxes[3], inner - widths[3] / 2, sizes.rowHeight / 2),
+          ]),
+        );
+        const tower = placed(
+          inner,
+          sizes.rowHeight * lines.length,
+          lines.flatMap((line, i) => [
+            ...(i === 0
+              ? []
+              : [
+                  {
+                    box: hairlineBox(inner, 0, sizes.rule, colors.rule),
+                    x: 0,
+                    y: sizes.rowHeight * i,
+                  },
+                ]),
+            { box: line, x: 0, y: sizes.rowHeight * i },
+          ]),
+        );
+        // The header lit from above, apart from the rows by the shadow it casts on them.
+        const width = inner + 2 * sizes.padX;
+        const headerHeight = sizes.padY + header.height + sizes.padY * 0.6;
+        const height = headerHeight + tower.height + sizes.padY;
+        // `y` down the card: the card's top is that far above where the shade is placed.
+        const shade = (y: number, tall: number, shades: readonly [string, string]): Box => ({
+          width,
+          height: tall,
+          place: (x, top) => [
+            {
+              kind: 'shade',
+              x,
+              y: top,
+              width,
+              height: tall,
+              colors: shades,
+              card: { x, y: top - y, width, height, radius: sizes.radius },
+            },
+          ],
+        });
+        return placed(width, height, [
+          { box: fillBox(width, height, sizes.radius, colors.panel), x: 0, y: 0 },
+          { box: shade(0, headerHeight, colors.header), x: 0, y: 0 },
+          { box: shade(headerHeight, sizes.shadow, colors.shadow), x: 0, y: headerHeight },
+          { box: widened(header, inner, 'center'), x: sizes.padX, y: sizes.padY },
+          { box: tower, x: sizes.padX, y: headerHeight },
+        ]);
+      }
+      case 'alarm': {
+        // The start time as an alarm, on: the sport and the main datum as its label.
+        const colors = ALARM_COLORS[block.layout];
+        const clock = formatActivityDate(activity.startLocal, textContext.locale, 'time');
+        // "9:31 AM": the AM or PM smaller after the time, as the Clock writes it.
+        const [, time = clock, meridiem] = /^(.*?)\s*([AaPp]\.?\s?[Mm]\.?)?$/u.exec(clock) ?? [];
+        const timeText = appText(
+          [
+            { text: time, size: ALARM.time, bold: false, light: true },
+            ...(meridiem === undefined
+              ? []
+              : [
+                  {
+                    text: meridiem.replace(/[\s.]/gu, '').toLocaleUpperCase(),
+                    size: ALARM.meridiem,
+                    bold: false,
+                    light: true,
+                  },
+                ]),
+          ],
+          colors.ink,
+        );
+        const label = appText(
+          [
+            {
+              text: translate('widgets.alarmLabel', {
+                sport: translate(`modalities.${activity.sportModality}`),
+                datum: written(metrics[0]),
+              }),
+              size: ALARM.label,
+              bold: false,
+            },
+          ],
+          colors.ink,
+        );
+        const toggle = ALARM.toggle;
+        const onSwitch = placed(toggle.width, toggle.height, [
+          {
+            box: fillBox(toggle.width, toggle.height, toggle.height / 2, colors.on, {}),
+            x: 0,
+            y: 0,
+          },
+          centeredAt(
+            discBox(toggle.height / 2 - toggle.inset, colors.knob),
+            toggle.width - toggle.height / 2,
+            toggle.height / 2,
+          ),
+        ]);
+        const texts = column([timeText, label], 0, 'start');
+        const width = Math.max(ALARM.minWidth, texts.width + ALARM.gap + toggle.width);
+        return panel(
+          placed(width, texts.height, [
+            { box: texts, x: 0, y: 0 },
+            centeredAt(onSwitch, width - toggle.width / 2, texts.height / 2),
+          ]),
+          colors.card,
+          ALARM.padX,
+          ALARM.padY,
+          ALARM.radius,
+        );
+      }
+      case 'location': {
+        // The place where it started and the main datum, as a location sticker.
+        const place = data.place === null ? null : formatPlace(data.place, 'city');
+        if (place === null) {
+          return null;
+        }
+        const colors = LOCATION_COLORS[block.layout];
+        const line = translate('widgets.locationLine', { place, datum: written(metrics[0]) });
+        return panel(
+          row(
+            [
+              symbolBox('pin', LOCATION.text * LOCATION.pin, colors.ink),
+              appText([{ text: line, size: LOCATION.text, bold: false }], colors.ink, {
+                font: 'spaceMono',
+              }),
+            ],
+            LOCATION.gap,
+            'center',
+          ),
+          colors.card,
+          LOCATION.padX,
+          LOCATION.padY,
+          LOCATION.radius,
+        );
+      }
+      case 'verse':
+        return quotation(
+          translate(`widgets.verses.${block.verse}.text`),
+          translate(`widgets.verses.${block.verse}.source`),
+        );
+      case 'quote':
+        return quotation(
+          translate(`widgets.quotes.${block.quote}.text`),
+          translate(`widgets.quotes.${block.quote}.author`),
+        );
       case 'message': {
         // The data as a sent chat message, but the time: the sport and the activity's time go
         // where the message's time goes. Without other data, the time is the message and the
@@ -1512,8 +2133,7 @@ export function prepareActivityBlock(
             [{ text: name === '' ? day : `${name} · ${day}`, size: sizes.title, bold: false }],
             fonts,
             style,
-            true,
-            data.width,
+            { maxWidth: data.width },
           ),
         );
         return column([title, data], sizes.title * 0.5, 'start');
@@ -1747,6 +2367,43 @@ function symbolPaths(piece: Extract<Piece, { kind: 'symbol' }>): {
       }
       break;
     }
+    case 'pin': {
+      // A map pin's outline: a circle drawn down to a tip, the lines from the tip touching it,
+      // with a round hole.
+      const r = 0.3 * size;
+      const cx = x + 0.5 * size;
+      const cy = y + 0.38 * size;
+      const tipY = y + 0.95 * size;
+      // The lines from the tip touch the circle this far round from straight down.
+      const turn = (Math.acos(r / (tipY - cy)) * 180) / Math.PI;
+      line.moveTo(cx, tipY);
+      line.arcToOval(
+        { x: cx - r, y: cy - r, width: 2 * r, height: 2 * r },
+        90 + turn,
+        360 - 2 * turn,
+        false,
+      );
+      line.close();
+      line.addCircle(cx, cy, 0.12 * size);
+      break;
+    }
+    case 'stopwatch': {
+      // The fastest lap's stopwatch: a dial with its hand, and the crown on top.
+      const r = 0.3 * size;
+      const cx = x + 0.5 * size;
+      const cy = y + 0.56 * size;
+      line.addCircle(cx, cy, r);
+      line.moveTo(cx, cy);
+      line.lineTo(cx + 0.12 * size, cy - 0.12 * size);
+      line.moveTo(cx, cy - r);
+      line.lineTo(cx, y + 0.17 * size);
+      fill.addRRect({
+        rect: { x: cx - 0.1 * size, y: y + 0.08 * size, width: 0.2 * size, height: 0.09 * size },
+        rx: 0.03 * size,
+        ry: 0.03 * size,
+      });
+      break;
+    }
   }
   return {
     fill: fill.isEmpty() ? null : fill.detach(),
@@ -1854,6 +2511,25 @@ function appMark(piece: Piece, i: number): ReactElement | null {
           )}
         </Group>
       ) : null;
+    case 'shade':
+      return (
+        <Group
+          key={i}
+          clip={Skia.RRectXY(
+            Skia.XYWHRect(piece.card.x, piece.card.y, piece.card.width, piece.card.height),
+            piece.card.radius,
+            piece.card.radius,
+          )}
+        >
+          <Rect x={piece.x} y={piece.y} width={piece.width} height={piece.height}>
+            <LinearGradient
+              start={{ x: piece.x, y: piece.y }}
+              end={{ x: piece.x, y: piece.y + piece.height }}
+              colors={[...piece.colors]}
+            />
+          </Rect>
+        </Group>
+      );
     case 'hairline':
       return (
         <Line
@@ -1892,6 +2568,7 @@ function BlockArt({
     switch (piece.kind) {
       case 'text':
       case 'panel':
+      case 'shade':
       case 'hairline':
       case 'messageTail':
       case 'chevron':

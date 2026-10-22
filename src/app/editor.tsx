@@ -302,6 +302,7 @@ function EditorWorkspace({
           data.detail === null ? [] : availableActivityCharts(data.detail, unit),
           placeLookup.status !== 'unknown',
           data.zones !== null,
+          data.detail !== null && data.detail.laps.length > 1,
         )
       : summaryCatalog(data.summary, data.bucketSize);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
@@ -393,8 +394,8 @@ function EditorWorkspace({
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     // The place needs the permission first (Android): asked now, the widget is added once named.
     if (
-      item.kind === 'info' &&
-      item.field === 'activityPlace' &&
+      ((item.kind === 'info' && item.field === 'activityPlace') ||
+        (item.kind === 'activityBlock' && item.block.design === 'location')) &&
       placeLookup.status === 'needsPermission' &&
       data.mode === 'activity'
     ) {

@@ -10,10 +10,13 @@ import {
   type FontId,
   HEADLINE_LAYOUTS,
   BRAND_COVERS,
+  LAPS_LAYOUTS,
+  QUOTES,
   ROUTE_LAYOUTS,
   SPORT_LAYOUTS,
   TALL_LAYOUTS,
   WEEKDAY_LAYOUTS,
+  VERSES,
   WIDE_LAYOUTS,
 } from './template';
 
@@ -66,6 +69,10 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'music':
       return 2;
     case 'notes':
+    case 'laps':
+    case 'grandPrix':
+    case 'alarm':
+    case 'location':
       return 1;
     case 'headline':
     case 'day':
@@ -75,6 +82,9 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'message':
     case 'camera':
       return 3;
+    case 'verse':
+    case 'quote':
+      return 0;
   }
 }
 
@@ -82,9 +92,17 @@ export function blockDataCount(block: ActivityBlock): number {
  * Every version of the mixed widgets that `activity` can fill, design by design, in the order of
  * the gallery. Columns are only offered up to the number of data it has (a gym session has fewer
  * than six), the route's only when it has one, the splits only `withSplits` (when its detail has
- * them), and nothing for an activity without data. Time O(m) for the m metrics of its sport.
+ * them), the laps only `withLaps` (when it has more than one), the location only `withPlace` (when
+ * its place can be named), and nothing for an activity without data. The verse and the quote come
+ * with their first phrase: the gallery lists the others to choose from. Time O(m) for the m
+ * metrics of its sport.
  */
-export function activityBlocks(activity: Activity, withSplits = false): ActivityBlock[] {
+export function activityBlocks(
+  activity: Activity,
+  withSplits = false,
+  withPlace = false,
+  withLaps = false,
+): ActivityBlock[] {
   const available = blockMetrics(activity, Math.max(...BLOCK_COLUMN_COUNTS)).length;
   if (available === 0) {
     return [];
@@ -104,7 +122,15 @@ export function activityBlocks(activity: Activity, withSplits = false): Activity
     ...SPORT_LAYOUTS.map((layout) => ({ design: 'sport', layout }) as const),
     { design: 'poster' } as const,
     { design: 'serif' } as const,
+    { design: 'verse', verse: VERSES[0] } as const,
+    { design: 'quote', quote: QUOTES[0] } as const,
     ...(withSplits ? APP_MODES.map((layout) => ({ design: 'notes', layout }) as const) : []),
+    ...(withLaps
+      ? LAPS_LAYOUTS.flatMap((layout) =>
+          BRAND_COVERS.map((cover) => ({ design: 'laps', layout, cover }) as const),
+        )
+      : []),
+    ...(withSplits ? [{ design: 'grandPrix' } as const] : []),
     ...APP_MODES.map((layout) => ({ design: 'message', layout }) as const),
     ...APP_MODES.flatMap((layout) =>
       BRAND_COVERS.map((cover) => ({ design: 'music', layout, cover }) as const),
@@ -113,7 +139,34 @@ export function activityBlocks(activity: Activity, withSplits = false): Activity
     ...(activity.routePolyline === null
       ? [{ design: 'camera', cover: BRAND_COVERS[0] } as const]
       : BRAND_COVERS.map((cover) => ({ design: 'camera', cover }) as const)),
+    ...APP_MODES.map((layout) => ({ design: 'alarm', layout }) as const),
+    ...(withPlace ? APP_MODES.map((layout) => ({ design: 'location', layout }) as const) : []),
   ];
+}
+
+/** How a split compares with the others in a race's timing tower, as a tyre compound. */
+export type TyreCompound = 'soft' | 'medium' | 'hard';
+
+/**
+ * The compound each of `speeds` gets in a timing tower: the fastest third soft, the middle third
+ * medium and the slowest third hard, by rank (ties keep their order). Time O(n log n), space O(n).
+ */
+export function tyreCompounds(speeds: readonly number[]): TyreCompound[] {
+  const ranks = new Array<number>(speeds.length);
+  speeds
+    .map((speed, i) => ({ speed, i }))
+    .sort((a, b) => b.speed - a.speed)
+    .forEach(({ i }, rank) => {
+      ranks[i] = rank;
+    });
+  return ranks.map((rank) =>
+    rank < speeds.length / 3 ? 'soft' : rank < (2 * speeds.length) / 3 ? 'medium' : 'hard',
+  );
+}
+
+/** Index of the fastest of `speeds` (the first of equals), or -1 for none. Time O(n). */
+export function fastestIndex(speeds: readonly number[]): number {
+  return speeds.reduce((best, speed, i) => (best === -1 || speed > speeds[best] ? i : best), -1);
 }
 
 /** The icons a mixed widget can draw: one per sport family, and hiking's own. */
@@ -130,6 +183,10 @@ const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set([
   'message',
   'music',
   'camera',
+  'laps',
+  'grandPrix',
+  'alarm',
+  'location',
 ]);
 
 /**
@@ -189,10 +246,18 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
       return lettering('anton', false);
     case 'serif':
       return { font: 'playfairDisplay', bold: false, italic: true, uppercase: false };
+    case 'verse':
+    case 'quote':
+      // A quotation, in a serif italic.
+      return { font: 'playfairDisplay', bold: false, italic: true, uppercase: false };
     case 'notes':
     case 'message':
     case 'music':
     case 'camera':
+    case 'laps':
+    case 'grandPrix':
+    case 'alarm':
+    case 'location':
       return lettering('inter', false);
     case 'columns':
     case 'route':

@@ -16,8 +16,8 @@ import { formatPlace, type Place } from '@/core/place';
 import type { SportFamily, SportModality } from '@/core/sports';
 import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
-import type { ActivityChartSeries, Layer, SummaryMetricId } from '@/core/template';
-import { type DistanceUnit, durationParts, type DurationUnit } from '@/core/units';
+import type { ActivityChartSeries, Layer, Quote, SummaryMetricId, Verse } from '@/core/template';
+import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
 import {
   formatActivityDate,
   type FormattedMetric,
@@ -86,6 +86,13 @@ export type LabelKey =
   | `chartHeaders.${ChartHeaderName}`
   | `chartCaptions.activity.${ActivityChartSeries}`
   | 'widgets.chatLine'
+  | 'widgets.alarmLabel'
+  | 'widgets.locationLine'
+  | 'widgets.quoted'
+  | `widgets.verses.${Verse}.${'text' | 'source'}`
+  | `widgets.quotes.${Quote}.${'text' | 'author'}`
+  | `widgets.laps.${'title' | 'lap' | 'distance' | 'time' | 'pace' | 'speed'}`
+  | 'widgets.grandPrix.leader'
   | `widgets.cameraModes.${'video' | 'photo'}`
   | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`
   | `chartCaptions.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
@@ -384,12 +391,17 @@ const CHART_METRICS = {
 } as const satisfies Record<Exclude<ChartMeasure, 'periodDistance' | 'periodTime'>, MetricId>;
 
 /**
- * The texts of a row of splits: its number, how fast it went, its change in altitude and its
- * heart rate. Like Strava's table, they go without units: the names of the columns say them.
+ * The texts of a row of splits: its number, distance and time, how fast it went, its change in
+ * altitude and its heart rate. Like Strava's table, they go without units: the names of the
+ * columns say them.
  */
 export interface SplitRowTexts {
   /** "3", or "1–3" for a row of several splits. */
   readonly number: string;
+  /** In kilometers or miles: "1,00", "0,34". */
+  readonly distance: string;
+  /** Moving time: "5:42". */
+  readonly time: string;
   /** The pace or speed alone: "5:12", "34,2". */
   readonly value: string;
   /** In meters or feet, a descent with a minus: "12", "−3". */
@@ -418,6 +430,11 @@ export function splitRowTexts(
   const sign = climb.value !== '0' && row.elevationDifference < 0 ? '−' : '';
   return {
     number: row.first === row.last ? String(row.first) : `${row.first}–${row.last}`,
+    distance: formatMetric(
+      toDisplayMetric('distance', row.distanceMeters, { unit: context.unit, sportFamily: 'run' }),
+      context.locale,
+    ).value,
+    time: formatDuration(row.movingTimeSeconds),
     value: speed.value,
     elevation: `${sign}${climb.value}`,
     heartRate:
@@ -431,6 +448,48 @@ export function splitRowTexts(
             context.locale,
           ).value,
   };
+}
+
+/** Meters a pace is over: a kilometer or a mile; for swimmers, 100 meters or 100 yards. */
+const PACE_METERS: Readonly<Record<'pace' | 'swimPace', Readonly<Record<DistanceUnit, number>>>> = {
+  pace: { km: 1000, mi: 1609.344 },
+  swimPace: { km: 100, mi: 91.44 },
+};
+
+/**
+ * How far behind `fastest` a row of splits went, as a timing tower writes a gap: seconds more per
+ * kilometer, "+0:21", or less speed, "−1,8". Computed from the values as written, so it is exactly
+ * the difference the eye reads between two rows; a dash for a row that didn't move.
+ */
+export function splitGapText(
+  row: SplitRow,
+  fastest: SplitRow,
+  measure: SpeedMeasure,
+  context: TextContext,
+): string {
+  if (row.speed <= 0 || fastest.speed <= 0) {
+    return MISSING_VALUE;
+  }
+  if (measure !== 'speed') {
+    const meters = PACE_METERS[measure][context.unit];
+    const seconds = Math.round(meters / row.speed) - Math.round(meters / fastest.speed);
+    return `+${formatDuration(seconds)}`;
+  }
+  const written = (speed: number) => {
+    const metric = toDisplayMetric('speed', speed, { unit: context.unit, sportFamily: 'ride' });
+    if (metric.kind !== 'number') {
+      throw new Error('A speed is written as a number');
+    }
+    const factor = 10 ** metric.fractionDigits;
+    return { amount: Math.round(metric.amount * factor) / factor, digits: metric.fractionDigits };
+  };
+  const mine = written(row.speed);
+  const gap = written(fastest.speed).amount - mine.amount;
+  const text = new Intl.NumberFormat(context.locale, {
+    minimumFractionDigits: mine.digits,
+    maximumFractionDigits: mine.digits,
+  }).format(gap);
+  return gap > 0 ? `−${text}` : text;
 }
 
 /** One of the two data over a chart: its name, and its value with its unit apart. */

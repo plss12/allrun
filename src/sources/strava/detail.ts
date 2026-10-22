@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ActivityDetail, ActivitySplit } from '@/core/activity-detail';
+import type { ActivityDetail, ActivityLap, ActivitySplit } from '@/core/activity-detail';
 
 /**
  * Strava's activity streams (`GET /activities/{id}/streams?keys=…&key_by_type=true`): one series
@@ -35,10 +35,12 @@ export const stravaStreamsSchema = z
 export type StravaStreams = z.infer<typeof stravaStreamsSchema>;
 
 /**
- * The splits of Strava's `DetailedActivity` (`GET /activities/{id}`): by kilometer
- * (`splits_metric`) and by mile (`splits_standard`). Missing for activities without distance.
+ * The splits and laps of Strava's `DetailedActivity` (`GET /activities/{id}`): splits by kilometer
+ * (`splits_metric`) and by mile (`splits_standard`), missing for activities without distance, and
+ * its laps.
  *
- * Reference: https://developers.strava.com/docs/reference/#api-models-Split
+ * Reference: https://developers.strava.com/docs/reference/#api-models-Split and
+ * https://developers.strava.com/docs/reference/#api-models-Lap
  */
 const splitSchema = z.object({
   distance: z.number().nonnegative(),
@@ -48,24 +50,32 @@ const splitSchema = z.object({
   average_heartrate: z.number().positive().nullish(),
 });
 
-export const stravaSplitsSchema = z.object({
-  splits_metric: z.array(splitSchema).nullish(),
-  splits_standard: z.array(splitSchema).nullish(),
+const lapSchema = z.object({
+  distance: z.number().nonnegative(),
+  moving_time: z.number().nonnegative(),
+  average_speed: z.number().nonnegative(),
+  average_heartrate: z.number().positive().nullish(),
 });
 
-export type StravaSplits = z.infer<typeof stravaSplitsSchema>;
+export const stravaDetailedActivitySchema = z.object({
+  splits_metric: z.array(splitSchema).nullish(),
+  splits_standard: z.array(splitSchema).nullish(),
+  laps: z.array(lapSchema).nullish(),
+});
+
+export type StravaDetailedActivity = z.infer<typeof stravaDetailedActivitySchema>;
 
 /**
- * Validates an activity's streams (`null` when it recorded none) and splits, and maps them to
- * the source-independent {@link ActivityDetail}. A sample a sensor missed becomes `NaN`, which
- * the charts skip.
+ * Validates an activity's streams (`null` when it recorded none) and its detail's splits and laps,
+ * and maps them to the source-independent {@link ActivityDetail}. A sample a sensor missed becomes
+ * `NaN`, which the charts skip.
  *
  * @throws Error naming each invalid field when the JSON doesn't match the schemas.
  */
-export function parseStravaDetail(streamsJson: unknown, splitsJson: unknown): ActivityDetail {
+export function parseStravaDetail(streamsJson: unknown, activityJson: unknown): ActivityDetail {
   const streams =
     streamsJson === null ? null : parseOrThrow(stravaStreamsSchema, streamsJson, 'streams');
-  const splits = parseOrThrow(stravaSplitsSchema, splitsJson, 'splits');
+  const splits = parseOrThrow(stravaDetailedActivitySchema, activityJson, 'activity detail');
   const series = (stream: { data: (number | null)[] } | undefined) =>
     stream === undefined ? null : stream.data.map((value) => value ?? Number.NaN);
   return {
@@ -84,6 +94,16 @@ export function parseStravaDetail(streamsJson: unknown, splitsJson: unknown): Ac
       metric: (splits.splits_metric ?? []).map(toSplit),
       imperial: (splits.splits_standard ?? []).map(toSplit),
     },
+    laps: (splits.laps ?? []).map(toLap),
+  };
+}
+
+function toLap(lap: z.infer<typeof lapSchema>): ActivityLap {
+  return {
+    distanceMeters: lap.distance,
+    movingTimeSeconds: lap.moving_time,
+    averageSpeed: lap.average_speed,
+    averageHeartRate: lap.average_heartrate ?? null,
   };
 }
 

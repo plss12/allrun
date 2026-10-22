@@ -39,6 +39,7 @@ const FILES: Partial<Record<FontId, readonly string[]>> = {
     'inter/700Bold/Inter_700Bold.ttf',
     'inter/400Regular_Italic/Inter_400Regular_Italic.ttf',
     'inter/700Bold_Italic/Inter_700Bold_Italic.ttf',
+    'inter/200ExtraLight/Inter_200ExtraLight.ttf',
   ],
   barlowCondensed: [
     'barlow-condensed/400Regular/BarlowCondensed_400Regular.ttf',

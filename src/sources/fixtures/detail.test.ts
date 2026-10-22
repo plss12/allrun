@@ -71,6 +71,30 @@ describe('FixtureActivitySource.getActivityDetail', () => {
     expect(await detailOf(activities[0])).toEqual(await detailOf(activities[0]));
   });
 
+  it('splits every activity into laps that add up to its distance and time', async () => {
+    const activities = await source.listRecent(120);
+    const lapCounts = new Set<number>();
+    let intervals = 0;
+    for (const activity of activities) {
+      const { laps } = await detailOf(activity);
+      expect(laps.length).toBeGreaterThan(0);
+      lapCounts.add(laps.length);
+      const meters = laps.reduce((sum, lap) => sum + lap.distanceMeters, 0);
+      const seconds = laps.reduce((sum, lap) => sum + lap.movingTimeSeconds, 0);
+      expect(meters).toBeCloseTo(activity.distanceMeters, -1);
+      expect(Math.abs(seconds - activity.movingTimeSeconds)).toBeLessThanOrEqual(laps.length);
+      // An interval session: its fastest lap far quicker than its slowest.
+      const speeds = laps.map((lap) => lap.averageSpeed).filter((speed) => speed > 0);
+      if (activity.sportFamily === 'run' && Math.max(...speeds) > 1.5 * Math.min(...speeds)) {
+        intervals += 1;
+      }
+    }
+    // Single laps, auto laps and interval sessions all show up.
+    expect(lapCounts.has(1)).toBe(true);
+    expect([...lapCounts].some((count) => count > 1)).toBe(true);
+    expect(intervals).toBeGreaterThan(0);
+  });
+
   it('has no detail for an unknown activity', async () => {
     expect(await source.getActivityDetail('strava:0')).toBeNull();
   });

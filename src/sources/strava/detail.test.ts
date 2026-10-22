@@ -17,10 +17,14 @@ const splits = {
     { distance: 1000, moving_time: 310, elevation_difference: null, average_speed: 3.22 },
   ],
   splits_standard: null,
+  laps: [
+    { distance: 2000, moving_time: 610, average_speed: 3.28, average_heartrate: 160.2 },
+    { distance: 400.5, moving_time: 180, average_speed: 2.225 },
+  ],
 };
 
 describe('parseStravaDetail', () => {
-  it('maps streams and splits, a missed sample or heart rate becoming NaN or null', () => {
+  it('maps streams, splits and laps, a missed sample or heart rate becoming NaN or null', () => {
     const detail = parseStravaDetail(streams, splits);
     expect(detail.streams).toEqual({
       time: [0, 1, 2],
@@ -49,10 +53,21 @@ describe('parseStravaDetail', () => {
       ],
       imperial: [],
     });
+    expect(detail.laps).toEqual([
+      { distanceMeters: 2000, movingTimeSeconds: 610, averageSpeed: 3.28, averageHeartRate: 160.2 },
+      {
+        distanceMeters: 400.5,
+        movingTimeSeconds: 180,
+        averageSpeed: 2.225,
+        averageHeartRate: null,
+      },
+    ]);
   });
 
-  it('takes an activity without streams', () => {
-    expect(parseStravaDetail(null, {}).streams).toBeNull();
+  it('takes an activity without streams, splits or laps', () => {
+    const bare = parseStravaDetail(null, {});
+    expect(bare.streams).toBeNull();
+    expect(bare.laps).toEqual([]);
   });
 
   it('rejects streams of different lengths, naming the stream', () => {

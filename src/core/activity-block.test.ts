@@ -5,9 +5,11 @@ import {
   blockDataCount,
   blockLettering,
   blockMetrics,
+  fastestIndex,
   framesCanvas,
   isAppReplica,
   sportIcon,
+  tyreCompounds,
 } from './activity-block';
 
 describe('blockMetrics', () => {
@@ -95,6 +97,9 @@ describe('activityBlocks', () => {
       { design: 'sport', layout: 'list' },
       { design: 'poster' },
       { design: 'serif' },
+      // The verse and the quote with their first phrase: the others are chosen from a list.
+      { design: 'verse', verse: 'philippians4v13' },
+      { design: 'quote', quote: 'kipchoge' },
       { design: 'message', layout: 'dark' },
       { design: 'message', layout: 'light' },
       { design: 'music', layout: 'dark', cover: 'red' },
@@ -103,15 +108,21 @@ describe('activityBlocks', () => {
       { design: 'music', layout: 'light', cover: 'ink' },
       { design: 'camera', cover: 'red' },
       { design: 'camera', cover: 'ink' },
+      { design: 'alarm', layout: 'dark' },
+      { design: 'alarm', layout: 'light' },
     ]);
   });
 
-  it('offers the note of splits only for an activity with them, first of the replicas', () => {
-    const designs = activityBlocks(makeActivity(), true).map((block) => block.design);
-    expect(designs.slice(designs.indexOf('serif'))).toEqual([
-      'serif',
+  it('offers the splits and the laps only for an activity with them, first of the replicas', () => {
+    const designs = activityBlocks(makeActivity(), true, false, true).map((block) => block.design);
+    expect(designs.slice(designs.indexOf('quote') + 1)).toEqual([
       'notes',
       'notes',
+      'laps',
+      'laps',
+      'laps',
+      'laps',
+      'grandPrix',
       'message',
       'message',
       'music',
@@ -120,8 +131,31 @@ describe('activityBlocks', () => {
       'music',
       'camera',
       'camera',
+      'alarm',
+      'alarm',
     ]);
     expect(activityBlocks(makeActivity()).map((block) => block.design)).not.toContain('notes');
+    // The laps need laps, not splits.
+    const splitsOnly = activityBlocks(makeActivity(), true).map((block) => block.design);
+    expect(splitsOnly).toContain('grandPrix');
+    expect(splitsOnly).not.toContain('laps');
+    // A board and a timing sheet, each with the fastest lap in either brand color.
+    expect(
+      activityBlocks(makeActivity(), false, false, true).filter((block) => block.design === 'laps'),
+    ).toEqual([
+      { design: 'laps', layout: 'board', cover: 'red' },
+      { design: 'laps', layout: 'board', cover: 'ink' },
+      { design: 'laps', layout: 'sheet', cover: 'red' },
+      { design: 'laps', layout: 'sheet', cover: 'ink' },
+    ]);
+  });
+
+  it('offers the location sticker last, dark and light, only when the place can be named', () => {
+    expect(activityBlocks(makeActivity(), false, true).slice(-2)).toEqual([
+      { design: 'location', layout: 'dark' },
+      { design: 'location', layout: 'light' },
+    ]);
+    expect(activityBlocks(makeActivity()).map((block) => block.design)).not.toContain('location');
   });
 
   it('offers columns only up to the data the activity has', () => {
@@ -187,6 +221,13 @@ describe('blockDataCount', () => {
     expect(blockDataCount({ design: 'music', layout: 'dark', cover: 'red' })).toBe(2);
     expect(blockDataCount({ design: 'message', layout: 'dark' })).toBe(3);
     expect(blockDataCount({ design: 'camera', cover: 'ink' })).toBe(3);
+    // The tables list splits; the alarm's label and the sticker carry the main datum.
+    expect(blockDataCount({ design: 'grandPrix' })).toBe(1);
+    expect(blockDataCount({ design: 'alarm', layout: 'light' })).toBe(1);
+    expect(blockDataCount({ design: 'location', layout: 'dark' })).toBe(1);
+    // A verse or a quote shows none.
+    expect(blockDataCount({ design: 'verse', verse: 'romans8v18' })).toBe(0);
+    expect(blockDataCount({ design: 'quote', quote: 'kipchoge' })).toBe(0);
   });
 });
 
@@ -213,6 +254,12 @@ describe('isAppReplica and blockLettering', () => {
     expect(isAppReplica('message')).toBe(true);
     expect(isAppReplica('music')).toBe(true);
     expect(isAppReplica('camera')).toBe(true);
+    expect(isAppReplica('laps')).toBe(true);
+    expect(isAppReplica('grandPrix')).toBe(true);
+    expect(isAppReplica('alarm')).toBe(true);
+    expect(isAppReplica('location')).toBe(true);
+    expect(isAppReplica('verse')).toBe(false);
+    expect(isAppReplica('quote')).toBe(false);
     expect(isAppReplica('poster')).toBe(false);
     expect(isAppReplica('serif')).toBe(false);
     expect(isAppReplica('headline')).toBe(false);
@@ -249,10 +296,46 @@ describe('isAppReplica and blockLettering', () => {
     expect(blockLettering({ design: 'headline', layout: 'condensed' }).font).toBe('anton');
     expect(blockLettering({ design: 'notes', layout: 'dark' }).font).toBe('inter');
     expect(blockLettering({ design: 'music', layout: 'light', cover: 'red' }).font).toBe('inter');
+    // A verse and a quote are quotations in a serif italic.
+    expect(blockLettering({ design: 'verse', verse: 'timothy4v7' })).toEqual({
+      font: 'playfairDisplay',
+      bold: false,
+      italic: true,
+      uppercase: false,
+    });
+    expect(blockLettering({ design: 'quote', quote: 'ali' })).toEqual(
+      blockLettering({ design: 'verse', verse: 'romans8v18' }),
+    );
     expect(blockLettering({ design: 'columns', count: 3 })).toEqual({
       font: 'barlowCondensed',
       bold: true,
       ...capitals,
     });
+  });
+});
+
+describe('fastestIndex', () => {
+  it('is the fastest, the first of equals, or none', () => {
+    expect(fastestIndex([3, 4.2, 3.9, 4.2])).toBe(1);
+    expect(fastestIndex([])).toBe(-1);
+  });
+});
+
+describe('tyreCompounds', () => {
+  it('gives the fastest third soft, the middle medium and the slowest hard', () => {
+    expect(tyreCompounds([3.1, 3.6, 2.9, 3.4, 3.3, 3.0])).toEqual([
+      'medium',
+      'soft',
+      'hard',
+      'soft',
+      'medium',
+      'hard',
+    ]);
+  });
+
+  it('keeps the order of equal speeds, and copes with one split or none', () => {
+    expect(tyreCompounds([3, 3, 3])).toEqual(['soft', 'medium', 'hard']);
+    expect(tyreCompounds([3])).toEqual(['soft']);
+    expect(tyreCompounds([])).toEqual([]);
   });
 });

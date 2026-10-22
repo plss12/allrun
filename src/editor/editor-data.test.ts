@@ -20,6 +20,7 @@ import {
   periodChartHeader,
   MISSING_VALUE,
   speedMeasure,
+  splitGapText,
   splitRowTexts,
   type SummaryData,
   textRuns,
@@ -360,12 +361,16 @@ describe('chart texts', () => {
     const row = {
       first: 1,
       last: 1,
+      distanceMeters: 1000,
+      movingTimeSeconds: 450,
       speed: 1000 / 450,
       elevationDifference: 110.4,
       heartRate: 151.6,
     };
     expect(splitRowTexts(row, 'pace', context)).toEqual({
       number: '1',
+      distance: '1,00',
+      time: '7:30',
       value: '7:30',
       elevation: '110',
       heartRate: '152',
@@ -376,11 +381,32 @@ describe('chart texts', () => {
         'speed',
         context,
       ),
-    ).toEqual({ number: '1–3', value: '8,0', elevation: '−72', heartRate: '—' });
+    ).toMatchObject({ number: '1–3', value: '8,0', elevation: '−72', heartRate: '—' });
     // A descent that rounds to nothing has no minus.
     expect(splitRowTexts({ ...row, elevationDifference: -0.2 }, 'pace', context).elevation).toBe(
       '0',
     );
+  });
+
+  it('write the gap of a row of splits to the fastest as the difference of what they show', () => {
+    const row = {
+      first: 1,
+      last: 1,
+      distanceMeters: 1000,
+      movingTimeSeconds: 342,
+      speed: 1000 / 342.4,
+      elevationDifference: 0,
+      heartRate: null,
+    };
+    const fastest = { ...row, speed: 1000 / 320.6 };
+    // 5:42 against 5:21, as written.
+    expect(splitGapText(row, fastest, 'pace', context)).toBe('+0:21');
+    expect(splitGapText(fastest, fastest, 'pace', context)).toBe('+0:00');
+    // Per 100 m: 34 s against 32 s.
+    expect(splitGapText(row, fastest, 'swimPace', context)).toBe('+0:02');
+    // 10,5 km/h against 11,2 km/h.
+    expect(splitGapText(row, fastest, 'speed', context)).toBe('−0,7');
+    expect(splitGapText({ ...row, speed: 0 }, fastest, 'pace', context)).toBe('—');
   });
 });
 

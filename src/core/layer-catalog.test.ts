@@ -75,14 +75,24 @@ describe('activityCatalog', () => {
       'block-sport',
       'block-poster',
       'block-serif',
+      'block-verse',
+      'block-quote',
       'block-message',
       'block-music',
       'block-camera',
+      'block-alarm',
     ]);
     // A design of a single version is its tile's only page.
     expect(variantKeys(trail, 'block-poster')).toEqual(['block-poster']);
-    // The note of splits comes with the activity's splits.
-    expect(tileKeys(activityCatalog(makeActivity(), ['splits']), 'mixed')).toContain('block-notes');
+    // The verse comes with its first one: the others are chosen from a list.
+    expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
+    // The note and the timing tower come with the activity's splits; the laps, with its laps.
+    const withSplits = tileKeys(activityCatalog(makeActivity(), ['splits']), 'mixed');
+    expect(withSplits).toEqual(expect.arrayContaining(['block-notes', 'block-grandPrix']));
+    expect(withSplits).not.toContain('block-laps');
+    expect(tileKeys(activityCatalog(makeActivity(), [], false, false, true), 'mixed')).toContain(
+      'block-laps',
+    );
     expect(variantKeys(trail, 'block-headline')).toEqual([
       'block-headline-stacked',
       'block-headline-inline',
@@ -212,6 +222,9 @@ describe('activityCatalog', () => {
       'info-activityDate',
       'info-activityPlace',
     ]);
+    // And the location sticker, after the other replicas.
+    expect(tileKeys(named, 'mixed').at(-1)).toBe('block-location');
+    expect(tileKeys(activityCatalog(makeActivity()), 'mixed')).not.toContain('block-location');
     expect(variantKeys(named, 'info-activityPlace')).toEqual([
       'info-activityPlace',
       'info-activityPlace-cityRegion',

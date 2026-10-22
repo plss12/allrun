@@ -14,7 +14,8 @@ activity's detail (`GET /activities/{id}`). Neither comes with the activity list
 
 ## Decision
 
-- **Fetched on demand.** `ActivitySource.getActivityDetail` fetches the streams and splits only
+- **Fetched on demand.** `ActivitySource.getActivityDetail` fetches the streams, splits and laps
+  (these two from the activity's detail; the laps since ADR 009's tables of laps) only
   when an activity opens in the editor, alongside the activity. If it fails, the editor still
   works, without activity charts (the error is logged). The detail is a source-independent
   `ActivityDetail` in SI units, like `Activity`; Strava's JSON is validated with Zod and mapped in

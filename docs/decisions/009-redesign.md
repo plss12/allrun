@@ -60,8 +60,10 @@ comes later.
   weight, slant and case. Replicas of other apps (the iPhone's Notes with the splits, a sent chat
   message with the data, and the sport and the activity's time where its time goes, the lock
   screen's player of iOS 26 copied place by place, with the route as its cover (in AllRun's red
-  or night ink) and the distance and time at the ends of its bar, and the camera, and later a receipt and a
-  boarding pass) keep the app's colors, font and icons, since recognizing the app is the point:
+  or night ink) and the distance and time at the ends of its bar, the camera, the splits as a board
+  of the activity's laps and as a karting's timing sheet, as a race's timing tower on TV, the start time as an
+  iPhone alarm and the place as a location sticker, and later a receipt and a boarding
+  pass) keep the app's colors, font and icons, since recognizing the app is the point:
   only their opacity changes, their dark and light modes are versions in the carousel, and they
   carry no AllRun signature. A version in one brand color (the route's cover, in red or
   night ink) always comes with one in the other. The player's glass is a see-through tint with an edge, not a blur
@@ -109,7 +111,28 @@ comes later.
   like the streams (ADR 008).
 - **The logo:** a watermark centered at the bottom that can be removed, an option inside the
   mixed widgets (as Strava does) and still a widget of its own.
-- **A motivational sticker:** phrases of our own in English and Spanish, and Bible verses from
+- **Laps and splits as races:** the laps' board and timing sheet list the activity's laps (an
+  interval session's reps and recoveries, or the watch's auto laps; Strava gives them with the
+  activity's detail), only when it has more than one: number, distance, time and pace, the fastest
+  on a row in a brand color (both versions, red and night ink). The timing tower lists the splits
+  by kilometer or mile in their order, each with its pace and its gap to the fastest ("+0:21",
+  "Leader" for the fastest, which carries the purple stopwatch of the fastest lap), and a tyre
+  letter by thirds of pace (S, M, H), under the sport and the exact distance ("9,90 KM", not the
+  number of splits), its header lit and casting a shadow on the rows as on TV; no Formula 1 logo,
+  a trademark. More rows than fit are grouped like the note's (24 laps, 20 splits on the tower).
+- **The alarm and the location:** the alarm writes the start time in the Clock's thin letters
+  (Inter's light face, loaded for replicas only) with the sport and distance as its label; the
+  location sticker writes the city and the distance after a pin, in a typewriter's letters, in
+  light or dark mode, and is offered only when the place can be named (it asks for Android's
+  permission as the place widget does). A version in Instagram's colors was left out.
+- **Verses and quotes:** two widgets of words in quotation marks, in a serif italic, without data:
+  a Bible verse with its reference, and a famous athlete's or writer's quote with its author. The
+  gallery shows the first of each with a "Tap to choose" hint; a tap opens the list of all of
+  them, and the one chosen is added. The first of each list is a short one (Philippians 4:13,
+  Kipchoge's "No human is limited"), so the hint covers little of it. Pending: review the
+  current verses and quotes, add a long list of both, and change a verse or quote already on the
+  canvas by tapping it, without removing it and adding another. Phrases of our own over the data were
+  tried and left out. Bible verses come from
   public-domain translations only (World English Bible or King James in English, Reina-Valera 1909
   in Spanish); the NIV or the Reina-Valera 1960 are copyrighted.
 

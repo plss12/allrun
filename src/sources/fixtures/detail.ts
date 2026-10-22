@@ -1,5 +1,5 @@
 import type { Activity } from '@/core/activity';
-import type { StravaSplits, StravaStreams } from '@/sources/strava/detail';
+import type { StravaDetailedActivity, StravaStreams } from '@/sources/strava/detail';
 
 import { mulberry32, type Random } from './random';
 
@@ -7,10 +7,12 @@ import { mulberry32, type Random } from './random';
 const SAMPLE_SECONDS = 5;
 const MAX_SAMPLES = 3000;
 const METERS_PER_MILE = 1609.344;
+/** Mixed into the seed for the laps, so drawing them leaves every other draw as it was. */
+const LAP_SEED = 0x9e3779b9;
 
 /**
- * Synthetic streams and splits for a synthetic activity, in the shape of Strava's API, so the
- * activity charts can be built and tested without real data. They agree with the activity's
+ * Synthetic streams, splits and laps for a synthetic activity, in the shape of Strava's API, so
+ * the activity charts can be built and tested without real data. They agree with the activity's
  * totals: the distance and moving time, the elevation gain (climbs and descents with that much
  * going up), the average heart rate and power. The same activity and seed always give the same
  * result.
@@ -21,14 +23,18 @@ const METERS_PER_MILE = 1609.344;
  * - Heart rate warms up over the first minutes and follows the effort; power wanders around its
  *   average.
  * - Splits are measured on the streams, every kilometer and every mile.
+ * - Laps are an interval session for some runs (a warm-up, four to eight fast reps with slower
+ *   recoveries, and a cool-down, which the speed follows), a lap every kilometer for others (a
+ *   watch's auto lap) or every 5 km for some rides, and a single lap for everything else.
  *
  * Time and space O(n) for n samples.
  */
 export function generateStravaDetail(
   activity: Activity,
   seed: number,
-): { readonly streams: StravaStreams | null; readonly splits: StravaSplits } {
+): { readonly streams: StravaStreams | null; readonly detailed: StravaDetailedActivity } {
   const random = mulberry32(seed);
+  const plan = lapPlan(activity, mulberry32(seed ^ LAP_SEED));
   const count = Math.min(
     MAX_SAMPLES,
     Math.max(50, Math.round(activity.movingTimeSeconds / SAMPLE_SECONDS)),
@@ -48,9 +54,9 @@ export function generateStravaDetail(
   // distance to place the hills: close enough for the speed to follow them.
   const rawSpeed = time.map((_, i) => {
     const along = i / (count - 1);
-    return Math.max(
-      0.3,
-      1 + effort(along) - climbing * hills.slope(along) + 0.03 * (random() - 0.5),
+    return (
+      Math.max(0.3, 1 + effort(along) - climbing * hills.slope(along) + 0.03 * (random() - 0.5)) *
+      lapEffort(plan, along)
     );
   });
   const distance = hasDistance ? cumulative(rawSpeed, time, activity.distanceMeters) : null;
@@ -83,14 +89,145 @@ export function generateStravaDetail(
       heartrate: stream(heartRate),
       watts: stream(power),
     },
-    splits:
+    detailed:
       distance === null
-        ? { splits_metric: null, splits_standard: null }
+        ? {
+            splits_metric: null,
+            splits_standard: null,
+            laps: [lap(0, activity.movingTimeSeconds, heartRate, time, 0)],
+          }
         : {
             splits_metric: splits(distance, time, altitude, heartRate, 1000),
             splits_standard: splits(distance, time, altitude, heartRate, METERS_PER_MILE),
+            laps: laps(plan, distance, time, altitude, heartRate),
           },
   };
+}
+
+/**
+ * How an activity is split into laps: not at all, by the watch every so many meters, or as an
+ * interval session, whose laps end at `ends` (shares of the moving time, the last one 1) and go
+ * `efforts` times as fast as the rest of the activity would.
+ */
+type LapPlan =
+  | { readonly kind: 'single' }
+  | { readonly kind: 'auto'; readonly meters: number }
+  | {
+      readonly kind: 'intervals';
+      readonly ends: readonly number[];
+      readonly efforts: readonly number[];
+    };
+
+/** Some runs are interval sessions, others auto lap every kilometer; some rides every 5 km. */
+function lapPlan(activity: Activity, random: Random): LapPlan {
+  const draw = random();
+  if (activity.distanceMeters <= 0) {
+    return { kind: 'single' };
+  }
+  switch (activity.sportFamily) {
+    case 'run':
+      if (draw < 0.4 && activity.movingTimeSeconds >= 20 * 60) {
+        return intervalPlan(random);
+      }
+      return draw < 0.7 ? { kind: 'auto', meters: 1000 } : { kind: 'single' };
+    case 'ride':
+      return draw < 0.5 ? { kind: 'auto', meters: 5000 } : { kind: 'single' };
+    case 'walk':
+    case 'swim':
+    case 'training':
+    case 'other':
+      return { kind: 'single' };
+  }
+}
+
+/**
+ * A warm-up, four to eight reps each followed by a recovery half as long, and a cool-down: the
+ * reps 20% faster than the rest would go, the recoveries 30% slower.
+ */
+function intervalPlan(random: Random): LapPlan {
+  const WARM_UP = 0.15;
+  const COOL_DOWN = 0.1;
+  const reps = 4 + Math.floor(random() * 5);
+  const block = (1 - WARM_UP - COOL_DOWN) / reps;
+  const ends = [WARM_UP];
+  const efforts = [0.92];
+  for (let i = 0; i < reps; i++) {
+    ends.push(ends[ends.length - 1] + (block * 2) / 3, ends[ends.length - 1] + block);
+    efforts.push(1.2, 0.7);
+  }
+  ends.push(1);
+  efforts.push(0.9);
+  return { kind: 'intervals', ends, efforts };
+}
+
+/** How fast the lap at `along` (0..1 of the moving time) goes, relative to the rest. */
+function lapEffort(plan: LapPlan, along: number): number {
+  if (plan.kind !== 'intervals') {
+    return 1;
+  }
+  const index = plan.ends.findIndex((end) => along <= end);
+  return plan.efforts[index === -1 ? plan.efforts.length - 1 : index];
+}
+
+/** The laps of `plan`, measured on the streams as Strava measures them. */
+function laps(
+  plan: LapPlan,
+  distance: readonly number[],
+  time: readonly number[],
+  altitude: readonly number[] | null,
+  heartRate: readonly number[] | null,
+) {
+  const total = distance[distance.length - 1];
+  const duration = time[time.length - 1];
+  switch (plan.kind) {
+    case 'single':
+      return [lap(total, duration, heartRate, time, 0)];
+    case 'auto':
+      return splits(distance, time, altitude, heartRate, plan.meters).map((split) => ({
+        distance: split.distance,
+        moving_time: split.moving_time,
+        average_speed: split.average_speed,
+        average_heartrate: split.average_heartrate,
+      }));
+    case 'intervals': {
+      let start = 0;
+      return plan.ends.map((end) => {
+        const from = start * duration;
+        const to = end * duration;
+        start = end;
+        const meters = valueAtTime(time, distance, to) - valueAtTime(time, distance, from);
+        return lap(round(meters, 1), to - from, heartRate, time, from);
+      });
+    }
+  }
+}
+
+/** A lap of `meters` covered in `seconds` from `from` seconds on, with its average heart rate. */
+function lap(
+  meters: number,
+  seconds: number,
+  heartRate: readonly number[] | null,
+  time: readonly number[],
+  from: number,
+) {
+  return {
+    distance: meters,
+    moving_time: Math.round(seconds),
+    average_speed: seconds > 0 ? round(meters / seconds, 3) : 0,
+    average_heartrate:
+      heartRate === null ? null : round(meanBetween(time, heartRate, from, from + seconds), 1),
+  };
+}
+
+/** The value of a stream at `seconds`, interpolating between samples. */
+function valueAtTime(time: readonly number[], values: readonly number[], seconds: number): number {
+  const after = time.findIndex((value) => value >= seconds);
+  if (after <= 0) {
+    return values[after === 0 ? 0 : values.length - 1];
+  }
+  const span = time[after] - time[after - 1];
+  const share = span > 0 ? (seconds - time[after - 1]) / span : 0;
+  return values[after - 1] + (values[after] - values[after - 1]) * share;
 }
 
 /** A smooth wander around 0 of about `size`, as a function of the position (0..1). */

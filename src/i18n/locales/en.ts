@@ -52,6 +52,7 @@ export const en = {
     removeLayer: 'Drop here to remove',
     addLayer: 'Add element',
     close: 'Close',
+    back: 'Back',
     cancel: 'Cancel',
     done: 'Done',
     selectedLayer: 'Selected element',
@@ -119,6 +120,12 @@ export const en = {
       message: 'Message',
       music: 'Music',
       camera: 'Camera',
+      verse: 'Verse',
+      quote: 'Quote',
+      laps: 'Laps',
+      grandPrix: 'Grand Prix',
+      alarm: 'Alarm',
+      location: 'Location',
     },
     /** The camera's modes, as the iPhone writes them: photo is the one chosen. */
     cameraModes: { video: 'VIDEO', photo: 'PHOTO' },
@@ -126,6 +133,79 @@ export const en = {
     cameraZoom: { wide: '.5', main: '1×', tele: '2' },
     /** A chat message's line where the time goes: the sport and its start time. */
     chatLine: '{{sport}} {{time}}',
+    /** A quotation, in the language's quotation marks. */
+    quoted: '“{{text}}”',
+    /** Bible verses from the World English Bible (public domain), with their references. */
+    verses: {
+      romans8v18: {
+        text: 'For I consider that the sufferings of this present time are not worthy to be compared with the glory which will be revealed toward us.',
+        source: 'Romans 8:18',
+      },
+      philippians4v13: {
+        text: 'I can do all things through Christ, who strengthens me.',
+        source: 'Philippians 4:13',
+      },
+      isaiah40v31: {
+        text: 'They will run, and not be weary. They will walk, and not faint.',
+        source: 'Isaiah 40:31',
+      },
+      timothy4v7: {
+        text: 'I have fought the good fight. I have finished the course. I have kept the faith.',
+        source: '2 Timothy 4:7',
+      },
+      hebrews12v1: {
+        text: "Let's run with perseverance the race that is set before us.",
+        source: 'Hebrews 12:1',
+      },
+      corinthians9v24: { text: 'Run like that, that you may win.', source: '1 Corinthians 9:24' },
+    },
+    /** Motivating quotes, with their authors. */
+    quotes: {
+      prefontaine: {
+        text: 'To give anything less than your best is to sacrifice the gift.',
+        author: 'Steve Prefontaine',
+      },
+      murakami: { text: 'Pain is inevitable. Suffering is optional.', author: 'Haruki Murakami' },
+      zatopek: {
+        text: 'If you want to run, run a mile. If you want to experience a different life, run a marathon.',
+        author: 'Emil Zátopek',
+      },
+      kipchoge: { text: 'No human is limited.', author: 'Eliud Kipchoge' },
+      karnazes: {
+        text: 'Run when you can, walk if you have to, crawl if you must; just never give up.',
+        author: 'Dean Karnazes',
+      },
+      bingham: {
+        text: "The miracle isn't that I finished. The miracle is that I had the courage to start.",
+        author: 'John Bingham',
+      },
+      jordan: {
+        text: "I've failed over and over and over again in my life. And that is why I succeed.",
+        author: 'Michael Jordan',
+      },
+      notke: {
+        text: "Hard work beats talent when talent doesn't work hard.",
+        author: 'Tim Notke',
+      },
+      billieJeanKing: {
+        text: 'Champions keep playing until they get it right.',
+        author: 'Billie Jean King',
+      },
+      ali: { text: "Don't count the days. Make the days count.", author: 'Muhammad Ali' },
+    },
+    laps: {
+      title: 'Laps',
+      lap: 'Lap',
+      distance: 'Dist',
+      time: 'Time',
+      pace: 'Pace',
+      speed: 'Speed',
+    },
+    /** A race's timing tower: the leader's gap. */
+    grandPrix: { leader: 'Leader' },
+    /** An alarm's label, and a location sticker's line: the sport or place and a datum. */
+    alarmLabel: '{{sport}}, {{datum}}',
+    locationLine: '{{place}}, {{datum}}',
   },
   style: {
     color: 'Color',
@@ -255,7 +335,13 @@ export const en = {
       trio: 'Three data',
       weekday: 'With the day',
       grid: 'Grid',
+      board: 'Board',
+      sheet: 'Timing sheet',
     },
+    /** A widget chosen from a list: the hint on its tile, and the list's titles. */
+    choose: 'Tap to choose',
+    chooseVerse: 'Choose a verse',
+    chooseQuote: 'Choose a quote',
     dataCount: 'Data: {{count}}',
   },
   metrics: {

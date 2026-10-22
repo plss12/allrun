@@ -51,6 +51,7 @@ export const es: Translations = {
     removeLayer: 'Suelta aquí para eliminar',
     addLayer: 'Añadir elemento',
     close: 'Cerrar',
+    back: 'Atrás',
     cancel: 'Cancelar',
     done: 'Listo',
     selectedLayer: 'Elemento seleccionado',
@@ -118,10 +119,91 @@ export const es: Translations = {
       message: 'Mensaje',
       music: 'Música',
       camera: 'Cámara',
+      verse: 'Versículo',
+      quote: 'Cita',
+      laps: 'Vueltas',
+      grandPrix: 'Gran Premio',
+      alarm: 'Alarma',
+      location: 'Ubicación',
     },
     cameraModes: { video: 'VÍDEO', photo: 'FOTO' },
     cameraZoom: { wide: '0,5', main: 'x1', tele: '2' },
     chatLine: '{{sport}} {{time}}',
+    quoted: '«{{text}}»',
+    /** Versículos de la Reina-Valera 1909 (dominio público). */
+    verses: {
+      romans8v18: {
+        text: 'Porque tengo por cierto que lo que en este tiempo se padece, no es de comparar con la gloria venidera que en nosotros ha de ser manifestada.',
+        source: 'Romanos 8:18',
+      },
+      philippians4v13: {
+        text: 'Todo lo puedo en Cristo que me fortalece.',
+        source: 'Filipenses 4:13',
+      },
+      isaiah40v31: {
+        text: 'Correrán, y no se cansarán; caminarán, y no se fatigarán.',
+        source: 'Isaías 40:31',
+      },
+      timothy4v7: {
+        text: 'He peleado la buena batalla, he acabado la carrera, he guardado la fe.',
+        source: '2 Timoteo 4:7',
+      },
+      hebrews12v1: {
+        text: 'Corramos con paciencia la carrera que nos es propuesta.',
+        source: 'Hebreos 12:1',
+      },
+      corinthians9v24: {
+        text: 'Corred de tal manera que lo obtengáis.',
+        source: '1 Corintios 9:24',
+      },
+    },
+    quotes: {
+      prefontaine: {
+        text: 'Dar menos de lo mejor de ti es desperdiciar el don.',
+        author: 'Steve Prefontaine',
+      },
+      murakami: {
+        text: 'El dolor es inevitable. El sufrimiento es opcional.',
+        author: 'Haruki Murakami',
+      },
+      zatopek: {
+        text: 'Si quieres correr, corre una milla. Si quieres vivir otra vida, corre una maratón.',
+        author: 'Emil Zátopek',
+      },
+      kipchoge: { text: 'Ningún ser humano tiene límites.', author: 'Eliud Kipchoge' },
+      karnazes: {
+        text: 'Corre cuando puedas, camina si tienes que hacerlo, gatea si no queda otra; pero nunca te rindas.',
+        author: 'Dean Karnazes',
+      },
+      bingham: {
+        text: 'El milagro no es haber terminado. El milagro es haber tenido el valor de empezar.',
+        author: 'John Bingham',
+      },
+      jordan: {
+        text: 'He fallado una y otra vez en mi vida. Y por eso tengo éxito.',
+        author: 'Michael Jordan',
+      },
+      notke: {
+        text: 'El trabajo duro vence al talento cuando el talento no trabaja duro.',
+        author: 'Tim Notke',
+      },
+      billieJeanKing: {
+        text: 'Los campeones siguen jugando hasta que lo hacen bien.',
+        author: 'Billie Jean King',
+      },
+      ali: { text: 'No cuentes los días: haz que los días cuenten.', author: 'Muhammad Ali' },
+    },
+    laps: {
+      title: 'Vueltas',
+      lap: 'Vuelta',
+      distance: 'Dist.',
+      time: 'Tiempo',
+      pace: 'Ritmo',
+      speed: 'Vel.',
+    },
+    grandPrix: { leader: 'Líder' },
+    alarmLabel: '{{sport}}, {{datum}}',
+    locationLine: '{{place}}, {{datum}}',
   },
   style: {
     color: 'Color',
@@ -251,7 +333,12 @@ export const es: Translations = {
       trio: 'Tres datos',
       weekday: 'Con el día',
       grid: 'Cuadrícula',
+      board: 'Tablero',
+      sheet: 'Hoja de tiempos',
     },
+    choose: 'Toca para elegir',
+    chooseVerse: 'Elige un versículo',
+    chooseQuote: 'Elige una cita',
     dataCount: 'Datos: {{count}}',
   },
   metrics: {

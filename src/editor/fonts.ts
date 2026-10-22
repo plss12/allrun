@@ -24,12 +24,16 @@ export const FONT_FAMILIES: Readonly<Record<FontId, string>> = {
   doto: 'Doto',
 };
 
-/** A font's files: its regular face, and its bold and italics when it ships them. */
+/**
+ * A font's files: its regular face, and its bold and italics when it ships them; and a light face
+ * for the replicas of apps that write thin (an alarm's time), not offered to the user.
+ */
 interface FontFaces {
   readonly regular: number;
   readonly bold?: number;
   readonly italic?: number;
   readonly boldItalic?: number;
+  readonly light?: number;
 }
 
 // Fonts with a single weight are display fonts that are already heavy (or, for the marker,
@@ -40,6 +44,7 @@ const FONT_FACES: Readonly<Record<FontId, FontFaces>> = {
     bold: require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
     italic: require('@expo-google-fonts/inter/400Regular_Italic/Inter_400Regular_Italic.ttf'),
     boldItalic: require('@expo-google-fonts/inter/700Bold_Italic/Inter_700Bold_Italic.ttf'),
+    light: require('@expo-google-fonts/inter/200ExtraLight/Inter_200ExtraLight.ttf'),
   },
   barlowCondensed: {
     regular: require('@expo-google-fonts/barlow-condensed/400Regular/BarlowCondensed_400Regular.ttf'),
@@ -148,10 +153,11 @@ export const PREVIEW_FAMILIES: Readonly<Record<FontId, string>> = {
   doto: 'AllRunPreview-Doto',
 };
 
+/** The faces the interface writes with; the light one is only drawn on the canvas. */
 const FACES = ['regular', 'bold', 'italic', 'boldItalic'] as const;
 
 /** What each face adds to its font's family name in React Native. */
-const FACE_SUFFIXES: Readonly<Record<keyof FontFaces, string>> = {
+const FACE_SUFFIXES: Readonly<Record<(typeof FACES)[number], string>> = {
   regular: '',
   bold: '-Bold',
   italic: '-Italic',
@@ -165,7 +171,7 @@ const FACE_SUFFIXES: Readonly<Record<keyof FontFaces, string>> = {
  */
 export function previewFamily(font: FontId, bold: boolean, italic = false): string {
   const faces = FONT_FACES[font];
-  const face: keyof FontFaces =
+  const face: (typeof FACES)[number] =
     bold && faces.bold !== undefined
       ? italic && faces.boldItalic !== undefined
         ? 'boldItalic'

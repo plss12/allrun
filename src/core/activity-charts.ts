@@ -1,4 +1,9 @@
-import type { ActivityDetail, ActivitySplit, ActivityStreams } from './activity-detail';
+import type {
+  ActivityDetail,
+  ActivityLap,
+  ActivitySplit,
+  ActivityStreams,
+} from './activity-detail';
 import type { ActivityChartSeries } from './template';
 import type { DistanceUnit } from './units';
 
@@ -71,9 +76,12 @@ export interface SplitRow {
   /** Number of the first split in the row, from 1, and of the last (the same for one split). */
   readonly first: number;
   readonly last: number;
+  /** Meters and moving seconds of the row's splits together. */
+  readonly distanceMeters: number;
+  readonly movingTimeSeconds: number;
   /** Meters per second over the row's splits. */
   readonly speed: number;
-  /** Change in altitude over the row's splits, in meters. */
+  /** Change in altitude over the row's splits, in meters (0 for laps, which don't give it). */
   readonly elevationDifference: number;
   /** Beats per minute over the row's splits, or `null` when none of them has a heart rate. */
   readonly heartRate: number | null;
@@ -85,7 +93,10 @@ export interface SplitRow {
  * speed and its heart rate averaged over the time of the splits that have one. Time and space
  * O(s) for s splits.
  */
-export function splitRows(splits: readonly ActivitySplit[], maxRows: number): SplitRow[] {
+export function splitRows(
+  splits: readonly (ActivityLap | ActivitySplit)[],
+  maxRows: number,
+): SplitRow[] {
   const size = Math.max(1, Math.ceil(splits.length / maxRows));
   const rows: SplitRow[] = [];
   for (let start = 0; start < splits.length; start += size) {
@@ -97,8 +108,14 @@ export function splitRows(splits: readonly ActivitySplit[], maxRows: number): Sp
     rows.push({
       first: start + 1,
       last: start + group.length,
+      distanceMeters: meters,
+      movingTimeSeconds: seconds,
       speed: seconds > 0 ? meters / seconds : 0,
-      elevationDifference: group.reduce((sum, split) => sum + split.elevationDifferenceMeters, 0),
+      elevationDifference: group.reduce(
+        (sum, split) =>
+          sum + ('elevationDifferenceMeters' in split ? split.elevationDifferenceMeters : 0),
+        0,
+      ),
       heartRate:
         timedSeconds > 0
           ? timed.reduce(

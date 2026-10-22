@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 
-import type { CatalogSection, NewLayer } from '@/core/layer-catalog';
-import type { CanvasFormat, FontId } from '@/core/template';
+import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
+import { type CanvasFormat, type FontId, QUOTES, VERSES } from '@/core/template';
 import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
@@ -43,10 +43,19 @@ interface LayerSheetProps {
   readonly onClose: () => void;
 }
 
+/** Widgets whose words are chosen from a list: a Bible verse or a quote. */
+type Choice = 'verse' | 'quote';
+
+/** The list a gallery item is chosen from, if it is. */
+const choiceOf = (item: CatalogItem): Choice | null =>
+  item.kind === 'activityBlock' && (item.block.design === 'verse' || item.block.design === 'quote')
+    ? item.block.design
+    : null;
+
 /**
  * Sheet to add a widget: a gallery of every widget drawn live with the user's data, in sections,
  * each tile scrolling sideways through the widget's variants (see `widget-gallery.ts`). A tap
- * adds the variant shown.
+ * adds the variant shown; a verse or a quote is chosen first from its list.
  */
 export function LayerSheet({
   visible,
@@ -60,11 +69,16 @@ export function LayerSheet({
 }: LayerSheetProps) {
   const { t } = useTranslation();
   const window = useWindowDimensions();
+  const [choosing, setChoosing] = useState<Choice | null>(null);
+  const close = () => {
+    setChoosing(null);
+    onClose();
+  };
   // iOS opens no keyboard while a sheet is on screen: free text starts once it has slid away.
   // Android has no dismiss callback, and no such limit.
   const textPending = useRef(false);
   const addText = () => {
-    onClose();
+    close();
     if (Platform.OS === 'ios') {
       textPending.current = true;
     } else {
@@ -84,7 +98,8 @@ export function LayerSheet({
       // Android shows it full screen: drawn under the system bars, padded by their insets.
       statusBarTranslucent
       navigationBarTranslucent
-      onRequestClose={onClose}
+      // Android's back button leaves a list for the gallery first.
+      onRequestClose={() => (choosing === null ? close() : setChoosing(null))}
       onDismiss={() => {
         if (textPending.current) {
           textPending.current = false;
@@ -92,50 +107,126 @@ export function LayerSheet({
         }
       }}
     >
-      <SheetFrame title={t('editor.addLayer')} closeLabel={t('editor.close')} onClose={onClose}>
-        <SectionList
-          sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
-          keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
-          stickySectionHeadersEnabled={false}
-          initialNumToRender={8}
-          contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
-          renderSectionHeader={({ section }) => (
-            <Text
-              accessibilityRole="header"
-              style={{
-                color: colors.secondaryLabel,
-                fontSize: 13,
-                fontWeight: '600',
-                paddingTop: 16,
-                paddingBottom: 8,
-              }}
-            >
-              {t(`widgets.sections.${section.id}`).toLocaleUpperCase()}
-            </Text>
-          )}
-          renderItem={({ item: row }) => (
-            <View style={{ flexDirection: 'row', gap: GALLERY_GAP, marginBottom: GALLERY_GAP }}>
-              {row.widgets.map((widget) => (
-                <WidgetTile
-                  key={widget.key}
-                  widget={widget}
-                  width={row.width}
-                  height={row.height}
-                  label={(page) => pageLabel(page, layerContext, t)}
-                  onPress={(page) => {
-                    if (page.item.kind === 'text') {
-                      addText();
-                    } else {
-                      onAdd(page.item);
-                    }
-                  }}
-                />
-              ))}
-            </View>
-          )}
-        />
-      </SheetFrame>
+      {choosing !== null ? (
+        <SheetFrame
+          title={t(choosing === 'verse' ? 'gallery.chooseVerse' : 'gallery.chooseQuote')}
+          closeLabel={t('editor.back')}
+          onClose={() => setChoosing(null)}
+        >
+          <ChoiceList
+            choice={choosing}
+            onChoose={(block) => {
+              setChoosing(null);
+              onAdd({ kind: 'activityBlock', block });
+            }}
+          />
+        </SheetFrame>
+      ) : (
+        <SheetFrame title={t('editor.addLayer')} closeLabel={t('editor.close')} onClose={close}>
+          <SectionList
+            sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
+            keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
+            stickySectionHeadersEnabled={false}
+            initialNumToRender={8}
+            contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
+            renderSectionHeader={({ section }) => (
+              <Text
+                accessibilityRole="header"
+                style={{
+                  color: colors.secondaryLabel,
+                  fontSize: 13,
+                  fontWeight: '600',
+                  paddingTop: 16,
+                  paddingBottom: 8,
+                }}
+              >
+                {t(`widgets.sections.${section.id}`).toLocaleUpperCase()}
+              </Text>
+            )}
+            renderItem={({ item: row }) => (
+              <View style={{ flexDirection: 'row', gap: GALLERY_GAP, marginBottom: GALLERY_GAP }}>
+                {row.widgets.map((widget) => (
+                  <WidgetTile
+                    key={widget.key}
+                    widget={widget}
+                    width={row.width}
+                    height={row.height}
+                    label={(page) => pageLabel(page, layerContext, t)}
+                    hint={choiceOf(widget.pages[0].item) === null ? undefined : t('gallery.choose')}
+                    onPress={(page) => {
+                      const choice = choiceOf(page.item);
+                      if (choice !== null) {
+                        setChoosing(choice);
+                      } else if (page.item.kind === 'text') {
+                        addText();
+                      } else {
+                        onAdd(page.item);
+                      }
+                    }}
+                  />
+                ))}
+              </View>
+            )}
+          />
+        </SheetFrame>
+      )}
     </Modal>
+  );
+}
+
+/**
+ * The verses or quotes to choose from, each on a card: its words in quotation marks, and where
+ * it comes from or who said it under them. A tap adds it.
+ */
+function ChoiceList({
+  choice,
+  onChoose,
+}: {
+  readonly choice: Choice;
+  readonly onChoose: (block: Extract<NewLayer, { kind: 'activityBlock' }>['block']) => void;
+}) {
+  const { t } = useTranslation();
+  const entries =
+    choice === 'verse'
+      ? VERSES.map((verse) => ({
+          key: verse,
+          words: t(`widgets.verses.${verse}.text`),
+          source: t(`widgets.verses.${verse}.source`),
+          block: { design: 'verse', verse } as const,
+        }))
+      : QUOTES.map((quote) => ({
+          key: quote,
+          words: t(`widgets.quotes.${quote}.text`),
+          source: t(`widgets.quotes.${quote}.author`),
+          block: { design: 'quote', quote } as const,
+        }));
+  return (
+    <ScrollView
+      contentContainerStyle={{ padding: GALLERY_PADDING, gap: GALLERY_GAP, paddingBottom: 32 }}
+    >
+      {entries.map((entry) => (
+        <Pressable
+          key={entry.key}
+          accessibilityRole="button"
+          accessibilityLabel={`${entry.words} ${entry.source}`}
+          onPress={() => onChoose(entry.block)}
+          style={({ pressed }) => ({
+            ...cardSurface(14),
+            paddingHorizontal: 18,
+            paddingVertical: 16,
+            gap: 6,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Text style={{ color: colors.label, fontSize: 17, lineHeight: 23 }}>
+            {t('widgets.quoted', { text: entry.words })}
+          </Text>
+          <Text style={{ color: colors.secondaryLabel, fontSize: 15, fontStyle: 'italic' }}>
+            {entry.source}
+          </Text>
+        </Pressable>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -201,6 +292,12 @@ function pageLabel(
         if (block.design === 'columns') {
           return [name, t('gallery.dataCount', { count: block.count })];
         }
+        if (block.design === 'verse') {
+          return [name, t(`widgets.verses.${block.verse}.source`)];
+        }
+        if (block.design === 'quote') {
+          return [name, t(`widgets.quotes.${block.quote}.author`)];
+        }
         if (!('layout' in block)) {
           return [name];
         }
@@ -213,19 +310,22 @@ function pageLabel(
 
 /**
  * A widget's tile: its variants side by side, one page each, scrolled sideways, with a dot per
- * page under them. A tap adds the variant on the page.
+ * page under them. A tap adds the variant on the page; a widget chosen from a list says so with
+ * its `hint` at the bottom.
  */
 function WidgetTile({
   widget,
   width,
   height,
   label,
+  hint,
   onPress,
 }: {
   readonly widget: GalleryWidget;
   readonly width: number;
   readonly height: number;
   readonly label: (page: GalleryPage) => string;
+  readonly hint?: string;
   readonly onPress: (page: GalleryPage) => void;
 }) {
   const { t } = useTranslation();
@@ -256,7 +356,7 @@ function WidgetTile({
             key={page.key}
             accessibilityRole="button"
             accessibilityLabel={label(page)}
-            accessibilityHint={several ? t('gallery.moreVariants') : undefined}
+            accessibilityHint={hint ?? (several ? t('gallery.moreVariants') : undefined)}
             accessibilityElementsHidden={i !== shown}
             importantForAccessibility={i === shown ? 'auto' : 'no-hide-descendants'}
             onPress={() => onPress(page)}
@@ -265,11 +365,32 @@ function WidgetTile({
             <PageCanvas
               page={page}
               width={width}
-              height={several ? height - GALLERY_DOTS_HEIGHT : height}
+              height={several || hint !== undefined ? height - GALLERY_DOTS_HEIGHT : height}
             />
           </Pressable>
         ))}
       </ScrollView>
+      {hint !== undefined ? (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', bottom: 6, left: 0, right: 0, alignItems: 'center' }}
+        >
+          <Text
+            style={{
+              color: '#FFFFFF',
+              fontSize: 11,
+              fontWeight: '600',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 8,
+              overflow: 'hidden',
+              backgroundColor: 'rgba(255, 255, 255, 0.18)',
+            }}
+          >
+            {hint}
+          </Text>
+        </View>
+      ) : null}
       {several ? (
         <View
           pointerEvents="none"

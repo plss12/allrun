@@ -49,6 +49,9 @@ export const LETTER_SPACING = { normal: 0, wide: 0.08, wider: 0.2 } as const;
  */
 const ITALIC_LEAN = 0.22;
 
+/** How far the top of a slanted letter `fontSize` big leans past its width, in pixels. */
+export const leanRoom = (fontSize: number): number => Math.ceil(fontSize * ITALIC_LEAN);
+
 /** The slant of a text: upright, or italic (the font's own, or its letters leaned). */
 export const slantOf = (italic: boolean | undefined): FontSlant =>
   italic === true ? FontSlant.Italic : FontSlant.Upright;
@@ -60,7 +63,7 @@ export const slantOf = (italic: boolean | undefined): FontSlant =>
  */
 export function addLeanRoom(builder: SkParagraphBuilder, fontSize: number): void {
   builder.addPlaceholder(
-    Math.ceil(fontSize * ITALIC_LEAN),
+    leanRoom(fontSize),
     0,
     PlaceholderAlignment.Baseline,
     TextBaseline.Alphabetic,

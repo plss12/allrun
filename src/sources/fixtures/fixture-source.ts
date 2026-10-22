@@ -43,15 +43,15 @@ export class FixtureActivitySource implements ActivitySource {
     return this.activities.find((activity) => activity.id === id) ?? null;
   }
 
-  /** Synthetic streams and splits, the same for an activity every time (seeded by its id). */
+  /** Synthetic streams, splits and laps, the same for an activity every time (seeded by its id). */
   async getActivityDetail(id: string): Promise<ActivityDetail | null> {
     const activity = await this.getActivity(id);
     if (activity === null) {
       return null;
     }
     // Through the same validation and mapping as Strava's responses.
-    const { streams, splits } = generateStravaDetail(activity, seedOf(id));
-    return parseStravaDetail(JSON.parse(JSON.stringify(streams)), splits);
+    const { streams, detailed } = generateStravaDetail(activity, seedOf(id));
+    return parseStravaDetail(JSON.parse(JSON.stringify(streams)), detailed);
   }
 
   /** The synthetic athlete's zones, through the same validation as Strava's. */
