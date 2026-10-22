@@ -4,18 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import {
-  chartBucketOptions,
-  chartValueOptions,
   colorPageOf,
   layerColor,
   setChartOptions,
   setDataLabels,
-  setDateFormat,
-  setLineOptions,
   setLayerColor,
   setLayerOpacity,
   setLogoOptions,
-  setPeriodFormat,
   setStrokeWidth,
   setTextStyle,
   STROKE_WIDTHS,
@@ -23,37 +18,29 @@ import {
   STYLE_OPACITIES,
   type TextStyle,
 } from '@/core/layer-style';
-import type { BucketSize, PeriodSummary } from '@/core/summary';
 import {
   BACKDROPS,
-  DATE_FORMATS,
-  DISTANCE_DECIMALS,
   FONT_IDS,
   type FontId,
   LETTER_SPACINGS,
   type Layer,
-  LINE_STYLES,
-  PERIOD_FORMATS,
   type Template,
-  TIME_NOTATIONS,
 } from '@/core/template';
 import { colors } from '@/theme/colors';
 
-import { hasUnit, isDistanceLayer, isPaceLayer, isTimeLayer, MISSING_VALUE } from './editor-data';
+import { hasUnit } from './editor-data';
 import { hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts } from './fonts';
 
 /** A style edit of the template, applied by the editor as one undo step. */
 export type StyleChange = (template: Template) => Template;
 
-type Tab = 'color' | 'font' | 'format' | 'width' | 'data' | 'opacity' | 'variant' | 'tone';
+type Tab = 'color' | 'font' | 'format' | 'width' | 'opacity' | 'tone';
 
 type TextLayer = Extract<Layer, { kind: 'metric' | 'summaryMetric' | 'info' | 'text' }>;
 type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
-type ChartLayer = Extract<Layer, { kind: 'summaryChart' }>;
-/** A period's chart or an activity's: they share how their texts look and their extras. */
+/** A period's chart or an activity's: they share how their texts look. */
 type AnyChartLayer = Extract<Layer, { kind: 'summaryChart' | 'activityChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
-type ChartValue = ChartLayer['value'];
 
 function isTextLayer(layer: Layer): layer is TextLayer {
   return (
@@ -65,23 +52,11 @@ function isTextLayer(layer: Layer): layer is TextLayer {
 }
 
 /**
- * What a chart can measure in its period: distance only when the period has some. A chart
- * already measuring what the period lacks (from a template) keeps that choice, so it can be
- * switched to one that draws.
+ * Tabs of the panel for a layer: only its look. What it shows and how (a time's notation, a
+ * chart's average, a route's line…) is a variant of its own in the gallery: to change it, the
+ * user replaces the widget.
  */
-function chartValues(layer: ChartLayer, values: readonly ChartValue[]): readonly ChartValue[] {
-  return values.includes(layer.value) ? values : [layer.value, ...values];
-}
-
-/**
- * Tabs of the panel for a layer. A chart puts its data first (what it measures and its bar
- * size), only when the period offers a choice of either.
- */
-function tabsFor(
-  layer: Layer,
-  buckets: readonly BucketSize[],
-  values: readonly ChartValue[],
-): readonly Tab[] {
+function tabsFor(layer: Layer): readonly Tab[] {
   switch (layer.kind) {
     case 'metric':
     case 'summaryMetric':
@@ -92,18 +67,10 @@ function tabsFor(
     case 'summaryRoutes':
       return ['color', 'width', 'opacity'];
     case 'summaryChart':
-      return [
-        ...(chartValues(layer, values).length > 1 || buckets.length > 1 ? (['data'] as const) : []),
-        'color',
-        'font',
-        'format',
-        'opacity',
-      ];
-    // An activity's chart draws one series: another one is another chart from the catalog.
     case 'activityChart':
       return ['color', 'font', 'format', 'opacity'];
     case 'logo':
-      return ['variant', 'tone', 'opacity'];
+      return ['tone', 'opacity'];
   }
 }
 
@@ -119,16 +86,7 @@ export const STYLE_PANEL_HEIGHT = TAB_HEIGHT + ROW_GAP + OPTIONS_HEIGHT;
 
 interface StylePanelProps {
   readonly layer: Layer;
-  /** The summary, for what its chart can measure and its bar sizes; `null` for an activity. */
-  readonly summary: PeriodSummary | null;
-  /** Bar size of the period, which a chart on `auto` uses; `null` for an activity. */
-  readonly autoBucket: BucketSize | null;
   readonly locale: string;
-  /**
-   * What a text widget shows with the current data (its value, without label or unit), or `null`
-   * for other layers: options that change how a value is written show it written each way.
-   */
-  readonly textOf: (layer: Layer) => string | null;
   readonly onChange: (change: StyleChange) => void;
 }
 
@@ -136,18 +94,9 @@ interface StylePanelProps {
  * Style options of the selected layer, one tab at a time, in the space of the editor's formats
  * (the editor's main button turns into "Done" meanwhile). Every tap is one undo step.
  */
-export function StylePanel({
-  layer,
-  summary,
-  autoBucket,
-  locale,
-  textOf,
-  onChange,
-}: StylePanelProps) {
+export function StylePanel({ layer, locale, onChange }: StylePanelProps) {
   const { t } = useTranslation();
-  const buckets = summary === null ? [] : chartBucketOptions(summary.range);
-  const values = summary === null ? [] : chartValueOptions(summary);
-  const tabs = tabsFor(layer, buckets, values);
+  const tabs = tabsFor(layer);
   const [chosen, setChosen] = useState<Tab>(tabs[0] ?? 'opacity');
   const tab = tabs.includes(chosen) ? chosen : tabs[0];
   return (
@@ -178,16 +127,7 @@ export function StylePanel({
       </ScrollView>
       <View style={{ height: OPTIONS_HEIGHT, flexShrink: 0, justifyContent: 'center' }}>
         {tab === undefined ? null : (
-          <TabContent
-            tab={tab}
-            layer={layer}
-            buckets={buckets}
-            autoBucket={autoBucket}
-            values={values}
-            locale={locale}
-            textOf={textOf}
-            onChange={onChange}
-          />
+          <TabContent tab={tab} layer={layer} locale={locale} onChange={onChange} />
         )}
       </View>
     </View>
@@ -319,20 +259,12 @@ function formatOf(layer: TextLayer | AnyChartLayer): {
 function TabContent({
   tab,
   layer,
-  buckets,
-  autoBucket,
-  values,
   locale,
-  textOf,
   onChange,
 }: {
   readonly tab: Tab;
   readonly layer: Layer;
-  readonly buckets: readonly BucketSize[];
-  readonly autoBucket: BucketSize | null;
-  readonly values: readonly ChartValue[];
   readonly locale: string;
-  readonly textOf: (layer: Layer) => string | null;
   readonly onChange: (change: StyleChange) => void;
 }) {
   switch (tab) {
@@ -349,13 +281,9 @@ function TabContent({
       ) : (
         <FormatRow format={format} onPatch={(patch) => onChange(change(patch))}>
           {layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (
-            <DataOptions layer={layer} textOf={textOf} onChange={onChange} />
+            <DataOptions layer={layer} onChange={onChange} />
           ) : layer.kind === 'summaryChart' || layer.kind === 'activityChart' ? (
             <ChartOptions layer={layer} onChange={onChange} />
-          ) : layer.kind === 'info' && layer.field === 'activityDate' ? (
-            <DateOptions layer={layer} textOf={textOf} onChange={onChange} />
-          ) : layer.kind === 'info' && layer.field === 'periodName' ? (
-            <PeriodOptions layer={layer} textOf={textOf} onChange={onChange} />
           ) : undefined}
         </FormatRow>
       );
@@ -364,23 +292,10 @@ function TabContent({
       return layer.kind === 'route' || layer.kind === 'summaryRoutes' ? (
         <LineRow layer={layer} onChange={onChange} />
       ) : null;
-    case 'data':
-      return layer.kind === 'summaryChart' ? (
-        <ChartDataRow
-          layer={layer}
-          values={values}
-          buckets={buckets}
-          autoBucket={autoBucket}
-          onChange={onChange}
-        />
-      ) : null;
     case 'opacity':
       return <OpacityRow layer={layer} locale={locale} onChange={onChange} />;
-    case 'variant':
     case 'tone':
-      return layer.kind === 'logo' ? (
-        <LogoRow layer={layer} option={tab} onChange={onChange} />
-      ) : null;
+      return layer.kind === 'logo' ? <LogoRow layer={layer} onChange={onChange} /> : null;
   }
 }
 
@@ -520,66 +435,17 @@ function FontRow({
   );
 }
 
-/**
- * How a pace or a time is written, first (how the value itself reads), then whether a metric
- * shows its name and, when it has one, its unit. The pace and time chips show the widget's own
- * value written the current way; a pace without a value shows the pattern instead.
- */
+/** Whether a metric shows its name and, when it has one, its unit. */
 function DataOptions({
   layer,
-  textOf,
   onChange,
 }: {
   readonly layer: Extract<Layer, { kind: 'metric' | 'summaryMetric' }>;
-  readonly textOf: (layer: Layer) => string | null;
   readonly onChange: (change: StyleChange) => void;
 }) {
   const { t } = useTranslation();
-  const pace = layer.paceNotation ?? 'colon';
-  const time = layer.timeNotation ?? 'clock';
-  const decimals = layer.decimals ?? 2;
-  const paceIn = (paceNotation: 'colon' | 'marks') => {
-    const text = textOf({ ...layer, paceNotation });
-    return text === null || text === MISSING_VALUE ? PACE_PATTERNS[paceNotation] : text;
-  };
   return (
     <>
-      {isPaceLayer(layer) ? (
-        <CycleChip
-          label={paceIn(pace)}
-          accessibilityLabel={t('style.paceNotation')}
-          accessibilityValue={t(`style.paceNotations.${pace}`)}
-          onPress={() =>
-            onChange((template) =>
-              setDataLabels(template, layer.id, { paceNotation: nextOf(PACE_NOTATIONS, pace) }),
-            )
-          }
-        />
-      ) : null}
-      {isDistanceLayer(layer) ? (
-        <CycleChip
-          label={textOf(layer) ?? ''}
-          accessibilityLabel={t('style.decimals')}
-          accessibilityValue={String(decimals)}
-          onPress={() =>
-            onChange((template) =>
-              setDataLabels(template, layer.id, { decimals: nextOf(DISTANCE_DECIMALS, decimals) }),
-            )
-          }
-        />
-      ) : null}
-      {isTimeLayer(layer) ? (
-        <CycleChip
-          label={textOf(layer) ?? ''}
-          accessibilityLabel={t('style.timeNotation')}
-          accessibilityValue={t(`style.timeNotations.${time}`)}
-          onPress={() =>
-            onChange((template) =>
-              setDataLabels(template, layer.id, { timeNotation: nextOf(TIME_NOTATIONS, time) }),
-            )
-          }
-        />
-      ) : null}
       <Chip
         label={t('style.showLabel')}
         selected={layer.showLabel}
@@ -600,90 +466,16 @@ function DataOptions({
   );
 }
 
-const PACE_NOTATIONS = ['colon', 'marks'] as const;
-
-/** How each pace notation looks, for a widget without a pace to show it with. */
-const PACE_PATTERNS = { colon: 'm:ss', marks: `m'ss"` } as const;
-
 /** The option after `current`, back to the first after the last. */
 function nextOf<T>(options: readonly T[], current: T): T {
   return options[(options.indexOf(current) + 1) % options.length];
 }
 
-/** How an activity's date reads: its own date written so, each tap the next format. */
-function DateOptions({
-  layer,
-  textOf,
-  onChange,
-}: {
-  readonly layer: Extract<Layer, { kind: 'info' }>;
-  readonly textOf: (layer: Layer) => string | null;
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const { t } = useTranslation();
-  const current = layer.dateFormat ?? 'full';
-  const text = textOf(layer) ?? '';
-  return (
-    <CycleChip
-      label={text}
-      accessibilityLabel={t('style.dateFormat')}
-      accessibilityValue={text}
-      onPress={() =>
-        onChange((template) => setDateFormat(template, layer.id, nextOf(DATE_FORMATS, current)))
-      }
-    />
-  );
-}
-
-/**
- * How a period's name reads: its own name written so, each tap the next format that writes it
- * differently. None for a year, which only reads "2026".
- */
-function PeriodOptions({
-  layer,
-  textOf,
-  onChange,
-}: {
-  readonly layer: Extract<Layer, { kind: 'info' }>;
-  readonly textOf: (layer: Layer) => string | null;
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const { t } = useTranslation();
-  const text = textOf(layer) ?? '';
-  // One format per way of writing this period: a month and a week differ in different formats.
-  const seen = new Set<string>();
-  const formats = PERIOD_FORMATS.filter((periodFormat) => {
-    const written = textOf({ ...layer, periodFormat }) ?? '';
-    if (seen.has(written)) {
-      return false;
-    }
-    seen.add(written);
-    return true;
-  });
-  if (formats.length < 2) {
-    return null;
-  }
-  // A format that writes the same as an earlier one moves on from that one.
-  const position = formats.findIndex(
-    (periodFormat) => (textOf({ ...layer, periodFormat }) ?? '') === text,
-  );
-  const next = formats[(position + 1) % formats.length];
-  return (
-    <CycleChip
-      label={text}
-      accessibilityLabel={t('style.periodFormat')}
-      accessibilityValue={text}
-      onPress={() => onChange((template) => setPeriodFormat(template, layer.id, next))}
-    />
-  );
-}
-
 const WIDTHS = ['thin', 'medium', 'thick'] as const;
 
 /**
- * How a route's line looks: its width, from three sizes suited to one route or to a period's
- * many; solid, dashed or dotted, in one chip that moves to the next on each tap; a glow; and, for
- * one activity's route, marks where it starts and ends.
+ * A route's line width, from three sizes suited to one route or to a period's many. Solid,
+ * dashed, dotted or glowing are widgets of their own in the gallery.
  */
 function LineRow({
   layer,
@@ -694,7 +486,6 @@ function LineRow({
 }) {
   const { t } = useTranslation();
   const sizes = STROKE_WIDTHS[layer.kind];
-  const line = layer.stroke.line ?? 'solid';
   return (
     <Row>
       {WIDTHS.map((width) => (
@@ -705,104 +496,11 @@ function LineRow({
           onPress={() => onChange((template) => setStrokeWidth(template, layer.id, sizes[width]))}
         />
       ))}
-      <Divider />
-      <CycleChip
-        label={t(`style.lineStyles.${line}`)}
-        accessibilityLabel={t('style.lineStyle')}
-        accessibilityValue={t(`style.lineStyles.${line}`)}
-        onPress={() =>
-          onChange((template) =>
-            setLineOptions(template, layer.id, { line: nextOf(LINE_STYLES, line) }),
-          )
-        }
-      />
-      <Chip
-        label={t('style.glow')}
-        selected={layer.stroke.glow ?? false}
-        onPress={() =>
-          onChange((template) =>
-            setLineOptions(template, layer.id, { glow: !(layer.stroke.glow ?? false) }),
-          )
-        }
-      />
-      {layer.kind === 'route' ? (
-        <Chip
-          label={t('style.endpoints')}
-          selected={layer.endpoints ?? false}
-          onPress={() =>
-            onChange((template) =>
-              setLineOptions(template, layer.id, { endpoints: !(layer.endpoints ?? false) }),
-            )
-          }
-        />
-      ) : null}
     </Row>
   );
 }
 
-/**
- * The chart's data, as two separate choices with a divider between them: what the bars measure
- * (distance or time) and their size (days, weeks or months). Each shows only when the period
- * offers a choice. A chart on `auto` shows the size the period gives it as chosen; picking one
- * fixes it.
- */
-function ChartDataRow({
-  layer,
-  values,
-  buckets,
-  autoBucket,
-  onChange,
-}: {
-  readonly layer: ChartLayer;
-  readonly values: readonly ChartValue[];
-  readonly buckets: readonly BucketSize[];
-  readonly autoBucket: BucketSize | null;
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const { t } = useTranslation();
-  const measures = chartValues(layer, values);
-  const bucket = layer.bucket === 'auto' ? autoBucket : layer.bucket;
-  return (
-    <Row>
-      {measures.length > 1
-        ? measures.map((value) => (
-            <Chip
-              key={value}
-              label={t(`style.values.${value}`)}
-              selected={layer.value === value}
-              onPress={() => onChange((template) => setChartOptions(template, layer.id, { value }))}
-            />
-          ))
-        : null}
-      {measures.length > 1 && buckets.length > 1 ? (
-        <View
-          importantForAccessibility="no"
-          style={{ width: 1, height: 28, marginHorizontal: 8, backgroundColor: colors.separator }}
-        />
-      ) : null}
-      {buckets.length > 1
-        ? buckets.map((size) => (
-            <Chip
-              key={size}
-              label={t(`style.buckets.${size}`)}
-              selected={bucket === size}
-              onPress={() =>
-                onChange((template) => setChartOptions(template, layer.id, { bucket: size }))
-              }
-            />
-          ))
-        : null}
-    </Row>
-  );
-}
-
-/**
- * The chart's extras. Splits first choose columns or rows, with a button whose icon shows the
- * layout chosen, like the alignment one. Then what the chart draws besides its data: an average
- * line and its highest value marked or, as rows, each split's pace (shown unless hidden) and its
- * change in altitude instead, since every row writes its own. Then its texts: the labels under
- * it, which rows don't have, and its title.
- */
+/** Whether a chart writes its labels (under it; rows of splits have none) and its title. */
 function ChartOptions({
   layer,
   onChange,
@@ -811,63 +509,11 @@ function ChartOptions({
   readonly onChange: (change: StyleChange) => void;
 }) {
   const { t } = useTranslation();
-  const splits = layer.kind === 'activityChart' && layer.series === 'splits';
-  const orientation = layer.kind === 'activityChart' ? (layer.orientation ?? 'columns') : 'columns';
-  const rows = splits && orientation === 'rows';
-  const toggle = (option: 'averageLine' | 'maxLabel' | 'axisLabels' | 'title', value: boolean) =>
+  const rows = layer.kind === 'activityChart' && layer.series === 'splits';
+  const toggle = (option: 'axisLabels' | 'title', value: boolean) =>
     onChange((template) => setChartOptions(template, layer.id, { [option]: !value }));
   return (
     <>
-      {splits ? (
-        <IconToggle
-          icon={ORIENTATION_ICONS[orientation]}
-          label={t('style.orientation')}
-          value={t(`style.orientations.${orientation}`)}
-          selected={false}
-          onPress={() =>
-            onChange((template) =>
-              setChartOptions(template, layer.id, {
-                orientation: orientation === 'columns' ? 'rows' : 'columns',
-              }),
-            )
-          }
-        />
-      ) : null}
-      <Chip
-        label={t('style.averageLine')}
-        selected={layer.averageLine ?? false}
-        onPress={() => toggle('averageLine', layer.averageLine ?? false)}
-      />
-      {rows && layer.kind === 'activityChart' ? (
-        <>
-          <Chip
-            label={t('style.splitPace')}
-            selected={layer.splitPace ?? true}
-            onPress={() =>
-              onChange((template) =>
-                setChartOptions(template, layer.id, { splitPace: !(layer.splitPace ?? true) }),
-              )
-            }
-          />
-          <Chip
-            label={t('style.splitElevation')}
-            selected={layer.splitElevation ?? false}
-            onPress={() =>
-              onChange((template) =>
-                setChartOptions(template, layer.id, {
-                  splitElevation: !(layer.splitElevation ?? false),
-                }),
-              )
-            }
-          />
-        </>
-      ) : (
-        <Chip
-          label={t('style.maxLabel')}
-          selected={layer.maxLabel ?? false}
-          onPress={() => toggle('maxLabel', layer.maxLabel ?? false)}
-        />
-      )}
       {rows ? null : (
         <Chip
           label={t('style.axisLabels')}
@@ -884,49 +530,29 @@ function ChartOptions({
   );
 }
 
-/** The icon of each layout of the splits: bars standing side by side, or lying one under another. */
-const ORIENTATION_ICONS: Readonly<Record<'columns' | 'rows', SymbolViewProps['name']>> = {
-  columns: { ios: 'chart.bar.xaxis', android: 'bar_chart' },
-  rows: { ios: 'chart.bar.yaxis', android: 'align_horizontal_left' },
-};
+const LOGO_TONES = ['light', 'dark', 'color'] as const;
 
-const LOGO_OPTIONS = {
-  variant: ['wordmark', 'mark', 'lockup'],
-  tone: ['light', 'dark', 'color'],
-} as const;
-
-/** The logo's artwork (name, monogram or both) or its tone. */
+/**
+ * The logo's tone. Its artwork (name, monogram or both) is a widget of its own in the gallery.
+ */
 function LogoRow({
   layer,
-  option,
   onChange,
 }: {
   readonly layer: LogoLayer;
-  readonly option: 'variant' | 'tone';
   readonly onChange: (change: StyleChange) => void;
 }) {
   const { t } = useTranslation();
   return (
     <Row>
-      {option === 'variant'
-        ? LOGO_OPTIONS.variant.map((variant) => (
-            <Chip
-              key={variant}
-              label={t(`style.variants.${variant}`)}
-              selected={layer.variant === variant}
-              onPress={() =>
-                onChange((template) => setLogoOptions(template, layer.id, { variant }))
-              }
-            />
-          ))
-        : LOGO_OPTIONS.tone.map((tone) => (
-            <Chip
-              key={tone}
-              label={t(`style.tones.${tone}`)}
-              selected={layer.tone === tone}
-              onPress={() => onChange((template) => setLogoOptions(template, layer.id, { tone }))}
-            />
-          ))}
+      {LOGO_TONES.map((tone) => (
+        <Chip
+          key={tone}
+          label={t(`style.tones.${tone}`)}
+          selected={layer.tone === tone}
+          onPress={() => onChange((template) => setLogoOptions(template, layer.id, { tone }))}
+        />
+      ))}
     </Row>
   );
 }
@@ -1022,43 +648,6 @@ function Chip({
       >
         {label}
       </Text>
-    </Pressable>
-  );
-}
-
-/**
- * One chip for the ways a value can be written: it shows the value written the current way and
- * switches to the next way on each tap, so the row doesn't fill with a chip per option.
- */
-function CycleChip({
-  label,
-  accessibilityLabel,
-  accessibilityValue,
-  onPress,
-}: {
-  readonly label: string;
-  /** What the chip chooses ("Date format"). */
-  readonly accessibilityLabel: string;
-  /** The current choice, spoken. */
-  readonly accessibilityValue: string;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityValue={{ text: accessibilityValue }}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 44,
-        paddingHorizontal: 14,
-        borderRadius: 999,
-        justifyContent: 'center',
-        backgroundColor: colors.secondarySystemBackground,
-        opacity: pressed ? 0.7 : 1,
-      })}
-    >
-      <Text style={{ color: colors.label, fontSize: 15, fontWeight: '600' }}>{label}</Text>
     </Pressable>
   );
 }

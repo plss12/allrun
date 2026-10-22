@@ -1,13 +1,4 @@
-import { type DateRange, rangeLength } from './dates';
-import type { BucketSize, PeriodSummary } from './summary';
-import { summaryHasDistance } from './summary-metrics';
-import {
-  type DateFormat,
-  type Layer,
-  type LayerKind,
-  type PeriodFormat,
-  type Template,
-} from './template';
+import type { Layer, LayerKind, Template } from './template';
 
 /**
  * The look of each layer, as the style panel edits it: color, opacity, text style, data labels,
@@ -138,7 +129,6 @@ type LayerOf<K extends LayerKind> = Extract<Layer, { kind: K }>;
 type TextLayer = LayerOf<'metric' | 'summaryMetric' | 'info' | 'text'>;
 export type TextStyle = TextLayer['style'];
 type ChartLayer = LayerOf<'summaryChart'>;
-type LineStyle = NonNullable<LayerOf<'route'>['stroke']['line']>;
 type LogoLayer = LayerOf<'logo'>;
 
 const TEXT_KINDS = ['metric', 'summaryMetric', 'info', 'text'] as const;
@@ -253,38 +243,6 @@ export function setLayerOpacity(template: Template, id: string, opacity: number)
 }
 
 /**
- * How an activity's date reads.
- *
- * @throws Error for any layer but the activity's date.
- */
-export function setDateFormat(template: Template, id: string, dateFormat: DateFormat): Template {
-  return editLayer(template, id, ['info'], 'date format', (layer) => {
-    if (layer.field !== 'activityDate') {
-      throw new Error(`Layer "${id}" (${layer.field}) has no date format`);
-    }
-    return (layer.dateFormat ?? 'full') === dateFormat ? layer : { ...layer, dateFormat };
-  });
-}
-
-/**
- * How a period's name reads.
- *
- * @throws Error for any layer but the period's name.
- */
-export function setPeriodFormat(
-  template: Template,
-  id: string,
-  periodFormat: PeriodFormat,
-): Template {
-  return editLayer(template, id, ['info'], 'period format', (layer) => {
-    if (layer.field !== 'periodName') {
-      throw new Error(`Layer "${id}" (${layer.field}) has no period format`);
-    }
-    return (layer.periodFormat ?? 'full') === periodFormat ? layer : { ...layer, periodFormat };
-  });
-}
-
-/**
  * Font, weight, case, alignment, backdrop or letter spacing of a text layer; the color goes
  * through `setLayerColor`.
  */
@@ -305,31 +263,16 @@ export function setTextStyle(
 }
 
 /**
- * Whether a metric shows its name above the value and its unit after it, and how its value
- * reads: a pace (`5:28` or `5'28"`), a time (`1:40:30`, `1h 40min 30s`…) or the decimals of a
- * distance.
+ * Whether a metric shows its name above the value and its unit after it. How its value reads (a
+ * pace's marks, a time's notation, a distance's decimals) is chosen in the gallery.
  */
 export function setDataLabels(
   template: Template,
   id: string,
-  patch: Partial<
-    Pick<LayerOf<'metric'>, 'showLabel' | 'showUnit' | 'paceNotation' | 'timeNotation' | 'decimals'>
-  >,
+  patch: Partial<Pick<LayerOf<'metric'>, 'showLabel' | 'showUnit'>>,
 ): Template {
   return editLayer(template, id, DATA_KINDS, 'data labels', (layer) =>
-    // Without a notation a pace reads with a colon, a time as a clock and a distance with two
-    // decimals: choosing that changes nothing.
-    unchanged(
-      {
-        ...layer,
-        paceNotation: layer.paceNotation ?? 'colon',
-        timeNotation: layer.timeNotation ?? 'clock',
-        decimals: layer.decimals ?? 2,
-      },
-      patch,
-    )
-      ? layer
-      : { ...layer, ...patch },
+    unchanged(layer, patch) ? layer : { ...layer, ...patch },
   );
 }
 
@@ -361,139 +304,34 @@ export function setStrokeWidth(template: Template, id: string, width: number): T
   );
 }
 
-/**
- * How a route's line is drawn (solid, dashed or dotted), whether it glows and, for one
- * activity's route, whether its start and end are marked.
- *
- * @throws Error when marking the ends of a period's routes, which would be a cloud of dots.
- */
-export function setLineOptions(
-  template: Template,
-  id: string,
-  patch: {
-    readonly line?: LineStyle;
-    readonly glow?: boolean;
-    readonly endpoints?: boolean;
-  },
-): Template {
-  return editLayer(template, id, LINE_KINDS, 'line options', (layer) => {
-    if (patch.endpoints !== undefined && layer.kind !== 'route') {
-      throw new Error(`Layer "${id}" (${layer.kind}) has no start and end marks`);
-    }
-    const current = {
-      line: layer.stroke.line ?? 'solid',
-      glow: layer.stroke.glow ?? false,
-      endpoints: layer.kind === 'route' ? (layer.endpoints ?? false) : false,
-    };
-    if (unchanged(current, patch)) {
-      return layer;
-    }
-    const { endpoints, ...stroke } = patch;
-    const next = { ...layer, stroke: { ...layer.stroke, ...stroke } };
-    return endpoints === undefined ? next : { ...next, endpoints };
-  });
-}
-
-/** What a chart's texts look like and what it draws besides its data, for any chart. */
+/** What a chart's texts look like and whether it has them. */
 type ChartLooks = Pick<
   ChartLayer,
-  'axisLabels' | 'title' | 'font' | 'bold' | 'uppercase' | 'align' | 'averageLine' | 'maxLabel'
+  'axisLabels' | 'title' | 'font' | 'bold' | 'uppercase' | 'align'
 >;
 
-/** How an activity's splits are laid out. */
-type SplitLayout = Pick<LayerOf<'activityChart'>, 'orientation' | 'splitPace' | 'splitElevation'>;
-
 /**
- * Whether a chart has labels, a title, an average line and its highest value marked, and how
- * its texts are written (font, bold, capitals, alignment of the title); for a period's chart also
- * what it measures (distance or time) and its bar size; for an activity's splits, columns or
- * rows and whether rows show each split's pace and its change in altitude.
- *
- * @throws Error when setting what an activity's chart measures or its bar size (it draws one
- *   series, at the activity's own pace), or a split layout on a period's chart.
+ * Whether a chart has labels and a title, and how its texts are written (font, bold, capitals,
+ * alignment of the title). What it measures and draws (bar size, average line, highest value,
+ * each bar's value) is chosen in the gallery.
  */
 export function setChartOptions(
   template: Template,
   id: string,
-  patch: Partial<ChartLooks & Pick<ChartLayer, 'value' | 'bucket'> & SplitLayout>,
+  patch: Partial<ChartLooks>,
 ): Template {
-  return editLayer(template, id, CHART_KINDS, 'chart options', (layer) => {
-    const current = {
-      ...layer,
-      averageLine: layer.averageLine ?? false,
-      maxLabel: layer.maxLabel ?? false,
-      orientation: layer.kind === 'activityChart' ? (layer.orientation ?? 'columns') : undefined,
-      splitPace: layer.kind === 'activityChart' ? (layer.splitPace ?? true) : undefined,
-      splitElevation: layer.kind === 'activityChart' ? (layer.splitElevation ?? false) : undefined,
-    };
-    if (unchanged(current, patch)) {
-      return layer;
-    }
-    const { value, bucket, orientation, splitPace, splitElevation, ...looks } = patch;
-    if (layer.kind === 'summaryChart') {
-      if (orientation !== undefined || splitPace !== undefined || splitElevation !== undefined) {
-        throw new Error(`Layer "${id}" (summaryChart) has no split layout`);
-      }
-      return {
-        ...layer,
-        ...looks,
-        ...(value === undefined ? {} : { value }),
-        ...(bucket === undefined ? {} : { bucket }),
-      };
-    }
-    if (value !== undefined || bucket !== undefined) {
-      throw new Error(`Layer "${id}" (activityChart) has no measure or bar size`);
-    }
-    return {
-      ...layer,
-      ...looks,
-      ...(orientation === undefined ? {} : { orientation }),
-      ...(splitPace === undefined ? {} : { splitPace }),
-      ...(splitElevation === undefined ? {} : { splitElevation }),
-    };
-  });
-}
-
-/** Tone (light, dark or brand colors) and artwork (name, monogram or both) of the logo. */
-export function setLogoOptions(
-  template: Template,
-  id: string,
-  patch: Partial<Pick<LogoLayer, 'tone' | 'variant'>>,
-): Template {
-  return editLayer(template, id, ['logo'], 'logo options', (layer) =>
+  return editLayer(template, id, CHART_KINDS, 'chart options', (layer) =>
     unchanged(layer, patch) ? layer : { ...layer, ...patch },
   );
 }
 
-/**
- * What a chart of the period can measure: distance only when some activity has any (a month of
- * gym sessions would draw empty bars), time always. Time and space O(1).
- */
-export function chartValueOptions(summary: PeriodSummary): ChartLayer['value'][] {
-  return summaryHasDistance(summary) ? ['distance', 'movingTime'] : ['movingTime'];
-}
-
-/** Fewest and most bars a chart may have for a bar size to be offered. */
-const MIN_BARS = 3;
-const MAX_BARS = 62;
-
-/**
- * Bar sizes worth offering for a chart of `range`: every size that gives between 3 and 62 bars,
- * so a week offers only days, a month days or weeks, and a year weeks or months. A chart starts
- * on `auto` (the period's own size, which is always one of these when there is a choice) until
- * the user picks one. Time and space O(1).
- */
-export function chartBucketOptions(range: DateRange): BucketSize[] {
-  const days = rangeLength(range);
-  const [startYear, startMonth] = range.start.split('-').map(Number);
-  const [endYear, endMonth] = range.end.split('-').map(Number);
-  const counts = {
-    day: days,
-    week: Math.ceil(days / 7),
-    month: (endYear - startYear) * 12 + endMonth - startMonth + 1,
-  } as const;
-  const sizes = (['day', 'week', 'month'] as const).filter(
-    (size) => counts[size] >= MIN_BARS && counts[size] <= MAX_BARS,
+/** Tone of the logo (light, dark or brand colors); its artwork is chosen in the gallery. */
+export function setLogoOptions(
+  template: Template,
+  id: string,
+  patch: Partial<Pick<LogoLayer, 'tone'>>,
+): Template {
+  return editLayer(template, id, ['logo'], 'logo options', (layer) =>
+    unchanged(layer, patch) ? layer : { ...layer, ...patch },
   );
-  return sizes;
 }

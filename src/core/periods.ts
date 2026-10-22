@@ -107,3 +107,27 @@ export function setCustomRangeDate(
   const limits = customRangeLimits(range, today)[which];
   return { ...range, [which]: later(limits.min, earlier(date, limits.max)) };
 }
+
+/** Fewest and most bars a chart may have for a bar size to be offered. */
+const MIN_BARS = 3;
+const MAX_BARS = 62;
+
+/**
+ * Bar sizes worth offering for a chart of `range`: every size that gives between 3 and 62 bars,
+ * so a week offers only days, a month days or weeks, and a year weeks or months. The gallery
+ * offers a chart of each. Time and space O(1).
+ */
+export function chartBucketOptions(range: DateRange): BucketSize[] {
+  const days = rangeLength(range);
+  const [startYear, startMonth] = range.start.split('-').map(Number);
+  const [endYear, endMonth] = range.end.split('-').map(Number);
+  const counts = {
+    day: days,
+    week: Math.ceil(days / 7),
+    month: (endYear - startYear) * 12 + endMonth - startMonth + 1,
+  } as const;
+  const sizes = (['day', 'week', 'month'] as const).filter(
+    (size) => counts[size] >= MIN_BARS && counts[size] <= MAX_BARS,
+  );
+  return sizes;
+}

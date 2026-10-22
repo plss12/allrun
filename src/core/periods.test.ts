@@ -1,6 +1,7 @@
-import { customRange, rangeLength } from './dates';
+import { customRange, monthRange, rangeLength, weekRange, yearRange } from './dates';
 import {
   bucketForPeriod,
+  chartBucketOptions,
   customRangeLimits,
   MAX_CUSTOM_DAYS,
   periodContaining,
@@ -100,5 +101,20 @@ describe('custom ranges', () => {
       today,
     );
     expect(rangeLength(longest)).toBe(MAX_CUSTOM_DAYS);
+  });
+});
+
+describe('chartBucketOptions', () => {
+  it('offers the bar sizes that give a readable number of bars', () => {
+    // A week that spans two months: two monthly bars are not worth a chart.
+    expect(chartBucketOptions(weekRange('2026-09-30'))).toEqual(['day']);
+    expect(chartBucketOptions(monthRange('2026-10-14'))).toEqual(['day', 'week']);
+    expect(chartBucketOptions(yearRange('2026-10-14'))).toEqual(['week', 'month']);
+    // A 10-week training block.
+    expect(chartBucketOptions(customRange('2026-08-10', '2026-10-18'))).toEqual(['week', 'month']);
+  });
+
+  it('offers nothing for a range too short for any chart', () => {
+    expect(chartBucketOptions(customRange('2026-10-14', '2026-10-15'))).toEqual([]);
   });
 });

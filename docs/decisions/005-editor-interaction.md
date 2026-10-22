@@ -62,6 +62,18 @@ Going back while designing returns to the first step (`usePreventRemove`). The i
 off in that step: react-native-screens lets UIKit pop the screen and pushes it back afterwards,
 which flashes the previous screen.
 
+### Adding widgets
+
+"Add element" opens a gallery, like the templates sheet: every widget the activity or period can
+show, drawn live with the user's data and in the design's font, in sections (distance, time, pace
+and speed, elevation, more data, text, route, charts, logos). Each variant is a widget of its own:
+a distance with two, one or no decimals, each time and pace notation, each date format, a period's
+name in each format that writes it differently, the route solid, glowing, dashed or dotted,
+splits without values, with their pace, or with their pace and change in altitude, and the logo's name,
+monogram or both. A tap adds the one shown, centered. The variants of a widget are drawn at one
+size so they compare. Variants are presets of the layer's fields: the template schema doesn't
+change.
+
 ### Style
 
 Few, visual options: color swatches (no free picker), five opacity presets, ten fonts named by
@@ -82,10 +94,11 @@ short or in numbers. Then label and unit. The chip carries no icon: tapping it s
 Texts also get, as icon buttons next to bold and case, a backdrop that cycles like the story
 editors' (none, a translucent box, a solid box), always in the color opposite to the text's,
 which keeps its color, and letter spacing (normal, open, wide open), whose icon shows the
-spacing chosen, as the alignment one does. Routes add their line style (solid, dashed, dotted), a
-glow and, for one activity, a dot where it starts and a ring where it ends, in the line's color.
-Charts put their bar option first (a dashed average line), then their texts (axis labels,
-title).
+spacing chosen, as the alignment one does. The notation chips stay in Style although the gallery
+offers each notation too: changing one there keeps the widget's place and colors. What changes a
+widget's shape is picked only in the gallery: a route's line (Style keeps its width), the splits'
+layout and the logo's artwork (Style keeps its tone). Charts put their bar option first (a dashed
+average line), then their texts (axis labels, title).
 
 Data widgets keep their metric's own label: there is no renaming them. Typing a label over a
 widget written in capitals jumped between cases, and a free text next to a widget without its
@@ -106,6 +119,10 @@ the whole edit is one undo step.
   only wanted to fix a widget, and Start over threw away the framing.
 - **Re-laying out custom widgets on a format change:** no automatic rule keeps a free design
   looking intended in a very different proportion.
+- **"Add element" as a list of names, with variants in Style:** options like the seven date
+  formats or the splits' layout hid behind chips few would find, and the style panel kept growing.
+- **Marks at a route's start and end:** they added nothing a viewer reads; removed (templates that
+  had them still load, without them).
 - **Shadow as a setting:** one more choice for something that has a right answer per color.
 - **Swipe back that returns to the first step:** see above; react-native-screens can't cancel
   the native pop cleanly.

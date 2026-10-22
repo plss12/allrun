@@ -127,7 +127,6 @@ describe('parseTemplate', () => {
     };
     const lined = {
       ...route,
-      endpoints: true,
       stroke: { ...route.stroke, line: 'dotted', glow: true },
     };
     expect(parseTemplate({ ...activityTemplate, layers: [styled, lined] }).layers).toMatchObject([
@@ -141,6 +140,14 @@ describe('parseTemplate', () => {
     ]) {
       expect(() => parseTemplate({ ...activityTemplate, layers: [broken] })).toThrow();
     }
+  });
+
+  it('still reads routes saved with start and end marks, dropping them', () => {
+    const [read] = parseTemplate({
+      ...activityTemplate,
+      layers: [{ ...route, endpoints: true }],
+    }).layers;
+    expect(read).toEqual(route);
   });
 
   it('takes activity charts in activity templates only', () => {
@@ -167,13 +174,16 @@ describe('parseTemplate', () => {
     expect(() =>
       parseTemplate({ ...activityTemplate, layers: [{ ...chart, series: 'cadence' }] }),
     ).toThrow(/series/);
-    const rows = { ...chart, orientation: 'rows', splitElevation: true, maxLabel: true };
+    const rows = { ...chart, splitElevation: true, maxLabel: true };
     expect(parseTemplate({ ...activityTemplate, layers: [rows] }).layers[0]).toMatchObject({
-      orientation: 'rows',
+      splitElevation: true,
     });
-    expect(() =>
-      parseTemplate({ ...activityTemplate, layers: [{ ...rows, orientation: 'diagonal' }] }),
-    ).toThrow(/orientation/);
+    // Splits saved while they could be columns read as rows.
+    const columns = parseTemplate({
+      ...activityTemplate,
+      layers: [{ ...rows, orientation: 'columns' }],
+    }).layers[0];
+    expect(columns).not.toHaveProperty('orientation');
   });
 
   it('rejects unknown versions and blank names', () => {

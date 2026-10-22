@@ -250,13 +250,9 @@ export const layerSchema = z.discriminatedUnion('kind', [
     ...textFit,
     style: textStyleSchema,
   }),
-  z.object({
-    ...layerBase,
-    kind: z.literal('route'),
-    stroke: strokeStyleSchema,
-    /** A dot where the route starts and a ring where it ends, in the line's color. */
-    endpoints: z.boolean().optional(),
-  }),
+  // Templates saved while routes could mark their start and end (`endpoints`) still read: the
+  // field is dropped.
+  z.object({ ...layerBase, kind: z.literal('route'), stroke: strokeStyleSchema }),
   z.object({ ...layerBase, kind: z.literal('summaryRoutes'), stroke: strokeStyleSchema }),
   z.object({
     ...layerBase,
@@ -281,15 +277,18 @@ export const layerSchema = z.discriminatedUnion('kind', [
     align: z.enum(['left', 'center', 'right']).default('center'),
     /** A dashed line across the bars at their average. */
     averageLine: z.boolean().optional(),
-    /** The value of the highest bar, over it. */
-    maxLabel: z.boolean().optional(),
+    /**
+     * Each bar's value, in a row over the chart. Templates saved when the highest bar could be
+     * marked alone (`maxLabel`) still read: the field is dropped.
+     */
+    barValues: z.boolean().optional(),
   }),
   z.object({
     ...layerBase,
     kind: z.literal('activityChart'),
     series: z.enum(ACTIVITY_CHART_SERIES),
     color: colorSchema,
-    /** Distance (or time) at both ends of a line; the split numbers under the bars. */
+    /** Distance (or time) at both ends of a line. Splits ignore it: each row has its number. */
     axisLabels: z.boolean(),
     /** A line under the chart saying what it shows ("ELEVATION", "SPLITS PER KM"). */
     title: z.boolean(),
@@ -301,16 +300,14 @@ export const layerSchema = z.discriminatedUnion('kind', [
     align: z.enum(['left', 'center', 'right']),
     /** A dashed line across the chart at the average. */
     averageLine: z.boolean().optional(),
-    /** The highest point (the fastest split) marked, with its value. */
+    /** The highest point of a line marked, with its value. Splits ignore it. */
     maxLabel: z.boolean().optional(),
-    /**
-     * Splits as columns side by side (absent), or as rows one under another, each with its number
-     * before the bar and its texts in a column on the right. Other series ignore it.
-     */
-    orientation: z.enum(['columns', 'rows']).optional(),
-    /** In rows, each split's pace ("5:12"); shown when absent. */
+    // Splits are rows one under another, each with its number before the bar and its texts in a
+    // column on the right. Templates saved while they could also be columns (`orientation`) still
+    // read: the field is dropped, and they draw as rows.
+    /** Each split's pace ("5:12"), at the end of its row; shown when absent. */
     splitPace: z.boolean().optional(),
-    /** In rows, each split's change in altitude ("+12 m"); hidden when absent. */
+    /** Each split's change in altitude ("+12 m"), next to its pace; hidden when absent. */
     splitElevation: z.boolean().optional(),
   }),
   z.object({

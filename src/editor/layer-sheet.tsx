@@ -1,20 +1,32 @@
+import { Canvas, Group, Paint } from '@shopify/react-native-skia';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-
 import {
-  type CatalogItem,
-  catalogItemKey,
-  type CatalogSection,
-  type NewLayer,
-} from '@/core/layer-catalog';
+  Modal,
+  Platform,
+  Pressable,
+  SectionList,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+
+import type { CatalogSection, NewLayer } from '@/core/layer-catalog';
+import type { CanvasFormat, FontId } from '@/core/template';
 import { colors } from '@/theme/colors';
 
+import { layerText } from './editor-data';
 import { SheetFrame } from './sheet-frame';
+import type { LayerContext } from './template-scene';
+import { GALLERY_GAP, GALLERY_PADDING, type GalleryTile, gallerySections } from './widget-gallery';
 
 interface LayerSheetProps {
   readonly visible: boolean;
   readonly catalog: readonly CatalogSection[];
+  /** Format and font of the design: each widget is drawn as it will be added. */
+  readonly format: CanvasFormat;
+  readonly font: FontId;
+  readonly layerContext: LayerContext;
   /** Adds a widget; free text goes through `onAddText` instead. */
   readonly onAdd: (item: Exclude<NewLayer, { kind: 'text' }>) => void;
   /** Starts typing a new free text, straight on the canvas, once the sheet has closed. */
@@ -22,9 +34,28 @@ interface LayerSheetProps {
   readonly onClose: () => void;
 }
 
-/** Sheet to add a widget from the catalog of the current activity or period. */
-export function LayerSheet({ visible, catalog, onAdd, onAddText, onClose }: LayerSheetProps) {
+/**
+ * Behind each widget: dark, like the editor's checkerboard, so the white widgets read; Chalk for
+ * the dark and colored logos. The same in both themes, as a photo would be.
+ */
+const TILE_BACKGROUNDS = { dark: '#1C1C1E', light: '#F6F1EA' } as const;
+
+/**
+ * Sheet to add a widget: a gallery of every widget, and each of its variants, drawn live with
+ * the user's data, in sections (see `widget-gallery.ts`). A tap adds the one shown.
+ */
+export function LayerSheet({
+  visible,
+  catalog,
+  format,
+  font,
+  layerContext,
+  onAdd,
+  onAddText,
+  onClose,
+}: LayerSheetProps) {
   const { t } = useTranslation();
+  const window = useWindowDimensions();
   // iOS opens no keyboard while a sheet is on screen: free text starts once it has slid away.
   // Android has no dismiss callback, and no such limit.
   const textPending = useRef(false);
@@ -36,6 +67,10 @@ export function LayerSheet({ visible, catalog, onAdd, onAddText, onClose }: Laye
       onAddText();
     }
   };
+  // Measured only while open: the sheet is closed most of the time.
+  const sections = visible
+    ? gallerySections(catalog, format, font, layerContext, window.width, t('gallery.textSample'))
+    : [];
   return (
     <Modal
       visible={visible}
@@ -54,92 +89,151 @@ export function LayerSheet({ visible, catalog, onAdd, onAddText, onClose }: Laye
       }}
     >
       <SheetFrame title={t('editor.addLayer')} closeLabel={t('editor.close')} onClose={onClose}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 24 }}>
-          {catalog.map((section) => (
-            <View key={section.id} style={{ gap: 8 }}>
-              <Text
-                accessibilityRole="header"
-                style={{ color: colors.secondaryLabel, fontSize: 13, fontWeight: '600' }}
-              >
-                {t(`widgets.sections.${section.id}`).toLocaleUpperCase()}
-              </Text>
-              <View
-                style={{
-                  borderRadius: 12,
-                  borderCurve: 'continuous',
-                  overflow: 'hidden',
-                  backgroundColor: colors.secondarySystemBackground,
-                }}
-              >
-                {section.items.map((item, index) => (
-                  <CatalogRow
-                    key={catalogItemKey(item)}
-                    item={item}
-                    separator={index > 0}
-                    onPress={() => {
-                      if (item.kind === 'text') {
-                        addText();
-                      } else {
-                        onAdd(item);
-                      }
-                    }}
-                  />
-                ))}
-              </View>
+        <SectionList
+          sections={sections}
+          keyExtractor={(row) => row.map((tile) => tile.key).join(' ')}
+          stickySectionHeadersEnabled={false}
+          initialNumToRender={8}
+          contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
+          renderSectionHeader={({ section }) => (
+            <Text
+              accessibilityRole="header"
+              style={{
+                color: colors.secondaryLabel,
+                fontSize: 13,
+                fontWeight: '600',
+                paddingTop: 16,
+                paddingBottom: 8,
+              }}
+            >
+              {t(`widgets.sections.${section.id}`).toLocaleUpperCase()}
+            </Text>
+          )}
+          renderItem={({ item: row, section }) => (
+            <View style={{ flexDirection: 'row', gap: GALLERY_GAP, marginBottom: GALLERY_GAP }}>
+              {row.map((tile) => (
+                <TileButton
+                  key={tile.key}
+                  tile={tile}
+                  width={section.width}
+                  height={section.height}
+                  label={tileLabel(tile, layerContext, t)}
+                  onPress={() => {
+                    if (tile.item.kind === 'text') {
+                      addText();
+                    } else {
+                      onAdd(tile.item);
+                    }
+                  }}
+                />
+              ))}
             </View>
-          ))}
-        </ScrollView>
+          )}
+        />
       </SheetFrame>
     </Modal>
   );
 }
 
-function CatalogRow({
-  item,
-  separator,
+/**
+ * What a screen reader says for a tile: the widget's name and, for a text, what it shows ("Date,
+ * 14 Oct"); for the other widgets, their variant ("Route, Dashed", "Splits, Rows, Pace").
+ */
+function tileLabel(
+  { item, prepared }: GalleryTile,
+  context: LayerContext,
+  t: ReturnType<typeof useTranslation>['t'],
+): string {
+  const shown = layerText(prepared.layer, context.data, context.textContext)?.value ?? '';
+  const flag = (on: boolean | undefined, label: string) => (on === true ? label : '');
+  const parts = ((): string[] => {
+    switch (item.kind) {
+      case 'metric':
+        return [t(`metrics.${item.metric}`), shown];
+      case 'summaryMetric':
+        return [t(`summaryMetrics.${item.metric}`), shown];
+      case 'info':
+        return [t(`widgets.${item.field}`), shown];
+      case 'text':
+        return [t('widgets.text')];
+      case 'route':
+      case 'summaryRoutes':
+        return [
+          t(`widgets.${item.kind}`),
+          t(`gallery.lineStyles.${item.line ?? 'solid'}`),
+          flag(item.glow, t('gallery.glow')),
+        ];
+      case 'summaryChart':
+        return [
+          t(`widgets.sections.${item.value === 'distance' ? 'distanceChart' : 'timeChart'}`),
+          item.bucket === undefined || item.bucket === 'auto'
+            ? ''
+            : t(`gallery.buckets.${item.bucket}`),
+          flag(item.barValues, t('gallery.values')),
+          flag(item.averageLine, t('gallery.average')),
+        ];
+      case 'activityChart':
+        return [
+          t(`activityCharts.${item.series}`),
+          ...(item.series === 'splits'
+            ? [
+                item.splitPace === false
+                  ? t('gallery.noValues')
+                  : t(item.splitElevation === true ? 'gallery.paceAndElevation' : 'gallery.pace'),
+              ]
+            : []),
+          flag(item.maxLabel, t('gallery.peak')),
+          flag(item.averageLine, t('gallery.average')),
+        ];
+      case 'logo':
+        return [
+          t('widgets.allrunLogo'),
+          t(`gallery.variants.${item.variant}`),
+          t(`style.tones.${item.tone ?? 'light'}`),
+        ];
+    }
+  })();
+  return parts.filter((part) => part !== '').join(', ');
+}
+
+/** A widget drawn in its tile, centered; a tap adds it. */
+function TileButton({
+  tile,
+  width,
+  height,
+  label,
   onPress,
 }: {
-  readonly item: CatalogItem;
-  readonly separator: boolean;
+  readonly tile: GalleryTile;
+  readonly width: number;
+  readonly height: number;
+  readonly label: string;
   readonly onPress: () => void;
 }) {
-  const label = useCatalogLabel(item);
+  const { layer, content } = tile.prepared;
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: 48,
-        paddingHorizontal: 16,
-        justifyContent: 'center',
-        borderTopWidth: separator ? 0.5 : 0,
-        borderTopColor: colors.separator,
+        width,
+        height,
+        borderRadius: 10,
+        borderCurve: 'continuous',
+        overflow: 'hidden',
+        backgroundColor: TILE_BACKGROUNDS[tile.background],
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Text style={{ color: colors.label, fontSize: 17 }}>{label}</Text>
+      <Canvas style={{ width, height }}>
+        <Group
+          transform={[{ translateX: width / 2 }, { translateY: height / 2 }, { scale: tile.scale }]}
+          layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
+        >
+          {content}
+        </Group>
+      </Canvas>
     </Pressable>
   );
-}
-
-/** Name of a catalog widget in the app language. */
-function useCatalogLabel(item: CatalogItem): string {
-  const { t } = useTranslation();
-  switch (item.kind) {
-    case 'metric':
-      return t(`metrics.${item.metric}`);
-    case 'summaryMetric':
-      return t(`summaryMetrics.${item.metric}`);
-    case 'info':
-      return t(`widgets.${item.field}`);
-    case 'logo':
-      return t('widgets.allrunLogo');
-    case 'activityChart':
-      return t(`activityCharts.${item.series}`);
-    case 'text':
-    case 'route':
-    case 'summaryRoutes':
-    case 'summaryChart':
-      return t(`widgets.${item.kind}`);
-  }
 }

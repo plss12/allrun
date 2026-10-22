@@ -20,7 +20,6 @@ import {
   lineAxisLabels,
   MISSING_VALUE,
   speedMeasure,
-  splitLabels,
   splitRowTexts,
   type SummaryData,
   textRuns,
@@ -239,7 +238,7 @@ describe('textRuns', () => {
   });
 });
 
-describe('lineAxisLabels and splitLabels', () => {
+describe('lineAxisLabels', () => {
   it("label the ends of a line with how far it runs, in the user's unit", () => {
     expect(lineAxisLabels({ axis: 'distance', axisEnd: 16_080 }, context)).toEqual([
       '0',
@@ -252,22 +251,6 @@ describe('lineAxisLabels and splitLabels', () => {
       ),
     ).toEqual(['0', '10.0 mi']);
     expect(lineAxisLabels({ axis: 'time', axisEnd: 2700 }, context)).toEqual(['0:00', '45:00']);
-  });
-
-  it('number every split, or 1 and every 5th of many', () => {
-    expect(splitLabels(3)).toEqual(['1', '2', '3']);
-    const marathon = splitLabels(42);
-    expect(marathon.filter((label) => label !== '')).toEqual([
-      '1',
-      '5',
-      '10',
-      '15',
-      '20',
-      '25',
-      '30',
-      '35',
-      '40',
-    ]);
   });
 });
 

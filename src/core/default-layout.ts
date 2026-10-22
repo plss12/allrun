@@ -79,7 +79,7 @@ const LAYOUTS: Readonly<Record<CanvasFormat, FormatLayout>> = {
     titleMaxWidth: 0.86,
     route: slot(0.5, 0.485, 0.69),
     routes: slot(0.5, 0.36, 0.6),
-    chart: slot(0.5, 0.61, 0.6),
+    chart: slot(0.5, 0.615, 0.6),
     metrics: { y: 0.79, from: 0.03, to: 0.97 },
     scale: 0.66,
     logo: slot(0.5, 0.93, 0.85),
@@ -268,26 +268,28 @@ export function newLayer(
         opacity: 1,
       };
     case 'route':
+    case 'summaryRoutes': {
+      // The line's look goes in its stroke.
+      const { kind, line, glow } = item;
+      const one = kind === 'route';
       return {
-        ...item,
+        kind,
         id,
-        stroke: { color: WHITE, width: 8 },
-        transform: centered(layout.route.scale),
-        opacity: 0.95,
+        stroke: {
+          color: WHITE,
+          width: one ? 8 : 4,
+          ...(line === undefined ? {} : { line }),
+          ...(glow === undefined ? {} : { glow }),
+        },
+        transform: centered(one ? layout.route.scale : layout.routes.scale),
+        opacity: one ? 0.95 : 0.85,
       };
-    case 'summaryRoutes':
-      return {
-        ...item,
-        id,
-        stroke: { color: WHITE, width: 4 },
-        transform: centered(layout.routes.scale),
-        opacity: 0.85,
-      };
+    }
     case 'summaryChart':
       return {
+        bucket: 'auto',
         ...item,
         id,
-        bucket: 'auto',
         color: WHITE,
         axisLabels: true,
         title: true,
@@ -314,10 +316,9 @@ export function newLayer(
       };
     case 'logo':
       return {
+        tone: 'light',
         ...item,
         id,
-        tone: 'light',
-        variant: 'wordmark',
         transform: centered(layout.logo.scale),
         opacity: 0.95,
       };

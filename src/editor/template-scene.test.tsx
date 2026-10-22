@@ -12,7 +12,9 @@ import {
   type SkImage,
 } from '@shopify/react-native-skia/lib/commonjs/headless';
 
-import { defaultActivityTemplate, newLayer } from '@/core/default-layout';
+import { monthRange } from '@/core/dates';
+import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from '@/core/default-layout';
+import { summarize } from '@/core/summary';
 import {
   ACTIVITY_CHART_SERIES,
   type ActivityChartSeries,
@@ -193,22 +195,6 @@ describe('TemplateScene style options', () => {
       halo(await render((layer) => layer, 'route')),
     );
   });
-
-  it('makes room for the start and end marks of a route', () => {
-    const base = defaultActivityTemplate(activity, 'story');
-    const route = base.layers.find((layer) => layer.id === 'route');
-    if (route?.kind !== 'route') {
-      throw new Error('No route');
-    }
-    const context: LayerContext = {
-      data: { mode: 'activity', activity, detail: null },
-      fonts: interFonts(),
-      textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
-      translate: (key) => key,
-    };
-    const sizeOf = (layer: Layer) => scene.prepareLayers({ ...base, layers: [layer] }, context)[0];
-    expect(sizeOf({ ...route, endpoints: true }).width).toBeGreaterThan(sizeOf(route).width);
-  });
 });
 
 describe('activity charts', () => {
@@ -222,15 +208,8 @@ describe('activity charts', () => {
     }
     const detail = await source.getActivityDetail(ride.id);
     const base = defaultActivityTemplate(ride, 'story');
-    const drawn = async (
-      data: LayerContext['data'],
-      series: ActivityChartSeries,
-      options: { readonly orientation?: 'rows' } = {},
-    ) => {
-      const chart = {
-        ...newLayer({ kind: 'activityChart', series }, 'chart', 'story'),
-        ...options,
-      };
+    const drawn = async (data: LayerContext['data'], series: ActivityChartSeries) => {
+      const chart = newLayer({ kind: 'activityChart', series }, 'chart', 'story');
       const context: LayerContext = {
         data,
         fonts: interFonts(),
@@ -251,18 +230,51 @@ describe('activity charts', () => {
     }
     const { layers } = await drawn({ mode: 'activity', activity: ride, detail: null }, 'pace');
     expect(layers).toEqual([]);
-    // As rows, the splits draw too, as tall as their rows.
-    const rows = await drawn({ mode: 'activity', activity: ride, detail }, 'splits', {
-      orientation: 'rows',
-    });
-    expect(rows.pixels).toBeGreaterThan(5000);
+    // The splits draw as rows, as tall as their rows.
+    const rows = await drawn({ mode: 'activity', activity: ride, detail }, 'splits');
     expect(rows.layers[0].height).toBeGreaterThan(400);
+  });
+});
+
+describe("a period's bar values", () => {
+  const context = (data: LayerContext['data']): LayerContext => ({
+    data,
+    fonts: interFonts(),
+    textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+    translate: (key) => key,
+  });
+  const heightOf = (template: Template, layer: Layer, data: LayerContext['data']) =>
+    scene.prepareLayers({ ...template, layers: [plainChart(layer)] }, context(data))[0].height;
+
+  it("write each bar's value over a period's chart", () => {
+    const month = monthRange('2026-10-14');
+    const activities = [
+      makeActivity({ localDate: '2026-10-03', distanceMeters: 12_300 }),
+      makeActivity({ localDate: '2026-10-17', distanceMeters: 8_000 }),
+    ];
+    const data = {
+      mode: 'summary',
+      kind: 'month',
+      summary: summarize(activities, month),
+      activities,
+      bucketSize: 'day',
+    } as const;
+    const base = defaultSummaryTemplate(data.summary, 'story');
+    const chart = newLayer({ kind: 'summaryChart', value: 'distance' }, 'chart', 'story');
+    if (chart.kind !== 'summaryChart') {
+      throw new Error('No summary chart');
+    }
+    expect(heightOf(base, { ...chart, barValues: true }, data)).toBeGreaterThan(
+      heightOf(base, chart, data),
+    );
   });
 });
 
 /** A chart written in the only font these tests load. */
 function plainChart(layer: Layer): Layer {
-  return layer.kind === 'activityChart' ? { ...layer, font: 'inter' } : layer;
+  return layer.kind === 'activityChart' || layer.kind === 'summaryChart'
+    ? { ...layer, font: 'inter' }
+    : layer;
 }
 
 describe('TemplateScene opacity', () => {

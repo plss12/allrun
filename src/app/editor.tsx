@@ -61,7 +61,7 @@ import { EditorCanvas } from '@/editor/editor-canvas';
 import { ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
 import type { ExportDesign } from '@/editor/export-scene';
-import { type EditorData, layerText } from '@/editor/editor-data';
+import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
@@ -272,7 +272,7 @@ function EditorWorkspace({
           data.activity,
           data.detail === null ? [] : availableActivityCharts(data.detail, unit),
         )
-      : summaryCatalog(data.summary);
+      : summaryCatalog(data.summary, data.bucketSize);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
   const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
@@ -563,6 +563,9 @@ function EditorWorkspace({
       <LayerSheet
         visible={sheetOpen}
         catalog={catalog}
+        format={template.format}
+        font={designFont(template.layers)}
+        layerContext={layerContext}
         onAdd={addNewLayer}
         onAddText={addText}
         onClose={() => setSheetOpen(false)}
@@ -668,14 +671,7 @@ function EditorWorkspace({
         }}
       >
         {styled !== null ? (
-          <StylePanel
-            layer={styled}
-            summary={data.mode === 'summary' ? data.summary : null}
-            autoBucket={data.mode === 'summary' ? data.bucketSize : null}
-            locale={locale}
-            textOf={(layer) => layerText(layer, data, layerContext.textContext)?.value ?? null}
-            onChange={edit}
-          />
+          <StylePanel layer={styled} locale={locale} onChange={edit} />
         ) : (
           <View style={{ height: STYLE_PANEL_HEIGHT, justifyContent: 'center' }}>
             {step === 'photo' ? (

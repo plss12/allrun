@@ -1,24 +1,18 @@
 import { makeActivity } from '@/test-utils/make-activity';
 import { makeSummary } from '@/test-utils/make-summary';
 
-import { customRange, monthRange, weekRange, yearRange } from './dates';
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
 import {
   castsShadow,
-  chartBucketOptions,
-  chartValueOptions,
   colorPageOf,
   contrastingInk,
   layerColor,
   relativeLuminance,
   setChartOptions,
   setDataLabels,
-  setDateFormat,
   setLayerColor,
   setLayerOpacity,
-  setLineOptions,
   setLogoOptions,
-  setPeriodFormat,
   setStrokeWidth,
   setTextStyle,
   STYLE_COLOR_PAGES,
@@ -147,31 +141,6 @@ describe('setTextStyle and setDataLabels', () => {
     expect(setDataLabels(activity, 'metric-distance', { showLabel: true })).toBe(activity);
     expect(() => setDataLabels(activity, 'name', { showLabel: false })).toThrow(/data labels/);
   });
-
-  it('writes a pace with marks or without', () => {
-    const marked = setDataLabels(activity, 'metric-distance', { paceNotation: 'marks' });
-    expect(find(marked, 'metric-distance')).toMatchObject({ paceNotation: 'marks' });
-    expect(setDataLabels(marked, 'metric-distance', { paceNotation: 'marks' })).toBe(marked);
-    // Without a notation a pace reads with a colon: choosing it records no step.
-    expect(setDataLabels(activity, 'metric-distance', { paceNotation: 'colon' })).toBe(activity);
-  });
-
-  it('writes a time in words or as a clock', () => {
-    const words = setDataLabels(activity, 'metric-movingTime', { timeNotation: 'units' });
-    expect(find(words, 'metric-movingTime')).toMatchObject({ timeNotation: 'units' });
-    // Without a notation a time reads as a clock: choosing it records no step.
-    expect(setDataLabels(activity, 'metric-movingTime', { timeNotation: 'clock' })).toBe(activity);
-  });
-
-  it("sets how the activity's date reads, and only the date's", () => {
-    const short = setDateFormat(activity, 'date', 'short');
-    expect(find(short, 'date')).toMatchObject({ dateFormat: 'short' });
-    expect(setDateFormat(short, 'date', 'short')).toBe(short);
-    // Without a format the date reads in full.
-    expect(setDateFormat(activity, 'date', 'full')).toBe(activity);
-    expect(() => setDateFormat(activity, 'name', 'short')).toThrow(/date format/);
-    expect(() => setDateFormat(activity, 'route', 'short')).toThrow(/date format/);
-  });
 });
 
 describe('contrastingInk', () => {
@@ -184,19 +153,6 @@ describe('contrastingInk', () => {
 });
 
 describe('the options of the format tab', () => {
-  it('sets the decimals of a distance, two being the default', () => {
-    const one = setDataLabels(activity, 'metric-distance', { decimals: 1 });
-    expect(find(one, 'metric-distance')).toMatchObject({ decimals: 1 });
-    expect(setDataLabels(activity, 'metric-distance', { decimals: 2 })).toBe(activity);
-  });
-
-  it("sets how the period's name reads, and only the period's", () => {
-    const short = setPeriodFormat(summary, 'period', 'short');
-    expect(find(short, 'period')).toMatchObject({ periodFormat: 'short' });
-    expect(setPeriodFormat(summary, 'period', 'full')).toBe(summary);
-    expect(() => setPeriodFormat(activity, 'date', 'short')).toThrow(/period format/);
-  });
-
   it('puts a backdrop and letter spacing on texts, none and normal being the defaults', () => {
     const boxed = setTextStyle(activity, 'name', { backdrop: 'solid', letterSpacing: 'wide' });
     expect(find(boxed, 'name')).toMatchObject({
@@ -207,24 +163,7 @@ describe('the options of the format tab', () => {
     );
   });
 
-  it('dashes and lights up routes, and marks the ends of one activity only', () => {
-    const route = setLineOptions(activity, 'route', {
-      line: 'dotted',
-      glow: true,
-      endpoints: true,
-    });
-    expect(find(route, 'route')).toMatchObject({
-      endpoints: true,
-      stroke: { line: 'dotted', glow: true },
-    });
-    expect(setLineOptions(activity, 'route', { line: 'solid', glow: false })).toBe(activity);
-    expect(find(setLineOptions(summary, 'routes', { line: 'dashed' }), 'routes')).toMatchObject({
-      stroke: { line: 'dashed' },
-    });
-    expect(() => setLineOptions(summary, 'routes', { endpoints: true })).toThrow(/start and end/);
-  });
-
-  it("styles an activity's chart like a period's, but it measures only its series", () => {
+  it("styles an activity's chart like a period's", () => {
     const withChart = parseTemplate({
       ...activity,
       layers: [
@@ -232,56 +171,11 @@ describe('the options of the format tab', () => {
         newLayer({ kind: 'activityChart', series: 'elevation' }, 'chart', 'story'),
       ],
     });
-    const styled = setChartOptions(withChart, 'chart', { averageLine: true, title: false });
-    expect(find(styled, 'chart')).toMatchObject({ averageLine: true, title: false });
+    const styled = setChartOptions(withChart, 'chart', { axisLabels: false, title: false });
+    expect(find(styled, 'chart')).toMatchObject({ axisLabels: false, title: false });
     expect(find(setLayerColor(styled, 'chart', '#C94A2E'), 'chart')).toMatchObject({
       color: '#C94A2E',
     });
-    expect(() => setChartOptions(withChart, 'chart', { value: 'distance' })).toThrow(/measure/);
-  });
-
-  it('lays splits out as rows with their pace and elevation, and marks the highest value', () => {
-    const withSplits = parseTemplate({
-      ...activity,
-      layers: [
-        ...activity.layers,
-        newLayer({ kind: 'activityChart', series: 'splits' }, 'splits', 'story'),
-      ],
-    });
-    // A new chart comes with nothing extra, like the average line: as columns, without its
-    // highest value marked; as rows, with each split's pace but not its elevation.
-    const added = find(withSplits, 'splits');
-    expect(added).not.toHaveProperty('maxLabel');
-    expect(added).not.toHaveProperty('splitElevation');
-    expect(
-      setChartOptions(withSplits, 'splits', {
-        orientation: 'columns',
-        maxLabel: false,
-        splitPace: true,
-        splitElevation: false,
-      }),
-    ).toBe(withSplits);
-    const rows = setChartOptions(withSplits, 'splits', {
-      orientation: 'rows',
-      splitPace: false,
-      splitElevation: true,
-    });
-    expect(find(rows, 'splits')).toMatchObject({
-      orientation: 'rows',
-      splitPace: false,
-      splitElevation: true,
-    });
-    const marked = setChartOptions(summary, 'chart', { maxLabel: true });
-    expect(find(marked, 'chart')).toMatchObject({ maxLabel: true });
-    expect(() => setChartOptions(summary, 'chart', { orientation: 'rows' })).toThrow(
-      /split layout/,
-    );
-  });
-
-  it("draws a chart's average, off by default", () => {
-    const chart = setChartOptions(summary, 'chart', { averageLine: true });
-    expect(find(chart, 'chart')).toMatchObject({ averageLine: true });
-    expect(setChartOptions(summary, 'chart', { averageLine: false })).toBe(summary);
   });
 });
 
@@ -297,7 +191,6 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
 
   it('sets chart and logo options', () => {
     const chart = setChartOptions(summary, 'chart', {
-      bucket: 'week',
       axisLabels: false,
       title: false,
       font: 'orbitron',
@@ -307,7 +200,6 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
     });
     expect(find(chart, 'chart')).toMatchObject({
       align: 'left',
-      bucket: 'week',
       axisLabels: false,
       title: false,
       font: 'orbitron',
@@ -315,36 +207,9 @@ describe('setStrokeWidth, setChartOptions and setLogoOptions', () => {
       uppercase: false,
     });
     expect(parseTemplate(chart)).toEqual(chart);
-    expect(setChartOptions(summary, 'chart', { value: 'distance' })).toBe(summary);
-    const logo = setLogoOptions(activity, 'logo', { tone: 'color', variant: 'lockup' });
-    expect(find(logo, 'logo')).toMatchObject({ tone: 'color', variant: 'lockup' });
+    expect(setChartOptions(summary, 'chart', { title: true })).toBe(summary);
+    const logo = setLogoOptions(activity, 'logo', { tone: 'color' });
+    expect(find(logo, 'logo')).toMatchObject({ tone: 'color' });
     expect(() => setLogoOptions(activity, 'name', { tone: 'dark' })).toThrow(/logo options/);
-  });
-});
-
-describe('chartValueOptions', () => {
-  it('offers distance only when the period has some', () => {
-    expect(chartValueOptions(makeSummary())).toEqual(['distance', 'movingTime']);
-    const gym = makeActivity({
-      sportType: 'WeightTraining',
-      distanceMeters: 0,
-      routePolyline: null,
-    });
-    expect(chartValueOptions(makeSummary([gym]))).toEqual(['movingTime']);
-  });
-});
-
-describe('chartBucketOptions', () => {
-  it('offers the bar sizes that give a readable number of bars', () => {
-    // A week that spans two months: two monthly bars are not worth a chart.
-    expect(chartBucketOptions(weekRange('2026-09-30'))).toEqual(['day']);
-    expect(chartBucketOptions(monthRange('2026-10-14'))).toEqual(['day', 'week']);
-    expect(chartBucketOptions(yearRange('2026-10-14'))).toEqual(['week', 'month']);
-    // A 10-week training block.
-    expect(chartBucketOptions(customRange('2026-08-10', '2026-10-18'))).toEqual(['week', 'month']);
-  });
-
-  it('offers nothing for a range too short for any chart', () => {
-    expect(chartBucketOptions(customRange('2026-10-14', '2026-10-15'))).toEqual([]);
   });
 });

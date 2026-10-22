@@ -328,20 +328,6 @@ export function lineAxisLabels(
   return ['0', `${end.value} ${end.unit ?? ''}`.trim()];
 }
 
-/** Above this many splits, only the 1st and every 5th keep their number. */
-const MAX_SPLIT_NUMBERS = 16;
-
-/**
- * Numbers under the bars of the splits ("1", "2"…), thinned to 1, 5, 10… for long activities
- * ("" for an unlabelled bar). Time and space O(n).
- */
-export function splitLabels(count: number): string[] {
-  return Array.from({ length: count }, (_, i) => {
-    const number = i + 1;
-    return count <= MAX_SPLIT_NUMBERS || number === 1 || number % 5 === 0 ? String(number) : '';
-  });
-}
-
 /** How a sport writes how fast it went: a pace, a swimming pace or a speed. */
 export type SpeedMeasure = 'pace' | 'swimPace' | 'speed';
 
