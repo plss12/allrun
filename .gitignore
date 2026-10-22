@@ -52,3 +52,6 @@ supabase/.branches/
 
 # editors
 .idea/
+
+# Product notes with personal photos and third-party screenshots (summarized in ADR 009)
+docs/AllRun Ideas.pdf
