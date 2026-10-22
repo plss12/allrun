@@ -11,7 +11,7 @@ import { activityCatalog, summaryCatalog } from '@/core/layer-catalog';
 import { summarize } from '@/core/summary';
 import { makeActivity } from '@/test-utils/make-activity';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
-import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
+import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import type { EditorData } from './editor-data';
 import type { LayerContext } from './template-scene';
@@ -47,7 +47,12 @@ function contextFor(data: EditorData): LayerContext {
   return {
     data,
     fonts: loadTestFonts(['inter']),
-    textContext: { unit: 'km', locale: 'es', durationUnits: TEST_DURATION_UNITS },
+    textContext: {
+      unit: 'km',
+      locale: 'es',
+      durationUnits: TEST_DURATION_UNITS,
+      unitLabel: testUnitLabel,
+    },
     translate: (key) => key,
   };
 }

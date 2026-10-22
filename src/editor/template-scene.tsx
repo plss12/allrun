@@ -277,7 +277,7 @@ function prepareLayer(
         {
           label: text.label === null ? null : translate(text.label),
           value: text.value,
-          unit: text.unit,
+          unit: text.unit === null ? null : textContext.unitLabel(text.unit),
           valueSize: isData ? VALUE_SIZE : layer.kind === 'info' ? INFO_SIZE : TEXT_SIZE,
         },
         // On a backdrop the box has to fit too: the text gets a little less room.

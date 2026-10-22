@@ -23,7 +23,7 @@ import {
 } from '@/core/template';
 import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 import { makeActivity } from '@/test-utils/make-activity';
-import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
+import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import { FONT_FAMILIES } from './fonts';
 import type { LayerContext } from './template-scene';
@@ -89,7 +89,12 @@ async function render(change: (layer: Layer) => Layer, id: string): Promise<SkIm
   const context: LayerContext = {
     data: { mode: 'activity', activity, detail: null },
     fonts: interFonts(),
-    textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+    textContext: {
+      unit: 'km',
+      locale: 'en',
+      durationUnits: TEST_DURATION_UNITS,
+      unitLabel: testUnitLabel,
+    },
     translate: (key) => key,
   };
   const surface = makeOffscreenSurface(1080, 1920);
@@ -130,7 +135,12 @@ describe('prepareLayers', () => {
         {
           data: { mode: 'activity', activity: { ...activity, name: activityName }, detail: null },
           fonts: interFonts(),
-          textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+          textContext: {
+            unit: 'km',
+            locale: 'en',
+            durationUnits: TEST_DURATION_UNITS,
+            unitLabel: testUnitLabel,
+          },
           translate: (key) => key,
         },
       );
@@ -213,7 +223,12 @@ describe('activity charts', () => {
       const context: LayerContext = {
         data,
         fonts: interFonts(),
-        textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+        textContext: {
+          unit: 'km',
+          locale: 'en',
+          durationUnits: TEST_DURATION_UNITS,
+          unitLabel: testUnitLabel,
+        },
         translate: (key) => key,
       };
       const layers = scene.prepareLayers({ ...base, layers: [plainChart(chart)] }, context);
@@ -240,7 +255,12 @@ describe("a period's bar values", () => {
   const context = (data: LayerContext['data']): LayerContext => ({
     data,
     fonts: interFonts(),
-    textContext: { unit: 'km', locale: 'en', durationUnits: TEST_DURATION_UNITS },
+    textContext: {
+      unit: 'km',
+      locale: 'en',
+      durationUnits: TEST_DURATION_UNITS,
+      unitLabel: testUnitLabel,
+    },
     translate: (key) => key,
   });
   const heightOf = (template: Template, layer: Layer, data: LayerContext['data']) =>

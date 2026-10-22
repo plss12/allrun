@@ -16,7 +16,12 @@ import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } fr
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type { ActivityChartSeries, Layer, SummaryMetricId } from '@/core/template';
 import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
-import { formatActivityDate, formatMetric, formatPeriodName } from '@/ui/format';
+import {
+  formatActivityDate,
+  type FormattedMetric,
+  formatMetric,
+  formatPeriodName,
+} from '@/ui/format';
 
 /** A period summary to fill a template with. */
 export interface SummaryData {
@@ -87,6 +92,13 @@ export interface TextContext {
   readonly locale: string;
   /** How each unit of a time written in words is abbreviated in the app language ("min"). */
   readonly durationUnits: Readonly<Record<DurationUnit, string>>;
+  /** How a metric's unit is written in the app language: "bpm" in English, "ppm" in Spanish. */
+  readonly unitLabel: (unit: MetricUnit) => string;
+}
+
+/** A formatted value followed by its unit in the app language, when it has one. */
+function withUnit({ value, unit }: FormattedMetric, context: TextContext): string {
+  return unit === null ? value : `${value} ${context.unitLabel(unit)}`;
 }
 
 /** Shown in place of a value the activity or period doesn't have. */
@@ -325,7 +337,7 @@ export function lineAxisLabels(
     display.kind === 'number' ? { ...display, fractionDigits: 1 } : display,
     context.locale,
   );
-  return ['0', `${end.value} ${end.unit ?? ''}`.trim()];
+  return ['0', withUnit(end, context)];
 }
 
 /** How a sport writes how fast it went: a pace, a swimming pace or a speed. */
@@ -364,8 +376,7 @@ export function chartValueText(measure: ChartMeasure, value: number, context: Te
             unit: context.unit,
             sportFamily: 'run',
           });
-  const formatted = formatMetric(display, context.locale);
-  return formatted.unit === null ? formatted.value : `${formatted.value} ${formatted.unit}`;
+  return withUnit(formatMetric(display, context.locale), context);
 }
 
 const CHART_METRICS = {
@@ -408,6 +419,6 @@ export function splitRowTexts(
   return {
     number: row.first === row.last ? String(row.first) : `${row.first}–${row.last}`,
     value: speed.value,
-    elevation: `${sign}${climb.value} ${climb.unit ?? ''}`.trim(),
+    elevation: `${sign}${withUnit(climb, context)}`,
   };
 }

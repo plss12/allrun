@@ -1,3 +1,5 @@
+import type { MetricUnit } from '@/core/metrics';
+
 /** English strings; the source of truth for translation keys. */
 export const en = {
   app: {
@@ -322,6 +324,29 @@ export const en = {
     minutes: 'm',
     seconds: 's',
   },
+  // Every unit a metric can carry; heart rate and steps change in other languages.
+  metricUnits: {
+    km: 'km',
+    mi: 'mi',
+    m: 'm',
+    ft: 'ft',
+    'min/km': 'min/km',
+    'min/mi': 'min/mi',
+    'min/100m': 'min/100m',
+    'min/100yd': 'min/100yd',
+    '/km': '/km',
+    '/mi': '/mi',
+    '/100m': '/100m',
+    '/100yd': '/100yd',
+    'km/h': 'km/h',
+    mph: 'mph',
+    bpm: 'bpm',
+    W: 'W',
+    spm: 'spm',
+    rpm: 'rpm',
+    kcal: 'kcal',
+    h: 'h',
+  } satisfies Record<MetricUnit, string>,
   fonts: {
     inter: 'Modern',
     barlowCondensed: 'Sport',

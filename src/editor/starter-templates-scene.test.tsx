@@ -14,7 +14,7 @@ import { CANVAS_FORMATS, type CanvasFormat } from '@/core/template';
 import { es } from '@/i18n/locales/es';
 import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
-import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
+import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import type { EditorData } from './editor-data';
 import type { LayerContext, PreparedLayer } from './template-scene';
@@ -113,7 +113,12 @@ describe('starter templates', () => {
       const context: LayerContext = {
         data,
         fonts,
-        textContext: { unit: 'km', locale: 'es', durationUnits: TEST_DURATION_UNITS },
+        textContext: {
+          unit: 'km',
+          locale: 'es',
+          durationUnits: TEST_DURATION_UNITS,
+          unitLabel: testUnitLabel,
+        },
         translate,
       };
       for (const id of STARTER_TEMPLATE_IDS) {

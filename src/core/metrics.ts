@@ -193,28 +193,36 @@ export function availableMetrics(activity: Activity): MetricId[] {
   });
 }
 
+/**
+ * Every unit a displayed metric can carry, as a key the interface translates (`metricUnits` in
+ * the locales): most read the same in every language, but heart rate is "bpm" in English and
+ * "ppm" in Spanish.
+ */
+export const METRIC_UNITS = [
+  'km',
+  'mi',
+  'm',
+  'ft',
+  'min/km',
+  'min/mi',
+  'min/100m',
+  'min/100yd',
+  '/km',
+  '/mi',
+  '/100m',
+  '/100yd',
+  'km/h',
+  'mph',
+  'bpm',
+  'W',
+  'spm',
+  'rpm',
+  'kcal',
+  'h',
+] as const;
+
 /** Unit label key of a displayed metric; the UI translates it. */
-export type MetricUnit =
-  | 'km'
-  | 'mi'
-  | 'm'
-  | 'ft'
-  | 'min/km'
-  | 'min/mi'
-  | 'min/100m'
-  | 'min/100yd'
-  | '/km'
-  | '/mi'
-  | '/100m'
-  | '/100yd'
-  | 'km/h'
-  | 'mph'
-  | 'bpm'
-  | 'W'
-  | 'spm'
-  | 'rpm'
-  | 'kcal'
-  | 'h';
+export type MetricUnit = (typeof METRIC_UNITS)[number];
 
 /**
  * A metric ready to render. Numbers stay numeric so the UI can format them for the user's

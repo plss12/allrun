@@ -249,6 +249,7 @@ function EditorWorkspace({
         minutes: t('durationUnits.minutes'),
         seconds: t('durationUnits.seconds'),
       },
+      unitLabel: (metricUnit) => t(`metricUnits.${metricUnit}`),
     },
     translate: (key, values) => t(key, values),
   };

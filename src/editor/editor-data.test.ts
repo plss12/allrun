@@ -1,11 +1,12 @@
 import { weekRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from '@/core/default-layout';
+import type { MetricUnit } from '@/core/metrics';
 import { summarize } from '@/core/summary';
 import type { Layer } from '@/core/template';
 import { en } from '@/i18n/locales/en';
 import { makeActivity } from '@/test-utils/make-activity';
 import { makeSummary } from '@/test-utils/make-summary';
-import { TEST_DURATION_UNITS } from '@/test-utils/text-context';
+import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import {
   chartBuckets,
@@ -25,7 +26,12 @@ import {
   textRuns,
 } from './editor-data';
 
-const context = { unit: 'km', locale: 'es', durationUnits: TEST_DURATION_UNITS } as const;
+const context = {
+  unit: 'km',
+  locale: 'es',
+  durationUnits: TEST_DURATION_UNITS,
+  unitLabel: testUnitLabel,
+} as const;
 const activity = makeActivity({ name: 'Rodaje suave', startLocal: '2026-10-14T08:00:00' });
 const activityData: EditorData = { mode: 'activity', activity, detail: null };
 
@@ -265,10 +271,20 @@ describe('chart texts', () => {
     expect(chartValueText('elevation', 283.4, context)).toBe('283 m');
     expect(chartValueText('pace', 1000 / 397, context)).toBe('6:37 min/km');
     expect(chartValueText('speed', 30 / 3.6, context)).toBe('30,0 km/h');
-    expect(chartValueText('heartRate', 158, context)).toBe('158 bpm');
+    expect(chartValueText('heartRate', 158, context)).toBe('158 ppm');
     expect(chartValueText('power', 221, context)).toBe('221 W');
     expect(chartValueText('periodDistance', 52_300, context)).toBe('52,30 km');
     expect(chartValueText('periodTime', 19_200, context)).toBe('5:20 h');
+  });
+
+  it('write units in the app language: beats per minute are "ppm" in Spanish', () => {
+    const english = {
+      ...context,
+      locale: 'en',
+      unitLabel: (unit: MetricUnit) => en.metricUnits[unit],
+    };
+    expect(chartValueText('heartRate', 158, english)).toBe('158 bpm');
+    expect(chartValueText('heartRate', 158, context)).toBe('158 ppm');
   });
 
   it('write a row of splits: its number, its pace alone and its change in altitude', () => {
