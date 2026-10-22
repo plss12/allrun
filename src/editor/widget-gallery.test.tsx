@@ -1,5 +1,5 @@
 /**
- * Builds the widget gallery with real fonts (CanvasKit): every tile fits its widget, the variants
+ * Builds the widget gallery with real fonts (CanvasKit): every page fits its tile, the variants
  * of a widget compare at one size, and variants that read the same are shown once.
  *
  * @jest-environment node
@@ -72,91 +72,99 @@ function summaryData(kind: 'week' | 'year'): EditorData {
   };
 }
 
+const activitySections = () =>
+  gallery.gallerySections(
+    activityCatalog(activity),
+    'story',
+    'inter',
+    contextFor(activityData),
+    SCREEN,
+    'Text',
+  );
+
+/** Every page of every tile. */
+const pagesOf = (sections: ReturnType<typeof activitySections>) =>
+  sections.flatMap((section) =>
+    section.rows.flatMap((row) => row.widgets.flatMap((widget) => widget.pages)),
+  );
+
 describe('gallerySections', () => {
-  it('fits every widget in its tile, and lays tiles out in rows that fit the screen', () => {
-    const sections = gallery.gallerySections(
-      activityCatalog(activity),
-      'story',
-      'inter',
-      contextFor(activityData),
-      SCREEN,
-      'Text',
-    );
+  it('fits every variant in its tile, above its dots, and lays tiles out in rows that fit', () => {
+    const sections = activitySections();
     expect(sections.length).toBeGreaterThan(0);
     for (const section of sections) {
-      for (const row of section.data) {
-        const rowWidth = row.length * section.width + (row.length - 1) * gallery.GALLERY_GAP;
+      for (const row of section.rows) {
+        const rowWidth =
+          row.widgets.length * row.width + (row.widgets.length - 1) * gallery.GALLERY_GAP;
         expect(rowWidth).toBeLessThanOrEqual(SCREEN - 2 * gallery.GALLERY_PADDING);
-        for (const tile of row) {
-          expect(tile.prepared.width * tile.scale).toBeLessThanOrEqual(section.width);
-          expect(tile.prepared.height * tile.scale).toBeLessThanOrEqual(section.height);
+        for (const widget of row.widgets) {
+          const room =
+            widget.pages.length > 1 ? row.height - gallery.GALLERY_DOTS_HEIGHT : row.height;
+          for (const page of widget.pages) {
+            expect(page.prepared.width * page.scale).toBeLessThanOrEqual(row.width);
+            expect(page.prepared.height * page.scale).toBeLessThanOrEqual(room);
+          }
         }
       }
     }
   });
 
-  it('draws the variants of a widget at one size', () => {
+  it("draws a widget's variants at one size, page after page", () => {
+    const widgets = activitySections().flatMap((section) =>
+      section.rows.flatMap((row) => row.widgets),
+    );
+    const scalesOf = (key: string) =>
+      new Set(widgets.find((widget) => widget.key === key)?.pages.map((page) => page.scale));
+    expect(scalesOf('data-distance').size).toBe(1);
+    expect(scalesOf('data-time').size).toBe(1);
+  });
+
+  it('fills each date page with its own date: the short ones are not shrunk to the long one', () => {
+    const pages = pagesOf(activitySections());
+    const scaleOf = (key: string) => pages.find((page) => page.key === key)?.scale ?? 0;
+    expect(scaleOf('info-activityDate-time')).toBeGreaterThan(scaleOf('info-activityDate'));
+  });
+
+  it('lays every tile two per row but the charts, which take the whole width', () => {
     const sections = gallery.gallerySections(
-      activityCatalog(activity),
+      activityCatalog(activity, ['elevation']),
       'story',
       'inter',
       contextFor(activityData),
       SCREEN,
       'Text',
     );
-    const tiles = sections.flatMap((section) => section.data.flat());
-    const scalesOf = (prefix: string) =>
-      new Set(tiles.filter((tile) => tile.key.startsWith(prefix)).map((tile) => tile.scale));
-    expect(scalesOf('metric-distance').size).toBe(1);
-    expect(scalesOf('metric-movingTime').size).toBe(1);
+    const full = SCREEN - 2 * gallery.GALLERY_PADDING;
+    const half = Math.floor((full - gallery.GALLERY_GAP) / 2);
+    for (const section of sections) {
+      for (const row of section.rows) {
+        expect(row.width).toBe(section.id === 'charts' ? full : half);
+      }
+    }
   });
 
-  it('fills each date tile with its own date: the short ones are not shrunk to the long one', () => {
-    const tiles = gallery
-      .gallerySections(
-        activityCatalog(activity),
-        'story',
-        'inter',
-        contextFor(activityData),
-        SCREEN,
-        'Text',
-      )
-      .flatMap((section) => section.data.flat());
-    const scaleOf = (key: string) => tiles.find((tile) => tile.key === key)?.scale ?? 0;
-    expect(scaleOf('info-activityDate-time')).toBeGreaterThan(scaleOf('info-activityDate'));
-  });
-
-  it('puts the dark and colored logos on a light tile, and the rest on a dark one', () => {
-    const tiles = gallery
-      .gallerySections(
-        activityCatalog(activity),
-        'story',
-        'inter',
-        contextFor(activityData),
-        SCREEN,
-        'Text',
-      )
-      .flatMap((section) => section.data.flat());
-    const backgroundOf = (key: string) => tiles.find((tile) => tile.key === key)?.background;
-    expect(backgroundOf('logo-allrun')).toBe('dark');
-    expect(backgroundOf('logo-allrun-mark-dark')).toBe('light');
-    expect(backgroundOf('logo-allrun-color')).toBe('light');
-    expect(backgroundOf('metric-distance')).toBe('dark');
+  it('fills the tile with each date, the short ones bigger than the long ones', () => {
+    const pages = pagesOf(activitySections());
+    const sizeOf = (key: string) => {
+      const page = pages.find((candidate) => candidate.key === key);
+      return page === undefined ? 0 : page.prepared.height * page.scale;
+    };
+    expect(sizeOf('info-activityDate-weekday')).toBeGreaterThan(sizeOf('info-activityDate') * 1.5);
   });
 
   it("shows a period's name once for each way it is written: a year only reads one way", () => {
     const keysOf = (data: EditorData) =>
-      gallery
-        .gallerySections(
+      pagesOf(
+        gallery.gallerySections(
           data.mode === 'summary' ? summaryCatalog(data.summary, data.bucketSize) : [],
           'story',
           'inter',
           contextFor(data),
           SCREEN,
           'Text',
-        )
-        .flatMap((section) => section.data.flat())
-        .map((tile) => tile.key)
+        ),
+      )
+        .map((page) => page.key)
         .filter((key) => key.startsWith('info-periodName'));
     expect(keysOf(summaryData('year'))).toEqual(['info-periodName']);
     expect(keysOf(summaryData('week')).length).toBeGreaterThan(1);

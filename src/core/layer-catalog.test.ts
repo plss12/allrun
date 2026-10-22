@@ -25,12 +25,19 @@ import {
 import { addLayer, uniqueLayerId } from './template-edit';
 
 const week = weekRange('2026-10-14');
-const items = (catalog: readonly CatalogSection[]) => catalog.flatMap((section) => section.items);
+const widgets = (catalog: readonly CatalogSection[]) =>
+  catalog.flatMap((section) => section.widgets);
+const items = (catalog: readonly CatalogSection[]) =>
+  widgets(catalog).flatMap((widget) => widget.variants);
 const keys = (catalog: readonly CatalogSection[]) => items(catalog).map(catalogItemKey);
 
-/** Keys of the items of one section. */
-const sectionKeys = (catalog: readonly CatalogSection[], id: CatalogSectionId) =>
-  (catalog.find((section) => section.id === id)?.items ?? []).map(catalogItemKey);
+/** Keys of the tiles of one section. */
+const tileKeys = (catalog: readonly CatalogSection[], id: CatalogSectionId) =>
+  (catalog.find((section) => section.id === id)?.widgets ?? []).map((widget) => widget.key);
+
+/** Keys of the variants that scroll in one tile. */
+const variantKeys = (catalog: readonly CatalogSection[], tile: string) =>
+  (widgets(catalog).find((widget) => widget.key === tile)?.variants ?? []).map(catalogItemKey);
 
 /**
  * The layer each catalog item adds to `template` (free text with some content), each validated in
@@ -53,46 +60,46 @@ describe('activityCatalog', () => {
   const trail = activityCatalog(makeActivity({ sportType: 'TrailRun' }));
 
   it('groups the widgets in sections, in the gallery order', () => {
-    expect(trail.map((section) => section.id)).toEqual([
-      'distance',
-      'time',
-      'pace',
-      'elevation',
-      'more',
-      'text',
-      'date',
-      'route',
-      'brand',
+    expect(trail.map((section) => section.id)).toEqual(['data', 'text', 'route', 'brand']);
+  });
+
+  it('gives each datum a tile, in the sport order, close data sharing one', () => {
+    expect(tileKeys(trail, 'data')).toEqual([
+      'data-distance',
+      'data-elevation',
+      'data-time',
+      'data-pace',
+      'data-heartRate',
+      'data-averageCadence',
+      'data-calories',
     ]);
   });
 
-  it('offers each way of writing a value as a widget, the default first', () => {
-    // Never rounded: distances keep their two decimals, and times their seconds.
-    expect(sectionKeys(trail, 'distance')).toEqual(['metric-distance']);
+  it('scrolls through each way of writing a value in its tile, the default first, never rounded', () => {
+    // Distances keep their two decimals, and times their seconds.
+    expect(variantKeys(trail, 'data-distance')).toEqual(['metric-distance']);
     // In the sport's order: a trail run's moving time before its elapsed time.
-    expect(sectionKeys(trail, 'time')).toEqual([
+    expect(variantKeys(trail, 'data-time')).toEqual([
       'metric-movingTime',
       'metric-movingTime-units',
       'metric-elapsedTime',
       'metric-elapsedTime-units',
     ]);
-    expect(sectionKeys(trail, 'pace')).toEqual(['metric-pace', 'metric-pace-marks']);
-    expect(sectionKeys(trail, 'elevation')).toEqual([
+    expect(variantKeys(trail, 'data-pace')).toEqual(['metric-pace', 'metric-pace-marks']);
+    expect(variantKeys(trail, 'data-elevation')).toEqual([
       'metric-elevationGain',
       'metric-maxElevation',
     ]);
-    expect(sectionKeys(trail, 'more')).toEqual([
+    expect(variantKeys(trail, 'data-heartRate')).toEqual([
       'metric-averageHeartRate',
       'metric-maxHeartRate',
-      'metric-averageCadence',
-      'metric-calories',
     ]);
   });
 
-  it('offers free text and the name, and the date in a section of its own', () => {
-    expect(sectionKeys(trail, 'text')).toEqual(['text', 'info-activityName']);
+  it('offers free text, the name and the date, with every date format in its tile', () => {
+    expect(tileKeys(trail, 'text')).toEqual(['text', 'info-activityName', 'info-activityDate']);
     // Every format but the weekday with the start time; the start time alone stays.
-    expect(sectionKeys(trail, 'date')).toEqual([
+    expect(variantKeys(trail, 'info-activityDate')).toEqual([
       'info-activityDate',
       'info-activityDate-weekday',
       'info-activityDate-long',
@@ -103,7 +110,7 @@ describe('activityCatalog', () => {
   });
 
   it('offers the route solid, glowing, dashed and dotted', () => {
-    expect(sectionKeys(trail, 'route')).toEqual([
+    expect(variantKeys(trail, 'route')).toEqual([
       'route',
       'route-glow',
       'route-dashed',
@@ -111,28 +118,24 @@ describe('activityCatalog', () => {
     ]);
   });
 
-  it('offers each logo in each tone', () => {
-    expect(sectionKeys(trail, 'brand')).toEqual([
+  it('offers the logo as the name, the monogram or both; its tone is styled', () => {
+    expect(tileKeys(trail, 'brand')).toEqual(['logo-allrun']);
+    expect(variantKeys(trail, 'logo-allrun')).toEqual([
       'logo-allrun',
       'logo-allrun-mark',
       'logo-allrun-lockup',
-      'logo-allrun-dark',
-      'logo-allrun-mark-dark',
-      'logo-allrun-lockup-dark',
-      'logo-allrun-color',
-      'logo-allrun-mark-color',
-      'logo-allrun-lockup-color',
     ]);
   });
 
   it('offers each line chart plain, with its peak or with its average, in its own section', () => {
     const catalog = activityCatalog(makeActivity(), ['elevation', 'heartRate']);
-    expect(sectionKeys(catalog, 'elevationChart')).toEqual([
+    expect(tileKeys(catalog, 'charts')).toEqual(['chart-elevation', 'chart-heartRate']);
+    expect(variantKeys(catalog, 'chart-elevation')).toEqual([
       'chart-elevation',
       'chart-elevation-max',
       'chart-elevation-average',
     ]);
-    expect(sectionKeys(catalog, 'heartRateChart')).toEqual([
+    expect(variantKeys(catalog, 'chart-heartRate')).toEqual([
       'chart-heartRate',
       'chart-heartRate-max',
       'chart-heartRate-average',
@@ -141,7 +144,7 @@ describe('activityCatalog', () => {
 
   it('offers splits without values, with the pace, with the pace and elevation, or with the average', () => {
     const catalog = activityCatalog(makeActivity(), ['splits']);
-    expect(sectionKeys(catalog, 'splits')).toEqual([
+    expect(variantKeys(catalog, 'chart-splits')).toEqual([
       'chart-splits-nopace',
       'chart-splits',
       'chart-splits-elevation',
@@ -154,15 +157,17 @@ describe('activityCatalog', () => {
     expect(catalog.map((section) => section.id)).not.toContain('route');
   });
 
-  it('gives every item its own key, and the variants of a widget one widget key', () => {
+  it('gives every item and every tile its own key, and the variants of a widget one widget key', () => {
     const catalog = activityCatalog(makeActivity(), ['elevation', 'pace', 'splits']);
     const all = keys(catalog);
     expect(new Set(all).size).toBe(all.length);
-    const widgets = new Set(items(catalog).map(catalogWidgetKey));
-    expect(widgets).toContain('metric-distance');
-    expect(widgets).toContain('route');
-    expect(widgets).not.toContain('route-dashed');
-    expect(widgets).not.toContain('chart-splits-elevation');
+    const tiles = widgets(catalog).map((widget) => widget.key);
+    expect(new Set(tiles).size).toBe(tiles.length);
+    const widgetKeys = new Set(items(catalog).map(catalogWidgetKey));
+    expect(widgetKeys).toContain('metric-distance');
+    expect(widgetKeys).toContain('route');
+    expect(widgetKeys).not.toContain('route-dashed');
+    expect(widgetKeys).not.toContain('chart-splits-elevation');
   });
 
   it.each(Object.keys(CANVAS_FORMATS) as CanvasFormat[])(
@@ -222,30 +227,27 @@ describe('summaryCatalog', () => {
   it('offers every total as written each way, the texts, the routes, the charts and the logo', () => {
     const catalog = summaryCatalog(summarize(activities, week), 'day');
     expect(catalog.map((section) => section.id)).toEqual([
-      'distance',
-      'time',
-      'pace',
-      'elevation',
-      'more',
+      'data',
       'text',
-      'period',
       'route',
-      'distanceChart',
-      'timeChart',
+      'charts',
       'brand',
     ]);
-    expect(keys(catalog).slice(0, 8)).toEqual([
-      'summaryMetric-totalDistance',
-      'summaryMetric-longestDistance',
+    expect(tileKeys(catalog, 'data')).toEqual([
+      'data-totalDistance',
+      'data-totalMovingTime',
+      'data-activityCount',
+      'data-totalElevationGain',
+      'data-averagePace',
+      'data-longestDistance',
+    ]);
+    expect(variantKeys(catalog, 'data-totalMovingTime')).toEqual([
       'summaryMetric-totalMovingTime',
       'summaryMetric-totalMovingTime-units',
-      'summaryMetric-averagePace',
-      'summaryMetric-averagePace-marks',
-      'summaryMetric-totalElevationGain',
-      'summaryMetric-activityCount',
     ]);
-    expect(sectionKeys(catalog, 'text')).toEqual(['text']);
-    expect(sectionKeys(catalog, 'period')).toEqual([
+    expect(variantKeys(catalog, 'data-totalDistance')).toEqual(['summaryMetric-totalDistance']);
+    expect(tileKeys(catalog, 'text')).toEqual(['text', 'info-periodName']);
+    expect(variantKeys(catalog, 'info-periodName')).toEqual([
       'info-periodName',
       ...PERIOD_FORMATS.slice(1).map((format) => `info-periodName-${format}`),
     ]);
@@ -254,12 +256,16 @@ describe('summaryCatalog', () => {
   it("offers each chart plain, with each bar's value or with the average", () => {
     // A week only has days.
     const catalog = summaryCatalog(summarize(activities, week), 'day');
-    expect(sectionKeys(catalog, 'distanceChart')).toEqual([
+    expect(tileKeys(catalog, 'charts')).toEqual([
+      'summaryChart-distance',
+      'summaryChart-movingTime',
+    ]);
+    expect(variantKeys(catalog, 'summaryChart-distance')).toEqual([
       'summaryChart-distance',
       'summaryChart-distance-values',
       'summaryChart-distance-average',
     ]);
-    expect(sectionKeys(catalog, 'timeChart')).toEqual([
+    expect(variantKeys(catalog, 'summaryChart-movingTime')).toEqual([
       'summaryChart-movingTime',
       'summaryChart-movingTime-values',
       'summaryChart-movingTime-average',
@@ -269,7 +275,7 @@ describe('summaryCatalog', () => {
   it('offers every bar size of the period, its own first, following the period', () => {
     const month = monthRange('2026-10-14');
     const catalog = summaryCatalog(summarize(activities, month), 'day');
-    expect(sectionKeys(catalog, 'timeChart')).toEqual([
+    expect(variantKeys(catalog, 'summaryChart-movingTime')).toEqual([
       'summaryChart-movingTime',
       'summaryChart-movingTime-values',
       'summaryChart-movingTime-average',
@@ -305,7 +311,7 @@ describe('summaryCatalog', () => {
       'summaryMetric-totalMovingTime-units',
       'summaryMetric-activityCount',
     ]);
-    expect(catalog.map((section) => section.id)).not.toContain('distanceChart');
+    expect(tileKeys(catalog, 'charts')).toEqual(['summaryChart-movingTime']);
     expect(items(catalog)).toContainEqual({ kind: 'summaryChart', value: 'movingTime' });
   });
 

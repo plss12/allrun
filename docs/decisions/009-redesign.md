@@ -46,7 +46,8 @@ comes later.
   AllRun's templates: a good-looking set of data in one tap. The gallery keeps fewer single
   widgets.
 - **Variants scroll inside their tile**, with dots, instead of filling the gallery with one tile
-  each (date formats, data shown, logo versions…).
+  each (date formats, data shown, logo versions…). Close data share a tile (moving and elapsed
+  time, average and highest heart rate…). Tiles go two per row; charts take the whole width.
 - **Nothing rounded:** distances keep their two decimals and an activity's times their seconds,
   in every widget, chart and design. A period's total time drops the seconds, which say nothing
   over a week or more. Designs saved with rounded data read without the rounding.

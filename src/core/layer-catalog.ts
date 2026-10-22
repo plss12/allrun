@@ -16,11 +16,13 @@ import {
 /**
  * The widgets the user can add to the canvas, grouped in sections for the editor's gallery. Only
  * what the current activity or period can show is offered: metrics the activity has a value for,
- * the route when there is one, the charts it recorded data for. Each way of writing or drawing a
- * widget is a widget of its own (a time as a clock or in units; a dashed route; splits as
- * rows; a chart with its average line), so the gallery shows every variant ready-made and the
- * style panel keeps only the look (color, font, opacity…). To change a variant, the user replaces
- * the widget. `default-layout.ts` turns a pick into a layer with the default look.
+ * the route when there is one, the charts it recorded data for. A widget is one tile of the
+ * gallery, and every way of writing or drawing it is a variant that scrolls inside the tile (a
+ * time as a clock or in units; a dashed route; a chart with its average line), so the
+ * gallery stays short and shows every variant ready-made, while the style panel keeps only the
+ * look (color, font, opacity…). Close data share a tile: the moving and elapsed times, the
+ * average and highest heart rates (ADR 009). To change a variant, the user replaces the widget.
+ * `default-layout.ts` turns a pick into a layer with the default look.
  */
 
 type LayerOf<K extends LayerKind> = Extract<Layer, { kind: K }>;
@@ -57,28 +59,17 @@ export type CatalogItem =
 export type NewLayer =
   Exclude<CatalogItem, { kind: 'text' }> | { readonly kind: 'text'; readonly content: string };
 
-export type CatalogSectionId =
-  | 'distance'
-  | 'time'
-  | 'pace'
-  | 'elevation'
-  | 'more'
-  | 'text'
-  | 'date'
-  | 'period'
-  | 'route'
-  | 'elevationChart'
-  | 'paceChart'
-  | 'heartRateChart'
-  | 'powerChart'
-  | 'splits'
-  | 'distanceChart'
-  | 'timeChart'
-  | 'brand';
+export type CatalogSectionId = 'data' | 'text' | 'route' | 'charts' | 'brand';
+
+/** A tile of the gallery: one widget, whose variants scroll inside it, the default first. */
+export interface CatalogWidget {
+  readonly key: string;
+  readonly variants: readonly CatalogItem[];
+}
 
 export interface CatalogSection {
   readonly id: CatalogSectionId;
-  readonly items: readonly CatalogItem[];
+  readonly widgets: readonly CatalogWidget[];
 }
 
 /**
@@ -150,50 +141,65 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
 type DataItem = Extract<CatalogItem, { kind: 'metric' | 'summaryMetric' }>;
 type Writing = 'time' | 'pace' | 'plain';
 
-/** A catalog item and the section it goes in. */
-type Entry = readonly [CatalogSectionId, CatalogItem];
+/** A catalog item, the section it goes in and the tile it scrolls in. */
+type Entry = readonly [CatalogSectionId, string, CatalogItem];
 
-/** Which section each metric goes in and how its value can be written. */
-const METRIC_GROUPS: Readonly<
-  Record<MetricId | SummaryMetricId, readonly [CatalogSectionId, Writing]>
-> = {
-  distance: ['distance', 'plain'],
-  totalDistance: ['distance', 'plain'],
-  longestDistance: ['distance', 'plain'],
-  movingTime: ['time', 'time'],
-  elapsedTime: ['time', 'time'],
-  totalMovingTime: ['time', 'time'],
-  pace: ['pace', 'pace'],
-  swimPace: ['pace', 'pace'],
-  averagePace: ['pace', 'pace'],
-  speed: ['pace', 'plain'],
-  elevationGain: ['elevation', 'plain'],
-  maxElevation: ['elevation', 'plain'],
-  totalElevationGain: ['elevation', 'plain'],
-  averageHeartRate: ['more', 'plain'],
-  maxHeartRate: ['more', 'plain'],
-  averagePower: ['more', 'plain'],
-  weightedAveragePower: ['more', 'plain'],
-  averageCadence: ['more', 'plain'],
-  calories: ['more', 'plain'],
-  activityCount: ['more', 'plain'],
+/** How each metric's value can be written. */
+const WRITINGS: Readonly<Record<MetricId | SummaryMetricId, Writing>> = {
+  distance: 'plain',
+  totalDistance: 'plain',
+  longestDistance: 'plain',
+  movingTime: 'time',
+  elapsedTime: 'time',
+  totalMovingTime: 'time',
+  pace: 'pace',
+  swimPace: 'pace',
+  averagePace: 'pace',
+  speed: 'plain',
+  elevationGain: 'plain',
+  maxElevation: 'plain',
+  totalElevationGain: 'plain',
+  averageHeartRate: 'plain',
+  maxHeartRate: 'plain',
+  averagePower: 'plain',
+  weightedAveragePower: 'plain',
+  averageCadence: 'plain',
+  calories: 'plain',
+  activityCount: 'plain',
+};
+
+/** Metrics that share a tile with a close one: two times, two heart rates, two altitudes. */
+const SHARED_TILES: Partial<Record<MetricId | SummaryMetricId, string>> = {
+  movingTime: 'time',
+  elapsedTime: 'time',
+  averageHeartRate: 'heartRate',
+  maxHeartRate: 'heartRate',
+  elevationGain: 'elevation',
+  maxElevation: 'elevation',
+  averagePower: 'power',
+  weightedAveragePower: 'power',
 };
 
 /**
- * A data widget in each way its value can be written (its time or pace notation), in its
- * section. The first is the default, which the layer leaves out. Nothing is rounded: distances
- * keep their two decimals and times their seconds (ADR 009).
+ * A data widget in each way its value can be written (its time or pace notation), in its tile.
+ * The first is the default, which the layer leaves out. Nothing is rounded: distances keep their
+ * two decimals and times their seconds (ADR 009).
  */
 function dataEntries(plain: DataItem): Entry[] {
-  const [section, writing] = METRIC_GROUPS[plain.metric];
+  const writing = WRITINGS[plain.metric];
+  const tile = `data-${SHARED_TILES[plain.metric] ?? plain.metric}`;
   const variants: DataItem[] =
     writing === 'time'
       ? [plain, ...TIME_NOTATIONS.slice(1).map((timeNotation) => ({ ...plain, timeNotation }))]
       : writing === 'pace'
         ? [plain, { ...plain, paceNotation: 'marks' }]
         : [plain];
-  return variants.map((item) => [section, item]);
+  return variants.map((item) => ['data', tile, item]);
 }
+
+/** Entries of one widget's variants, in their section. */
+const tileEntries = (section: CatalogSectionId, items: readonly CatalogItem[]): Entry[] =>
+  items.map((item) => [section, catalogWidgetKey(item), item]);
 
 /**
  * Formats offered for an activity's date. The weekday with the start time is left out (the user
@@ -201,25 +207,15 @@ function dataEntries(plain: DataItem): Entry[] {
  */
 const OFFERED_DATE_FORMATS = DATE_FORMATS.filter((format) => format !== 'weekdayTime');
 
-/** Route lines, solid, solid with a glow, dashed and dotted, in their section. */
+/** Route lines, solid, solid with a glow, dashed and dotted. */
 function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {
-  const lines: CatalogItem[] = [
+  return tileEntries('route', [
     { kind },
     { kind, glow: true },
     { kind, line: 'dashed' },
     { kind, line: 'dotted' },
-  ];
-  return lines.map((item) => ['route', item]);
+  ]);
 }
-
-/** The section of each activity chart. */
-const CHART_SECTIONS: Readonly<Record<ActivityChartSeries, CatalogSectionId>> = {
-  elevation: 'elevationChart',
-  pace: 'paceChart',
-  heartRate: 'heartRateChart',
-  power: 'powerChart',
-  splits: 'splits',
-};
 
 /**
  * An activity chart's variants. A line: plain, with its highest point marked, or with its average.
@@ -227,7 +223,6 @@ const CHART_SECTIONS: Readonly<Record<ActivityChartSeries, CatalogSectionId>> = 
  * altitude, or with the average.
  */
 function chartEntries(series: ActivityChartSeries): Entry[] {
-  const section = CHART_SECTIONS[series];
   const items: CatalogItem[] =
     series === 'splits'
       ? [
@@ -241,7 +236,7 @@ function chartEntries(series: ActivityChartSeries): Entry[] {
           { kind: 'activityChart', series, maxLabel: true },
           { kind: 'activityChart', series, averageLine: true },
         ];
-  return items.map((item) => [section, item]);
+  return tileEntries('charts', items);
 }
 
 /**
@@ -257,59 +252,52 @@ function periodChartEntries(summary: PeriodSummary, autoBucket: BucketSize): Ent
     undefined,
     ...chartBucketOptions(summary.range).filter((size) => size !== autoBucket),
   ];
-  return values.flatMap((value) => {
-    const section = value === 'distance' ? 'distanceChart' : 'timeChart';
-    return buckets.flatMap((bucket): Entry[] => {
-      const chart = {
-        kind: 'summaryChart',
-        value,
-        ...(bucket === undefined ? {} : { bucket }),
-      } as const;
-      return [
-        [section, chart],
-        [section, { ...chart, barValues: true }],
-        [section, { ...chart, averageLine: true }],
-      ];
-    });
-  });
+  return values.flatMap((value) =>
+    tileEntries(
+      'charts',
+      buckets.flatMap((bucket): CatalogItem[] => {
+        const chart = {
+          kind: 'summaryChart',
+          value,
+          ...(bucket === undefined ? {} : { bucket }),
+        } as const;
+        return [chart, { ...chart, barValues: true }, { ...chart, averageLine: true }];
+      }),
+    ),
+  );
 }
 
-/** The AllRun name, monogram and both, in each tone: light, dark and in the brand's colors. */
-const BRAND: readonly Entry[] = (['light', 'dark', 'color'] as const).flatMap((tone) =>
-  (['wordmark', 'mark', 'lockup'] as const).map((variant): Entry => [
-    'brand',
-    { kind: 'logo', brand: 'allrun', variant, tone },
-  ]),
+/**
+ * The AllRun name, monogram and both, light: its tone (light, dark or the brand's colors) is
+ * part of its look, chosen in the style panel.
+ */
+const BRAND: readonly Entry[] = tileEntries(
+  'brand',
+  (['wordmark', 'mark', 'lockup'] as const).map((variant) => ({
+    kind: 'logo',
+    brand: 'allrun',
+    variant,
+    tone: 'light',
+  })),
 );
 
-const SECTION_ORDER: readonly CatalogSectionId[] = [
-  'distance',
-  'time',
-  'pace',
-  'elevation',
-  'more',
-  'text',
-  'date',
-  'period',
-  'route',
-  'elevationChart',
-  'paceChart',
-  'heartRateChart',
-  'powerChart',
-  'splits',
-  'distanceChart',
-  'timeChart',
-  'brand',
-];
+const SECTION_ORDER: readonly CatalogSectionId[] = ['data', 'text', 'route', 'charts', 'brand'];
 
 /**
- * Puts the items in their sections, in the gallery's order, leaving out sections with nothing
- * to offer. Items keep their order within a section.
+ * Puts the items in their tiles and the tiles in their sections, in the gallery's order, leaving
+ * out sections with nothing to offer. Tiles keep the order of their first item, and items their
+ * order within a tile. Time O(n) for n items.
  */
 function sections(entries: readonly Entry[]): CatalogSection[] {
   return SECTION_ORDER.flatMap((id) => {
-    const items = entries.filter(([section]) => section === id).map(([, item]) => item);
-    return items.length === 0 ? [] : [{ id, items }];
+    const tiles = new Map<string, CatalogItem[]>();
+    for (const [section, tile, item] of entries) {
+      if (section === id) {
+        tiles.set(tile, [...(tiles.get(tile) ?? []), item]);
+      }
+    }
+    const widgets = [...tiles].map(([key, variants]) => ({ key, variants }));
+    return widgets.length === 0 ? [] : [{ id, widgets }];
   });
 }
 
@@ -325,13 +313,16 @@ export function activityCatalog(
 ): CatalogSection[] {
   return sections([
     ...availableMetrics(activity).flatMap((metric) => dataEntries({ kind: 'metric', metric })),
-    ['text', { kind: 'text' }],
-    ['text', { kind: 'info', field: 'activityName' }],
+    ...tileEntries('text', [{ kind: 'text' }, { kind: 'info', field: 'activityName' }]),
     // The first format is the default, which the layer leaves out.
-    ...OFFERED_DATE_FORMATS.map((dateFormat, i): Entry => [
-      'date',
-      { kind: 'info', field: 'activityDate', ...(i === 0 ? {} : { dateFormat }) },
-    ]),
+    ...tileEntries(
+      'text',
+      OFFERED_DATE_FORMATS.map((dateFormat, i) => ({
+        kind: 'info',
+        field: 'activityDate',
+        ...(i === 0 ? {} : { dateFormat }),
+      })),
+    ),
     ...(activity.routePolyline === null ? [] : lineEntries('route')),
     ...charts.flatMap(chartEntries),
     ...BRAND,
@@ -349,11 +340,15 @@ export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): 
     ...availableSummaryMetrics(summary).flatMap((metric) =>
       dataEntries({ kind: 'summaryMetric', metric }),
     ),
-    ['text', { kind: 'text' }],
-    ...PERIOD_FORMATS.map((periodFormat, i): Entry => [
-      'period',
-      { kind: 'info', field: 'periodName', ...(i === 0 ? {} : { periodFormat }) },
-    ]),
+    ...tileEntries('text', [{ kind: 'text' }]),
+    ...tileEntries(
+      'text',
+      PERIOD_FORMATS.map((periodFormat, i) => ({
+        kind: 'info',
+        field: 'periodName',
+        ...(i === 0 ? {} : { periodFormat }),
+      })),
+    ),
     ...(summary.routes.length === 0 ? [] : lineEntries('summaryRoutes')),
     ...periodChartEntries(summary, autoBucket),
     ...BRAND,

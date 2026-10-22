@@ -1,10 +1,11 @@
 import { Canvas, Group, Paint } from '@shopify/react-native-skia';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   SectionList,
   Text,
   useWindowDimensions,
@@ -18,7 +19,14 @@ import { colors } from '@/theme/colors';
 import { layerText } from './editor-data';
 import { SheetFrame } from './sheet-frame';
 import type { LayerContext } from './template-scene';
-import { GALLERY_GAP, GALLERY_PADDING, type GalleryTile, gallerySections } from './widget-gallery';
+import {
+  GALLERY_DOTS_HEIGHT,
+  GALLERY_GAP,
+  GALLERY_PADDING,
+  type GalleryPage,
+  type GalleryWidget,
+  gallerySections,
+} from './widget-gallery';
 
 interface LayerSheetProps {
   readonly visible: boolean;
@@ -34,15 +42,13 @@ interface LayerSheetProps {
   readonly onClose: () => void;
 }
 
-/**
- * Behind each widget: dark, like the editor's checkerboard, so the white widgets read; Chalk for
- * the dark and colored logos. The same in both themes, as a photo would be.
- */
-const TILE_BACKGROUNDS = { dark: '#1C1C1E', light: '#F6F1EA' } as const;
+/** Behind each widget: dark, like the editor's checkerboard, so the white widgets read. */
+const TILE_BACKGROUND = '#1C1C1E';
 
 /**
- * Sheet to add a widget: a gallery of every widget, and each of its variants, drawn live with
- * the user's data, in sections (see `widget-gallery.ts`). A tap adds the one shown.
+ * Sheet to add a widget: a gallery of every widget drawn live with the user's data, in sections,
+ * each tile scrolling sideways through the widget's variants (see `widget-gallery.ts`). A tap
+ * adds the variant shown.
  */
 export function LayerSheet({
   visible,
@@ -90,8 +96,8 @@ export function LayerSheet({
     >
       <SheetFrame title={t('editor.addLayer')} closeLabel={t('editor.close')} onClose={onClose}>
         <SectionList
-          sections={sections}
-          keyExtractor={(row) => row.map((tile) => tile.key).join(' ')}
+          sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
+          keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
           stickySectionHeadersEnabled={false}
           initialNumToRender={8}
           contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
@@ -109,20 +115,20 @@ export function LayerSheet({
               {t(`widgets.sections.${section.id}`).toLocaleUpperCase()}
             </Text>
           )}
-          renderItem={({ item: row, section }) => (
+          renderItem={({ item: row }) => (
             <View style={{ flexDirection: 'row', gap: GALLERY_GAP, marginBottom: GALLERY_GAP }}>
-              {row.map((tile) => (
-                <TileButton
-                  key={tile.key}
-                  tile={tile}
-                  width={section.width}
-                  height={section.height}
-                  label={tileLabel(tile, layerContext, t)}
-                  onPress={() => {
-                    if (tile.item.kind === 'text') {
+              {row.widgets.map((widget) => (
+                <WidgetTile
+                  key={widget.key}
+                  widget={widget}
+                  width={row.width}
+                  height={row.height}
+                  label={(page) => pageLabel(page, layerContext, t)}
+                  onPress={(page) => {
+                    if (page.item.kind === 'text') {
                       addText();
                     } else {
-                      onAdd(tile.item);
+                      onAdd(page.item);
                     }
                   }}
                 />
@@ -136,11 +142,11 @@ export function LayerSheet({
 }
 
 /**
- * What a screen reader says for a tile: the widget's name and, for a text, what it shows ("Date,
- * 14 Oct"); for the other widgets, their variant ("Route, Dashed", "Splits, Rows, Pace").
+ * What a screen reader says for a page: the widget's name and, for a text, what it shows ("Date,
+ * 14 Oct"); for the other widgets, their variant ("Route, Dashed", "Splits, Pace").
  */
-function tileLabel(
-  { item, prepared }: GalleryTile,
+function pageLabel(
+  { item, prepared }: GalleryPage,
   context: LayerContext,
   t: ReturnType<typeof useTranslation>['t'],
 ): string {
@@ -165,7 +171,7 @@ function tileLabel(
         ];
       case 'summaryChart':
         return [
-          t(`widgets.sections.${item.value === 'distance' ? 'distanceChart' : 'timeChart'}`),
+          t(`widgets.${item.value === 'distance' ? 'distanceChart' : 'timeChart'}`),
           item.bucket === undefined || item.bucket === 'auto'
             ? ''
             : t(`gallery.buckets.${item.bucket}`),
@@ -186,54 +192,120 @@ function tileLabel(
           flag(item.averageLine, t('gallery.average')),
         ];
       case 'logo':
-        return [
-          t('widgets.allrunLogo'),
-          t(`gallery.variants.${item.variant}`),
-          t(`style.tones.${item.tone ?? 'light'}`),
-        ];
+        return [t('widgets.allrunLogo'), t(`gallery.variants.${item.variant}`)];
     }
   })();
   return parts.filter((part) => part !== '').join(', ');
 }
 
-/** A widget drawn in its tile, centered; a tap adds it. */
-function TileButton({
-  tile,
+/**
+ * A widget's tile: its variants side by side, one page each, scrolled sideways, with a dot per
+ * page under them. A tap adds the variant on the page.
+ */
+function WidgetTile({
+  widget,
   width,
   height,
   label,
   onPress,
 }: {
-  readonly tile: GalleryTile;
+  readonly widget: GalleryWidget;
   readonly width: number;
   readonly height: number;
-  readonly label: string;
-  readonly onPress: () => void;
+  readonly label: (page: GalleryPage) => string;
+  readonly onPress: (page: GalleryPage) => void;
 }) {
-  const { layer, content } = tile.prepared;
+  const { t } = useTranslation();
+  const [shown, setShown] = useState(0);
+  const several = widget.pages.length > 1;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => ({
+    <View
+      style={{
         width,
         height,
         borderRadius: 10,
         borderCurve: 'continuous',
         overflow: 'hidden',
-        backgroundColor: TILE_BACKGROUNDS[tile.background],
-        opacity: pressed ? 0.6 : 1,
-      })}
+        backgroundColor: TILE_BACKGROUND,
+      }}
     >
-      <Canvas style={{ width, height }}>
-        <Group
-          transform={[{ translateX: width / 2 }, { translateY: height / 2 }, { scale: tile.scale }]}
-          layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEnabled={several}
+        onMomentumScrollEnd={(event) =>
+          setShown(Math.round(event.nativeEvent.contentOffset.x / width))
+        }
+      >
+        {widget.pages.map((page, i) => (
+          <Pressable
+            key={page.key}
+            accessibilityRole="button"
+            accessibilityLabel={label(page)}
+            accessibilityHint={several ? t('gallery.moreVariants') : undefined}
+            accessibilityElementsHidden={i !== shown}
+            importantForAccessibility={i === shown ? 'auto' : 'no-hide-descendants'}
+            onPress={() => onPress(page)}
+            style={({ pressed }) => ({ width, height, opacity: pressed ? 0.6 : 1 })}
+          >
+            <PageCanvas
+              page={page}
+              width={width}
+              height={several ? height - GALLERY_DOTS_HEIGHT : height}
+            />
+          </Pressable>
+        ))}
+      </ScrollView>
+      {several ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            bottom: 6,
+            left: 0,
+            right: 0,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: 5,
+          }}
         >
-          {content}
-        </Group>
-      </Canvas>
-    </Pressable>
+          {widget.pages.map((page, i) => (
+            <View
+              key={page.key}
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: 2.5,
+                backgroundColor: i === shown ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)',
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** A variant drawn centered in its page, at its tile's scale. */
+function PageCanvas({
+  page,
+  width,
+  height,
+}: {
+  readonly page: GalleryPage;
+  readonly width: number;
+  readonly height: number;
+}) {
+  const { layer, content } = page.prepared;
+  return (
+    <Canvas style={{ width, height }}>
+      <Group
+        transform={[{ translateX: width / 2 }, { translateY: height / 2 }, { scale: page.scale }]}
+        layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
+      >
+        {content}
+      </Group>
+    </Canvas>
   );
 }
