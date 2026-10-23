@@ -1,5 +1,5 @@
 import type { Activity } from './activity';
-import { activityBlocks } from './activity-block';
+import { activityBlocks, isDataWidget } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
 import { chartBucketOptions } from './periods';
 import { PLACE_FORMATS } from './place';
@@ -73,7 +73,7 @@ export type CatalogItem =
 export type NewLayer =
   Exclude<CatalogItem, { kind: 'text' }> | { readonly kind: 'text'; readonly content: string };
 
-export type CatalogSectionId = 'mixed' | 'basic' | 'charts' | 'brand';
+export type CatalogSectionId = 'data' | 'creative' | 'charts' | 'basic' | 'brand';
 
 /** A tile of the gallery: one widget, whose variants scroll inside it, the default first. */
 export interface CatalogWidget {
@@ -98,15 +98,20 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'info':
       return `info-${item.field}`;
     case 'logo':
-      return `logo-${item.brand}`;
+      // The name, the monogram and both are a tile each; the tone is a look of the same one.
+      return item.variant === 'wordmark'
+        ? `logo-${item.brand}`
+        : `logo-${item.brand}-${item.variant}`;
     case 'activityChart':
       return `chart-${item.series}`;
     case 'summaryChart':
       return `summaryChart-${item.value}`;
     case 'activityBlock':
-      // The laps' looks are apart: a tile each, with its two brand colors.
-      return item.block.design === 'laps'
-        ? `block-laps-${item.block.layout}`
+      // The laps' looks are apart, and a big datum's: a tile each, with its colors or its tops.
+      return item.block.design === 'laps' ||
+        item.block.design === 'bigPair' ||
+        item.block.design === 'bigTrio'
+        ? `block-${item.block.design}-${item.block.layout}`
         : `block-${item.block.design}`;
     case 'text':
     case 'route':
@@ -130,10 +135,8 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
       case 'info':
         return [item.dateFormat, item.periodFormat, item.placeFormat];
       case 'logo':
-        return [
-          item.variant === 'wordmark' ? undefined : item.variant,
-          item.tone === 'light' ? undefined : item.tone,
-        ];
+        // The artwork is in the widget's key already.
+        return [item.tone === 'light' ? undefined : item.tone];
       case 'activityChart':
         return [
           item.splitPace === false ? 'nopace' : undefined,
@@ -158,12 +161,11 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         // design of a single version has nothing to add; a cover adds its color, and a verse, a
         // quote or a chat message's phrase its name (a phrase of the user's, nothing).
         return [
-          item.block.design === 'columns'
-            ? item.block.count
-            : // The laps' look is in their widget's key already.
-              'layout' in item.block && item.block.design !== 'laps'
-              ? item.block.layout
-              : undefined,
+          // The look of the laps and of a big datum is in their widget's key already.
+          'layout' in item.block && item.block.design !== 'laps' && !('top' in item.block)
+            ? item.block.layout
+            : undefined,
+          'top' in item.block && item.block.top !== 'main' ? item.block.top : undefined,
           'cover' in item.block ? item.block.cover : undefined,
           'verse' in item.block ? item.block.verse : undefined,
           'quote' in item.block ? item.block.quote : undefined,
@@ -318,8 +320,8 @@ function periodChartEntries(summary: PeriodSummary, autoBucket: BucketSize): Ent
 }
 
 /**
- * The AllRun name, monogram and both, light: its tone (light, dark or the brand's colors) is
- * part of its look, chosen in the style panel.
+ * The AllRun name, monogram and both, a tile each, light: its tone (light, dark or the brand's
+ * colors) is part of its look, chosen in the style panel.
  */
 const BRAND: readonly Entry[] = tileEntries(
   'brand',
@@ -331,7 +333,11 @@ const BRAND: readonly Entry[] = tileEntries(
   })),
 );
 
-const SECTION_ORDER: readonly CatalogSectionId[] = ['mixed', 'basic', 'charts', 'brand'];
+/**
+ * The gallery's sections: the data widgets and the creative ones (the mixed widgets, see
+ * `isDataWidget`: replicas of apps and things, and phrases), the charts, the basics and the logo.
+ */
+const SECTION_ORDER: readonly CatalogSectionId[] = ['data', 'creative', 'charts', 'basic', 'brand'];
 
 /**
  * Puts the items in their tiles and the tiles in their sections, in the gallery's order, leaving
@@ -352,11 +358,11 @@ function sections(entries: readonly Entry[]): CatalogSection[] {
 }
 
 /**
- * Widgets for one activity: its mixed widgets (see `activityBlocks`; the location's only
- * `withPlace`, the laps' only `withLaps`); its basics: the metrics of
- * its sport it has values for (in the sport's order, all in one tile), the route when it has GPS,
- * free text, its name, its date and its place when it can be named (`withPlace`); then the
- * `charts` it recorded data for (see `availableActivityCharts`), and the logo. Time O(m + c) for
+ * Widgets for one activity: its mixed widgets, data or creative ones (see `activityBlocks`; the
+ * location's only `withPlace`, the laps' only `withLaps`); the `charts` it recorded data for (see
+ * `availableActivityCharts`); its basics: the metrics of its sport it has values for (in the
+ * sport's order, all in one tile), the route when it has GPS, free text, its name, its date and
+ * its place when it can be named (`withPlace`); and the logo. Time O(m + c) for
  * the m metrics of the sport and c charts.
  */
 export function activityCatalog(
@@ -367,12 +373,10 @@ export function activityCatalog(
   withLaps = false,
 ): CatalogSection[] {
   return sections([
-    ...tileEntries(
-      'mixed',
-      activityBlocks(activity, charts.includes('splits'), withPlace, withLaps).map((block) => ({
-        kind: 'activityBlock',
-        block,
-      })),
+    ...activityBlocks(activity, charts.includes('splits'), withPlace, withLaps).flatMap((block) =>
+      tileEntries(isDataWidget(block.design) ? 'data' : 'creative', [
+        { kind: 'activityBlock', block },
+      ]),
     ),
     ...availableMetrics(activity).flatMap((metric) => dataEntries({ kind: 'metric', metric })),
     ...(activity.routePolyline === null ? [] : lineEntries('route')),
@@ -404,9 +408,9 @@ export function activityCatalog(
 }
 
 /**
- * Widgets for a period summary: its basics (every total in one tile, the overlaid routes when any
- * activity has GPS, free text, the period name in each format), the bar charts (`autoBucket` is the period's own bar
- * size, see `bucketForPeriod`), and the logo. Formats of the name that write a period the same
+ * Widgets for a period summary: the bar charts (`autoBucket` is the period's own bar size, see
+ * `bucketForPeriod`), its basics (every total in one tile, the overlaid routes when any activity
+ * has GPS, free text, the period name in each format), and the logo. Formats of the name that write a period the same
  * (all of them, for a year) are one widget for the user: the gallery drops the repeats. Time O(1).
  */
 export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): CatalogSection[] {

@@ -385,9 +385,6 @@ function pageLabel(
       case 'activityBlock': {
         const { block } = item;
         const name: string = t(`widgets.blocks.${block.design}`);
-        if (block.design === 'columns') {
-          return [name, t('gallery.dataCount', { count: block.count })];
-        }
         if (block.design === 'verse') {
           return [name, t(`widgets.verses.${block.verse}.source`)];
         }
@@ -406,7 +403,11 @@ function pageLabel(
         if (!('layout' in block)) {
           return [name];
         }
-        return [name, t(`gallery.blockLayouts.${block.layout}`)];
+        return [
+          name,
+          t(`gallery.blockLayouts.${block.layout}`),
+          'top' in block && block.top === 'time' ? t('gallery.timeOnTop') : '',
+        ];
       }
     }
   })();

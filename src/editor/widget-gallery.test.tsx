@@ -152,9 +152,32 @@ describe('gallerySections', () => {
     const half = Math.floor((full - gallery.GALLERY_GAP) / 2);
     for (const section of sections) {
       for (const row of section.rows) {
-        expect(row.width).toBe(section.id === 'charts' ? full : half);
+        const wide = section.id === 'charts' || row.widgets[0].key === 'logo-allrun-lockup';
+        expect(row.width).toBe(wide ? full : half);
       }
     }
+  });
+
+  it('lays the name and the monogram side by side, and both together under them, as wide', () => {
+    const brand = activitySections().find((section) => section.id === 'brand');
+    const rows = (brand?.rows ?? []).map((row) => ({
+      keys: row.widgets.map((widget) => widget.key),
+      width: row.width,
+      height: row.height,
+    }));
+    const full = SCREEN - 2 * gallery.GALLERY_PADDING;
+    const half = Math.floor((full - gallery.GALLERY_GAP) / 2);
+    // As tall as the tiles over it, so the section stays even.
+    const height = rows[0]?.height;
+    expect(rows).toEqual([
+      { keys: ['logo-allrun', 'logo-allrun-mark'], width: half, height },
+      { keys: ['logo-allrun-lockup'], width: full, height },
+    ]);
+    // Drawn as big as the name and the monogram over it: the wider tile only gives it room.
+    const scales = (brand?.rows ?? []).flatMap((row) =>
+      row.widgets.map((widget) => widget.pages[0].scale),
+    );
+    expect(scales[2]).toBeCloseTo(scales[0]);
   });
 
   it('fills the tile with each date, the short ones bigger than the long ones', () => {

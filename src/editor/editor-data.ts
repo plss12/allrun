@@ -160,6 +160,33 @@ export function metricText(
 }
 
 /**
+ * A datum of `activity` as a widget of data without names writes it: numbers with a decimal point
+ * and no thousands separator in any language ("11.34 km", "1250 kcal"), a pace with its marks and
+ * no unit (`5'45"`, the marks say what it is), anything else with its unit after it ("41 m").
+ */
+export function plainMetricText(
+  activity: Activity,
+  metric: MetricId,
+  context: TextContext,
+): string {
+  const value = metricValue(activity, metric);
+  if (value === null || value <= 0) {
+    return MISSING_VALUE;
+  }
+  const display = toDisplayMetric(metric, value, {
+    unit: context.unit,
+    sportFamily: activity.sportFamily,
+  });
+  const marked = withPaceMarks(display);
+  if (marked !== display && marked.kind === 'time') {
+    return marked.text;
+  }
+  const written =
+    display.kind === 'time' ? display.text : display.amount.toFixed(display.fractionDigits);
+  return display.unit === null ? written : `${written} ${context.unitLabel(display.unit)}`;
+}
+
+/**
  * Text a layer displays for the given data, or `null` for layers that aren't text (route,
  * chart, logo) or that don't fit the data mode.
  */

@@ -178,6 +178,26 @@ describe('parseTemplate', () => {
     expect(read).toEqual(route);
   });
 
+  it('still reads designs with retired mixed widgets, without them', () => {
+    const block = (design: string) => ({
+      id: design,
+      kind: 'activityBlock',
+      block: { design, layout: 'stacked' },
+      logo: true,
+      style: { font: 'inter', color: '#FFFFFF', bold: true, uppercase: true },
+      transform: center,
+      opacity: 1,
+    });
+    const read = parseTemplate({
+      ...activityTemplate,
+      layers: [route, block('headline'), { ...block('serif'), block: { design: 'serif' } }],
+    });
+    expect(read.layers).toEqual([route]);
+    expect(() => parseTemplate({ ...activityTemplate, layers: [route, block('unknown')] })).toThrow(
+      /design/,
+    );
+  });
+
   it('takes activity charts in activity templates only', () => {
     const chart = {
       id: 'chart',

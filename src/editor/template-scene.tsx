@@ -63,7 +63,14 @@ import { prepareActivityBlock } from './activity-blocks';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
 import { FONT_FAMILIES } from './fonts';
-import { addLeanRoom, DropShadow, LETTER_SPACING, slantOf, textShadows } from './scene-text';
+import {
+  addLeanRoom,
+  DropShadow,
+  LETTER_SPACING,
+  slantOf,
+  softBackdrop,
+  textShadows,
+} from './scene-text';
 
 /**
  * A layer filled with data and measured, ready to draw. Its content is centered on (0, 0); the
@@ -560,16 +567,6 @@ function preparedParagraph(layer: Layer, paragraph: SkParagraph): PreparedLayer 
     height: paragraph.getHeight(),
     content: <CenteredParagraph paragraph={paragraph} />,
   };
-}
-
-/**
- * Behind a light text a translucent dark box, behind a dark text a translucent light one, as in
- * story editors.
- */
-function softBackdrop(textColor: string): string {
-  return contrastingInk(textColor) === '#000000'
-    ? 'rgba(0, 0, 0, 0.5)'
-    : 'rgba(255, 255, 255, 0.75)';
 }
 
 /**

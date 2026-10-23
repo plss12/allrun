@@ -28,7 +28,7 @@ import {
   type Layer,
   type Template,
 } from '@/core/template';
-import { isAppReplica } from '@/core/activity-block';
+import { isAppReplica, isDataWidget } from '@/core/activity-block';
 import { colors } from '@/theme/colors';
 
 import { hasUnit } from './editor-data';
@@ -249,10 +249,19 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
   readonly change: (patch: Partial<Format>) => StyleChange;
 } {
   if (layer.kind === 'activityBlock') {
-    // A block lays out its own texts: no alignment, backdrop or spacing.
-    const { font, bold, italic, uppercase } = layer.style;
+    // A block lays out its own texts: no alignment. A data widget can go on a backdrop and open
+    // its letters up, as a text widget.
+    const { font, bold, italic, uppercase, backdrop, letterSpacing } = layer.style;
     return {
-      format: { font, bold, italic: italic ?? false, uppercase },
+      format: {
+        font,
+        bold,
+        italic: italic ?? false,
+        uppercase,
+        ...(isDataWidget(layer.block.design)
+          ? { backdrop: backdrop ?? 'none', letterSpacing: letterSpacing ?? 'normal' }
+          : {}),
+      },
       change: (patch) => (template) => setBlockOptions(template, layer.id, patch),
     };
   }

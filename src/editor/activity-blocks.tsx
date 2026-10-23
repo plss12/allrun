@@ -19,6 +19,7 @@ import type { ReactElement } from 'react';
 
 import {
   blockDataCount,
+  bigMetrics,
   blockMetrics,
   fastestIndex,
   isAppReplica,
@@ -29,7 +30,7 @@ import {
   tyreCompounds,
 } from '@/core/activity-block';
 import { splitRows } from '@/core/activity-charts';
-import { castsShadow } from '@/core/layer-style';
+import { castsShadow, contrastingInk } from '@/core/layer-style';
 import { metricValue, type MetricId } from '@/core/metrics';
 import { formatPlace } from '@/core/place';
 import { decodePolyline } from '@/core/polyline';
@@ -39,21 +40,30 @@ import type { HitHole } from '@/core/layer-transform';
 import type { Size } from '@/core/photo-framing';
 import type { FontId, Layer } from '@/core/template';
 import { durationParts } from '@/core/units';
-import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
+import { formatActivityDate, formatTimeAfter } from '@/ui/format';
 
 import { PlainWordmark, wordmarkHeight } from './brand/brand-art';
 import {
   type ActivityData,
   type LabelKey,
   metricText,
+  plainMetricText,
   speedMeasure,
   splitGapText,
   splitRowTexts,
   type TextContext,
 } from './editor-data';
-import { FONT_FAMILIES } from './fonts';
+import { CAP_HEIGHTS, FONT_FAMILIES } from './fonts';
 import { SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
-import { addLeanRoom, DropShadow, leanRoom, slantOf, textShadows } from './scene-text';
+import {
+  addLeanRoom,
+  DropShadow,
+  LETTER_SPACING,
+  leanRoom,
+  slantOf,
+  softBackdrop,
+  textShadows,
+} from './scene-text';
 
 /**
  * The mixed widgets of an activity (ADR 009): several of its data in one designed block, laid out
@@ -93,8 +103,6 @@ type Piece =
       readonly paragraph: SkParagraph;
       readonly x: number;
       readonly y: number;
-      /** Turned to read upwards, its top-left corner still at (x, y). */
-      readonly turned?: boolean;
       /** Drawn this many times taller than it is laid out (see `STRETCHED_FONTS`). */
       readonly stretch?: number;
     }
@@ -193,14 +201,6 @@ type Piece =
       readonly size: number;
       readonly color: string;
     }
-  | {
-      readonly kind: 'rule';
-      readonly x1: number;
-      readonly y1: number;
-      readonly x2: number;
-      readonly y2: number;
-    }
-  | { readonly kind: 'dot'; readonly x: number; readonly y: number }
   | {
       readonly kind: 'icon';
       readonly icon: SportIconId;
@@ -381,25 +381,6 @@ function overlay(back: Box, front: Box): Box {
   };
 }
 
-/** Boxes in rows, each column as wide as its widest box, its boxes aligned to `align`. */
-function grid(rows: readonly (readonly Box[])[], gapX: number, gapY: number, align: Align): Box {
-  const columns = Math.max(0, ...rows.map((cells) => cells.length));
-  const widths = Array.from({ length: columns }, (_, i) =>
-    Math.max(0, ...rows.map((cells) => cells[i]?.width ?? 0)),
-  );
-  return column(
-    rows.map((cells) =>
-      row(
-        cells.map((cell, i) => widened(cell, widths[i], align)),
-        gapX,
-        'end',
-      ),
-    ),
-    gapY,
-    'start',
-  );
-}
-
 /** Width of each column of a table: its widest cell. */
 const columnWidths = (cells: readonly (readonly Box[])[]): number[] =>
   cells[0].map((_, i) => Math.max(...cells.map((line) => line[i].width)));
@@ -427,51 +408,6 @@ function tableRow(
     }),
   );
 }
-
-/** Width of a block's rules, before the layer's scale. */
-const RULE_WIDTH = 3;
-/** Radius of the dots between data in one line. */
-const DOT_RADIUS = 7;
-
-/** Boxes side by side with an upright rule between each two, as tall as the tallest. */
-function divided(boxes: readonly Box[], gap: number): Box {
-  const height = Math.max(0, ...boxes.map((box) => box.height));
-  const rule: Box = {
-    width: RULE_WIDTH,
-    height,
-    place: (x, y) => [
-      { kind: 'rule', x1: x + RULE_WIDTH / 2, y1: y, x2: x + RULE_WIDTH / 2, y2: y + height },
-    ],
-  };
-  return row(
-    boxes.flatMap((box, i) => (i === 0 ? [box] : [rule, box])),
-    gap,
-    'center',
-  );
-}
-
-/** Boxes side by side with a dot between each two. */
-function dotted(boxes: readonly Box[], gap: number): Box {
-  const dot: Box = {
-    width: DOT_RADIUS * 2,
-    height: DOT_RADIUS * 2,
-    place: (x, y) => [{ kind: 'dot', x: x + DOT_RADIUS, y: y + DOT_RADIUS }],
-  };
-  return row(
-    boxes.flatMap((box, i) => (i === 0 ? [box] : [dot, box])),
-    gap,
-    'center',
-  );
-}
-
-/** A level rule `width` long. */
-const ruleAcross = (width: number): Box => ({
-  width,
-  height: RULE_WIDTH,
-  place: (x, y) => [
-    { kind: 'rule', x1: x, y1: y + RULE_WIDTH / 2, x2: x + width, y2: y + RULE_WIDTH / 2 },
-  ],
-});
 
 const iconBox = (icon: SportIconId, size: number, color?: string): Box => ({
   width: size,
@@ -666,13 +602,6 @@ const wrappedBox = (laidOut: SkParagraph, fontSize: number, italic: boolean | un
   return italic === true ? { ...box, width: box.width + leanRoom(fontSize) } : box;
 };
 
-/** A text turned to read upwards: as tall as the text is long. */
-const turnedBox = (paragraph: SkParagraph): Box => ({
-  width: paragraph.getHeight(),
-  height: Math.ceil(paragraph.getLongestLine()) + 1,
-  place: (x, y) => [{ kind: 'text', paragraph, x, y, turned: true }],
-});
-
 /** `box` on a replica's card of `color`, `padX` and `padY` inside its edges. */
 const panel = (box: Box, color: string, padX: number, padY: number, radius: number): Box => {
   const width = box.width + 2 * padX;
@@ -728,7 +657,6 @@ interface Run {
 
 /** How opaque faded texts and rules are. */
 const FADED_ALPHA = 0.72;
-const RULE_ALPHA = 0.45;
 /** A layout width no text reaches: lines only break where the text does. */
 const NO_WRAP_WIDTH = 1_000_000;
 
@@ -770,8 +698,10 @@ function paragraph(
     lining = false,
   }: TextLook = {},
 ) {
-  const tightening = TIGHT_FONTS[style.font] ?? 0;
-  const shadows = shadow ? textShadows(style.color) : [];
+  const tightening =
+    (TIGHT_FONTS[style.font] ?? 0) + LETTER_SPACING[style.letterSpacing ?? 'normal'];
+  // A backdrop already sets the texts apart: no shadow.
+  const shadows = shadow && (style.backdrop ?? 'none') === 'none' ? textShadows(style.color) : [];
   const build = (cut: boolean) => {
     const builder = Skia.ParagraphBuilder.Make(
       cut
@@ -853,11 +783,7 @@ function paragraph(
 const TIGHT_FONTS: Partial<Record<FontId, number>> = { bowlbyOneSC: -0.06 };
 const STRETCHED_FONTS: Partial<Record<FontId, number>> = { bowlbyOneSC: 1.35 };
 
-/** Size of a unit after its value, and of a datum's name over it, relative to the value. */
-const UNIT_SCALE = 0.45;
-const LABEL_SCALE = 0.32;
-const MIN_LABEL_SIZE = 24;
-/** Room after each letter of a datum's name. */
+/** Room after each letter of a secondary text (a quotation's source). */
 const LABEL_SPACING = 0.1;
 
 /**
@@ -865,36 +791,15 @@ const LABEL_SPACING = 0.1;
  * story (other formats scale the whole block, see `newLayer`).
  */
 const SIZES = {
-  headline: {
-    stacked: { primary: 210, secondary: 72 },
-    inline: { primary: 170, secondary: 62 },
-    condensed: { value: 84 },
+  /**
+   * A big datum (`value`) and the data under it (`data`), in each look: as tall as AURA's, their
+   * capitals about a fifth or a quarter of the big one's.
+   */
+  big: {
+    wide: { value: 120, data: 38, stretch: 1 },
+    // Drawn this many times taller than the font, as AURA stretches its big "11.3 KM".
+    stretched: { value: 180, data: 56, stretch: 1.9 },
   },
-  columns: { 2: 96, 3: 96, 4: 90, 6: 76 },
-  route: {
-    stacked: { route: { width: 560, height: 420 }, value: 66 },
-    inline: { route: { width: 380, height: 380 }, value: 60 },
-    between: { route: { width: 300, height: 300 }, value: 76 },
-  },
-  day: {
-    stacked: { weekday: 170, date: 40, value: 62 },
-    inline: { weekday: 130, date: 36, value: 56 },
-  },
-  sport: {
-    centered: { icon: 150, name: 52, value: 76 },
-    list: { icon: 96, name: 58, label: 34, value: 56 },
-  },
-  poster: { value: 250, name: 48, cell: 62 },
-  tall: {
-    thin: { primary: 250, secondary: 66 },
-    heavy: { primary: 230, secondary: 62 },
-  },
-  wide: { value: 112, secondary: 44 },
-  weekday: {
-    grid: { weekday: 190, value: 56 },
-    inline: { weekday: 140, value: 40 },
-  },
-  serif: { title: 40, label: 34, value: 80 },
   /**
    * A quotation's words: at most `lines` lines no wider than `width`, as big as `text` when they
    * fit, smaller (down to `minText`) when they don't, so a long verse is wide rather than tall.
@@ -903,6 +808,18 @@ const SIZES = {
   notes: { bar: 34, icon: 40, title: 74, row: 40 },
   message: { text: 50, meta: 26 },
 } as const;
+
+/**
+ * Room around a data widget on a backdrop, as a share of its height (at least `minPad`), wider
+ * at its sides, and the box's corners, as a share of that room: as a text widget's.
+ */
+const BLOCK_BACKDROP = { padding: 0.16, minPad: 6, wider: 1.6, radius: 1.4 } as const;
+
+/**
+ * Room under a big datum's baseline and its data's, for a comma's tail (a share of their size),
+ * and least room between two data, a share of theirs: they spread to the big one's width.
+ */
+const BIG = { below: 0.12, minGap: 0.8 } as const;
 
 /** Most splits a note lists one by one; longer activities group them (km 1–2…). */
 const NOTES_ROWS = 16;
@@ -1252,8 +1169,6 @@ const BOARDING_PASS = {
 /** Width of the AllRun name signing a block, and its room above. */
 const LOGO_WIDTH = 190;
 const LOGO_GAP = 40;
-/** Narrowest a list of data is, so a short one doesn't look cramped. */
-const LIST_MIN_WIDTH = 560;
 
 /**
  * Lays out a mixed widget with the data of `data`'s activity, or `null` when the activity has no
@@ -1266,7 +1181,10 @@ export function prepareActivityBlock(
 ): PreparedBlock | null {
   const { activity } = data;
   const { block, style } = layer;
-  const metrics = blockMetrics(activity, blockDataCount(block));
+  const metrics =
+    block.design === 'bigPair' || block.design === 'bigTrio'
+      ? bigMetrics(activity, block.top, blockDataCount(block))
+      : blockMetrics(activity, blockDataCount(block));
   // A verse or a quote shows no data: it is drawn for any activity.
   if (metrics.length === 0 && blockDataCount(block) > 0) {
     return null;
@@ -1304,6 +1222,31 @@ export function prepareActivityBlock(
         },
       ),
     );
+  /**
+   * `runs` at `size` cut to their capitals: from a capital's top to `below` under the baseline
+   * (room for a comma's tail), so what goes over or under them sits as close as it looks (see
+   * `CAP_HEIGHTS`); drawn `taller` times taller than the font.
+   */
+  const capitals = (runs: readonly Run[], size: number, below: number, taller = 1): Box => {
+    const laidOut = paragraph(runs, fonts, style);
+    const stretch = (STRETCHED_FONTS[style.font] ?? 1) * taller;
+    const baseline = laidOut.getLineMetrics()[0]?.baseline ?? laidOut.getHeight();
+    const top = baseline - CAP_HEIGHTS[style.font] * size;
+    return {
+      width: textBox(laidOut).width,
+      // Only the letters stretch: the room under them stays as it is.
+      height: (baseline - top) * stretch + below,
+      place: (x, y) => [
+        {
+          kind: 'text',
+          paragraph: laidOut,
+          x,
+          y: y - top * stretch,
+          ...(stretch === 1 ? {} : { stretch }),
+        },
+      ],
+    };
+  };
   /** A datum as one text, its unit after it: "11,34 km". */
   const written = (metric: MetricId): string => {
     const { value: amount, unit } = metricText(activity, metric, textContext);
@@ -1330,80 +1273,6 @@ export function prepareActivityBlock(
       ? translate(`widgets.verified.${unit}`, { value })
       : translate(`widgets.sentence.units.${unit}`, { value });
   };
-  /** A datum at `size`, its unit as big as its value, as AURA writes "11.3 KM". */
-  const datum = (metric: MetricId, size: number) =>
-    text([{ text: written(metric), size, bold: style.bold }]);
-  /** The runs of a datum's value at `size`, with its unit after it, smaller. */
-  const valueRuns = (metric: MetricId, size: number): Run[] => {
-    const written = metricText(activity, metric, textContext);
-    return [
-      { text: written.value, size, bold: style.bold },
-      ...(written.unit === null
-        ? []
-        : [
-            {
-              text: ` ${textContext.unitLabel(written.unit)}`,
-              size: size * UNIT_SCALE,
-              bold: style.bold,
-            },
-          ]),
-    ];
-  };
-  /** A datum's value at `size`, with its unit after it, smaller. */
-  const value = (metric: MetricId, size: number) => text(valueRuns(metric, size));
-  /** A datum's name, small, faded and spaced out, for a value of `size`. */
-  const label = (metric: MetricId, size: number) =>
-    text([
-      {
-        text: translate(`metrics.${metric}`),
-        size: Math.max(MIN_LABEL_SIZE, size * LABEL_SCALE),
-        bold: false,
-        faded: true,
-        spacing: LABEL_SPACING,
-      },
-    ]);
-  /** A datum's name over its value. */
-  const cell = (metric: MetricId, size: number, align: Align) =>
-    column([label(metric, size), value(metric, size)], size * 0.06, align);
-  /** The data after the first, each with its name. */
-  const cells = (from: number, size: number, align: Align) =>
-    metrics.slice(from).map((metric) => cell(metric, size, align));
-  const weekday = (size: number) =>
-    text([
-      {
-        text: formatActivityDate(activity.startLocal, textContext.locale, 'weekday'),
-        size,
-        bold: style.bold,
-      },
-    ]);
-  const shortWeekday = (size: number) =>
-    text([
-      {
-        text: formatShortWeekday(activity.startLocal, textContext.locale),
-        size,
-        bold: style.bold,
-      },
-    ]);
-  const date = (size: number) =>
-    text([
-      {
-        text: formatActivityDate(activity.startLocal, textContext.locale, 'long'),
-        size,
-        bold: false,
-        faded: true,
-        spacing: LABEL_SPACING,
-      },
-    ]);
-  const sportName = (size: number) =>
-    text([
-      {
-        text: translate(`modalities.${activity.sportModality}`),
-        size,
-        bold: style.bold,
-        spacing: LABEL_SPACING,
-      },
-    ]);
-
   /** The splits in the user's unit, kilometers or miles; none without a detail. */
   const splits =
     data.detail === null
@@ -1446,136 +1315,43 @@ export function prepareActivityBlock(
   let hole: HitHole | undefined;
   const body = ((): Box | null => {
     switch (block.design) {
-      case 'headline': {
-        if (block.layout === 'condensed') {
-          const size = SIZES.headline.condensed.value;
-          return dotted(
-            metrics.map((metric) => value(metric, size)),
-            size * 0.4,
-          );
-        }
-        const sizes = SIZES.headline[block.layout];
-        const primary = value(metrics[0], sizes.primary);
-        const rest = cells(1, sizes.secondary, block.layout === 'stacked' ? 'center' : 'start');
-        if (rest.length === 0) {
-          return primary;
-        }
-        return block.layout === 'stacked'
-          ? column([primary, row(rest, sizes.secondary * 1.1, 'start')], 16, 'center')
-          : divided([primary, column(rest, sizes.secondary * 0.3, 'start')], 44);
-      }
-      case 'route': {
-        const sizes = SIZES.route[block.layout];
-        const route =
-          activity.routePolyline === null
-            ? null
-            : routeBox(activity.routePolyline, sizes.route.width, sizes.route.height);
-        const data = cells(0, sizes.value, block.layout === 'inline' ? 'start' : 'center');
-        // Without a route left to draw (all of it private), the data stand alone.
-        if (route === null) {
-          return row(data, sizes.value * 1.1, 'start');
-        }
-        switch (block.layout) {
-          case 'stacked':
-            return column(
-              [route, row(data, sizes.value * 1.1, 'start')],
-              sizes.value * 0.7,
-              'center',
-            );
-          case 'inline':
-            return divided([route, column(data, sizes.value * 0.3, 'start')], 48);
-          case 'between':
-            return row([data[0], route, ...data.slice(1)], sizes.value * 0.6, 'center');
-        }
-      }
-      case 'columns': {
-        const size = SIZES.columns[block.count];
-        const perRow = block.count === 4 ? 2 : block.count === 6 ? 3 : block.count;
-        const all = metrics.map((metric) => cell(metric, size, 'center'));
-        // Every column as wide as the widest datum, so the rules line up from row to row.
-        const width = Math.max(...all.map((box) => box.width));
-        const rows: Box[] = [];
-        for (let i = 0; i < all.length; i += perRow) {
-          rows.push(
-            divided(
-              all.slice(i, i + perRow).map((box) => widened(box, width, 'center')),
-              size * 0.45,
-            ),
-          );
-        }
-        return column(rows, size * 0.5, 'center');
-      }
-      case 'day': {
-        const sizes = SIZES.day[block.layout];
-        const data = cells(0, sizes.value, block.layout === 'stacked' ? 'center' : 'start');
-        return block.layout === 'stacked'
-          ? column(
-              [
-                column([weekday(sizes.weekday), date(sizes.date)], 0, 'center'),
-                row(data, sizes.value * 1.1, 'start'),
-              ],
-              sizes.value * 0.6,
-              'center',
-            )
-          : divided(
-              [
-                column([weekday(sizes.weekday), date(sizes.date)], 4, 'start'),
-                column(data, sizes.value * 0.3, 'start'),
-              ],
-              44,
-            );
-      }
-      case 'sport': {
-        if (block.layout === 'centered') {
-          const sizes = SIZES.sport.centered;
-          return column(
-            [
-              column(
-                [iconBox(sportIcon(activity), sizes.icon), sportName(sizes.name)],
-                8,
-                'center',
-              ),
-              column(cells(0, sizes.value, 'center'), sizes.value * 0.35, 'center'),
-            ],
-            sizes.value * 0.55,
-            'center',
-          );
-        }
-        const sizes = SIZES.sport.list;
-        const header = row(
-          [iconBox(sportIcon(activity), sizes.icon), sportName(sizes.name)],
-          sizes.icon * 0.22,
-          'center',
-        );
-        const pairs = metrics.map((metric) => ({
-          name: text([
-            {
-              text: translate(`metrics.${metric}`),
-              size: sizes.label,
-              bold: false,
-              faded: true,
-            },
-          ]),
-          value: value(metric, sizes.value),
-        }));
-        const width = Math.max(
-          LIST_MIN_WIDTH,
-          header.width,
-          ...pairs.map((pair) => pair.name.width + sizes.value * 1.5 + pair.value.width),
-        );
-        return column(
+      case 'bigTrio':
+      case 'bigPair': {
+        // A datum big, unit and all (stretched upwards in its stretched look), and the others
+        // small under it, spread across its width: the first at its start, the last at its end.
+        const sizes = SIZES.big[block.layout];
+        const [first, ...rest] = metrics;
+        const main = capitals(
           [
-            header,
-            ruleAcross(width),
-            column(
-              pairs.map((pair) => spread(pair.name, pair.value, width)),
-              sizes.value * 0.3,
-              'start',
-            ),
+            {
+              text: plainMetricText(activity, first, textContext),
+              size: sizes.value,
+              bold: style.bold,
+            },
           ],
-          sizes.value * 0.4,
-          'start',
+          sizes.value,
+          sizes.value * BIG.below,
+          sizes.stretch,
         );
+        if (rest.length === 0) {
+          return main;
+        }
+        const under = (size: number) =>
+          rest.map((metric) =>
+            capitals(
+              [{ text: plainMetricText(activity, metric, textContext), size, bold: style.bold }],
+              size,
+              size * BIG.below,
+            ),
+          );
+        // Smaller when they don't fit under it (a short time over three long data).
+        const room = (data: readonly Box[], size: number) =>
+          data.reduce((sum, box) => sum + box.width, 0) + size * BIG.minGap * (data.length - 1);
+        const wanted = under(sizes.data);
+        const fits = room(wanted, sizes.data) <= main.width;
+        const size = fits ? sizes.data : (sizes.data * main.width) / room(wanted, sizes.data);
+        const data = fits ? wanted : under(size);
+        return column([main, justified(data, main.width, size * BIG.minGap)], 0, 'start');
       }
       case 'notes': {
         // The splits as a note of the iPhone's Notes, in its font and colors.
@@ -2809,112 +2585,6 @@ export function prepareActivityBlock(
           ],
         };
       }
-      case 'tall': {
-        // The main datum tall, the others small under it, without names.
-        const sizes = SIZES.tall[block.layout];
-        const rest = metrics.slice(1).map((metric) => datum(metric, sizes.secondary));
-        const primary = datum(metrics[0], sizes.primary);
-        return rest.length === 0
-          ? primary
-          : column([primary, row(rest, sizes.secondary * 0.9, 'end')], 0, 'center');
-      }
-      case 'wide': {
-        // The main datum wide (under the weekday, as wide), the others spread under it.
-        const sizes = SIZES.wide;
-        const primary = datum(metrics[0], sizes.value);
-        const top =
-          block.layout === 'weekday'
-            ? column([weekday(sizes.value), primary], -sizes.value * 0.12, 'start')
-            : primary;
-        const rest = metrics.slice(1).map((metric) => datum(metric, sizes.secondary));
-        return rest.length === 0
-          ? top
-          : column(
-              [top, justified(rest, top.width, sizes.secondary * 0.8)],
-              sizes.secondary * 0.2,
-              'start',
-            );
-      }
-      case 'weekday': {
-        const sizes = SIZES.weekday[block.layout];
-        const data = metrics.map((metric) => datum(metric, sizes.value));
-        const stretched = STRETCHED_FONTS[style.font] !== undefined;
-        if (block.layout === 'grid') {
-          // The weekday over its data, two by two.
-          const rows: Box[][] = [];
-          for (let i = 0; i < data.length; i += 2) {
-            rows.push(data.slice(i, i + 2));
-          }
-          return column(
-            [
-              shortWeekday(sizes.weekday),
-              grid(rows, sizes.value * 0.7, stretched ? -sizes.value * 0.2 : 0, 'start'),
-            ],
-            // A stretched font's boxes keep the room under its letters, stretched too: close
-            // it up.
-            stretched ? -sizes.weekday * 0.25 : 0,
-            'center',
-          );
-        }
-        // The weekday between its data, half on each side.
-        const half = Math.ceil(data.length / 2);
-        return row(
-          [
-            column(data.slice(0, half), sizes.value * 0.15, 'end'),
-            shortWeekday(sizes.weekday),
-            ...(data.length > half ? [column(data.slice(half), sizes.value * 0.15, 'start')] : []),
-          ],
-          sizes.value * 0.6,
-          'center',
-        );
-      }
-      case 'serif': {
-        // The name and date over the data, each under its name, as a magazine's caption.
-        const sizes = SIZES.serif;
-        const data = row(
-          metrics.map((metric) =>
-            column(
-              [
-                text([
-                  {
-                    text: translate(`metrics.${metric}`),
-                    size: sizes.label,
-                    bold: false,
-                    faded: true,
-                  },
-                ]),
-                datum(metric, sizes.value),
-              ],
-              0,
-              'start',
-            ),
-          ),
-          sizes.value * 0.45,
-          'end',
-        );
-        const day = formatActivityDate(activity.startLocal, textContext.locale, 'short');
-        const name = activity.name.trim();
-        const title = textBox(
-          paragraph(
-            [{ text: name === '' ? day : `${name} · ${day}`, size: sizes.title, bold: false }],
-            fonts,
-            style,
-            { maxWidth: data.width },
-          ),
-        );
-        return column([title, data], sizes.title * 0.5, 'start');
-      }
-      case 'poster': {
-        const sizes = SIZES.poster;
-        // The main datum reads upwards along the poster's side.
-        const big = turnedBox(paragraph(valueRuns(metrics[0], sizes.value), fonts, style));
-        const side = column(
-          [sportName(sizes.name), ...cells(1, sizes.cell, 'start')],
-          sizes.cell * 0.4,
-          'start',
-        );
-        return row([big, side], sizes.cell * 0.6, 'end');
-      }
     }
   })();
   if (body === null) {
@@ -2922,14 +2592,31 @@ export function prepareActivityBlock(
   }
 
   // A replica is the app's own view: no signature under it.
-  const whole =
+  const signed =
     layer.logo && !isAppReplica(block.design)
-      ? column(
-          [body, logoBox(LOGO_WIDTH)],
-          LOGO_GAP,
-          block.design === 'sport' && block.layout === 'list' ? 'start' : 'center',
-        )
+      ? column([body, logoBox(LOGO_WIDTH)], LOGO_GAP, 'center')
       : body;
+  // On a backdrop (only data widgets offer one), as a text widget: a box of the color opposite
+  // to its texts', translucent or solid, padded in proportion.
+  const backdrop = style.backdrop ?? 'none';
+  const whole =
+    backdrop === 'none'
+      ? signed
+      : (() => {
+          const pad = Math.max(BLOCK_BACKDROP.minPad, signed.height * BLOCK_BACKDROP.padding);
+          const width = signed.width + 2 * pad * BLOCK_BACKDROP.wider;
+          const height = signed.height + 2 * pad;
+          return overlay(
+            fillBox(
+              width,
+              height,
+              Math.min(pad * BLOCK_BACKDROP.radius, height / 2),
+              backdrop === 'solid' ? contrastingInk(style.color) : softBackdrop(style.color),
+              {},
+            ),
+            signed,
+          );
+        })();
   return {
     width: whole.width,
     height: whole.height,
@@ -3447,8 +3134,6 @@ function appMark(piece: Piece, i: number): ReactElement | null {
     case 'text':
     case 'messageTail':
     case 'paper':
-    case 'rule':
-    case 'dot':
     case 'logo':
       return null;
   }
@@ -3484,28 +3169,6 @@ function BlockArt({
       case 'symbol':
       case 'disc':
         return [];
-      case 'rule':
-        return [
-          <Line
-            key={i}
-            p1={{ x: piece.x1, y: piece.y1 }}
-            p2={{ x: piece.x2, y: piece.y2 }}
-            color={color}
-            opacity={RULE_ALPHA}
-            strokeWidth={RULE_WIDTH}
-            strokeCap="round"
-          />,
-        ];
-      case 'dot':
-        return [
-          <Circle
-            key={i}
-            c={{ x: piece.x, y: piece.y }}
-            r={DOT_RADIUS}
-            color={color}
-            opacity={FADED_ALPHA}
-          />,
-        ];
       case 'icon':
         return piece.color !== undefined
           ? []
@@ -3591,8 +3254,6 @@ function BlockArt({
           return null;
         }
         const width = Math.ceil(piece.paragraph.getLongestLine()) + 1;
-        // Turned upwards about its top-left corner, then moved down by its length: the text
-        // fills the box it measured, reading from the bottom.
         if (piece.stretch !== undefined) {
           return (
             <Group
@@ -3607,18 +3268,7 @@ function BlockArt({
             </Group>
           );
         }
-        return piece.turned === true ? (
-          <Group
-            key={i}
-            transform={[
-              { translateX: piece.x },
-              { translateY: piece.y + width },
-              { rotate: -Math.PI / 2 },
-            ]}
-          >
-            <Paragraph paragraph={piece.paragraph} x={0} y={0} width={width} />
-          </Group>
-        ) : (
+        return (
           <Paragraph key={i} paragraph={piece.paragraph} x={piece.x} y={piece.y} width={width} />
         );
       })}

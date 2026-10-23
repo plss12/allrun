@@ -236,7 +236,7 @@ describe('setBlockOptions', () => {
   const withBlock = addLayer(
     activity,
     newLayer(
-      { kind: 'activityBlock', block: { design: 'headline', layout: 'stacked' } },
+      { kind: 'activityBlock', block: { design: 'verse', verse: 'philippians4v13' } },
       'block',
       'story',
     ),
@@ -260,10 +260,21 @@ describe('setBlockOptions', () => {
     });
   });
 
+  it("sets a mixed widget's backdrop and letter spacing", () => {
+    const styled = setBlockOptions(withBlock, 'block', {
+      backdrop: 'solid',
+      letterSpacing: 'wide',
+    });
+    expect(find(styled, 'block')).toMatchObject({
+      style: { backdrop: 'solid', letterSpacing: 'wide' },
+    });
+    expect(parseTemplate(styled)).toEqual(styled);
+  });
+
   it('changes nothing when the options are already set, and only fits mixed widgets', () => {
-    // A stacked headline starts in a thin font, not bold.
+    // A verse starts in a serif italic, not bold.
     expect(setBlockOptions(withBlock, 'block', { bold: false, logo: false })).toBe(withBlock);
-    expect(setBlockOptions(withBlock, 'block', { italic: false })).toBe(withBlock);
+    expect(setBlockOptions(withBlock, 'block', { italic: true })).toBe(withBlock);
     expect(() => setBlockOptions(withBlock, 'name', { logo: true })).toThrow(/block options/);
   });
 });

@@ -19,6 +19,7 @@ import {
   layerText,
   periodChartHeader,
   MISSING_VALUE,
+  plainMetricText,
   speedMeasure,
   splitGapText,
   splitRowTexts,
@@ -48,6 +49,21 @@ const layer = (id: string, layers: readonly Layer[]): Layer => {
   }
   return found;
 };
+
+describe('plainMetricText', () => {
+  it('writes a pace with its marks and no unit, anything else with its unit', () => {
+    expect(plainMetricText(activity, 'pace', context)).toBe(`5'00"`);
+    expect(plainMetricText(activity, 'movingTime', context)).toBe('50:00');
+    expect(plainMetricText(activity, 'elevationGain', context)).toBe('50 m');
+    expect(plainMetricText(makeActivity({ sportType: 'Swim' }), 'swimPace', context)).toBe(`0'30"`);
+  });
+
+  it('writes numbers with a decimal point and no thousands separator, in any language', () => {
+    const long = makeActivity({ distanceMeters: 11_340, calories: 1250 });
+    expect(plainMetricText(long, 'distance', context)).toBe('11.34 km');
+    expect(plainMetricText(long, 'calories', context)).toBe('1250 kcal');
+  });
+});
 
 describe('layerText for an activity', () => {
   const { layers } = defaultActivityTemplate(activity);

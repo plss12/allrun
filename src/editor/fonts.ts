@@ -25,6 +25,29 @@ export const FONT_FAMILIES: Readonly<Record<FontId, string>> = {
 };
 
 /**
+ * How tall each font's capitals are, as a share of its size: the `sCapHeight` of its OS/2 table
+ * over its units per em, the same in every face it ships. A big datum is cut to it, so the data
+ * under it sit as close as they look (Skia measures a line by its ascent, well above a capital).
+ */
+export const CAP_HEIGHTS: Readonly<Record<FontId, number>> = {
+  inter: 0.7275,
+  barlowCondensed: 0.7,
+  playfairDisplay: 0.708,
+  spaceMono: 0.7,
+  orbitron: 0.72,
+  bangers: 0.721,
+  permanentMarker: 0.7402,
+  anton: 0.8594,
+  unbounded: 0.75,
+  bigShoulders: 0.8,
+  bowlbyOneSC: 0.7422,
+  rubikGlitch: 0.7,
+  graduate: 0.75,
+  sacramento: 0.7568,
+  doto: 0.7,
+};
+
+/**
  * A font's files: its regular face, and its bold and italics when it ships them; and a light face
  * for the replicas of apps that write thin (an alarm's time), not offered to the user.
  */

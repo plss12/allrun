@@ -48,16 +48,21 @@ comes later.
 - **Variants scroll inside their tile**, with dots, instead of filling the gallery with one tile
   each (date formats, data shown, logo versions…). Tiles go two per row, mixed widgets too, as in
   AURA; only charts take the whole width.
-- **The gallery leads with the mixed widgets**, the ones people will use most. The basics follow
-  in one section: every single datum in one tile (the distance first, then the rest of the
+- **The gallery leads with the mixed widgets**, the ones people will use most. Since 2026-10-23
+  its sections are: data widgets (typographic ones with data, the first section, once they are
+  redone), creative ones (the replicas of apps and things, and the phrases, called "mixed" until
+  then), charts, basics and the logo, whose name, monogram and both are a tile each, so the
+  section is not a lone tile. The basics are: every single datum in one tile (the distance first, then the rest of the
   sport's data, each followed by its other ways of writing it), the route, free text, the name,
-  the date and the place. Columns of data start at two (distance and time): one datum alone is
-  the data tile. Mixed widgets with the route draw it over, beside or between the data.
-- **Two families of mixed widgets.** Typographic ones (headline, columns, route, day, sport,
-  poster, tall, wide, short weekday, serif…) start each in the font that suits it, as AURA does
-  (thin and tall, wide, block-like, puffy for the day, a poster face for the poster, a serif
-  italic in small letters for the serif), and the user can still change their font, color,
-  weight, slant and case. Replicas of other apps (the iPhone's Notes with the splits, a sent chat
+  the date and the place.
+- **Two families of mixed widgets.** Typographic ones start each in the font that suits it, as
+  AURA does (a serif italic in small letters for a verse or a quote), and the user can still
+  change their font, color, weight, slant and case. The first typographic ones with data
+  (headline, columns, route, day, sport, poster, tall, wide, short weekday, serif) were retired
+  on 2026-10-23, as none convinced: they are redone one by one from examples, and designs saved
+  with them read without them. The first ones back: a datum big with two or three more under
+  it, spread to its width (`bigPair`, `bigTrio`), wide or stretched upwards, the main datum or
+  the time on top; never a second reading of a measure, since they carry no names. Replicas of other apps (the iPhone's Notes with the splits, a sent chat
   message with the data, and the sport and the activity's time where its time goes, the lock
   screen's player of iOS 26 copied place by place, with the route as its cover (in AllRun's red
   or night ink) and the distance and time at the ends of its bar, the camera, the splits as a board
@@ -71,8 +76,8 @@ comes later.
   data where its settings go, the sport's icon on its f button, the route as the last photo's
   thumbnail (none without a route), and its view of the photo see-through, so touches there reach the photo and the
   widgets under it (`HitHole`). New widgets are built with the fonts the app already has.
-- **Fonts:** Anton, Unbounded, Big Shoulders Display, Bowlby One SC (the day's heavy face,
-  stretched upwards and set tight, as AURA's "WED") and Rubik Glitch, and then three styles the
+- **Fonts:** Anton, Unbounded, Big Shoulders Display, Bowlby One SC (a heavy face, stretched
+  upwards and set tight, as AURA's "WED") and Rubik Glitch, and then three styles the
   set lacked: a varsity jersey's letters (Graduate), a scoreboard's dot matrix (Doto) and a
   signature (Sacramento), all with open licenses. Fifteen in all.
   Paid fonts are left out: an app bundles its fonts, which needs an app license. Fonts too close

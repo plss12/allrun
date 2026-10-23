@@ -5,20 +5,14 @@ import {
   type ActivityBlock,
   type ActivityBlockDesign,
   APP_MODES,
-  BLOCK_COLUMN_COUNTS,
-  DAY_LAYOUTS,
+  BIG_LAYOUTS,
+  BIG_TOPS,
   type FontId,
-  HEADLINE_LAYOUTS,
   BRAND_COVERS,
   CHAT_PHRASES,
   LAPS_LAYOUTS,
   QUOTES,
-  ROUTE_LAYOUTS,
-  SPORT_LAYOUTS,
-  TALL_LAYOUTS,
-  WEEKDAY_LAYOUTS,
   VERSES,
-  WIDE_LAYOUTS,
 } from './template';
 
 /**
@@ -28,8 +22,17 @@ import {
  * data widget does.
  */
 
-/** Second readings of a datum (elapsed after moving time, highest after average heart rate). */
-const SECOND_READINGS: readonly MetricId[] = ['elapsedTime', 'maxHeartRate'];
+/**
+ * Second readings of a datum (elapsed after moving time, highest after average heart rate,
+ * weighted after average power, highest altitude after the elevation gain): without their names,
+ * they read as the first.
+ */
+const SECOND_READINGS: readonly MetricId[] = [
+  'elapsedTime',
+  'maxHeartRate',
+  'weightedAveragePower',
+  'maxElevation',
+];
 
 /** The two data a widget of two shows when the activity has them: how far and how long. */
 const PAIR: readonly MetricId[] = ['distance', 'movingTime'];
@@ -57,16 +60,10 @@ export function blockMetrics(activity: Activity, count: number): MetricId[] {
 /** Data each version of a design shows, at most; the splits show splits instead. */
 export function blockDataCount(block: ActivityBlock): number {
   switch (block.design) {
-    case 'columns':
-      return block.count;
-    case 'sport':
-      return block.layout === 'list' ? 4 : 3;
-    case 'route':
-      return block.layout === 'between' ? 2 : 3;
-    case 'wide':
-      return block.layout === 'pair' ? 3 : 4;
-    case 'weekday':
+    case 'bigTrio':
       return 4;
+    case 'bigPair':
+      return 3;
     case 'music':
       return 2;
     case 'receipt':
@@ -82,11 +79,6 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'splitLadder':
     case 'verified':
       return 1;
-    case 'headline':
-    case 'day':
-    case 'poster':
-    case 'tall':
-    case 'serif':
     case 'message':
     case 'camera':
     case 'chat':
@@ -99,10 +91,46 @@ export function blockDataCount(block: ActivityBlock): number {
 }
 
 /**
+ * The first `count` data of a big datum's widget: the sport's main datum (`top: 'main'`) or the
+ * time on top, then the rest in the sport's order. It writes them without names, so never a
+ * second reading of a measure (a highest heart rate would read as a second average). Fewer when
+ * the activity has fewer. Time O(m) for the m metrics of its sport.
+ */
+export function bigMetrics(
+  activity: Activity,
+  top: (typeof BIG_TOPS)[number],
+  count: number,
+): MetricId[] {
+  const data = availableMetrics(activity).filter((metric) => !SECOND_READINGS.includes(metric));
+  const ordered =
+    top === 'time' && data.includes('movingTime')
+      ? ['movingTime' as const, ...data.filter((metric) => metric !== 'movingTime')]
+      : data;
+  return ordered.slice(0, count);
+}
+
+/**
+ * The big datum's widgets `activity` fills, a look after another, two data under it then three:
+ * each only with all its data, and with the time on top only when the main datum is another.
+ */
+function bigBlocks(activity: Activity): ActivityBlock[] {
+  const main = bigMetrics(activity, 'main', 1)[0];
+  return BIG_LAYOUTS.flatMap((layout) =>
+    (['bigPair', 'bigTrio'] as const).flatMap((design) =>
+      BIG_TOPS.filter((top) => {
+        const metrics = bigMetrics(activity, top, blockDataCount({ design, layout, top }));
+        return (
+          metrics.length === blockDataCount({ design, layout, top }) &&
+          (top === 'main' || (metrics[0] === 'movingTime' && main !== 'movingTime'))
+        );
+      }).map((top) => ({ design, layout, top })),
+    ),
+  );
+}
+
+/**
  * Every version of the mixed widgets that `activity` can fill, design by design, in the order of
- * the gallery. Columns are only offered up to the number of data it has (a gym session has fewer
- * than six), the route's only when it has one, the splits only `withSplits` (when its detail has
- * them), the laps only `withLaps` (when it has more than one), the location only `withPlace` (when
+ * the gallery: the splits only `withSplits` (when its detail has them), the laps only `withLaps` (when it has more than one), the location only `withPlace` (when
  * its place can be named), the sentence only when it can be written (see `sentencePlan`), and
  * nothing for an activity without data. The verse, the quote and the chat message come with their
  * first phrase: the gallery lists the others to choose from. Time O(m) for the m metrics of its
@@ -114,25 +142,12 @@ export function activityBlocks(
   withPlace = false,
   withLaps = false,
 ): ActivityBlock[] {
-  const available = blockMetrics(activity, Math.max(...BLOCK_COLUMN_COUNTS)).length;
-  if (available === 0) {
+  if (blockMetrics(activity, 1).length === 0) {
     return [];
   }
   return [
-    ...HEADLINE_LAYOUTS.map((layout) => ({ design: 'headline', layout }) as const),
-    ...BLOCK_COLUMN_COUNTS.filter((count) => count <= available).map(
-      (count) => ({ design: 'columns', count }) as const,
-    ),
-    ...(activity.routePolyline === null
-      ? []
-      : ROUTE_LAYOUTS.map((layout) => ({ design: 'route', layout }) as const)),
-    ...TALL_LAYOUTS.map((layout) => ({ design: 'tall', layout }) as const),
-    ...WIDE_LAYOUTS.map((layout) => ({ design: 'wide', layout }) as const),
-    ...DAY_LAYOUTS.map((layout) => ({ design: 'day', layout }) as const),
-    ...WEEKDAY_LAYOUTS.map((layout) => ({ design: 'weekday', layout }) as const),
-    ...SPORT_LAYOUTS.map((layout) => ({ design: 'sport', layout }) as const),
-    { design: 'poster' } as const,
-    { design: 'serif' } as const,
+    // The data widgets (see `isDataWidget`).
+    ...bigBlocks(activity),
     { design: 'verse', verse: VERSES[0] } as const,
     { design: 'quote', quote: QUOTES[0] } as const,
     ...(sentencePlan(activity, withPlace) === null ? [] : [{ design: 'sentence' } as const]),
@@ -317,6 +332,17 @@ export function isAppReplica(design: ActivityBlockDesign): boolean {
   return APP_REPLICAS.has(design);
 }
 
+/** Mixed widgets made of data in the user's lettering: the gallery shows them apart. */
+const DATA_WIDGETS: ReadonlySet<ActivityBlockDesign> = new Set(['bigTrio', 'bigPair']);
+
+/**
+ * Whether a design is a data widget: its data written in a lettering the user can change, as
+ * opposed to the creative ones (replicas of apps and things, phrases).
+ */
+export function isDataWidget(design: ActivityBlockDesign): boolean {
+  return DATA_WIDGETS.has(design);
+}
+
 /**
  * Whether a design frames the whole canvas, as the camera does around the photo: it is as big as
  * the canvas, not a widget scaled to the format.
@@ -342,30 +368,17 @@ const lettering = (font: FontId, bold: boolean): BlockLettering => ({
 });
 
 /**
- * The lettering that suits each version of a mixed widget, as AURA gives each its own: thin and
- * tall, wide, condensed and heavy, heavy and stretched for the day, a poster face for the poster,
- * a serif italic in small letters for the serif. Replicas write in the system-like font of the
- * apps they recreate.
+ * The lettering that suits each version of a mixed widget, as AURA gives each its own: wide and
+ * heavy, or heavy and stretched upwards, for a big datum, a serif italic in small letters for a
+ * quotation. Replicas write in the system-like font of the apps they recreate.
  */
 export function blockLettering(block: ActivityBlock): BlockLettering {
   switch (block.design) {
-    case 'headline':
-      return block.layout === 'stacked'
-        ? lettering('bigShoulders', false)
-        : block.layout === 'inline'
-          ? lettering('unbounded', true)
-          : lettering('anton', false);
-    case 'tall':
-      return lettering('bigShoulders', block.layout === 'heavy');
-    case 'wide':
-      return lettering('unbounded', true);
-    case 'day':
-    case 'weekday':
-      return lettering('bowlbyOneSC', false);
-    case 'poster':
-      return lettering('anton', false);
-    case 'serif':
-      return { font: 'playfairDisplay', bold: false, italic: true, uppercase: false };
+    case 'bigTrio':
+    case 'bigPair':
+      return block.layout === 'wide'
+        ? lettering('unbounded', true)
+        : lettering('bowlbyOneSC', false);
     case 'verse':
     case 'quote':
       // A quotation, in a serif italic.
@@ -386,9 +399,5 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
     case 'receipt':
     case 'boardingPass':
       return lettering('inter', false);
-    case 'columns':
-    case 'route':
-    case 'sport':
-      return lettering('barlowCondensed', true);
   }
 }

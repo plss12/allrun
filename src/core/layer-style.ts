@@ -341,8 +341,14 @@ export function setLogoOptions(
   );
 }
 
-/** What a mixed widget's panel sets: its texts' font, weight, slant and case, and its logo. */
-export type BlockOptions = Pick<BlockLayer['style'], 'font' | 'bold' | 'italic' | 'uppercase'> &
+/**
+ * What a mixed widget's panel sets: its texts' font, weight, slant and case, its logo, and a data
+ * widget's backdrop and letter spacing.
+ */
+export type BlockOptions = Pick<
+  BlockLayer['style'],
+  'font' | 'bold' | 'italic' | 'uppercase' | 'backdrop' | 'letterSpacing'
+> &
   Pick<BlockLayer, 'logo'>;
 
 /**
@@ -356,7 +362,13 @@ export function setBlockOptions(
 ): Template {
   return editLayer(template, id, BLOCK_KINDS, 'block options', (layer) => {
     const { logo, ...style } = patch;
-    const current = { ...layer.style, italic: layer.style.italic ?? false, logo: layer.logo };
+    const current = {
+      ...layer.style,
+      italic: layer.style.italic ?? false,
+      backdrop: layer.style.backdrop ?? 'none',
+      letterSpacing: layer.style.letterSpacing ?? 'normal',
+      logo: layer.logo,
+    };
     if (unchanged(current, patch)) {
       return layer;
     }

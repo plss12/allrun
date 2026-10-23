@@ -2,12 +2,14 @@ import { makeActivity } from '@/test-utils/make-activity';
 
 import {
   activityBlocks,
+  bigMetrics,
   blockDataCount,
   blockLettering,
   blockMetrics,
   fastestIndex,
   framesCanvas,
   isAppReplica,
+  isDataWidget,
   sentencePlan,
   sportIcon,
   tyreCompounds,
@@ -72,32 +74,51 @@ describe('blockMetrics', () => {
   });
 });
 
+describe('bigMetrics', () => {
+  const gym = makeActivity({ sportType: 'WeightTraining', distanceMeters: 0, averageSpeed: null });
+
+  it("puts the main datum or the time on top, then the rest in the sport's order", () => {
+    const run = makeActivity({ sportType: 'Run' });
+    expect(bigMetrics(run, 'main', 4)).toEqual(['distance', 'pace', 'movingTime', 'elevationGain']);
+    expect(bigMetrics(run, 'time', 4)).toEqual(['movingTime', 'distance', 'pace', 'elevationGain']);
+    expect(bigMetrics(run, 'time', 3)).toEqual(['movingTime', 'distance', 'pace']);
+  });
+
+  it('leaves out the second readings of a measure, which nothing would tell from the first', () => {
+    // The highest heart rate and the elapsed time would read as a second "ppm" and time.
+    expect(bigMetrics(gym, 'main', 4)).toEqual(['movingTime', 'averageHeartRate', 'calories']);
+    const ride = makeActivity({
+      sportType: 'Ride',
+      averagePowerWatts: 210,
+      weightedAveragePowerWatts: 225,
+      elevationGainMeters: 0,
+      averageHeartRate: null,
+      calories: null,
+      averageCadence: null,
+    });
+    // Without its gain, the highest altitude would read as one; the weighted power, as a second.
+    expect(bigMetrics(ride, 'main', 6)).toEqual([
+      'distance',
+      'speed',
+      'movingTime',
+      'averagePower',
+    ]);
+  });
+});
+
 describe('activityBlocks', () => {
   it('offers every version of every design, in the order of the gallery', () => {
     expect(activityBlocks(makeActivity())).toEqual([
-      { design: 'headline', layout: 'stacked' },
-      { design: 'headline', layout: 'inline' },
-      { design: 'headline', layout: 'condensed' },
-      { design: 'columns', count: 2 },
-      { design: 'columns', count: 3 },
-      { design: 'columns', count: 4 },
-      { design: 'columns', count: 6 },
-      { design: 'route', layout: 'stacked' },
-      { design: 'route', layout: 'inline' },
-      { design: 'route', layout: 'between' },
-      { design: 'tall', layout: 'thin' },
-      { design: 'tall', layout: 'heavy' },
-      { design: 'wide', layout: 'pair' },
-      { design: 'wide', layout: 'trio' },
-      { design: 'wide', layout: 'weekday' },
-      { design: 'day', layout: 'stacked' },
-      { design: 'day', layout: 'inline' },
-      { design: 'weekday', layout: 'grid' },
-      { design: 'weekday', layout: 'inline' },
-      { design: 'sport', layout: 'centered' },
-      { design: 'sport', layout: 'list' },
-      { design: 'poster' },
-      { design: 'serif' },
+      // The data widgets: a datum big over two or three more, wide or stretched, the main datum
+      // or the time on top.
+      { design: 'bigPair', layout: 'wide', top: 'main' },
+      { design: 'bigPair', layout: 'wide', top: 'time' },
+      { design: 'bigTrio', layout: 'wide', top: 'main' },
+      { design: 'bigTrio', layout: 'wide', top: 'time' },
+      { design: 'bigPair', layout: 'stretched', top: 'main' },
+      { design: 'bigPair', layout: 'stretched', top: 'time' },
+      { design: 'bigTrio', layout: 'stretched', top: 'main' },
+      { design: 'bigTrio', layout: 'stretched', top: 'time' },
       // The verse and the quote with their first phrase: the others are chosen from a list.
       { design: 'verse', verse: 'philippians4v13' },
       { design: 'quote', quote: 'kipchoge' },
@@ -120,6 +141,18 @@ describe('activityBlocks', () => {
       { design: 'receipt' },
       { design: 'boardingPass', cover: 'red' },
       { design: 'boardingPass', cover: 'ink' },
+    ]);
+  });
+
+  it('offers the data widgets only full, and the time on top only when it is not already', () => {
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      averageSpeed: null,
+    });
+    expect(activityBlocks(gym).filter((block) => block.design.startsWith('big'))).toEqual([
+      { design: 'bigPair', layout: 'wide', top: 'main' },
+      { design: 'bigPair', layout: 'stretched', top: 'main' },
     ]);
   });
 
@@ -197,25 +230,6 @@ describe('activityBlocks', () => {
     ).not.toContain('sentence');
   });
 
-  it('offers columns only up to the data the activity has', () => {
-    const gym = makeActivity({
-      sportType: 'WeightTraining',
-      distanceMeters: 0,
-      averageSpeed: null,
-    });
-    const counts = activityBlocks(gym).flatMap((block) =>
-      block.design === 'columns' ? [block.count] : [],
-    );
-    expect(counts).toEqual([2, 3, 4]);
-  });
-
-  it('offers the route designs only for an activity with a route', () => {
-    const designs = (routePolyline: string | null) =>
-      new Set(activityBlocks(makeActivity({ routePolyline })).map((block) => block.design));
-    expect(designs('_p~iF~ps|U_ulLnnqC')).toContain('route');
-    expect(designs(null)).not.toContain('route');
-  });
-
   it('offers the camera in both brand colors with a route, and once without its thumbnail', () => {
     const cameras = (routePolyline: string | null) =>
       activityBlocks(makeActivity({ routePolyline })).filter((block) => block.design === 'camera');
@@ -242,19 +256,12 @@ describe('activityBlocks', () => {
 });
 
 describe('blockDataCount', () => {
-  it('is the number of columns, four for a list and three otherwise', () => {
-    expect(blockDataCount({ design: 'columns', count: 6 })).toBe(6);
-    expect(blockDataCount({ design: 'sport', layout: 'list' })).toBe(4);
-    expect(blockDataCount({ design: 'sport', layout: 'centered' })).toBe(3);
-    expect(blockDataCount({ design: 'route', layout: 'between' })).toBe(2);
-    expect(blockDataCount({ design: 'poster' })).toBe(3);
+  it('is the number of data each design writes', () => {
+    // The main datum and three or two more under it.
+    expect(blockDataCount({ design: 'bigTrio', layout: 'stretched', top: 'main' })).toBe(4);
+    expect(blockDataCount({ design: 'bigPair', layout: 'wide', top: 'time' })).toBe(3);
     // A note lists the splits under the distance.
     expect(blockDataCount({ design: 'notes', layout: 'light' })).toBe(1);
-    expect(blockDataCount({ design: 'headline', layout: 'condensed' })).toBe(3);
-    // Two at the ends of a wide datum, three spread under it.
-    expect(blockDataCount({ design: 'wide', layout: 'pair' })).toBe(3);
-    expect(blockDataCount({ design: 'wide', layout: 'trio' })).toBe(4);
-    expect(blockDataCount({ design: 'weekday', layout: 'grid' })).toBe(4);
     // The song's two ends; the message's two data and the time where its time goes; and the
     // three data where the camera's settings go.
     expect(blockDataCount({ design: 'music', layout: 'dark', cover: 'red' })).toBe(2);
@@ -282,7 +289,7 @@ describe('framesCanvas', () => {
   it('is only the camera, which frames the photo', () => {
     expect(framesCanvas({ design: 'camera', cover: 'red' })).toBe(true);
     expect(framesCanvas({ design: 'music', layout: 'dark', cover: 'ink' })).toBe(false);
-    expect(framesCanvas({ design: 'poster' })).toBe(false);
+    expect(framesCanvas({ design: 'receipt' })).toBe(false);
   });
 });
 
@@ -315,40 +322,30 @@ describe('isAppReplica and blockLettering', () => {
     expect(isAppReplica('boardingPass')).toBe(true);
     expect(isAppReplica('verse')).toBe(false);
     expect(isAppReplica('quote')).toBe(false);
-    expect(isAppReplica('poster')).toBe(false);
-    expect(isAppReplica('serif')).toBe(false);
-    expect(isAppReplica('headline')).toBe(false);
+    expect(isAppReplica('bigTrio')).toBe(false);
+    expect(isAppReplica('bigPair')).toBe(false);
+  });
+
+  it('tells the data widgets from the creative ones', () => {
+    expect(isDataWidget('bigTrio')).toBe(true);
+    expect(isDataWidget('bigPair')).toBe(true);
+    expect(isDataWidget('verse')).toBe(false);
+    expect(isDataWidget('receipt')).toBe(false);
   });
 
   it("gives each version the font that suits it, and replicas the apps' one", () => {
     const capitals = { italic: false, uppercase: true };
-    expect(blockLettering({ design: 'poster' })).toEqual({
-      font: 'anton',
-      bold: false,
-      ...capitals,
-    });
-    expect(blockLettering({ design: 'day', layout: 'inline' }).font).toBe('bowlbyOneSC');
-    expect(blockLettering({ design: 'weekday', layout: 'grid' }).font).toBe('bowlbyOneSC');
-    expect(blockLettering({ design: 'headline', layout: 'stacked' })).toEqual({
-      font: 'bigShoulders',
-      bold: false,
-      ...capitals,
-    });
-    expect(blockLettering({ design: 'tall', layout: 'heavy' })).toEqual({
-      font: 'bigShoulders',
+    // The big datum wide and heavy, or heavy and stretched upwards.
+    expect(blockLettering({ design: 'bigTrio', layout: 'wide', top: 'main' })).toEqual({
+      font: 'unbounded',
       bold: true,
       ...capitals,
     });
-    expect(blockLettering({ design: 'wide', layout: 'trio' }).font).toBe('unbounded');
-    // The serif writes in small letters, slanted.
-    expect(blockLettering({ design: 'serif' })).toEqual({
-      font: 'playfairDisplay',
+    expect(blockLettering({ design: 'bigPair', layout: 'stretched', top: 'time' })).toEqual({
+      font: 'bowlbyOneSC',
       bold: false,
-      italic: true,
-      uppercase: false,
+      ...capitals,
     });
-    expect(blockLettering({ design: 'headline', layout: 'inline' }).font).toBe('unbounded');
-    expect(blockLettering({ design: 'headline', layout: 'condensed' }).font).toBe('anton');
     expect(blockLettering({ design: 'notes', layout: 'dark' }).font).toBe('inter');
     expect(blockLettering({ design: 'music', layout: 'light', cover: 'red' }).font).toBe('inter');
     // A verse and a quote are quotations in a serif italic.
@@ -361,11 +358,6 @@ describe('isAppReplica and blockLettering', () => {
     expect(blockLettering({ design: 'quote', quote: 'ali' })).toEqual(
       blockLettering({ design: 'verse', verse: 'romans8v18' }),
     );
-    expect(blockLettering({ design: 'columns', count: 3 })).toEqual({
-      font: 'barlowCondensed',
-      bold: true,
-      ...capitals,
-    });
   });
 });
 

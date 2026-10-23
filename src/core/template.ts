@@ -171,24 +171,11 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * (see `isAppReplica`): typographic ones, each with a font of its own that the user can change,
  * and replicas of other apps, whose look (colors, font, icons) is fixed because recognizing the
  * app is the point. Each design comes in a few versions, the pages of its tile in the gallery:
- * - `headline`: one big datum with two more under it (`stacked`), beside it (`inline`), or the
- *   three in one line (`condensed`);
- * - `columns`: 2, 3, 4 or 6 data, each with its name over it, in columns (one datum alone is a
- *   data widget);
- * - `route`: the route with data under it (`stacked`), beside it (`inline`), or between two data
- *   (`between`); only for activities with a route;
- * - `day`: the weekday written big, its date and three data under it (`stacked`) or beside it
- *   (`inline`);
- * - `sport`: the sport's icon and name over its data, one under another (`centered`) or as a list
- *   of names and values (`list`);
- * - `poster`: the main datum huge and turned upright, the sport and two more data beside it;
- * - `tall`: the main datum tall, unit and all, two more data under it without names, in a thin
- *   (`thin`) or a heavy (`heavy`) letter;
- * - `wide`: the main datum wide and heavy, unit and all, with two data under it at its ends
- *   (`pair`), three spread under it (`trio`), or under the weekday, as wide (`weekday`);
- * - `weekday`: the weekday's short name, heavy and stretched, over four data without names in
- *   two columns (`grid`), or between them, two on each side (`inline`);
- * - `serif`: the activity's name and date over three data with their names, in a serif italic;
+ * - `bigPair` (data): a datum big, unit and all, and two more small under it, at its ends, in a
+ *   wide and heavy letter (`wide`) or stretched upwards (`stretched`); the big one is the
+ *   sport's main datum (`top: 'main'`) or the time (`top: 'time'`), the others follow in the
+ *   sport's order, without names, so never a second reading of one (see `bigMetrics`);
+ * - `bigTrio` (data): the same with three data under it, spread across its width;
  * - `notes` (replica): the splits as a note of the iPhone's Notes, the fastest in its yellow, in
  *   dark or light mode; only for activities with splits;
  * - `message` (replica): two data as a sent chat message, the sport and start time where the
@@ -223,16 +210,8 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  *   brand color (`cover`).
  */
 export const ACTIVITY_BLOCK_DESIGNS = [
-  'headline',
-  'columns',
-  'route',
-  'day',
-  'sport',
-  'poster',
-  'tall',
-  'wide',
-  'weekday',
-  'serif',
+  'bigTrio',
+  'bigPair',
   'notes',
   'message',
   'music',
@@ -254,16 +233,12 @@ export const ACTIVITY_BLOCK_DESIGNS = [
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
 
-export const HEADLINE_LAYOUTS = ['stacked', 'inline', 'condensed'] as const;
-export const BLOCK_COLUMN_COUNTS = [2, 3, 4, 6] as const;
-export const ROUTE_LAYOUTS = ['stacked', 'inline', 'between'] as const;
-export const DAY_LAYOUTS = ['stacked', 'inline'] as const;
-export const SPORT_LAYOUTS = ['centered', 'list'] as const;
-export const TALL_LAYOUTS = ['thin', 'heavy'] as const;
-export const WIDE_LAYOUTS = ['pair', 'trio', 'weekday'] as const;
-export const WEEKDAY_LAYOUTS = ['grid', 'inline'] as const;
 /** The two looks of an app replica, as the app shows them in dark and light mode. */
 export const APP_MODES = ['dark', 'light'] as const;
+/** The looks of a big datum: wide and heavy, or stretched upwards. */
+export const BIG_LAYOUTS = ['wide', 'stretched'] as const;
+/** What a big datum is: the sport's main one (a run's distance) or the time. */
+export const BIG_TOPS = ['main', 'time'] as const;
 /**
  * What a replica draws the route on (the song's cover, the camera's last photo): AllRun's red or
  * its night ink. A version in one brand color always comes with one in the other.
@@ -364,16 +339,16 @@ export type Quote = (typeof QUOTES)[number];
 export type ChatPhrase = (typeof CHAT_PHRASES)[number];
 
 const activityBlockSchema = z.discriminatedUnion('design', [
-  z.object({ design: z.literal('headline'), layout: z.enum(HEADLINE_LAYOUTS) }),
-  z.object({ design: z.literal('columns'), count: z.literal(BLOCK_COLUMN_COUNTS) }),
-  z.object({ design: z.literal('route'), layout: z.enum(ROUTE_LAYOUTS) }),
-  z.object({ design: z.literal('day'), layout: z.enum(DAY_LAYOUTS) }),
-  z.object({ design: z.literal('sport'), layout: z.enum(SPORT_LAYOUTS) }),
-  z.object({ design: z.literal('poster') }),
-  z.object({ design: z.literal('tall'), layout: z.enum(TALL_LAYOUTS) }),
-  z.object({ design: z.literal('wide'), layout: z.enum(WIDE_LAYOUTS) }),
-  z.object({ design: z.literal('weekday'), layout: z.enum(WEEKDAY_LAYOUTS) }),
-  z.object({ design: z.literal('serif') }),
+  z.object({
+    design: z.literal('bigTrio'),
+    layout: z.enum(BIG_LAYOUTS),
+    top: z.enum(BIG_TOPS),
+  }),
+  z.object({
+    design: z.literal('bigPair'),
+    layout: z.enum(BIG_LAYOUTS),
+    top: z.enum(BIG_TOPS),
+  }),
   z.object({ design: z.literal('notes'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('message'), layout: z.enum(APP_MODES) }),
   z.object({
@@ -453,12 +428,15 @@ const textStyleSchema = z.object({
  * How a mixed widget's texts look: one font and color for the whole block, which sets its names
  * and secondary data apart by size and weight. Its shadow follows its color (see `castsShadow`).
  */
+/** A mixed widget's lettering; a backdrop and letter spacing only data widgets offer. */
 const blockStyleSchema = textStyleSchema.pick({
   font: true,
   color: true,
   bold: true,
   italic: true,
   uppercase: true,
+  backdrop: true,
+  letterSpacing: true,
 });
 
 const strokeStyleSchema = z.object({
@@ -676,6 +654,42 @@ export function isLayerAllowed(mode: TemplateMode, layer: Layer): boolean {
   return mode === 'activity' ? !SUMMARY_ONLY.has(layer.kind) : !ACTIVITY_ONLY.has(layer.kind);
 }
 
+/**
+ * Mixed widgets taken out of the editor (the first typographic ones, with editable data). Designs
+ * saved with them still read, without them: nothing else in the design depends on a layer.
+ */
+const RETIRED_BLOCK_DESIGNS: ReadonlySet<unknown> = new Set([
+  'headline',
+  'columns',
+  'route',
+  'day',
+  'sport',
+  'poster',
+  'tall',
+  'wide',
+  'weekday',
+  'serif',
+]);
+
+/** Stored layers without those of a retired mixed widget; anything else as it is. */
+function withoutRetiredBlocks(layers: unknown): unknown {
+  if (!Array.isArray(layers)) {
+    return layers;
+  }
+  return layers.filter((layer: unknown) => {
+    if (typeof layer !== 'object' || layer === null || !('block' in layer)) {
+      return true;
+    }
+    const { block } = layer;
+    return !(
+      typeof block === 'object' &&
+      block !== null &&
+      'design' in block &&
+      RETIRED_BLOCK_DESIGNS.has(block.design)
+    );
+  });
+}
+
 export const templateSchema = z
   .object({
     /** Bumped on breaking changes, with a migration for stored templates. */
@@ -685,7 +699,7 @@ export const templateSchema = z
     name: z.string().trim().min(1).max(60).optional(),
     mode: z.enum(['activity', 'summary']),
     format: z.enum(['story', 'tall', 'portrait', 'square', 'landscape']),
-    layers: z.array(layerSchema).max(MAX_LAYERS),
+    layers: z.preprocess(withoutRetiredBlocks, z.array(layerSchema).max(MAX_LAYERS)),
   })
   .superRefine((template, context) => {
     const seen = new Set<string>();

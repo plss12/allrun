@@ -167,7 +167,7 @@ describe('prepareActivityBlock', () => {
       calories: null,
     });
     const layer = newLayer(
-      { kind: 'activityBlock', block: { design: 'headline', layout: 'stacked' } },
+      { kind: 'activityBlock', block: { design: 'receipt' } },
       'block',
       'story',
     );

@@ -60,21 +60,34 @@ describe('activityCatalog', () => {
   const trail = activityCatalog(makeActivity({ sportType: 'TrailRun' }));
 
   it('groups the widgets in sections, in the gallery order', () => {
-    expect(trail.map((section) => section.id)).toEqual(['mixed', 'basic', 'brand']);
+    expect(trail.map((section) => section.id)).toEqual(['data', 'creative', 'basic', 'brand']);
+    const withCharts = activityCatalog(makeActivity({ sportType: 'TrailRun' }), ['pace']);
+    expect(withCharts.map((section) => section.id)).toEqual([
+      'data',
+      'creative',
+      'charts',
+      'basic',
+      'brand',
+    ]);
   });
 
-  it('opens with the mixed widgets, a tile per design with its versions', () => {
-    expect(tileKeys(trail, 'mixed')).toEqual([
-      'block-headline',
-      'block-columns',
-      'block-route',
-      'block-tall',
-      'block-wide',
-      'block-day',
-      'block-weekday',
-      'block-sport',
-      'block-poster',
-      'block-serif',
+  it('opens with the data widgets, a tile per design with its looks', () => {
+    // A tile per look and number of data; the time on top is a page of each.
+    expect(tileKeys(trail, 'data')).toEqual([
+      'block-bigPair-wide',
+      'block-bigTrio-wide',
+      'block-bigPair-stretched',
+      'block-bigTrio-stretched',
+    ]);
+    expect(variantKeys(trail, 'block-bigTrio-stretched')).toEqual([
+      'block-bigTrio-stretched',
+      'block-bigTrio-stretched-time',
+    ]);
+    expect(tileKeys(trail, 'creative')).not.toContain('block-bigTrio-wide');
+  });
+
+  it('follows with the creative widgets, a tile per design with its versions', () => {
+    expect(tileKeys(trail, 'creative')).toEqual([
       'block-verse',
       'block-quote',
       'block-sentence',
@@ -93,11 +106,11 @@ describe('activityCatalog', () => {
       'block-chat-light-zombieMode',
     ]);
     // A design of a single version is its tile's only page.
-    expect(variantKeys(trail, 'block-poster')).toEqual(['block-poster']);
+    expect(variantKeys(trail, 'block-receipt')).toEqual(['block-receipt']);
     // The verse comes with its first one: the others are chosen from a list.
     expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
     // The note and the timing tower come with the activity's splits; the laps, with its laps.
-    const withSplits = tileKeys(activityCatalog(makeActivity(), ['splits']), 'mixed');
+    const withSplits = tileKeys(activityCatalog(makeActivity(), ['splits']), 'creative');
     expect(withSplits).toEqual(
       expect.arrayContaining([
         'block-notes',
@@ -109,24 +122,14 @@ describe('activityCatalog', () => {
     expect(withSplits.filter((key) => key.startsWith('block-laps'))).toEqual([]);
     // A tile per look of the laps, each in both brand colors.
     const withLaps = activityCatalog(makeActivity(), [], false, false, true);
-    expect(tileKeys(withLaps, 'mixed')).toEqual(
+    expect(tileKeys(withLaps, 'creative')).toEqual(
       expect.arrayContaining(['block-laps-board', 'block-laps-sheet']),
     );
     expect(variantKeys(withLaps, 'block-laps-sheet')).toEqual([
       'block-laps-sheet-red',
       'block-laps-sheet-ink',
     ]);
-    expect(variantKeys(trail, 'block-headline')).toEqual([
-      'block-headline-stacked',
-      'block-headline-inline',
-      'block-headline-condensed',
-    ]);
-    expect(variantKeys(trail, 'block-columns')).toEqual([
-      'block-columns-2',
-      'block-columns-3',
-      'block-columns-4',
-      'block-columns-6',
-    ]);
+    expect(variantKeys(trail, 'block-alarm')).toEqual(['block-alarm-dark', 'block-alarm-light']);
   });
 
   it('puts the basics in order: data, route, free text, name, date', () => {
@@ -179,13 +182,17 @@ describe('activityCatalog', () => {
     ]);
   });
 
-  it('offers the logo as the name, the monogram or both; its tone is styled', () => {
-    expect(tileKeys(trail, 'brand')).toEqual(['logo-allrun']);
-    expect(variantKeys(trail, 'logo-allrun')).toEqual([
+  it('offers the logo as the name, the monogram and both, a tile each; its tone is styled', () => {
+    expect(tileKeys(trail, 'brand')).toEqual([
       'logo-allrun',
       'logo-allrun-mark',
       'logo-allrun-lockup',
     ]);
+    expect(variantKeys(trail, 'logo-allrun-mark')).toEqual(['logo-allrun-mark']);
+    // A tone is a look of the same tile, not a tile of its own.
+    expect(catalogWidgetKey({ kind: 'logo', brand: 'allrun', variant: 'mark', tone: 'dark' })).toBe(
+      'logo-allrun-mark',
+    );
   });
 
   it('offers each line chart under its header, with its average, and alone', () => {
@@ -246,9 +253,9 @@ describe('activityCatalog', () => {
       'info-activityPlace',
     ]);
     // And the location sticker, after the alarm.
-    const mixed = tileKeys(named, 'mixed');
-    expect(mixed[mixed.indexOf('block-alarm') + 1]).toBe('block-location');
-    expect(tileKeys(activityCatalog(makeActivity()), 'mixed')).not.toContain('block-location');
+    const creative = tileKeys(named, 'creative');
+    expect(creative[creative.indexOf('block-alarm') + 1]).toBe('block-location');
+    expect(tileKeys(activityCatalog(makeActivity()), 'creative')).not.toContain('block-location');
     expect(variantKeys(named, 'info-activityPlace')).toEqual([
       'info-activityPlace',
       'info-activityPlace-cityRegion',
@@ -260,7 +267,6 @@ describe('activityCatalog', () => {
   it('leaves out the route of an activity without GPS', () => {
     const catalog = activityCatalog(makeActivity({ sportType: 'Yoga', routePolyline: null }));
     expect(tileKeys(catalog, 'basic')).not.toContain('route');
-    expect(tileKeys(catalog, 'mixed')).not.toContain('block-route');
   });
 
   it('gives every item and every tile its own key, and the variants of a widget one widget key', () => {
@@ -332,7 +338,7 @@ describe('summaryCatalog', () => {
 
   it('offers every total as written each way, the texts, the routes, the charts and the logo', () => {
     const catalog = summaryCatalog(summarize(activities, week), 'day');
-    expect(catalog.map((section) => section.id)).toEqual(['basic', 'charts', 'brand']);
+    expect(catalog.map((section) => section.id)).toEqual(['charts', 'basic', 'brand']);
     expect(tileKeys(catalog, 'basic')).toEqual([
       'data',
       'summaryRoutes',

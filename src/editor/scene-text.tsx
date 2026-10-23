@@ -8,7 +8,7 @@ import {
   TextBaseline,
 } from '@shopify/react-native-skia';
 
-import { castsShadow } from '@/core/layer-style';
+import { castsShadow, contrastingInk } from '@/core/layer-style';
 
 /**
  * The soft shadow under texts, routes and bars. It keeps white widgets readable on bright
@@ -68,4 +68,14 @@ export function addLeanRoom(builder: SkParagraphBuilder, fontSize: number): void
     PlaceholderAlignment.Baseline,
     TextBaseline.Alphabetic,
   );
+}
+
+/**
+ * Behind a light text a translucent dark box, behind a dark text a translucent light one, as in
+ * story editors.
+ */
+export function softBackdrop(textColor: string): string {
+  return contrastingInk(textColor) === '#000000'
+    ? 'rgba(0, 0, 0, 0.5)'
+    : 'rgba(255, 255, 255, 0.75)';
 }

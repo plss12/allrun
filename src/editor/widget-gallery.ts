@@ -47,6 +47,14 @@ const TILE_RATIO = { 1: 0.5, 2: 0.6 } as const;
 /** Tiles per row: charts take the whole width, so their texts read; the rest go two per row. */
 const columnsFor = (id: CatalogSectionId): 1 | 2 => (id === 'charts' ? 1 : 2);
 
+/**
+ * Whether a tile takes a whole row of a section of two, as tall as the others: the AllRun name
+ * with its monogram, wide by nature, under the name and the monogram alone, so the logo's section
+ * stays even.
+ */
+const spansRow = (widget: CatalogWidget): boolean =>
+  widget.variants.every((item) => item.kind === 'logo' && item.variant === 'lockup');
+
 /** A variant of a widget, filled in and measured, as one page of its tile. */
 export interface GalleryPage {
   readonly key: string;
@@ -93,31 +101,56 @@ export function gallerySections(
   screenWidth: number,
   textSample: string,
 ): GallerySection[] {
+  const full = screenWidth - 2 * GALLERY_PADDING;
   return catalog.flatMap((section) => {
     const columns = columnsFor(section.id);
-    const width = Math.floor(
-      (screenWidth - 2 * GALLERY_PADDING - (columns - 1) * GALLERY_GAP) / columns,
-    );
+    const width = Math.floor((full - (columns - 1) * GALLERY_GAP) / columns);
     const height = Math.round(width * TILE_RATIO[columns]);
-    const tiles = section.widgets.flatMap(
-      (widget) => measureWidget(widget, width, height, format, font, context, textSample) ?? [],
-    );
     const rows: GalleryRow[] = [];
-    for (let i = 0; i < tiles.length; i += columns) {
-      rows.push({ width, height, widgets: tiles.slice(i, i + columns) });
+    let open: GalleryWidget[] = [];
+    const close = () => {
+      if (open.length > 0) {
+        rows.push({ width, height, widgets: open });
+        open = [];
+      }
+    };
+    for (const widget of section.widgets) {
+      const wide = columns > 1 && spansRow(widget);
+      // A wide tile draws its widget as big as its neighbours do: it only has more room.
+      const tile = measureWidget(
+        widget,
+        { width: wide ? full : width, height, capWidth: width },
+        format,
+        font,
+        context,
+        textSample,
+      );
+      if (tile === null) {
+        continue;
+      }
+      if (wide) {
+        close();
+        rows.push({ width: full, height, widgets: [tile] });
+      } else {
+        open.push(tile);
+        if (open.length === columns) {
+          close();
+        }
+      }
     }
+    close();
     return rows.length === 0 ? [] : [{ id: section.id, rows }];
   });
 }
 
 /**
  * A widget's variants made into the pages of a `width` × `height` tile, or `null` when none has
- * anything to show.
+ * anything to show. Its data are drawn no bigger than in a tile `capWidth` wide (see
+ * `MAX_CANVAS_SPAN`).
  */
 function measureWidget(
   widget: CatalogWidget,
-  width: number,
-  height: number,
+  { width, height, capWidth }: { width: number; height: number; capWidth: number },
   format: CanvasFormat,
   font: FontId,
   context: LayerContext,
@@ -151,7 +184,7 @@ function measureWidget(
       (room * (1 - 2 * TILE_INSET)) / prepared.height,
     );
   const capped = (prepared: PreparedLayer) =>
-    Math.min(fill(prepared), width / (canvasWidth * MAX_CANVAS_SPAN));
+    Math.min(fill(prepared), capWidth / (canvasWidth * MAX_CANVAS_SPAN));
   const shared = Math.min(...measured.map(({ prepared }) => capped(prepared)));
   const pages = measured.map(({ item, prepared }) => ({
     key: catalogItemKey(item),
