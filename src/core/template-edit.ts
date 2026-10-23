@@ -1,3 +1,5 @@
+import { scaleLayer } from './layer-transform';
+import type { Size } from './photo-framing';
 import {
   CANVAS_FORMATS,
   isLayerAllowed,
@@ -102,6 +104,28 @@ export function duplicateLayer(template: Template, id: string, copyId: string): 
 export function removeLayer(template: Template, id: string): Template {
   const layers = template.layers.filter((layer) => layer.id !== id);
   return layers.length === template.layers.length ? template : { ...template, layers };
+}
+
+/**
+ * Rescales a layer whose content went from `before` to `after` in size (another font, with other
+ * proportions) so it covers as much of the canvas as before: its scale times the square root of
+ * the areas' ratio, about its center, within the scale's bounds. A narrower font makes it a little
+ * taller and a wider one a little lower, but it never shoots up or shrinks away. `template`
+ * itself when the size is the same, either is empty or the layer is missing. Time and space O(n).
+ */
+export function keepLayerArea(template: Template, id: string, before: Size, after: Size): Template {
+  const layer = template.layers.find((candidate) => candidate.id === id);
+  const ratio = (before.width * before.height) / (after.width * after.height);
+  if (layer === undefined || !Number.isFinite(ratio) || ratio <= 0 || ratio === 1) {
+    return template;
+  }
+  const transform = scaleLayer(layer.transform, Math.sqrt(ratio));
+  return {
+    ...template,
+    layers: template.layers.map((candidate) =>
+      candidate === layer ? { ...layer, transform } : candidate,
+    ),
+  };
 }
 
 /** Where a layer can move in the stack: above every other layer, or below them. */

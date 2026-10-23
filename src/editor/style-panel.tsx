@@ -32,6 +32,8 @@ import { isAppReplica, isDataWidget } from '@/core/activity-block';
 import { colors } from '@/theme/colors';
 
 import { hasUnit } from './editor-data';
+import { keepingArea } from './font-change';
+import type { LayerContext } from './template-scene';
 import { hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts } from './fonts';
 
 /** A style edit of the template, applied by the editor as one undo step. */
@@ -97,13 +99,15 @@ interface StylePanelProps {
   readonly layer: Layer;
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
+  /** How the layer is drawn, to keep its size when its font changes (see `keepingArea`). */
+  readonly layerContext: LayerContext;
 }
 
 /**
  * Style options of the selected layer, one tab at a time, in the space of the editor's formats
  * (the editor's main button turns into "Done" meanwhile). Every tap is one undo step.
  */
-export function StylePanel({ layer, locale, onChange }: StylePanelProps) {
+export function StylePanel({ layer, locale, onChange, layerContext }: StylePanelProps) {
   const { t } = useTranslation();
   const tabs = tabsFor(layer);
   const [chosen, setChosen] = useState<Tab>(tabs[0] ?? 'opacity');
@@ -136,7 +140,13 @@ export function StylePanel({ layer, locale, onChange }: StylePanelProps) {
       </ScrollView>
       <View style={{ height: OPTIONS_HEIGHT, flexShrink: 0, justifyContent: 'center' }}>
         {tab === undefined ? null : (
-          <TabContent tab={tab} layer={layer} locale={locale} onChange={onChange} />
+          <TabContent
+            tab={tab}
+            layer={layer}
+            locale={locale}
+            onChange={onChange}
+            layerContext={layerContext}
+          />
         )}
       </View>
     </View>
@@ -297,11 +307,13 @@ function TabContent({
   layer,
   locale,
   onChange,
+  layerContext,
 }: {
   readonly tab: Tab;
   readonly layer: Layer;
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
+  readonly layerContext: LayerContext;
 }) {
   const { t } = useTranslation();
   switch (tab) {
@@ -319,7 +331,11 @@ function TabContent({
       }
       const { format, change } = formatOf(layer);
       return tab === 'font' ? (
-        <FontRow font={format.font} onPick={(font) => onChange(change({ font }))} />
+        // Another font keeps the room the widget takes, not its letters' size.
+        <FontRow
+          font={format.font}
+          onPick={(font) => onChange(keepingArea(change({ font }), layer.id, layerContext))}
+        />
       ) : (
         <FormatRow format={format} onPatch={(patch) => onChange(change(patch))}>
           {layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (

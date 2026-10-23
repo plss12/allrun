@@ -738,7 +738,7 @@ function EditorWorkspace({
         }}
       >
         {styled !== null ? (
-          <StylePanel layer={styled} locale={locale} onChange={edit} />
+          <StylePanel layer={styled} locale={locale} onChange={edit} layerContext={layerContext} />
         ) : (
           <View style={{ height: STYLE_PANEL_HEIGHT, justifyContent: 'center' }}>
             {step === 'photo' ? (

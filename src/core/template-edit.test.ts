@@ -9,6 +9,7 @@ import {
   cleanText,
   DUPLICATE_OFFSET,
   duplicateLayer,
+  keepLayerArea,
   moveLayer,
   removeLayer,
   setTextContent,
@@ -93,6 +94,43 @@ describe('duplicateLayer', () => {
   it('returns the template itself for a missing layer and refuses a full one', () => {
     expect(duplicateLayer(template, 'missing', 'copy')).toBe(template);
     expect(() => duplicateLayer(filled(MAX_LAYERS), 'text-0', 'copy')).toThrow(/already has 50/);
+  });
+});
+
+describe('keepLayerArea', () => {
+  const one = filled(1);
+  const scaleOf = (edited: Template) => edited.layers[0].transform.scale;
+
+  it('scales a layer to cover as much as before its content changed size, about its center', () => {
+    // Twice as wide and as tall: half the scale. Twice as wide only: 1/√2.
+    const halved = keepLayerArea(
+      one,
+      'text-0',
+      { width: 100, height: 50 },
+      { width: 200, height: 100 },
+    );
+    expect(scaleOf(halved)).toBeCloseTo(0.5);
+    expect(halved.layers[0].transform).toMatchObject({ x: 0.5, y: 0.5, rotation: 0 });
+    const wider = keepLayerArea(
+      one,
+      'text-0',
+      { width: 100, height: 50 },
+      { width: 200, height: 50 },
+    );
+    expect(scaleOf(wider)).toBeCloseTo(Math.SQRT1_2);
+  });
+
+  it("stays within the scale's bounds", () => {
+    expect(
+      scaleOf(keepLayerArea(one, 'text-0', { width: 1, height: 1 }, { width: 1000, height: 1000 })),
+    ).toBe(0.1);
+  });
+
+  it('returns the template itself when nothing changes or the layer is missing', () => {
+    const same = { width: 100, height: 50 };
+    expect(keepLayerArea(one, 'text-0', same, same)).toBe(one);
+    expect(keepLayerArea(one, 'missing', same, { width: 1, height: 1 })).toBe(one);
+    expect(keepLayerArea(one, 'text-0', same, { width: 0, height: 0 })).toBe(one);
   });
 });
 
