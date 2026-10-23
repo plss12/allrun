@@ -5,27 +5,33 @@ on:
     branches: [main]
   pull_request:
 
+# Three jobs side by side, each setting up the same project: the run takes as long as the
+# slowest of them instead of all of them in a row. The same checks as `npm run check`.
 jobs:
-  check:
+  static:
+    name: Lint, format and types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      # Minimum Node version of the project (see "engines" in package.json); kept at what
-      # Expo SDK 58 requires so the planned upgrade doesn't change it
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22.13'
-          cache: npm
-
-      # Use the npm pinned in "packageManager": older npm versions disagree on the lockfile
-      - run: npm install -g "$(node -p "require('./package.json').packageManager")"
-
-      - run: npm ci
+      - uses: ./.github/actions/setup
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
       - run: npm test -- --ci
+
+  build:
+    name: Doctor and bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
       - run: npx expo-doctor
       # Bundle the JS for both platforms to catch build errors (native builds run on EAS)
       - run: npx expo export --platform ios --platform android

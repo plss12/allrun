@@ -1,0 +1,19 @@
+name: Set up the project
+description: Node at the project's minimum version, the npm pinned in package.json, and its dependencies.
+
+runs:
+  using: composite
+  steps:
+    # Minimum Node version of the project (see "engines" in package.json); kept at what
+    # Expo SDK 58 requires so the planned upgrade doesn't change it
+    - uses: actions/setup-node@v5
+      with:
+        node-version: '22.13'
+        cache: npm
+
+    # Use the npm pinned in "packageManager": older npm versions disagree on the lockfile
+    - shell: bash
+      run: npm install -g "$(node -p "require('./package.json').packageManager")"
+
+    - shell: bash
+      run: npm ci

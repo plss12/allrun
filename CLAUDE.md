@@ -9,7 +9,8 @@ App móvil (iOS + Android) para poner datos de Strava sobre tus fotos con libert
 ## Stack y comandos
 
 - Stack: Expo SDK 57 + Expo Router + TypeScript `strict`; editor con `@shopify/react-native-skia` + gesture-handler + reanimated; Supabase (Edge Functions para el OAuth de Strava, usuario anónimo); Zod; i18next (es/en); Sentry.
-- `npm start`: dev (Expo Go en el iPhone) · `npm test`: tests · `npm run lint`: lint (incluye Prettier) · `npm run format`: formatear · `npm run typecheck`: tipos · `npx expo export --platform ios --platform android`: build del bundle (lo mismo que la CI).
+- `npm start`: dev (Expo Go en el iPhone) · `npm test`: tests · `npm run lint`: lint (incluye Prettier) · `npm run format`: formatear · `npm run typecheck`: tipos · `npx expo export --platform ios --platform android`: build del bundle.
+- Comprobaciones: `npm run check:fast` mientras se itera (tipos incrementales, lint y los tests de lo cambiado, `jest --onlyChanged`; o `npx jest --findRelatedTests <ficheros>`) y `npm run check`, espejo exacto de la CI, una vez antes de pedir la prueba en el iPhone y antes del commit. La CI corre en tres trabajos en paralelo (estático, tests, doctor y bundle) con la preparación común en `.github/actions/setup`. Los tests de escena con CanvasKit son los lentos: Jest paraleliza por fichero, así que un suite pesado se parte en varios ficheros (`activity-blocks-scene` y `activity-blocks-restyled-scene`, con lo común en `src/test-utils/activity-blocks.ts`) y no se dibuja dos veces lo que sale igual.
 
 ## Estructura
 

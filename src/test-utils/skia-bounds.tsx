@@ -32,16 +32,29 @@ export async function alphaOutside(prepared: PreparedLayer): Promise<number> {
   if (pixels === null) {
     throw new Error('Could not read the pixels');
   }
-  const left = (width - prepared.width) / 2 - SHADOW_ROOM;
-  const top = (height - prepared.height) / 2 - SHADOW_ROOM;
-  const right = left + prepared.width + 2 * SHADOW_ROOM;
-  const bottom = top + prepared.height + 2 * SHADOW_ROOM;
+  // The first pixel column and row inside the room, and the first after it.
+  const left = Math.ceil((width - prepared.width) / 2 - SHADOW_ROOM);
+  const top = Math.ceil((height - prepared.height) / 2 - SHADOW_ROOM);
+  const right = Math.ceil(
+    (width - prepared.width) / 2 - SHADOW_ROOM + prepared.width + 2 * SHADOW_ROOM,
+  );
+  const bottom = Math.ceil(
+    (height - prepared.height) / 2 - SHADOW_ROOM + prepared.height + 2 * SHADOW_ROOM,
+  );
   let max = 0;
+  const scan = (y: number, from: number, to: number) => {
+    for (let x = Math.max(0, from); x < Math.min(width, to); x++) {
+      max = Math.max(max, pixels[(y * width + x) * 4 + 3]);
+    }
+  };
+  // Only the bands around the room: whole rows over and under it, and the ends of the rows
+  // beside it. O(w·h) pixels read, but only the margin's are scanned.
   for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (x < left || x >= right || y < top || y >= bottom) {
-        max = Math.max(max, pixels[(y * width + x) * 4 + 3]);
-      }
+    if (y < top || y >= bottom) {
+      scan(y, 0, width);
+    } else {
+      scan(y, 0, left);
+      scan(y, right, width);
     }
   }
   return max;
