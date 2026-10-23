@@ -96,6 +96,10 @@ export type LabelKey =
   | 'widgets.chatLine'
   | 'widgets.alarmLabel'
   | 'widgets.locationLine'
+  | 'widgets.dayAndTime'
+  | `widgets.cardLabels.${MetricId}`
+  | `widgets.tower.sports.${SportModality}`
+  | `compactDurationUnits.${DurationUnit}`
   | 'widgets.quoted'
   | `widgets.verses.${Verse}.${'text' | 'source'}`
   | `widgets.quotes.${Quote}.${'text' | 'author'}`
@@ -163,11 +167,16 @@ export function metricText(
  * A datum of `activity` as a widget of data without names writes it: numbers with a decimal point
  * and no thousands separator in any language ("11.34 km", "1250 kcal"), a pace with its marks and
  * no unit (`5'45"`, the marks say what it is), anything else with its unit after it ("41 m").
+ * In `words`, for widgets with more text, a pace keeps its unit ("4:32 min/km") and a time is
+ * written in units ("51min 25s"). Down to its minutes, a time leaves its seconds out ("51min"):
+ * in `tight`, for a caption with little room, with a pace's unit without its minutes ("4:32/km");
+ * in `brief`, for a line of data, with a pace's marks (`4'32"`).
  */
 export function plainMetricText(
   activity: Activity,
   metric: MetricId,
   context: TextContext,
+  notation: PlainNotation = 'short',
 ): string {
   const value = metricValue(activity, metric);
   if (value === null || value <= 0) {
@@ -177,13 +186,65 @@ export function plainMetricText(
     unit: context.unit,
     sportFamily: activity.sportFamily,
   });
-  const marked = withPaceMarks(display);
-  if (marked !== display && marked.kind === 'time') {
-    return marked.text;
+  if (notation !== 'short' && ACTIVITY_TIMES.has(metric)) {
+    return durationParts(value, notation === 'words' ? 'seconds' : 'minutes')
+      .map(({ amount, unit }) => `${amount}${context.durationUnits[unit]}`)
+      .join(' ');
   }
-  const written =
-    display.kind === 'time' ? display.text : display.amount.toFixed(display.fractionDigits);
-  return display.unit === null ? written : `${written} ${context.unitLabel(display.unit)}`;
+  const { amount, unit } = plainParts(display, notation);
+  if (unit === null) {
+    return amount;
+  }
+  // A unit per something ("/km") goes right after its amount.
+  const label = context.unitLabel(unit);
+  return label.startsWith('/') ? `${amount}${label}` : `${amount} ${label}`;
+}
+
+/** How a widget of data without names writes a datum (see `plainMetricText`). */
+export type PlainNotation = 'short' | 'words' | 'tight' | 'brief';
+
+/** A datum's amount and unit as `plainMetricText` writes them, but a time in words. */
+function plainParts(
+  display: DisplayMetric,
+  notation: PlainNotation,
+): { readonly amount: string; readonly unit: MetricUnit | null } {
+  const marked = withPaceMarks(display);
+  if (marked !== display && marked.kind === 'time' && notation !== 'words') {
+    return notation !== 'tight'
+      ? { amount: marked.text, unit: null }
+      : { amount: display.kind === 'time' ? display.text : marked.text, unit: marked.unit };
+  }
+  return {
+    amount: display.kind === 'time' ? display.text : display.amount.toFixed(display.fractionDigits),
+    unit: display.unit,
+  };
+}
+
+/**
+ * A datum of `activity` as `plainMetricText` writes it by default, with its unit apart, for a
+ * widget that writes them on lines of their own: "11.34" "km"; a number rounded to at most
+ * `fractionDigits` decimals ("11.3" with one). Without a value, a dash and no unit.
+ */
+export function plainMetricParts(
+  activity: Activity,
+  metric: MetricId,
+  context: TextContext,
+  fractionDigits?: number,
+): { readonly amount: string; readonly unit: MetricUnit | null } {
+  const value = metricValue(activity, metric);
+  if (value === null || value <= 0) {
+    return { amount: MISSING_VALUE, unit: null };
+  }
+  const display = toDisplayMetric(metric, value, {
+    unit: context.unit,
+    sportFamily: activity.sportFamily,
+  });
+  return plainParts(
+    fractionDigits !== undefined && display.kind === 'number'
+      ? { ...display, fractionDigits: Math.min(display.fractionDigits, fractionDigits) }
+      : display,
+    'short',
+  );
 }
 
 /**

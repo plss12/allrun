@@ -1,3 +1,4 @@
+import { isDataWidget } from '@/core/activity-block';
 import { newLayer } from '@/core/default-layout';
 import {
   type CatalogItem,
@@ -44,6 +45,20 @@ const FILLS_PAGE: ReadonlySet<CatalogItem['kind']> = new Set([
 /** Height of a tile over its width, by how many tiles share a row. */
 const TILE_RATIO = { 1: 0.5, 2: 0.6 } as const;
 
+/**
+ * Sections whose rows grow taller for tall widgets (a route over the data), up to square tiles
+ * (`MAX_TILE_RATIO`): the data widgets, whose looks range from a line to a column.
+ */
+const GROWING_SECTIONS: ReadonlySet<CatalogSectionId> = new Set(['data']);
+const MAX_TILE_RATIO = 1;
+
+/** Height a tile needs for `tile`'s tallest page drawn at its scale, its room and dots around. */
+function neededHeight(tile: GalleryWidget): number {
+  const tallest = Math.max(...tile.pages.map((page) => page.prepared.height * page.scale));
+  const dots = tile.pages.length > 1 ? GALLERY_DOTS_HEIGHT : 0;
+  return Math.ceil(tallest / (1 - 2 * TILE_INSET) + dots);
+}
+
 /** Tiles per row: charts take the whole width, so their texts read; the rest go two per row. */
 const columnsFor = (id: CatalogSectionId): 1 | 2 => (id === 'charts' ? 1 : 2);
 
@@ -88,9 +103,10 @@ export interface GallerySection {
  * The catalog as rows of tiles for a screen `screenWidth` points wide, each variant drawn as it
  * would be added to a design of `format` in `font`. Variants writing the same text as an earlier
  * one of their tile (a period's formats, all "2026" for a year) are left out, and so are items
- * with nothing to show. The variants of a widget share one scale, the smallest any of them needs
- * to fit, so they compare page to page; a date or a period's name, whose formats differ a lot in
- * length, each fill their own page. Free text, which has no content until typed, shows
+ * with nothing to show. Each page of a mixed widget, a chart, a date or a period's name fills its
+ * own page, as big as it fits (a data widget up to a cap, see `MAX_CANVAS_SPAN`), so none is left
+ * small beside a bigger one; the other widgets' variants share one scale, the smallest any of them
+ * needs, so they compare page to page. Free text, which has no content until typed, shows
  * `textSample`. Time O(n) for n items, each measured once.
  */
 export function gallerySections(
@@ -106,31 +122,36 @@ export function gallerySections(
     const columns = columnsFor(section.id);
     const width = Math.floor((full - (columns - 1) * GALLERY_GAP) / columns);
     const height = Math.round(width * TILE_RATIO[columns]);
-    const rows: GalleryRow[] = [];
-    let open: GalleryWidget[] = [];
-    const close = () => {
-      if (open.length > 0) {
-        rows.push({ width, height, widgets: open });
-        open = [];
-      }
-    };
-    for (const widget of section.widgets) {
-      const wide = columns > 1 && spansRow(widget);
-      // A wide tile draws its widget as big as its neighbours do: it only has more room.
-      const tile = measureWidget(
+    // Rows that grow are first measured as tall as they may be, to know how much they need.
+    const grows = GROWING_SECTIONS.has(section.id);
+    const tallest = Math.round(width * MAX_TILE_RATIO);
+    // A wide tile draws its widget as big as its neighbours do: it only has more room.
+    const measure = (widget: CatalogWidget, tileWidth: number, tileHeight: number) =>
+      measureWidget(
         widget,
-        { width: wide ? full : width, height, capWidth: width },
+        { width: tileWidth, height: tileHeight, capWidth: width },
         format,
         font,
         context,
         textSample,
       );
+    const groups: { readonly width: number; readonly tiles: GalleryWidget[] }[] = [];
+    let open: GalleryWidget[] = [];
+    const close = () => {
+      if (open.length > 0) {
+        groups.push({ width, tiles: open });
+        open = [];
+      }
+    };
+    for (const widget of section.widgets) {
+      const wide = columns > 1 && spansRow(widget);
+      const tile = measure(widget, wide ? full : width, grows ? tallest : height);
       if (tile === null) {
         continue;
       }
       if (wide) {
         close();
-        rows.push({ width: full, height, widgets: [tile] });
+        groups.push({ width: full, tiles: [tile] });
       } else {
         open.push(tile);
         if (open.length === columns) {
@@ -139,6 +160,25 @@ export function gallerySections(
       }
     }
     close();
+    const rows = groups.map(({ width: rowWidth, tiles }): GalleryRow => {
+      if (!grows) {
+        return { width: rowWidth, height, widgets: tiles };
+      }
+      // As tall as its tallest widget needs, between the usual tiles and square ones.
+      const needed = Math.max(...tiles.map(neededHeight));
+      const rowHeight = Math.min(tallest, Math.max(height, needed));
+      return {
+        width: rowWidth,
+        height: rowHeight,
+        widgets:
+          rowHeight === tallest
+            ? tiles
+            : tiles.map((tile) => {
+                const widget = section.widgets.find((candidate) => candidate.key === tile.key);
+                return (widget === undefined ? null : measure(widget, rowWidth, rowHeight)) ?? tile;
+              }),
+      };
+    });
     return rows.length === 0 ? [] : [{ id: section.id, rows }];
   });
 }
@@ -190,9 +230,17 @@ function measureWidget(
     key: catalogItemKey(item),
     item,
     prepared,
-    // Dates and names differ a lot in length, and a chart's versions in height (a heart rate's
-    // zones table): each fills its own page instead of shrinking the others.
-    scale: FILLS_PAGE.has(item.kind) ? fill(prepared) : shared,
+    // Dates and names differ a lot in length, a chart's versions in height (a heart rate's
+    // zones table) and a replica's in size (a timing board and a sheet): each fills its own page
+    // instead of shrinking the others. So do the looks of a data widget (a line, a stretched
+    // column), each as big as the cap allows.
+    scale:
+      FILLS_PAGE.has(item.kind) ||
+      (item.kind === 'activityBlock' && !isDataWidget(item.block.design))
+        ? fill(prepared)
+        : item.kind === 'activityBlock'
+          ? capped(prepared)
+          : shared,
   }));
   return { key: widget.key, pages };
 }

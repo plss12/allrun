@@ -52,7 +52,17 @@ comes later.
   its sections are: data widgets (typographic ones with data, the first section, once they are
   redone), creative ones (the replicas of apps and things, and the phrases, called "mixed" until
   then), charts, basics and the logo, whose name, monogram and both are a tile each, so the
-  section is not a lone tile. The basics are: every single datum in one tile (the distance first, then the rest of the
+  section is not a lone tile. Designs alike share a tile (`blockTile`), and the tiles go in an
+  order that reads (reviewed with the user on 2026-10-23): data widgets from the big datum (wide
+  and stretched; under the weekday; alone under it, the weekday small first; the tower) to the
+  data alone (stacked, in a line, on a card), around the weekday, and last around the route (the
+  big datum under it, and the weekday over it in a hand's marker, apart), only with GPS; creative ones by theme: words (the quote, the verse, the message, the chat
+  message apart since only it is chosen from a list, the sentence, the badge), the phone's apps
+  (the note too, though it lists the splits), the timing tables (the splits' bars and ladder, the
+  laps' board and sheet, the race on TV apart as it looks nothing alike) and things of paper. Every page fills its tile, however big
+  the others are, so none looks small in its space. The
+  time is never offered on top: it is a gym session's main datum already, and elsewhere it read
+  as a lesser copy of the main datum's widget (designs saved with it still draw). The basics are: every single datum in one tile (the distance first, then the rest of the
   sport's data, each followed by its other ways of writing it), the route, free text, the name,
   the date and the place.
 - **Two families of mixed widgets.** Typographic ones start each in the font that suits it, as
@@ -61,14 +71,22 @@ comes later.
   (headline, columns, route, day, sport, poster, tall, wide, short weekday, serif) were retired
   on 2026-10-23, as none convinced: they are redone one by one from examples, and designs saved
   with them read without them. The first ones back: a datum big with two or three more under
-  it, spread to its width (`bigPair`, `bigTrio`), wide or stretched upwards, the main datum or
-  the time on top; never a second reading of a measure, since they carry no names. Replicas of other apps (the iPhone's Notes with the splits, a sent chat
+  it, spread to its width (`bigPair`, `bigTrio`), wide, stretched upwards, under the weekday
+  written as wide (wide or stretched, also over the big datum alone) or under the route, the
+  main datum or the time on top; and date widgets around the weekday (with the route, between
+  data, over data in columns, beside the date, under stacked data), each in its own font so the
+  gallery reads varied; a tower to fit a corner of the photo, the big datum's amount, unit and
+  sport's word one under another, tall and narrow, with two or three data small and turned on
+  their side beside the word (the distance to its tenths, with the pace and time; without a
+  distance, the calories, with the time and heart rate; never the elevation, which reads as
+  minutes; times without seconds); the three or two most telling data in a line; and a card of three or six named data, with the activity's name or
+  not; never a second reading of a measure, since they carry no names. Replicas of other apps (the iPhone's Notes with the splits, a sent chat
   message with the data, and the sport and the activity's time where its time goes, the lock
   screen's player of iOS 26 copied place by place, with the route as its cover (in AllRun's red
   or night ink) and the distance and time at the ends of its bar, the camera, the splits as a board
   of the activity's laps and as a karting's timing sheet, as a race's timing tower on TV, the start time as an
   iPhone alarm and the place as a location sticker, and later a receipt and a boarding
-  pass) keep the app's colors, font and icons, since recognizing the app is the point:
+  pass, its band naming the city it started in, as a pass names its destination) keep the app's colors, font and icons, since recognizing the app is the point:
   only their opacity changes, their dark and light modes are versions in the carousel, and they
   carry no AllRun signature. A version in one brand color (the route's cover, in red or
   night ink) always comes with one in the other. The player's glass is a see-through tint with an edge, not a blur

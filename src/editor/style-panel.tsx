@@ -268,7 +268,8 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
         bold,
         italic: italic ?? false,
         uppercase,
-        ...(isDataWidget(layer.block.design)
+        // A card is a backdrop already.
+        ...(isDataWidget(layer.block.design) && layer.block.design !== 'card'
           ? { backdrop: backdrop ?? 'none', letterSpacing: letterSpacing ?? 'normal' }
           : {}),
       },

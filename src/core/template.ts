@@ -172,10 +172,32 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * and replicas of other apps, whose look (colors, font, icons) is fixed because recognizing the
  * app is the point. Each design comes in a few versions, the pages of its tile in the gallery:
  * - `bigPair` (data): a datum big, unit and all, and two more small under it, at its ends, in a
- *   wide and heavy letter (`wide`) or stretched upwards (`stretched`); the big one is the
+ *   wide and heavy letter (`wide`), stretched upwards (`stretched`), under the weekday written as
+ *   wide as it (`day`, or `stretchedDay` with the datum stretched) or under the route (`route`, only for
+ *   activities with one);
+ *   the big one is the
  *   sport's main datum (`top: 'main'`) or the time (`top: 'time'`), the others follow in the
  *   sport's order, without names, so never a second reading of one (see `bigMetrics`);
  * - `bigTrio` (data): the same with three data under it, spread across its width;
+ * - `bigSolo` (data): the big datum alone, under the weekday as wide (`day` or `stretchedDay`)
+ *   or small (`smallDay`);
+ * - `dayRoute` (data): the weekday and the big datum as wide, the route between them;
+ * - `dayBetween` (data): the short weekday big between its data, two on each side (`four`) or
+ *   one (`two`);
+ * - `dayOver` (data): the weekday wide over the sport, the start time and the data in columns,
+ *   three (`wide`) or two in a narrow letter (`narrow`);
+ * - `dayColumns` (data): the weekday, date and start time beside as many data (`three`), and the
+ *   sport beside a fourth (`four`);
+ * - `dataStack` (data): three (`three`) or two (`two`) data big, one under another, over the
+ *   short weekday and start time;
+ * - `tower` (data): the distance, or else the calories, tall and narrow, its amount, unit and
+ *   sport's word one under another, with two data small and turned on their side beside the
+ *   sport's word (the pace and time, or else the time and heart rate), to fit a corner of the
+ *   photo (see `towerMetrics`);
+ * - `dataLine` (data): the three (`three`) or two (`two`) most telling data in a line;
+ * - `card` (data): three or six data with their short names, in a row or two, on a square-cornered
+ *   see-through card, under the activity's name or not (`three`, `six`, `nameThree`,
+ *   `nameSix`);
  * - `notes` (replica): the splits as a note of the iPhone's Notes, the fastest in its yellow, in
  *   dark or light mode; only for activities with splits;
  * - `message` (replica): two data as a sent chat message, the sport and start time where the
@@ -207,11 +229,20 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  *   a marker;
  * - `receipt`: the data as a shop's receipt, on thermal paper, with its total and barcode;
  * - `boardingPass`: the activity as a boarding pass, from its start to its finish, its band in a
- *   brand color (`cover`).
+ *   brand color (`cover`) naming the city it started in (or saying what it is, while unknown).
  */
 export const ACTIVITY_BLOCK_DESIGNS = [
   'bigTrio',
   'bigPair',
+  'bigSolo',
+  'dayRoute',
+  'dayBetween',
+  'dayOver',
+  'dayColumns',
+  'dataStack',
+  'tower',
+  'dataLine',
+  'card',
   'notes',
   'message',
   'music',
@@ -235,8 +266,25 @@ export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
 
 /** The two looks of an app replica, as the app shows them in dark and light mode. */
 export const APP_MODES = ['dark', 'light'] as const;
-/** The looks of a big datum: wide and heavy, or stretched upwards. */
-export const BIG_LAYOUTS = ['wide', 'stretched'] as const;
+/**
+ * The looks of a big datum: wide and heavy, stretched upwards, under the weekday (wide or
+ * stretched) or under the route.
+ */
+export const BIG_LAYOUTS = ['wide', 'stretched', 'day', 'stretchedDay', 'route'] as const;
+/** The looks of a big datum alone: under the weekday as wide, wide or stretched, or small. */
+export const BIG_SOLO_LAYOUTS = ['smallDay', 'day', 'stretchedDay'] as const;
+/** How many data go beside the short weekday: two on each side, or one. */
+export const DAY_BETWEEN_LAYOUTS = ['four', 'two'] as const;
+/** The data under a wide weekday: in three columns, or in two in a narrow letter. */
+export const DAY_OVER_LAYOUTS = ['wide', 'narrow'] as const;
+/** How many lines the date and the data take side by side. */
+export const DAY_COLUMNS_LAYOUTS = ['three', 'four'] as const;
+/** How many data are stacked over the day and start time. */
+export const DATA_STACK_LAYOUTS = ['three', 'two'] as const;
+/** How many data go in a line. */
+export const DATA_LINE_LAYOUTS = ['three', 'two'] as const;
+/** A card's data: three or six, under the activity's name (first in the gallery) or not. */
+export const CARD_LAYOUTS = ['nameThree', 'nameSix', 'three', 'six'] as const;
 /** What a big datum is: the sport's main one (a run's distance) or the time. */
 export const BIG_TOPS = ['main', 'time'] as const;
 /**
@@ -349,6 +397,19 @@ const activityBlockSchema = z.discriminatedUnion('design', [
     layout: z.enum(BIG_LAYOUTS),
     top: z.enum(BIG_TOPS),
   }),
+  z.object({
+    design: z.literal('bigSolo'),
+    layout: z.enum(BIG_SOLO_LAYOUTS),
+    top: z.enum(BIG_TOPS),
+  }),
+  z.object({ design: z.literal('dayRoute'), top: z.enum(BIG_TOPS) }),
+  z.object({ design: z.literal('dayBetween'), layout: z.enum(DAY_BETWEEN_LAYOUTS) }),
+  z.object({ design: z.literal('dayOver'), layout: z.enum(DAY_OVER_LAYOUTS) }),
+  z.object({ design: z.literal('dayColumns'), layout: z.enum(DAY_COLUMNS_LAYOUTS) }),
+  z.object({ design: z.literal('dataStack'), layout: z.enum(DATA_STACK_LAYOUTS) }),
+  z.object({ design: z.literal('dataLine'), layout: z.enum(DATA_LINE_LAYOUTS) }),
+  z.object({ design: z.literal('tower') }),
+  z.object({ design: z.literal('card'), layout: z.enum(CARD_LAYOUTS) }),
   z.object({ design: z.literal('notes'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('message'), layout: z.enum(APP_MODES) }),
   z.object({

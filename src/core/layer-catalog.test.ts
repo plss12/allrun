@@ -71,61 +71,100 @@ describe('activityCatalog', () => {
     ]);
   });
 
-  it('opens with the data widgets, a tile per design with its looks', () => {
-    // A tile per look and number of data; the time on top is a page of each.
+  it('opens with the data widgets, alike designs in one tile', () => {
     expect(tileKeys(trail, 'data')).toEqual([
-      'block-bigPair-wide',
-      'block-bigTrio-wide',
-      'block-bigPair-stretched',
-      'block-bigTrio-stretched',
+      'block-big',
+      'block-bigDay',
+      'block-bigSolo',
+      'block-tower',
+      'block-dataStack',
+      'block-dataLine',
+      'block-card',
+      'block-dayBetween',
+      'block-dayOver',
+      'block-dayColumns',
+      'block-bigRoute',
+      'block-dayRoute',
     ]);
-    expect(variantKeys(trail, 'block-bigTrio-stretched')).toEqual([
-      'block-bigTrio-stretched',
-      'block-bigTrio-stretched-time',
+    // A big datum over two and three data, wide and stretched; never the time on top.
+    expect(variantKeys(trail, 'block-big')).toEqual([
+      'block-big-wide-pair',
+      'block-big-wide-trio',
+      'block-big-stretched-pair',
+      'block-big-stretched-trio',
     ]);
-    expect(tileKeys(trail, 'creative')).not.toContain('block-bigTrio-wide');
+    // Under the weekday; and the big datum alone under it, the weekday small first.
+    expect(variantKeys(trail, 'block-bigDay')).toEqual([
+      'block-bigDay-day-pair',
+      'block-bigDay-day-trio',
+      'block-bigDay-stretchedDay-pair',
+      'block-bigDay-stretchedDay-trio',
+    ]);
+    expect(variantKeys(trail, 'block-bigSolo')).toEqual([
+      'block-bigSolo-smallDay',
+      'block-bigSolo-day',
+      'block-bigSolo-stretchedDay',
+    ]);
+    expect(variantKeys(trail, 'block-tower')).toEqual(['block-tower']);
+    expect(variantKeys(trail, 'block-dataStack')).toEqual([
+      'block-dataStack-three',
+      'block-dataStack-two',
+    ]);
+    expect(variantKeys(trail, 'block-bigRoute')).toEqual([
+      'block-bigRoute-route-pair',
+      'block-bigRoute-route-trio',
+    ]);
+    expect(variantKeys(trail, 'block-dayRoute')).toEqual(['block-dayRoute']);
+    expect(tileKeys(trail, 'creative')).not.toContain('block-big');
   });
 
-  it('follows with the creative widgets, a tile per design with its versions', () => {
+  it('follows with the creative widgets by theme, alike designs in one tile', () => {
+    // Words, the phone's apps and things of paper.
     expect(tileKeys(trail, 'creative')).toEqual([
-      'block-verse',
       'block-quote',
-      'block-sentence',
-      'block-verified',
+      'block-verse',
       'block-message',
       'block-chat',
+      'block-sentence',
+      'block-verified',
       'block-music',
       'block-camera',
       'block-alarm',
       'block-receipt',
       'block-boardingPass',
     ]);
-    // The chat message comes with its first phrase, in dark and light mode.
+    // The quote and the verse with their first phrase: the others are chosen from a list.
+    expect(variantKeys(trail, 'block-quote')).toEqual(['block-quote-kipchoge']);
+    expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
+    // The chat message with its first phrase, apart from the message with data: only it is
+    // chosen from a list.
     expect(variantKeys(trail, 'block-chat')).toEqual([
       'block-chat-dark-zombieMode',
       'block-chat-light-zombieMode',
     ]);
     // A design of a single version is its tile's only page.
     expect(variantKeys(trail, 'block-receipt')).toEqual(['block-receipt']);
-    // The verse comes with its first one: the others are chosen from a list.
-    expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
-    // The note and the timing tower come with the activity's splits; the laps, with its laps.
-    const withSplits = tileKeys(activityCatalog(makeActivity(), ['splits']), 'creative');
-    expect(withSplits).toEqual(
-      expect.arrayContaining([
-        'block-notes',
-        'block-grandPrix',
-        'block-splitBars',
-        'block-splitLadder',
-      ]),
-    );
-    expect(withSplits.filter((key) => key.startsWith('block-laps'))).toEqual([]);
-    // A tile per look of the laps, each in both brand colors.
+    // The splits' tables come with the activity's splits: the note with the phone's apps, then
+    // the bars and the ladder together and the race on TV apart; the laps' two, with its laps.
+    const withSplits = activityCatalog(makeActivity(), ['splits']);
+    expect(tileKeys(withSplits, 'creative').slice(-6)).toEqual([
+      'block-alarm',
+      'block-notes',
+      'block-splits',
+      'block-grandPrix',
+      'block-receipt',
+      'block-boardingPass',
+    ]);
+    expect(variantKeys(withSplits, 'block-splits')).toEqual([
+      'block-splits-splitBars',
+      'block-splits-splitLadder-red',
+      'block-splits-splitLadder-ink',
+    ]);
+    expect(tileKeys(withSplits, 'creative')).not.toContain('block-laps');
     const withLaps = activityCatalog(makeActivity(), [], false, false, true);
-    expect(tileKeys(withLaps, 'creative')).toEqual(
-      expect.arrayContaining(['block-laps-board', 'block-laps-sheet']),
-    );
-    expect(variantKeys(withLaps, 'block-laps-sheet')).toEqual([
+    expect(variantKeys(withLaps, 'block-laps')).toEqual([
+      'block-laps-board-red',
+      'block-laps-board-ink',
       'block-laps-sheet-red',
       'block-laps-sheet-ink',
     ]);

@@ -48,6 +48,67 @@ export const CAP_HEIGHTS: Readonly<Record<FontId, number>> = {
 };
 
 /**
+ * How a font's small letters reach past its capitals, as shares of its size: how high the tallest
+ * rise without marks (an ascender, "k", or a figure: `plain`) and with them (an accent, a dot, a
+ * tilde: "é", "i", "ñ": `marked`), and how far the lowest go under the baseline ("p": `descent`).
+ * Measured on the outlines of every face the font ships (CanvasKit's glyph bounds, rounded up to
+ * a 64th of its size): a small capitals' font (Bowlby One SC) has no descent, and Sacramento's
+ * accents sit lower than its ascenders.
+ */
+const SMALL_LETTERS: Readonly<
+  Record<FontId, { readonly plain: number; readonly marked: number; readonly descent: number }>
+> = {
+  inter: { plain: 0.7656, marked: 0.7813, descent: 0.2188 },
+  barlowCondensed: { plain: 0.7188, marked: 0.7344, descent: 0.2188 },
+  playfairDisplay: { plain: 0.7969, marked: 0.8438, descent: 0.2031 },
+  spaceMono: { plain: 0.7188, marked: 0.75, descent: 0.2031 },
+  orbitron: { plain: 0.7813, marked: 0.8594, descent: 0.2344 },
+  bangers: { plain: 0.7656, marked: 1.1094, descent: 0.0625 },
+  permanentMarker: { plain: 0.7656, marked: 0.9688, descent: 0.0625 },
+  anton: { plain: 0.875, marked: 0.9844, descent: 0.1406 },
+  unbounded: { plain: 0.7969, marked: 0.8594, descent: 0.1875 },
+  bigShoulders: { plain: 0.8125, marked: 0.8125, descent: 0.2188 },
+  bowlbyOneSC: { plain: 0.7656, marked: 0.9531, descent: 0 },
+  rubikGlitch: { plain: 0.75, marked: 0.7813, descent: 0.2344 },
+  graduate: { plain: 0.75, marked: 0.8281, descent: 0.1094 },
+  sacramento: { plain: 0.75, marked: 0.75, descent: 0.5313 },
+  doto: { plain: 0.7031, marked: 0.7969, descent: 0.2031 },
+};
+
+/** A capital with a mark over it ("É" split into "E" and its accent). */
+const MARKED_CAPITAL = /\p{Lu}\p{M}/u;
+/** A small letter with a mark over it, split off, or with a dot. */
+const MARKED_SMALL = /\p{Ll}\p{M}|[ij]/u;
+const SMALL = /\p{Ll}/u;
+/** Small letters that go under the baseline. */
+const DESCENDERS = /[gjpqyç]/u;
+
+/**
+ * How high `text`'s letters rise over its baseline in `font`, and how far its small letters go
+ * under it, as shares of its size, to cut a line to its letters: to its capitals' height (see
+ * `CAP_HEIGHTS`), or to its small letters' when it has any; `top` is `null` when an accent rises
+ * over a capital ("MIÉRCOLES"), whose line keeps its own room above. `text` is as written, in
+ * capitals if it is to be. Time O(n) for its n characters.
+ */
+export function lettersExtent(
+  text: string,
+  font: FontId,
+): { readonly top: number | null; readonly descent: number } {
+  const split = text.normalize('NFD');
+  const small = SMALL_LETTERS[font];
+  const descent = DESCENDERS.test(split) ? small.descent : 0;
+  if (MARKED_CAPITAL.test(split)) {
+    return { top: null, descent };
+  }
+  const top = MARKED_SMALL.test(split)
+    ? Math.max(small.plain, small.marked)
+    : SMALL.test(split)
+      ? small.plain
+      : 0;
+  return { top: Math.max(CAP_HEIGHTS[font], top), descent };
+}
+
+/**
  * A font's files: its regular face, and its bold and italics when it ships them; and a light face
  * for the replicas of apps that write thin (an alarm's time), not offered to the user.
  */

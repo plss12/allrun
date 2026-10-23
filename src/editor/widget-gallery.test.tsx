@@ -9,6 +9,8 @@ import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
 import { weekRange, yearRange } from '@/core/dates';
 import { activityCatalog, summaryCatalog } from '@/core/layer-catalog';
 import { summarize } from '@/core/summary';
+import { generateStravaDetail } from '@/sources/fixtures/detail';
+import { parseStravaDetail } from '@/sources/strava/detail';
 import { makeActivity } from '@/test-utils/make-activity';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
@@ -126,6 +128,37 @@ describe('gallerySections', () => {
     expect(scalesOf('route').size).toBe(1);
   });
 
+  it('draws each page of a creative widget as big as it fits, none small beside a bigger one', () => {
+    // An interval session: its laps' board and timing sheet differ a lot in size.
+    const { streams, detailed } = generateStravaDetail(activity, 1);
+    const detail = parseStravaDetail(JSON.parse(JSON.stringify(streams)), detailed);
+    const sections = gallery.gallerySections(
+      activityCatalog(activity, ['splits'], false, false, true),
+      'story',
+      'inter',
+      contextFor({ ...activityData, detail }),
+      SCREEN,
+      'Text',
+    );
+    const creative = sections.find((section) => section.id === 'creative');
+    const tiles = (creative?.rows ?? []).flatMap((row) =>
+      row.widgets.map((widget) => ({ row, widget })),
+    );
+    expect(tiles.some(({ widget }) => widget.key === 'block-laps')).toBe(true);
+    for (const { row, widget } of tiles) {
+      const room = widget.pages.length > 1 ? row.height - gallery.GALLERY_DOTS_HEIGHT : row.height;
+      const filled = widget.pages.map((page) =>
+        Math.max(
+          (page.prepared.width * page.scale) / row.width,
+          (page.prepared.height * page.scale) / room,
+        ),
+      );
+      for (const share of filled) {
+        expect(share).toBeCloseTo(filled[0], 3);
+      }
+    }
+  });
+
   it('keeps two data that write the same number: their names and units differ', () => {
     // 172 beats at most and 172 steps per minute (86 per leg) share the data tile.
     const keys = pagesOf(activitySections()).map((page) => page.key);
@@ -156,6 +189,33 @@ describe('gallerySections', () => {
         expect(row.width).toBe(wide ? full : half);
       }
     }
+  });
+
+  it('draws each page of a data widget as big as it fits, its own size', () => {
+    const data = activitySections().find((section) => section.id === 'data');
+    const pages = (data?.rows ?? []).flatMap((row) =>
+      row.widgets.flatMap((widget) => widget.pages),
+    );
+    const scaleOf = (key: string) => pages.find((page) => page.key === key)?.scale ?? 0;
+    // The weekday small over the big datum is not shrunk to the stretched page's height: it was
+    // drawn at the same scale as it.
+    expect(scaleOf('block-bigSolo-smallDay')).toBeGreaterThan(
+      scaleOf('block-bigSolo-stretchedDay'),
+    );
+  });
+
+  it('gives a row of tall data widgets more height, up to square tiles', () => {
+    const data = activitySections().find((section) => section.id === 'data');
+    const rows = data?.rows ?? [];
+    const base = Math.round(rows[0].width * 0.6);
+    const heightOf = (key: string) =>
+      rows.find((row) => row.widgets.some((widget) => widget.key === key))?.height ?? 0;
+    // Every row between the usual tiles and square ones; the route over the data, taller.
+    for (const row of rows) {
+      expect(row.height).toBeGreaterThanOrEqual(base);
+      expect(row.height).toBeLessThanOrEqual(row.width);
+    }
+    expect(heightOf('block-bigRoute')).toBeGreaterThan(base);
   });
 
   it('lays the name and the monogram side by side, and both together under them, as wide', () => {

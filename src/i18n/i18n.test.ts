@@ -1,6 +1,8 @@
 import { getLocales, type Locale } from 'expo-localization';
 
 import { deviceDistanceUnit, deviceLanguage, i18n } from './index';
+import { en } from './locales/en';
+import { es } from './locales/es';
 
 const locale = (
   languageCode: string,
@@ -59,5 +61,15 @@ describe('translations', () => {
     expect(i18n.t('metrics.elevationGain')).toBe('Desnivel');
     await i18n.changeLanguage('en');
     expect(i18n.t('metrics.elevationGain')).toBe('Elevation gain');
+  });
+});
+
+describe('units of time', () => {
+  it.each([
+    ['English', en],
+    ['Spanish', es],
+  ])('never write minutes as a lone "m" in %s, which reads as meters', (_name, texts) => {
+    expect(texts.durationUnits.minutes).toBe('min');
+    expect(texts.compactDurationUnits.minutes).toBe('min');
   });
 });

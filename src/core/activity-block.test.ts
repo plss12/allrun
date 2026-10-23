@@ -12,6 +12,7 @@ import {
   isDataWidget,
   sentencePlan,
   sportIcon,
+  towerMetrics,
   tyreCompounds,
 } from './activity-block';
 
@@ -109,27 +110,52 @@ describe('bigMetrics', () => {
 describe('activityBlocks', () => {
   it('offers every version of every design, in the order of the gallery', () => {
     expect(activityBlocks(makeActivity())).toEqual([
-      // The data widgets: a datum big over two or three more, wide or stretched, the main datum
-      // or the time on top.
+      // The data widgets, never with the time on top: a datum big over two or three more, wide
+      // and stretched; under the weekday, wide and stretched; alone under it, small first.
       { design: 'bigPair', layout: 'wide', top: 'main' },
-      { design: 'bigPair', layout: 'wide', top: 'time' },
       { design: 'bigTrio', layout: 'wide', top: 'main' },
-      { design: 'bigTrio', layout: 'wide', top: 'time' },
       { design: 'bigPair', layout: 'stretched', top: 'main' },
-      { design: 'bigPair', layout: 'stretched', top: 'time' },
       { design: 'bigTrio', layout: 'stretched', top: 'main' },
-      { design: 'bigTrio', layout: 'stretched', top: 'time' },
-      // The verse and the quote with their first phrase: the others are chosen from a list.
-      { design: 'verse', verse: 'philippians4v13' },
+      { design: 'bigPair', layout: 'day', top: 'main' },
+      { design: 'bigTrio', layout: 'day', top: 'main' },
+      { design: 'bigPair', layout: 'stretchedDay', top: 'main' },
+      { design: 'bigTrio', layout: 'stretchedDay', top: 'main' },
+      { design: 'bigSolo', layout: 'smallDay', top: 'main' },
+      { design: 'bigSolo', layout: 'day', top: 'main' },
+      { design: 'bigSolo', layout: 'stretchedDay', top: 'main' },
+      // The tower; the data alone, stacked and in a line; the card.
+      { design: 'tower' },
+      { design: 'dataStack', layout: 'three' },
+      { design: 'dataStack', layout: 'two' },
+      { design: 'dataLine', layout: 'three' },
+      { design: 'dataLine', layout: 'two' },
+      { design: 'card', layout: 'nameThree' },
+      { design: 'card', layout: 'nameSix' },
+      { design: 'card', layout: 'three' },
+      { design: 'card', layout: 'six' },
+      // Around the weekday: between the data, over them in columns, beside them.
+      { design: 'dayBetween', layout: 'four' },
+      { design: 'dayBetween', layout: 'two' },
+      { design: 'dayOver', layout: 'wide' },
+      { design: 'dayOver', layout: 'narrow' },
+      { design: 'dayColumns', layout: 'three' },
+      { design: 'dayColumns', layout: 'four' },
+      // Around the route, for activities with GPS.
+      { design: 'bigPair', layout: 'route', top: 'main' },
+      { design: 'bigTrio', layout: 'route', top: 'main' },
+      { design: 'dayRoute', top: 'main' },
+      // Words: the quote and the verse with their first phrase (the others are chosen from a
+      // list), the two chat messages, the sentence and the badge.
       { design: 'quote', quote: 'kipchoge' },
+      { design: 'verse', verse: 'philippians4v13' },
+      { design: 'message', layout: 'dark' },
+      { design: 'message', layout: 'light' },
+      { design: 'chat', layout: 'dark', phrase: 'zombieMode' },
+      { design: 'chat', layout: 'light', phrase: 'zombieMode' },
       { design: 'sentence' },
       { design: 'verified', layout: 'dark' },
       { design: 'verified', layout: 'light' },
-      { design: 'message', layout: 'dark' },
-      { design: 'message', layout: 'light' },
-      // The chat message with its first phrase: the others are chosen from a list.
-      { design: 'chat', layout: 'dark', phrase: 'zombieMode' },
-      { design: 'chat', layout: 'light', phrase: 'zombieMode' },
+      // The phone's apps.
       { design: 'music', layout: 'dark', cover: 'red' },
       { design: 'music', layout: 'dark', cover: 'ink' },
       { design: 'music', layout: 'light', cover: 'red' },
@@ -138,39 +164,68 @@ describe('activityBlocks', () => {
       { design: 'camera', cover: 'ink' },
       { design: 'alarm', layout: 'dark' },
       { design: 'alarm', layout: 'light' },
+      // Things of paper.
       { design: 'receipt' },
       { design: 'boardingPass', cover: 'red' },
       { design: 'boardingPass', cover: 'ink' },
     ]);
   });
 
-  it('offers the data widgets only full, and the time on top only when it is not already', () => {
+  it('offers the data widgets only full', () => {
     const gym = makeActivity({
       sportType: 'WeightTraining',
       distanceMeters: 0,
       averageSpeed: null,
+      routePolyline: null,
     });
-    expect(activityBlocks(gym).filter((block) => block.design.startsWith('big'))).toEqual([
+    // A gym session: its time over its heart rate and calories, and no route.
+    expect(activityBlocks(gym).filter((block) => isDataWidget(block.design))).toEqual([
       { design: 'bigPair', layout: 'wide', top: 'main' },
       { design: 'bigPair', layout: 'stretched', top: 'main' },
+      { design: 'bigPair', layout: 'day', top: 'main' },
+      { design: 'bigPair', layout: 'stretchedDay', top: 'main' },
+      { design: 'bigSolo', layout: 'smallDay', top: 'main' },
+      { design: 'bigSolo', layout: 'day', top: 'main' },
+      { design: 'bigSolo', layout: 'stretchedDay', top: 'main' },
+      // The tower with its calories, time and heart rate.
+      { design: 'tower' },
+      { design: 'dataStack', layout: 'three' },
+      { design: 'dataStack', layout: 'two' },
+      { design: 'dataLine', layout: 'three' },
+      { design: 'dataLine', layout: 'two' },
+      { design: 'card', layout: 'nameThree' },
+      { design: 'card', layout: 'three' },
+      // Its time, heart rate and calories fill the date widgets of two data.
+      { design: 'dayBetween', layout: 'two' },
+      { design: 'dayOver', layout: 'narrow' },
+      { design: 'dayColumns', layout: 'three' },
     ]);
   });
 
-  it('offers the timing tables only for an activity with splits or laps, each by its look', () => {
+  it('offers the big datum under the route only for an activity with a route', () => {
+    const layouts = (routePolyline: string | null) =>
+      activityBlocks(makeActivity({ routePolyline })).flatMap((block) =>
+        block.design === 'bigPair' ? [block.layout] : [],
+      );
+    expect(layouts('_p~iF~ps|U_ulLnnqC')).toContain('route');
+    expect(layouts(null)).not.toContain('route');
+  });
+
+  it('offers the timing tables only for an activity with splits or laps, after the apps', () => {
     const designs = activityBlocks(makeActivity(), true, false, true).map((block) => block.design);
-    expect(designs.slice(designs.indexOf('verified') + 2, designs.indexOf('message'))).toEqual([
-      // AURA's board of laps and its bars of splits; the karting's sheet and the ladder of
-      // splits; the race on TV and the note.
-      'laps',
-      'laps',
+    expect(designs.slice(designs.indexOf('alarm') + 2, designs.indexOf('receipt'))).toEqual([
+      // The note, with the phone's apps; then the splits as AURA's bars and a typewriter's
+      // ladder, the laps as AURA's board and a karting's sheet, and the splits as a race on TV.
+      'notes',
+      'notes',
       'splitBars',
-      'laps',
-      'laps',
       'splitLadder',
       'splitLadder',
+      'laps',
+      'laps',
+      'laps',
+      'laps',
       'grandPrix',
-      'notes',
-      'notes',
     ]);
     expect(activityBlocks(makeActivity()).map((block) => block.design)).not.toContain('notes');
     // The laps need laps, not splits.
@@ -255,11 +310,66 @@ describe('activityBlocks', () => {
   });
 });
 
+describe('towerMetrics', () => {
+  it('writes the distance big, and how fast and how long small, in the sport order', () => {
+    expect(towerMetrics(makeActivity({ sportType: 'Run' }))).toEqual([
+      'distance',
+      'pace',
+      'movingTime',
+    ]);
+    expect(towerMetrics(makeActivity({ sportType: 'Ride' }))).toEqual([
+      'distance',
+      'speed',
+      'movingTime',
+    ]);
+    // A walk puts its time before its pace, and never its elevation gain.
+    expect(towerMetrics(makeActivity({ sportType: 'Walk', elevationGainMeters: 80 }))).toEqual([
+      'distance',
+      'movingTime',
+      'pace',
+    ]);
+  });
+
+  it('writes the calories big without a distance, and the time and heart rate small', () => {
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      averageSpeed: null,
+    });
+    expect(towerMetrics(gym)).toEqual(['calories', 'movingTime', 'averageHeartRate']);
+  });
+
+  it("is empty when the activity can't fill it", () => {
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      averageSpeed: null,
+      calories: null,
+    });
+    expect(towerMetrics(gym)).toEqual([]);
+  });
+});
+
 describe('blockDataCount', () => {
   it('is the number of data each design writes', () => {
     // The main datum and three or two more under it.
     expect(blockDataCount({ design: 'bigTrio', layout: 'stretched', top: 'main' })).toBe(4);
     expect(blockDataCount({ design: 'bigPair', layout: 'wide', top: 'time' })).toBe(3);
+    expect(blockDataCount({ design: 'bigSolo', layout: 'day', top: 'main' })).toBe(1);
+    // The date widgets: the data beside the short weekday, under the sport and start time, beside
+    // the date, and stacked.
+    expect(blockDataCount({ design: 'dayRoute', top: 'time' })).toBe(1);
+    expect(blockDataCount({ design: 'dayBetween', layout: 'four' })).toBe(4);
+    expect(blockDataCount({ design: 'dayOver', layout: 'wide' })).toBe(4);
+    expect(blockDataCount({ design: 'dayOver', layout: 'narrow' })).toBe(2);
+    expect(blockDataCount({ design: 'dayColumns', layout: 'three' })).toBe(3);
+    expect(blockDataCount({ design: 'dataStack', layout: 'two' })).toBe(2);
+    // The tower's big datum and two more beside its sport.
+    expect(blockDataCount({ design: 'tower' })).toBe(3);
+    expect(blockDataCount({ design: 'dataLine', layout: 'three' })).toBe(3);
+    expect(blockDataCount({ design: 'dataLine', layout: 'two' })).toBe(2);
+    expect(blockDataCount({ design: 'card', layout: 'nameSix' })).toBe(6);
+    expect(blockDataCount({ design: 'card', layout: 'three' })).toBe(3);
     // A note lists the splits under the distance.
     expect(blockDataCount({ design: 'notes', layout: 'light' })).toBe(1);
     // The song's two ends; the message's two data and the time where its time goes; and the
@@ -329,6 +439,11 @@ describe('isAppReplica and blockLettering', () => {
   it('tells the data widgets from the creative ones', () => {
     expect(isDataWidget('bigTrio')).toBe(true);
     expect(isDataWidget('bigPair')).toBe(true);
+    expect(isDataWidget('bigSolo')).toBe(true);
+    expect(isDataWidget('dataStack')).toBe(true);
+    expect(isDataWidget('tower')).toBe(true);
+    expect(isDataWidget('dataLine')).toBe(true);
+    expect(isDataWidget('card')).toBe(true);
     expect(isDataWidget('verse')).toBe(false);
     expect(isDataWidget('receipt')).toBe(false);
   });
@@ -341,6 +456,51 @@ describe('isAppReplica and blockLettering', () => {
       bold: true,
       ...capitals,
     });
+    // Under the weekday, wide and heavy too; under the route, techy, as the weekday over it.
+    expect(blockLettering({ design: 'bigPair', layout: 'day', top: 'main' }).font).toBe(
+      'unbounded',
+    );
+    expect(blockLettering({ design: 'bigTrio', layout: 'route', top: 'main' }).font).toBe(
+      'orbitron',
+    );
+    // Each date widget in a lettering of its own, for a varied gallery.
+    const fontOf = (block: Parameters<typeof blockLettering>[0]) => blockLettering(block).font;
+    expect([
+      fontOf({ design: 'bigSolo', layout: 'smallDay', top: 'main' }),
+      fontOf({ design: 'dayRoute', top: 'main' }),
+      fontOf({ design: 'dayBetween', layout: 'four' }),
+      fontOf({ design: 'dayOver', layout: 'wide' }),
+      fontOf({ design: 'dayOver', layout: 'narrow' }),
+      fontOf({ design: 'dataStack', layout: 'three' }),
+    ]).toEqual([
+      'inter',
+      'permanentMarker',
+      'bigShoulders',
+      'graduate',
+      'anton',
+      'barlowCondensed',
+    ]);
+    // The tower heavy and stretched upwards; the line of data wide and heavy.
+    expect(blockLettering({ design: 'tower' })).toEqual({
+      font: 'bowlbyOneSC',
+      bold: false,
+      ...capitals,
+    });
+    expect(blockLettering({ design: 'dataLine', layout: 'three' })).toEqual({
+      font: 'unbounded',
+      bold: true,
+      ...capitals,
+    });
+    // The card in a typewriter's letters, in small letters as its names and units are written.
+    expect(blockLettering({ design: 'card', layout: 'six' })).toEqual({
+      font: 'spaceMono',
+      bold: false,
+      italic: false,
+      uppercase: false,
+    });
+    expect(blockLettering({ design: 'bigSolo', layout: 'stretchedDay', top: 'main' }).font).toBe(
+      'bowlbyOneSC',
+    );
     expect(blockLettering({ design: 'bigPair', layout: 'stretched', top: 'time' })).toEqual({
       font: 'bowlbyOneSC',
       bold: false,

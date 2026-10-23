@@ -1,5 +1,5 @@
 import type { Activity } from './activity';
-import { activityBlocks, isDataWidget } from './activity-block';
+import { activityBlocks, blockTile, isDataWidget } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
 import { chartBucketOptions } from './periods';
 import { PLACE_FORMATS } from './place';
@@ -107,12 +107,8 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'summaryChart':
       return `summaryChart-${item.value}`;
     case 'activityBlock':
-      // The laps' looks are apart, and a big datum's: a tile each, with its colors or its tops.
-      return item.block.design === 'laps' ||
-        item.block.design === 'bigPair' ||
-        item.block.design === 'bigTrio'
-        ? `block-${item.block.design}-${item.block.layout}`
-        : `block-${item.block.design}`;
+      // Designs alike share a tile (see `blockTile`).
+      return `block-${blockTile(item.block)}`;
     case 'text':
     case 'route':
     case 'summaryRoutes':
@@ -161,10 +157,16 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         // design of a single version has nothing to add; a cover adds its color, and a verse, a
         // quote or a chat message's phrase its name (a phrase of the user's, nothing).
         return [
-          // The look of the laps and of a big datum is in their widget's key already.
-          'layout' in item.block && item.block.design !== 'laps' && !('top' in item.block)
-            ? item.block.layout
-            : undefined,
+          'layout' in item.block ? item.block.layout : undefined,
+          // In a tile of several designs, each version names its own; a big datum says how many
+          // data it has under it.
+          item.block.design === 'bigPair'
+            ? 'pair'
+            : item.block.design === 'bigTrio'
+              ? 'trio'
+              : item.block.design !== blockTile(item.block)
+                ? item.block.design
+                : undefined,
           'top' in item.block && item.block.top !== 'main' ? item.block.top : undefined,
           'cover' in item.block ? item.block.cover : undefined,
           'verse' in item.block ? item.block.verse : undefined,

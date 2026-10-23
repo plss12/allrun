@@ -19,10 +19,11 @@ import type { ReactElement } from 'react';
 
 import {
   blockDataCount,
-  bigMetrics,
   blockMetrics,
+  dataWidgetMetrics,
   fastestIndex,
   isAppReplica,
+  isDataWidget,
   sentencePlan,
   sportIcon,
   type SportIconId,
@@ -40,20 +41,21 @@ import type { HitHole } from '@/core/layer-transform';
 import type { Size } from '@/core/photo-framing';
 import type { FontId, Layer } from '@/core/template';
 import { durationParts } from '@/core/units';
-import { formatActivityDate, formatTimeAfter } from '@/ui/format';
+import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 
 import { PlainWordmark, wordmarkHeight } from './brand/brand-art';
 import {
   type ActivityData,
   type LabelKey,
   metricText,
+  plainMetricParts,
   plainMetricText,
   speedMeasure,
   splitGapText,
   splitRowTexts,
   type TextContext,
 } from './editor-data';
-import { CAP_HEIGHTS, FONT_FAMILIES } from './fonts';
+import { CAP_HEIGHTS, FONT_FAMILIES, lettersExtent } from './fonts';
 import { SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
 import {
   addLeanRoom,
@@ -105,6 +107,13 @@ type Piece =
       readonly y: number;
       /** Drawn this many times taller than it is laid out (see `STRETCHED_FONTS`). */
       readonly stretch?: number;
+      /** Casts the shadow of shapes once stretched, laid out without its own (see `capitals`). */
+      readonly shadow?: true;
+      /**
+       * Drawn turned a quarter counterclockwise (see `turned`): placed at (x, y) in a frame
+       * `length` long whose top-left corner, once turned, is at (`turn.x`, `turn.y`).
+       */
+      readonly turn?: { readonly x: number; readonly y: number; readonly length: number };
     }
   | {
       /** A replica's card or bubble, in its app's color. */
@@ -279,6 +288,24 @@ function column(boxes: readonly Box[], gap: number, align: Align): Box {
         return pieces;
       });
     },
+  };
+}
+
+/**
+ * A box of texts turned a quarter counterclockwise, read upwards: what was its start is at its
+ * bottom, and its first line at its left.
+ */
+function turned(box: Box): Box {
+  return {
+    width: box.height,
+    height: box.width,
+    place: (x, y) =>
+      box.place(0, 0).map((piece) => {
+        if (piece.kind !== 'text') {
+          throw new Error(`Only texts turn, not a ${piece.kind}`);
+        }
+        return { ...piece, turn: { x, y, length: box.width } };
+      }),
   };
 }
 
@@ -678,8 +705,8 @@ interface TextLook {
   readonly wrapWidth?: number;
   /** Lines of a wrapped text aligned to their start instead (a chat message, a sentence). */
   readonly wrapStart?: boolean;
-  /** Numbers as tall as capitals, in a font whose numbers are old-style (Playfair's). */
-  readonly lining?: boolean;
+  /** To be drawn turned (see `turned`): its shadow falls down the canvas, not down its lines. */
+  readonly turned?: boolean;
 }
 
 /**
@@ -695,14 +722,22 @@ function paragraph(
     maxWidth = NO_WRAP_WIDTH,
     wrapWidth,
     wrapStart = false,
-    lining = false,
+    turned = false,
   }: TextLook = {},
 ) {
   const tightening =
     (TIGHT_FONTS[style.font] ?? 0) + LETTER_SPACING[style.letterSpacing ?? 'normal'];
   // A backdrop already sets the texts apart: no shadow.
-  const shadows = shadow && (style.backdrop ?? 'none') === 'none' ? textShadows(style.color) : [];
-  const build = (cut: boolean) => {
+  const shadows = (
+    shadow && (style.backdrop ?? 'none') === 'none' ? textShadows(style.color) : []
+  ).map((cast) =>
+    // Turned a quarter counterclockwise, the text's left is the canvas's down.
+    turned && cast.offset !== undefined
+      ? { ...cast, offset: { x: -cast.offset.y, y: cast.offset.x } }
+      : cast,
+  );
+  /** Laid out cut short with an ellipsis (`cut`), or with each word on a line of its own. */
+  const build = (cut: boolean, wordPerLine = false) => {
     const builder = Skia.ParagraphBuilder.Make(
       cut
         ? { textAlign: TextAlign.Left, maxLines: 1, ellipsis: '…' }
@@ -732,9 +767,13 @@ function paragraph(
           },
           letterSpacing: run.size * ((run.spacing ?? 0) + tightening),
           shadows,
-          ...(lining ? { fontFeatures: [{ name: 'lnum', value: 1 }] } : {}),
         })
-        .addText(style.uppercase ? run.text.toLocaleUpperCase() : run.text)
+        .addText(
+          (style.uppercase ? run.text.toLocaleUpperCase() : run.text).replace(
+            / /gu,
+            wordPerLine ? '\n' : ' ',
+          ),
+        )
         .pop();
     }
     // A wrapped text leans out of each of its lines: `wrappedBox` makes room for all of them.
@@ -746,11 +785,15 @@ function paragraph(
   const built = build(false);
   if (wrapWidth !== undefined) {
     // The narrowest width that keeps as few lines as the widest allowed: even lines, no word left
-    // alone on the last one. Halved down to a pixel, O(log w) layouts.
-    built.layout(wrapWidth);
+    // alone on the last one. Never narrower than the widest word (words tied with no-break spaces
+    // are one), which would break inside it. Halved down to a pixel, O(log w) layouts.
+    const words = build(false, true);
+    words.layout(NO_WRAP_WIDTH);
+    const widestWord = Math.ceil(words.getLongestLine()) + 1;
+    built.layout(Math.max(wrapWidth, widestWord));
     const lines = built.getLineMetrics().length;
-    let low = 1;
-    let high = Math.ceil(built.getLongestLine()) + 1;
+    let low = widestWord;
+    let high = Math.max(widestWord, Math.ceil(built.getLongestLine()) + 1);
     while (low < high) {
       const middle = Math.floor((low + high) / 2);
       built.layout(middle);
@@ -783,6 +826,9 @@ function paragraph(
 const TIGHT_FONTS: Partial<Record<FontId, number>> = { bowlbyOneSC: -0.06 };
 const STRETCHED_FONTS: Partial<Record<FontId, number>> = { bowlbyOneSC: 1.35 };
 
+/** How far round letters ("C", "O") dip under the baseline, at most, as a share of their size. */
+const ROUND_DIP = 0.02;
+
 /** Room after each letter of a secondary text (a quotation's source). */
 const LABEL_SPACING = 0.1;
 
@@ -797,8 +843,47 @@ const SIZES = {
    */
   big: {
     wide: { value: 120, data: 38, stretch: 1 },
+    day: { value: 120, data: 38, stretch: 1 },
+    route: { value: 120, data: 38, stretch: 1 },
     // Drawn this many times taller than the font, as AURA stretches its big "11.3 KM".
     stretched: { value: 180, data: 56, stretch: 1.9 },
+    stretchedDay: { value: 180, data: 56, stretch: 1.9 },
+    smallDay: { value: 120, data: 38, stretch: 1 },
+  },
+  /** The weekday and the big datum, as wide, and the room around the route between them. */
+  dayRoute: { value: 120, gap: 0.3 },
+  /** The data beside the short weekday, and the room between their lines and beside it. */
+  dayBetween: { data: 44, rowGap: 0.45, sideGap: 0.7 },
+  /** The weekday over its columns, and their lines, in each look. */
+  dayOver: { wide: { weekday: 130, data: 30 }, narrow: { weekday: 210, data: 44 } },
+  /** The lines of the date and the data, and the room between their columns. */
+  dayColumns: { text: 44, gap: 3 },
+  /** The stacked data, and the weekday and time under them, a share of their size. */
+  dataStack: { value: 110, footer: 0.3 },
+  /**
+   * A tower's lines: their size, how many times taller than the font they are drawn, the room
+   * under each (a share of their capitals' height) and how narrow its sport's word may be squeezed
+   * to be no wider than the lines over it. The data on their side: the room between them and
+   * beside the word (shares of their capitals' height), and the biggest they get (a share of the
+   * lines' size).
+   */
+  tower: { value: 150, stretch: 1.9, gap: 0.15, squeeze: 0.6, sideGap: 0.5, sideMax: 0.3 },
+  /** The data in a line, and the room between them, a share of their size. */
+  dataLine: { text: 60, gap: 0.7 },
+  /**
+   * A card's names of data, their values and its title, the room between a name and its value,
+   * between rows and under the title (shares of their sizes), between columns and inside it.
+   */
+  card: {
+    label: 26,
+    value: 40,
+    title: 64,
+    labelGap: 0.35,
+    rowGap: 0.6,
+    titleGap: 0.5,
+    columnGap: 70,
+    padX: 44,
+    padY: 38,
   },
   /**
    * A quotation's words: at most `lines` lines no wider than `width`, as big as `text` when they
@@ -820,6 +905,35 @@ const BLOCK_BACKDROP = { padding: 0.16, minPad: 6, wider: 1.6, radius: 1.4 } as 
  * and least room between two data, a share of theirs: they spread to the big one's width.
  */
 const BIG = { below: 0.12, minGap: 0.8 } as const;
+
+/**
+ * Over a big datum: the weekday, as wide as it, its room under it a share of the big datum's
+ * size; or the route, in a box `routeWidth` and `routeHeight` times the big datum's width, so it
+ * doesn't outweigh the data, its room under it a share of the big datum's size too.
+ */
+const BIG_HEADER = {
+  dayGap: 0.08,
+  smallDay: 0.34,
+  smallDayGap: 0.12,
+  routeWidth: 0.8,
+  routeHeight: 0.9,
+  routeGap: 0.3,
+} as const;
+
+/**
+ * The date widgets' room: between a header and what goes under it, between lines, between
+ * stacked data and least between columns, each a share of its text's size.
+ */
+const DATE = { headGap: 0.1, lineGap: 0.3, stackGap: 0.12, minGap: 1.2 } as const;
+
+/** The typewriter's letters of the data on their side beside a tower's sport, as a caption. */
+const TOWER_SIDE_FONT: FontId = 'spaceMono';
+
+/** Data a card puts in a row. */
+const CARD_COLUMNS = 3;
+
+/** The size a text is laid out at to measure it before writing it as wide as something. */
+const FIT_SIZE = 100;
 
 /** Most splits a note lists one by one; longer activities group them (km 1–2…). */
 const NOTES_ROWS = 16;
@@ -1181,10 +1295,9 @@ export function prepareActivityBlock(
 ): PreparedBlock | null {
   const { activity } = data;
   const { block, style } = layer;
-  const metrics =
-    block.design === 'bigPair' || block.design === 'bigTrio'
-      ? bigMetrics(activity, block.top, blockDataCount(block))
-      : blockMetrics(activity, blockDataCount(block));
+  const metrics = isDataWidget(block.design)
+    ? dataWidgetMetrics(activity, block)
+    : blockMetrics(activity, blockDataCount(block));
   // A verse or a quote shows no data: it is drawn for any activity.
   if (metrics.length === 0 && blockDataCount(block) > 0) {
     return null;
@@ -1223,19 +1336,50 @@ export function prepareActivityBlock(
       ),
     );
   /**
-   * `runs` at `size` cut to their capitals: from a capital's top to `below` under the baseline
-   * (room for a comma's tail), so what goes over or under them sits as close as it looks (see
-   * `CAP_HEIGHTS`); drawn `taller` times taller than the font.
+   * `runs` at `size` cut to their letters: from the top of their capitals, or of their small
+   * letters when they have any, to `below` under the baseline (room for a comma's tail, or for
+   * what goes under them), and as far again as their small letters go down (see
+   * `lettersExtent`), so what goes over or under them sits as close as it looks. Over an accented
+   * capital ("MIÉRCOLES"), the line keeps its own room above. Drawn `taller` times taller than
+   * the font (squashed when less than one), in the block's lettering or in another `lettering`,
+   * laid out with `look`.
    */
-  const capitals = (runs: readonly Run[], size: number, below: number, taller = 1): Box => {
-    const laidOut = paragraph(runs, fonts, style);
-    const stretch = (STRETCHED_FONTS[style.font] ?? 1) * taller;
+  const capitals = (
+    runs: readonly Run[],
+    size: number,
+    below: number,
+    taller = 1,
+    lettering: BlockStyle = style,
+    look: TextLook = {},
+  ): Box => {
+    const stretch = (STRETCHED_FONTS[lettering.font] ?? 1) * taller;
+    // A stretched text's own shadow would stretch with it, down past its room: it casts the
+    // shadow of shapes once stretched instead, as long as it would have one.
+    const shadow =
+      stretch !== 1 &&
+      (look.shadow ?? true) &&
+      (lettering.backdrop ?? 'none') === 'none' &&
+      castsShadow(lettering.color);
+    const laidOut = paragraph(
+      runs,
+      fonts,
+      lettering,
+      stretch === 1 ? look : { ...look, shadow: false },
+    );
     const baseline = laidOut.getLineMetrics()[0]?.baseline ?? laidOut.getHeight();
-    const top = baseline - CAP_HEIGHTS[style.font] * size;
+    const written = runs.map((run) => run.text).join('');
+    const extent = lettersExtent(
+      lettering.uppercase ? written.toLocaleUpperCase() : written,
+      lettering.font,
+    );
+    const top = extent.top === null ? 0 : baseline - extent.top * size;
+    // What the letters draw under the baseline stretches with them: their descenders, and the
+    // dip of round letters ("C", "O"), which only shows once stretched. The room asked for under
+    // them stays as it is.
+    const under = (extent.descent * stretch + ROUND_DIP * (stretch - 1)) * size;
     return {
       width: textBox(laidOut).width,
-      // Only the letters stretch: the room under them stays as it is.
-      height: (baseline - top) * stretch + below,
+      height: (baseline - top) * stretch + under + below,
       place: (x, y) => [
         {
           kind: 'text',
@@ -1243,10 +1387,55 @@ export function prepareActivityBlock(
           x,
           y: y - top * stretch,
           ...(stretch === 1 ? {} : { stretch }),
+          ...(shadow ? { shadow } : {}),
         },
       ],
     };
   };
+  /** `text` on one line at `size` in the block's lettering, cut to its letters (see `capitals`). */
+  const line = (text: string, size: number, below: number, taller = 1): Box =>
+    capitals([{ text, size, bold: style.bold }], size, below, taller);
+  /** The size `text` is written at to be `width` wide (its width grows with its size). */
+  const sizeFor = (text: string, width: number): number =>
+    (FIT_SIZE * width) /
+    textBox(paragraph([{ text, size: FIT_SIZE, bold: style.bold }], fonts, style)).width;
+  /**
+   * Lines of `size` one under another, `gap` (a share of the size) apart and aligned to `align`,
+   * shrunk as one so that `columns` of them fit in `width` with `minGap` between them.
+   */
+  const fitted = (columns: readonly (readonly string[])[], size: number, width: number): Box => {
+    const laid = (at: number) =>
+      columns.map((lines, i) =>
+        column(
+          lines.map((text) => line(text, at, at * DATE.lineGap)),
+          0,
+          i === 0 ? 'start' : i === columns.length - 1 ? 'end' : 'start',
+        ),
+      );
+    const room = (boxes: readonly Box[], at: number) =>
+      boxes.reduce((sum, box) => sum + box.width, 0) + at * DATE.minGap * (boxes.length - 1);
+    const wanted = laid(size);
+    const fits = room(wanted, size) <= width;
+    const at = fits ? size : (size * width) / room(wanted, size);
+    return justified(fits ? wanted : laid(at), width, at * DATE.minGap);
+  };
+  /** The weekday's full name, and the short one ("Mié"). */
+  const weekdayName = formatActivityDate(activity.startLocal, textContext.locale, 'weekday');
+  const shortWeekdayName = formatShortWeekday(activity.startLocal, textContext.locale);
+  /** When the activity started ("10:00"), and its sport's name. */
+  const startTime = formatActivityDate(activity.startLocal, textContext.locale, 'time');
+  const sportWord = translate(`modalities.${activity.sportModality}`);
+  /** The text context with a time's units at their shortest ("1h 5min 5s"), for tight widgets. */
+  const compactContext: TextContext = {
+    ...textContext,
+    durationUnits: {
+      hours: translate('compactDurationUnits.hours'),
+      minutes: translate('compactDurationUnits.minutes'),
+      seconds: translate('compactDurationUnits.seconds'),
+    },
+  };
+  /** A datum as a data widget without names writes it (see `plainMetricText`). */
+  const plain = (metric: MetricId) => plainMetricText(activity, metric, textContext);
   /** A datum as one text, its unit after it: "11,34 km". */
   const written = (metric: MetricId): string => {
     const { value: amount, unit } = metricText(activity, metric, textContext);
@@ -1316,33 +1505,21 @@ export function prepareActivityBlock(
   const body = ((): Box | null => {
     switch (block.design) {
       case 'bigTrio':
-      case 'bigPair': {
-        // A datum big, unit and all (stretched upwards in its stretched look), and the others
+      case 'bigPair':
+      case 'bigSolo': {
+        // A datum big, unit and all (stretched upwards in its stretched looks), and the others
         // small under it, spread across its width: the first at its start, the last at its end.
         const sizes = SIZES.big[block.layout];
         const [first, ...rest] = metrics;
         const main = capitals(
-          [
-            {
-              text: plainMetricText(activity, first, textContext),
-              size: sizes.value,
-              bold: style.bold,
-            },
-          ],
+          [{ text: plain(first), size: sizes.value, bold: style.bold }],
           sizes.value,
           sizes.value * BIG.below,
           sizes.stretch,
         );
-        if (rest.length === 0) {
-          return main;
-        }
         const under = (size: number) =>
           rest.map((metric) =>
-            capitals(
-              [{ text: plainMetricText(activity, metric, textContext), size, bold: style.bold }],
-              size,
-              size * BIG.below,
-            ),
+            capitals([{ text: plain(metric), size, bold: style.bold }], size, size * BIG.below),
           );
         // Smaller when they don't fit under it (a short time over three long data).
         const room = (data: readonly Box[], size: number) =>
@@ -1351,7 +1528,266 @@ export function prepareActivityBlock(
         const fits = room(wanted, sizes.data) <= main.width;
         const size = fits ? sizes.data : (sizes.data * main.width) / room(wanted, sizes.data);
         const data = fits ? wanted : under(size);
-        return column([main, justified(data, main.width, size * BIG.minGap)], 0, 'start');
+        const stack =
+          data.length === 0
+            ? main
+            : column([main, justified(data, main.width, size * BIG.minGap)], 0, 'start');
+        if (block.layout === 'day' || block.layout === 'stretchedDay') {
+          // The weekday as wide as the big datum, written at the size that makes it so. Not
+          // stretched with it: an accent stretched upwards would float off its letter.
+          const day = line(
+            weekdayName,
+            sizeFor(weekdayName, main.width),
+            sizes.value * BIG_HEADER.dayGap,
+          );
+          return column([day, stack], 0, 'start');
+        }
+        if (block.layout === 'smallDay') {
+          // The weekday small and centered over it.
+          const day = line(
+            weekdayName,
+            sizes.value * BIG_HEADER.smallDay,
+            sizes.value * BIG_HEADER.smallDayGap,
+          );
+          return column([day, stack], 0, 'center');
+        }
+        if (block.layout === 'route' && activity.routePolyline !== null) {
+          // The route over it, centered, a little narrower than the big datum.
+          const route = routeBox(
+            activity.routePolyline,
+            main.width * BIG_HEADER.routeWidth,
+            main.width * BIG_HEADER.routeHeight,
+          );
+          return route === null
+            ? stack
+            : column([route, stack], sizes.value * BIG_HEADER.routeGap, 'center');
+        }
+        return stack;
+      }
+      case 'dayRoute': {
+        // The weekday and the big datum as wide as each other, the route between them.
+        const sizes = SIZES.dayRoute;
+        const main = capitals(
+          [{ text: plain(metrics[0]), size: sizes.value, bold: style.bold }],
+          sizes.value,
+          0,
+        );
+        const day = line(weekdayName, sizeFor(weekdayName, main.width), 0);
+        const route =
+          activity.routePolyline === null
+            ? null
+            : routeBox(
+                activity.routePolyline,
+                main.width * BIG_HEADER.routeWidth,
+                main.width * BIG_HEADER.routeHeight,
+              );
+        return column(
+          route === null ? [day, main] : [day, route, main],
+          sizes.value * sizes.gap,
+          'center',
+        );
+      }
+      case 'dayBetween': {
+        // The short weekday between its data, half on each side, one under another: one level
+        // band, the weekday's capitals as tall as two lines of data and the room between them.
+        // With a datum on each side, it keeps that size, squashed to their one line.
+        const sizes = SIZES.dayBetween;
+        const cells = metrics.map((metric) => line(plain(metric), sizes.data, 0));
+        const half = Math.ceil(cells.length / 2);
+        const side = (boxes: readonly Box[]) => column(boxes, sizes.data * sizes.rowGap, 'start');
+        const left = side(cells.slice(0, half));
+        const capital = CAP_HEIGHTS[style.font] * (STRETCHED_FONTS[style.font] ?? 1);
+        const twoLines = sizes.data * (2 * capital + sizes.rowGap);
+        const weekdaySize = twoLines / capital;
+        const day = line(shortWeekdayName, weekdaySize, 0, left.height / twoLines);
+        // Their baselines lined up at the bottom: an accent rises over the band, not under it.
+        return row([left, day, side(cells.slice(half))], sizes.data * sizes.sideGap, 'end');
+      }
+      case 'dayOver': {
+        // The weekday wide, and under it, as wide, the sport and start time, then the data, in
+        // columns of two lines.
+        const sizes = SIZES.dayOver[block.layout];
+        const day = line(weekdayName, sizes.weekday, sizes.weekday * DATE.headGap);
+        const texts = metrics.map(plain);
+        const columns: string[][] = [[sportWord, startTime]];
+        for (let i = 0; i < texts.length; i += 2) {
+          columns.push(texts.slice(i, i + 2));
+        }
+        return column([day, fitted(columns, sizes.data, day.width)], 0, 'start');
+      }
+      case 'dayColumns': {
+        // The date on the left, the data on the right, a line each.
+        const sizes = SIZES.dayColumns;
+        const date = formatActivityDate(activity.startLocal, textContext.locale, 'short');
+        const left = [
+          weekdayName,
+          date,
+          startTime,
+          ...(block.layout === 'four' ? [sportWord] : []),
+        ];
+        const lines = (texts: readonly string[]) =>
+          texts.map((text) => line(text, sizes.text, sizes.text * DATE.lineGap));
+        const lefts = lines(left);
+        // With more text around them, a pace keeps its unit and a time is written in units.
+        const rights = lines(
+          metrics.map((metric) => plainMetricText(activity, metric, compactContext, 'words')),
+        );
+        const width =
+          Math.max(...lefts.map((box) => box.width)) +
+          Math.max(...rights.map((box) => box.width)) +
+          sizes.text * sizes.gap;
+        return column(
+          lefts.map((box, i) => spread(box, rights[i], width)),
+          0,
+          'start',
+        );
+      }
+      case 'dataStack': {
+        // The data big, one under another, over the short weekday and start time.
+        const sizes = SIZES.dataStack;
+        const data = column(
+          metrics.map((metric) => line(plain(metric), sizes.value, sizes.value * DATE.stackGap)),
+          0,
+          'center',
+        );
+        const footer = line(
+          translate('widgets.dayAndTime', { day: shortWeekdayName, time: startTime }),
+          sizes.value * sizes.footer,
+          0,
+        );
+        return column([data, footer], sizes.value * DATE.stackGap, 'center');
+      }
+      case 'tower': {
+        // The big datum's amount, its unit and the sport's word, one under another, tall and
+        // narrow; the other two small beside the word, on their side, read upwards from its foot
+        // and as long as it is tall.
+        const sizes = SIZES.tower;
+        const [first, ...rest] = metrics;
+        const letters =
+          sizes.value *
+          CAP_HEIGHTS[style.font] *
+          (STRETCHED_FONTS[style.font] ?? 1) *
+          sizes.stretch;
+        const big = (text: string, size: number, below: number) =>
+          line(text, size, below, (sizes.stretch * sizes.value) / size);
+        // Short, to stay narrow: a distance to its hundreds of meters (or tenths of a mile).
+        const { amount, unit } = plainMetricParts(activity, first, textContext, 1);
+        const over = [amount, ...(unit === null ? [] : [textContext.unitLabel(unit)])].map((text) =>
+          big(text, sizes.value, letters * sizes.gap),
+        );
+        // A long word is squeezed, up to a point, to the width of the lines over it: written
+        // smaller and drawn taller, its capitals as tall as theirs.
+        const word = translate(`widgets.tower.sports.${activity.sportModality}`);
+        const natural = big(word, sizes.value, 0).width;
+        const widest = Math.max(...over.map((box) => box.width));
+        const squeeze = Math.min(1, Math.max(sizes.squeeze, widest / natural));
+        const sport = big(word, sizes.value * squeeze, 0);
+        const caption: BlockStyle = { ...style, font: TOWER_SIDE_FONT, bold: false };
+        const captions = rest.map((metric) =>
+          plainMetricText(activity, metric, compactContext, 'tight'),
+        );
+        const captionCap = CAP_HEIGHTS[TOWER_SIDE_FONT];
+        const longest = Math.max(
+          ...captions.map(
+            (text) =>
+              textBox(paragraph([{ text, size: FIT_SIZE, bold: false }], fonts, caption)).width,
+          ),
+        );
+        const size = Math.min((FIT_SIZE * letters) / longest, sizes.value * sizes.sideMax);
+        const lines = captions.map((text) =>
+          capitals([{ text, size, bold: false }], size, size * BIG.below, 1, caption, {
+            turned: true,
+          }),
+        );
+        const data = turned(column(lines, size * captionCap * sizes.sideGap, 'start'));
+        return column(
+          [...over, row([sport, data], size * captionCap * sizes.sideGap, 'end')],
+          0,
+          'start',
+        );
+      }
+      case 'dataLine': {
+        // The data in a line, briefly: a time without its seconds.
+        const sizes = SIZES.dataLine;
+        return row(
+          metrics.map((metric) =>
+            line(plainMetricText(activity, metric, compactContext, 'brief'), sizes.text, 0),
+          ),
+          sizes.text * sizes.gap,
+          'end',
+        );
+      }
+      case 'card': {
+        // The data with their short names over them, three a row, on a see-through card with
+        // square corners, under the activity's name in its two looks with one.
+        const sizes = SIZES.card;
+        const unshaded = (runs: readonly Run[], look: TextLook = {}) =>
+          textBox(paragraph(runs, fonts, style, { shadow: false, ...look }));
+        const cells = metrics.map((metric) =>
+          column(
+            [
+              unshaded([
+                {
+                  text: translate(`widgets.cardLabels.${metric}`),
+                  size: sizes.label,
+                  bold: false,
+                  faded: true,
+                },
+              ]),
+              unshaded([
+                {
+                  text: plainMetricText(activity, metric, compactContext, 'words'),
+                  size: sizes.value,
+                  bold: style.bold,
+                },
+              ]),
+            ],
+            sizes.label * sizes.labelGap,
+            'start',
+          ),
+        );
+        const rows: Box[][] = [];
+        for (let i = 0; i < cells.length; i += CARD_COLUMNS) {
+          rows.push(cells.slice(i, i + CARD_COLUMNS));
+        }
+        const widths = columnWidths(rows);
+        const rowHeight = Math.max(...cells.map((cell) => cell.height));
+        const grid = column(
+          rows.map((cellsOfRow) => tableRow(cellsOfRow, widths, sizes.columnGap, 0, rowHeight)),
+          sizes.value * sizes.rowGap,
+          'start',
+        );
+        const named = block.layout === 'nameThree' || block.layout === 'nameSix';
+        const name = activity.name.trim();
+        const content = named
+          ? column(
+              [
+                unshaded(
+                  [
+                    {
+                      text: name === '' ? sportWord : name,
+                      size: sizes.title,
+                      bold: true,
+                    },
+                  ],
+                  { maxWidth: grid.width },
+                ),
+                grid,
+              ],
+              sizes.value * sizes.titleGap,
+              'start',
+            )
+          : grid;
+        return overlay(
+          fillBox(
+            content.width + 2 * sizes.padX,
+            content.height + 2 * sizes.padY,
+            0,
+            softBackdrop(style.color),
+            {},
+          ),
+          content,
+        );
       }
       case 'notes': {
         // The splits as a note of the iPhone's Notes, in its font and colors.
@@ -1689,6 +2125,7 @@ export function prepareActivityBlock(
           translate(speed === 'speed' ? 'widgets.laps.speed' : 'widgets.laps.pace'),
         ];
         if (block.layout === 'board') {
+          // A board's dot matrix for its numbers.
           const board = LAPS.board;
           const { colors } = board;
           // "6:07/km", as AURA writes a pace; a swimmer's pace and a speed with their unit.
@@ -1704,7 +2141,7 @@ export function prepareActivityBlock(
                 { text: unitText, size: board.value * board.unit, bold: false },
               ],
               colors.ink,
-              { font: 'unbounded' },
+              { font: 'doto' },
             );
           const names = columnNames.map((name) =>
             appText(
@@ -1719,7 +2156,7 @@ export function prepareActivityBlock(
             appText(
               [{ text: written.number.padStart(2, '0'), size: board.number, bold: false }],
               colors.faded,
-              { font: 'unbounded' },
+              { font: 'doto' },
             ),
             value(written.distance, unit),
             value(written.time, ''),
@@ -2269,7 +2706,7 @@ export function prepareActivityBlock(
         return messageBubble(column([said, line], CHAT.meta * 0.2, 'start'), colors.bubble);
       }
       case 'sentence': {
-        // The activity as a sentence on paper, its data highlighted.
+        // The activity as a sentence typed on paper, its data highlighted.
         const place = data.place === null ? null : formatPlace(data.place, 'cityRegion');
         const plan = sentencePlan(activity, place !== null);
         if (plan === null) {
@@ -2331,13 +2768,13 @@ export function prepareActivityBlock(
           parts.map((part) => ({ text: part.text, size: sizes.text, bold: false })),
           fonts,
           {
-            font: 'playfairDisplay',
+            font: 'spaceMono',
             color: colors.ink,
             bold: false,
             uppercase: false,
             italic: false,
           },
-          { shadow: false, wrapWidth: sizes.wrap, wrapStart: true, lining: true },
+          { shadow: false, wrapWidth: sizes.wrap, wrapStart: true },
         );
         // Where each datum lies in the laid out text: a band per line it is on, from its first
         // letter to its last, as tall on every line whatever its letters (around the line's
@@ -3254,22 +3691,45 @@ function BlockArt({
           return null;
         }
         const width = Math.ceil(piece.paragraph.getLongestLine()) + 1;
-        if (piece.stretch !== undefined) {
-          return (
+        const text =
+          piece.stretch !== undefined ? (
+            // The shadow's layer is outside the stretch, so the shadow is cast once stretched.
             <Group
               key={i}
-              transform={[
-                { translateX: piece.x },
-                { translateY: piece.y },
-                { scaleY: piece.stretch },
-              ]}
+              layer={
+                piece.shadow === true ? (
+                  <Paint>
+                    <DropShadow />
+                  </Paint>
+                ) : undefined
+              }
             >
-              <Paragraph paragraph={piece.paragraph} x={0} y={0} width={width} />
+              <Group
+                transform={[
+                  { translateX: piece.x },
+                  { translateY: piece.y },
+                  { scaleY: piece.stretch },
+                ]}
+              >
+                <Paragraph paragraph={piece.paragraph} x={0} y={0} width={width} />
+              </Group>
             </Group>
+          ) : (
+            <Paragraph key={i} paragraph={piece.paragraph} x={piece.x} y={piece.y} width={width} />
           );
-        }
-        return (
-          <Paragraph key={i} paragraph={piece.paragraph} x={piece.x} y={piece.y} width={width} />
+        return piece.turn === undefined ? (
+          text
+        ) : (
+          <Group
+            key={i}
+            transform={[
+              { translateX: piece.turn.x },
+              { translateY: piece.turn.y + piece.turn.length },
+              { rotate: -Math.PI / 2 },
+            ]}
+          >
+            {text}
+          </Group>
         );
       })}
     </Group>

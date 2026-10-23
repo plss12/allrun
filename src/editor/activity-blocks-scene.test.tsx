@@ -120,6 +120,10 @@ const BLOCK_FONTS: readonly FontId[] = [
   'bowlbyOneSC',
   'playfairDisplay',
   'spaceMono',
+  'orbitron',
+  'graduate',
+  'doto',
+  'permanentMarker',
 ];
 
 const RUN = makeActivity({ sportType: 'Run', distanceMeters: 42_195, movingTimeSeconds: 12_345 });
@@ -225,4 +229,78 @@ describe('the camera', () => {
     },
     60_000,
   );
+});
+
+describe('a data widget in small letters', () => {
+  it.each(['tower', 'dataStack'] as const)(
+    'cuts the lines of the %s to their letters, as close as in capitals, and within its size',
+    async (design) => {
+      const block = design === 'tower' ? { design } : { design, layout: 'three' as const };
+      const prepared = (uppercase: boolean) => {
+        const layer = newLayer({ kind: 'activityBlock', block }, design, 'story');
+        if (layer.kind !== 'activityBlock') {
+          throw new Error('Expected a mixed widget');
+        }
+        const [widget] = scene.prepareLayers(
+          {
+            version: 1,
+            id: design,
+            mode: 'activity',
+            format: 'story',
+            layers: [{ ...layer, style: { ...layer.style, uppercase } }],
+          },
+          {
+            data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },
+            fonts: loadTestFonts(BLOCK_FONTS),
+            textContext: {
+              unit: 'km',
+              locale: 'es',
+              durationUnits: TEST_DURATION_UNITS,
+              unitLabel: testUnitLabel,
+            },
+            translate,
+          },
+        );
+        return widget;
+      };
+      const capitals = prepared(true);
+      const small = prepared(false);
+      // Small letters rise a little over capitals and go under the baseline: a little taller,
+      // never their font's whole line, stretched.
+      expect(small.height).toBeLessThan(capitals.height * 1.15);
+      expect(await alphaOutside(small)).toBeLessThanOrEqual(DRAWN_ALPHA);
+    },
+    60_000,
+  );
+});
+
+describe('a wrapped text', () => {
+  it('never breaks inside a word, even one wider than its lines may be', () => {
+    const chat = (own: string) => {
+      const layer = newLayer(
+        { kind: 'activityBlock', block: { design: 'chat', layout: 'dark', phrase: { own } } },
+        'chat',
+        'story',
+      );
+      const [prepared] = scene.prepareLayers(
+        { version: 1, id: 'chat', mode: 'activity', format: 'story', layers: [layer] },
+        {
+          data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },
+          fonts: loadTestFonts(['inter']),
+          textContext: {
+            unit: 'km',
+            locale: 'es',
+            durationUnits: TEST_DURATION_UNITS,
+            unitLabel: testUnitLabel,
+          },
+          translate,
+        },
+      );
+      return prepared;
+    };
+    // One word, longer than a message's lines: one line, as tall as a short message.
+    const long = chat('Supercalifragilisticoespialidoso');
+    expect(long.height).toBe(chat('Hola').height);
+    expect(long.width).toBeGreaterThan(chat('Hola').width);
+  });
 });

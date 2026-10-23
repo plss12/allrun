@@ -1,0 +1,29 @@
+import { CAP_HEIGHTS, lettersExtent } from './fonts';
+
+// Only the measures are tested: the font loading hooks need the native modules.
+jest.mock('@shopify/react-native-skia', () => ({ useFonts: jest.fn() }));
+jest.mock('expo-font', () => ({ useFonts: jest.fn() }));
+
+describe('lettersExtent', () => {
+  it('rises to the capitals in capitals and figures, with nothing under the baseline', () => {
+    expect(lettersExtent('11.34 KM', 'inter')).toEqual({ top: CAP_HEIGHTS.inter, descent: 0 });
+  });
+
+  it('rises to the ascenders with small letters, and to their marks with accents or dots', () => {
+    const km = lettersExtent('11.34 km', 'inter').top ?? 0;
+    const marked = lettersExtent('Mié', 'inter').top ?? 0;
+    expect(km).toBeGreaterThan(CAP_HEIGHTS.inter);
+    expect(marked).toBeGreaterThan(km);
+    expect(lettersExtent('1h 5min', 'inter').top).toBe(marked);
+  });
+
+  it('keeps the line of an accented capital, whose accent rises over the rest', () => {
+    expect(lettersExtent('MIÉRCOLES', 'inter').top).toBeNull();
+  });
+
+  it('goes under the baseline only with small letters that do, and not in small capitals', () => {
+    expect(lettersExtent('150 ppm', 'inter').descent).toBeGreaterThan(0);
+    expect(lettersExtent('150 PPM', 'inter').descent).toBe(0);
+    expect(lettersExtent('150 ppm', 'bowlbyOneSC').descent).toBe(0);
+  });
+});

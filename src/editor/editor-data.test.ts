@@ -19,6 +19,7 @@ import {
   layerText,
   periodChartHeader,
   MISSING_VALUE,
+  plainMetricParts,
   plainMetricText,
   speedMeasure,
   splitGapText,
@@ -58,10 +59,69 @@ describe('plainMetricText', () => {
     expect(plainMetricText(makeActivity({ sportType: 'Swim' }), 'swimPace', context)).toBe(`0'30"`);
   });
 
+  it('writes a pace with its unit and a time in units, in words, for widgets with more text', () => {
+    const run = makeActivity({
+      distanceMeters: 11_340,
+      movingTimeSeconds: 3085,
+      averageSpeed: 11_340 / 3085,
+    });
+    expect(plainMetricText(run, 'pace', context, 'words')).toBe('4:32 min/km');
+    expect(plainMetricText(run, 'movingTime', context, 'words')).toBe('51min 25seg');
+    expect(plainMetricText(run, 'distance', context, 'words')).toBe('11.34 km');
+  });
+
+  it('writes a time without its seconds, and a pace without its minutes when tight', () => {
+    const run = makeActivity({
+      distanceMeters: 11_340,
+      movingTimeSeconds: 3085,
+      averageSpeed: 11_340 / 3085,
+    });
+    expect(plainMetricText(run, 'pace', context, 'tight')).toBe('4:32/km');
+    expect(plainMetricText(run, 'movingTime', context, 'tight')).toBe('51min');
+    expect(plainMetricText(run, 'distance', context, 'tight')).toBe('11.34 km');
+    // Brief, for a line of data: the pace with its marks.
+    expect(plainMetricText(run, 'pace', context, 'brief')).toBe(`4'32"`);
+    expect(plainMetricText(run, 'movingTime', context, 'brief')).toBe('51min');
+    expect(plainMetricText(run, 'distance', context, 'brief')).toBe('11.34 km');
+  });
+
   it('writes numbers with a decimal point and no thousands separator, in any language', () => {
     const long = makeActivity({ distanceMeters: 11_340, calories: 1250 });
     expect(plainMetricText(long, 'distance', context)).toBe('11.34 km');
     expect(plainMetricText(long, 'calories', context)).toBe('1250 kcal');
+  });
+});
+
+describe('plainMetricParts', () => {
+  it('writes the amount and the unit apart, as plainMetricText does', () => {
+    const run = makeActivity({ distanceMeters: 11_340, calories: 1250 });
+    expect(plainMetricParts(run, 'distance', context)).toEqual({ amount: '11.34', unit: 'km' });
+    expect(plainMetricParts(run, 'calories', context)).toEqual({ amount: '1250', unit: 'kcal' });
+    // A time and a pace carry no unit: a clock, and the marks.
+    expect(plainMetricParts(activity, 'movingTime', context)).toEqual({
+      amount: '50:00',
+      unit: null,
+    });
+    expect(plainMetricParts(activity, 'pace', context)).toEqual({ amount: `5'00"`, unit: null });
+  });
+
+  it('rounds a number to at most the decimals asked for', () => {
+    const run = makeActivity({ distanceMeters: 11_340, calories: 1250 });
+    expect(plainMetricParts(run, 'distance', context, 1)).toEqual({ amount: '11.3', unit: 'km' });
+    expect(plainMetricParts(run, 'calories', context, 1)).toEqual({
+      amount: '1250',
+      unit: 'kcal',
+    });
+    const rounded = makeActivity({ distanceMeters: 11_960 });
+    expect(plainMetricParts(rounded, 'distance', context, 1)).toEqual({
+      amount: '12.0',
+      unit: 'km',
+    });
+  });
+
+  it('writes a dash and no unit for a datum the activity lacks', () => {
+    const gym = makeActivity({ sportType: 'WeightTraining', distanceMeters: 0 });
+    expect(plainMetricParts(gym, 'distance', context)).toEqual({ amount: '—', unit: null });
   });
 });
 
