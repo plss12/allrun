@@ -127,7 +127,9 @@ describe('activityBlocks', () => {
       { design: 'tower' },
       { design: 'dataStack', layout: 'three' },
       { design: 'dataStack', layout: 'two' },
+      { design: 'dataLine', layout: 'namedThree' },
       { design: 'dataLine', layout: 'three' },
+      { design: 'dataLine', layout: 'namedTwo' },
       { design: 'dataLine', layout: 'two' },
       { design: 'card', layout: 'nameThree' },
       { design: 'card', layout: 'nameSix' },
@@ -191,7 +193,9 @@ describe('activityBlocks', () => {
       { design: 'tower' },
       { design: 'dataStack', layout: 'three' },
       { design: 'dataStack', layout: 'two' },
+      { design: 'dataLine', layout: 'namedThree' },
       { design: 'dataLine', layout: 'three' },
+      { design: 'dataLine', layout: 'namedTwo' },
       { design: 'dataLine', layout: 'two' },
       { design: 'card', layout: 'nameThree' },
       { design: 'card', layout: 'three' },
@@ -368,6 +372,8 @@ describe('blockDataCount', () => {
     expect(blockDataCount({ design: 'tower' })).toBe(3);
     expect(blockDataCount({ design: 'dataLine', layout: 'three' })).toBe(3);
     expect(blockDataCount({ design: 'dataLine', layout: 'two' })).toBe(2);
+    expect(blockDataCount({ design: 'dataLine', layout: 'namedThree' })).toBe(3);
+    expect(blockDataCount({ design: 'dataLine', layout: 'namedTwo' })).toBe(2);
     expect(blockDataCount({ design: 'card', layout: 'nameSix' })).toBe(6);
     expect(blockDataCount({ design: 'card', layout: 'three' })).toBe(3);
     // A note lists the splits under the distance.
@@ -490,6 +496,13 @@ describe('isAppReplica and blockLettering', () => {
       font: 'unbounded',
       bold: true,
       ...capitals,
+    });
+    // Named, as Strava writes them: in small letters.
+    expect(blockLettering({ design: 'dataLine', layout: 'namedThree' })).toEqual({
+      font: 'unbounded',
+      bold: true,
+      italic: false,
+      uppercase: false,
     });
     // The card in a typewriter's letters, in small letters as its names and units are written.
     expect(blockLettering({ design: 'card', layout: 'six' })).toEqual({

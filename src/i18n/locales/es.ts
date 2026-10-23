@@ -525,6 +525,8 @@ export const es: Translations = {
       six: 'Seis datos',
       nameThree: 'Nombre y tres datos',
       nameSix: 'Nombre y seis datos',
+      namedThree: 'Tres datos con nombre',
+      namedTwo: 'Dos datos con nombre',
       two: 'Dos datos',
       narrow: 'Estrecho',
       wide: 'Ancho',

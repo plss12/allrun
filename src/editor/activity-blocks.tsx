@@ -868,8 +868,11 @@ const SIZES = {
    * lines' size).
    */
   tower: { value: 150, stretch: 1.9, gap: 0.15, squeeze: 0.6, sideGap: 0.5, sideMax: 0.3 },
-  /** The data in a line, and the room between them, a share of their size. */
-  dataLine: { text: 60, gap: 0.7 },
+  /**
+   * The data in a line, and the room between them, a share of their size; named, the names'
+   * size and the room under them, and the room between data, shares of the data's size too.
+   */
+  dataLine: { text: 60, gap: 0.7, name: 0.5, nameGap: 0.2, namedGap: 1 },
   /**
    * A card's names of data, their values and its title, the room between a name and its value,
    * between rows and under the title (shares of their sizes), between columns and inside it.
@@ -1342,7 +1345,8 @@ export function prepareActivityBlock(
    * `lettersExtent`), so what goes over or under them sits as close as it looks. Over an accented
    * capital ("MIÉRCOLES"), the line keeps its own room above. Drawn `taller` times taller than
    * the font (squashed when less than one), in the block's lettering or in another `lettering`,
-   * laid out with `look`.
+   * laid out with `look`. Texts side by side on one baseline are cut as one, all their letters
+   * in `shared`.
    */
   const capitals = (
     runs: readonly Run[],
@@ -1351,6 +1355,7 @@ export function prepareActivityBlock(
     taller = 1,
     lettering: BlockStyle = style,
     look: TextLook = {},
+    shared?: string,
   ): Box => {
     const stretch = (STRETCHED_FONTS[lettering.font] ?? 1) * taller;
     // A stretched text's own shadow would stretch with it, down past its room: it casts the
@@ -1367,7 +1372,7 @@ export function prepareActivityBlock(
       stretch === 1 ? look : { ...look, shadow: false },
     );
     const baseline = laidOut.getLineMetrics()[0]?.baseline ?? laidOut.getHeight();
-    const written = runs.map((run) => run.text).join('');
+    const written = shared ?? runs.map((run) => run.text).join('');
     const extent = lettersExtent(
       lettering.uppercase ? written.toLocaleUpperCase() : written,
       lettering.font,
@@ -1392,9 +1397,12 @@ export function prepareActivityBlock(
       ],
     };
   };
-  /** `text` on one line at `size` in the block's lettering, cut to its letters (see `capitals`). */
-  const line = (text: string, size: number, below: number, taller = 1): Box =>
-    capitals([{ text, size, bold: style.bold }], size, below, taller);
+  /**
+   * `text` on one line at `size` in the block's lettering, cut to its letters, or to all of
+   * `shared`'s when it sits on one baseline with others (see `capitals`).
+   */
+  const line = (text: string, size: number, below: number, taller = 1, shared?: string): Box =>
+    capitals([{ text, size, bold: style.bold }], size, below, taller, style, {}, shared);
   /** The size `text` is written at to be `width` wide (its width grows with its size). */
   const sizeFor = (text: string, width: number): number =>
     (FIT_SIZE * width) /
@@ -1707,14 +1715,43 @@ export function prepareActivityBlock(
         );
       }
       case 'dataLine': {
-        // The data in a line, briefly: a time without its seconds.
+        // The data in a line, briefly: a time without its seconds. Named, as Strava writes them:
+        // each under its name, aligned to their start, a pace with its unit.
+        // The names, and the data, each on one baseline: cut as one, whatever their letters.
         const sizes = SIZES.dataLine;
+        if (block.layout === 'namedThree' || block.layout === 'namedTwo') {
+          const names = metrics.map((metric) => translate(`metrics.${metric}`));
+          const values = metrics.map((metric) =>
+            plainMetricText(activity, metric, compactContext, 'tight'),
+          );
+          return row(
+            names.map((name, i) =>
+              column(
+                [
+                  line(
+                    name,
+                    sizes.text * sizes.name,
+                    sizes.text * sizes.nameGap,
+                    1,
+                    names.join(' '),
+                  ),
+                  line(values[i], sizes.text, 0, 1, values.join(' ')),
+                ],
+                0,
+                'start',
+              ),
+            ),
+            sizes.text * sizes.namedGap,
+            'start',
+          );
+        }
+        const values = metrics.map((metric) =>
+          plainMetricText(activity, metric, compactContext, 'brief'),
+        );
         return row(
-          metrics.map((metric) =>
-            line(plainMetricText(activity, metric, compactContext, 'brief'), sizes.text, 0),
-          ),
+          values.map((value) => line(value, sizes.text, 0, 1, values.join(' '))),
           sizes.text * sizes.gap,
-          'end',
+          'start',
         );
       }
       case 'card': {

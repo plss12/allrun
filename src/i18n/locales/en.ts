@@ -533,6 +533,8 @@ export const en = {
       six: 'Six data',
       nameThree: 'Name and three data',
       nameSix: 'Name and six data',
+      namedThree: 'Three named data',
+      namedTwo: 'Two named data',
       two: 'Two data',
       narrow: 'Narrow',
       wide: 'Wide',

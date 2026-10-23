@@ -85,7 +85,7 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'tower':
       return 3;
     case 'dataLine':
-      return block.layout === 'three' ? 3 : 2;
+      return block.layout === 'three' || block.layout === 'namedThree' ? 3 : 2;
     case 'card':
       return block.layout === 'six' || block.layout === 'nameSix' ? 6 : 3;
     case 'music':
@@ -516,7 +516,10 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
     case 'tower':
       return lettering('bowlbyOneSC', false);
     case 'dataLine':
-      return lettering('unbounded', true);
+      // Named, as Strava writes them: names and units in small letters.
+      return block.layout === 'namedThree' || block.layout === 'namedTwo'
+        ? { ...lettering('unbounded', true), uppercase: false }
+        : lettering('unbounded', true);
     case 'card':
       // A typewriter's letters, in small letters as its names and units are written.
       return { font: 'spaceMono', bold: false, italic: false, uppercase: false };

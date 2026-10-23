@@ -194,7 +194,8 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  *   sport's word one under another, with two data small and turned on their side beside the
  *   sport's word (the pace and time, or else the time and heart rate), to fit a corner of the
  *   photo (see `towerMetrics`);
- * - `dataLine` (data): the three (`three`) or two (`two`) most telling data in a line;
+ * - `dataLine` (data): the three (`three`) or two (`two`) most telling data in a line, with their
+ *   names over them, aligned to their start (`namedThree`, `namedTwo`) or not;
  * - `card` (data): three or six data with their short names, in a row or two, on a square-cornered
  *   see-through card, under the activity's name or not (`three`, `six`, `nameThree`,
  *   `nameSix`);
@@ -281,8 +282,8 @@ export const DAY_OVER_LAYOUTS = ['wide', 'narrow'] as const;
 export const DAY_COLUMNS_LAYOUTS = ['three', 'four'] as const;
 /** How many data are stacked over the day and start time. */
 export const DATA_STACK_LAYOUTS = ['three', 'two'] as const;
-/** How many data go in a line. */
-export const DATA_LINE_LAYOUTS = ['three', 'two'] as const;
+/** How many data go in a line, with their names over them (first in the gallery) or not. */
+export const DATA_LINE_LAYOUTS = ['namedThree', 'three', 'namedTwo', 'two'] as const;
 /** A card's data: three or six, under the activity's name (first in the gallery) or not. */
 export const CARD_LAYOUTS = ['nameThree', 'nameSix', 'three', 'six'] as const;
 /** What a big datum is: the sport's main one (a run's distance) or the time. */

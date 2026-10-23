@@ -79,7 +79,8 @@ comes later.
   sport's word one under another, tall and narrow, with two or three data small and turned on
   their side beside the word (the distance to its tenths, with the pace and time; without a
   distance, the calories, with the time and heart rate; never the elevation, which reads as
-  minutes; times without seconds); the three or two most telling data in a line; and a card of three or six named data, with the activity's name or
+  minutes; times without seconds); the three or two most telling data in a line, first with their
+  names over them as Strava writes them; and a card of three or six named data, with the activity's name or
   not; never a second reading of a measure, since they carry no names. Replicas of other apps (the iPhone's Notes with the splits, a sent chat
   message with the data, and the sport and the activity's time where its time goes, the lock
   screen's player of iOS 26 copied place by place, with the route as its cover (in AllRun's red
