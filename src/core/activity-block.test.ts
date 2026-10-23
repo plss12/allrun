@@ -22,8 +22,8 @@ describe('blockMetrics', () => {
       'pace',
       'movingTime',
       'elevationGain',
-      'maxElevation',
       'averageHeartRate',
+      'calories',
     ]);
     expect(blockMetrics(run, 20).slice(-2)).toEqual(['maxHeartRate', 'elapsedTime']);
   });

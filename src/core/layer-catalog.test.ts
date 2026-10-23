@@ -143,16 +143,16 @@ describe('activityCatalog', () => {
     // Distances keep their two decimals, and times their seconds: nothing is rounded.
     expect(variantKeys(trail, 'data')).toEqual([
       'metric-distance',
-      'metric-elevationGain',
-      'metric-movingTime',
-      'metric-movingTime-units',
-      'metric-maxElevation',
       'metric-pace',
       'metric-pace-marks',
+      'metric-movingTime',
+      'metric-movingTime-units',
+      'metric-elevationGain',
       'metric-averageHeartRate',
-      'metric-maxHeartRate',
-      'metric-averageCadence',
       'metric-calories',
+      'metric-averageCadence',
+      'metric-maxElevation',
+      'metric-maxHeartRate',
       'metric-elapsedTime',
       'metric-elapsedTime-units',
     ]);

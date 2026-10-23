@@ -9,18 +9,24 @@ import {
 } from './metrics';
 
 describe('availableMetrics', () => {
-  it('offers pace, not speed, for road runs, leading with distance, time and pace', () => {
-    const metrics = availableMetrics(makeActivity({ sportType: 'Run' }));
-    expect(metrics.slice(0, 3)).toEqual(['distance', 'movingTime', 'pace']);
-    expect(metrics).not.toContain('speed');
-  });
-
-  it('puts elevation before pace on trails and hikes', () => {
-    for (const sportType of ['TrailRun', 'Hike']) {
-      const metrics = availableMetrics(makeActivity({ sportType }));
-      expect(metrics[1]).toBe('elevationGain');
-      expect(metrics.indexOf('elevationGain')).toBeLessThan(metrics.indexOf('pace'));
+  // Every sport leads with what matters most for it, the same in every widget: the rest follows
+  // in a common tail, and the second readings of a datum (highest, weighted, elapsed) close it.
+  it('orders runs by distance, pace, time, elevation and heart rate', () => {
+    for (const sportType of ['Run', 'TrailRun']) {
+      expect(availableMetrics(makeActivity({ sportType }))).toEqual([
+        'distance',
+        'pace',
+        'movingTime',
+        'elevationGain',
+        'averageHeartRate',
+        'calories',
+        'averageCadence',
+        'maxElevation',
+        'maxHeartRate',
+        'elapsedTime',
+      ]);
     }
+    expect(availableMetrics(makeActivity({ sportType: 'Run' }))).not.toContain('speed');
   });
 
   it('leaves elevation out of treadmill runs even if the source reports some', () => {
@@ -31,25 +37,51 @@ describe('availableMetrics', () => {
     expect(metrics).not.toContain('maxElevation');
   });
 
-  it('leads mountain bike rides with elevation', () => {
-    expect(availableMetrics(makeActivity({ sportType: 'MountainBikeRide' }))[1]).toBe(
+  it('orders rides by distance, speed, time, elevation, power and heart rate', () => {
+    const power = { averagePowerWatts: 210, weightedAveragePowerWatts: 225 };
+    for (const sportType of ['Ride', 'MountainBikeRide', 'GravelRide']) {
+      expect(availableMetrics(makeActivity({ sportType, ...power }))).toEqual([
+        'distance',
+        'speed',
+        'movingTime',
+        'elevationGain',
+        'averagePower',
+        'averageHeartRate',
+        'calories',
+        'averageCadence',
+        'maxElevation',
+        'weightedAveragePower',
+        'maxHeartRate',
+        'elapsedTime',
+      ]);
+    }
+    const indoor = availableMetrics(makeActivity({ sportType: 'VirtualRide', ...power }));
+    expect(indoor.slice(0, 6)).toEqual([
+      'distance',
+      'speed',
+      'movingTime',
       'elevationGain',
-    );
+      'averagePower',
+      'averageHeartRate',
+    ]);
+    expect(indoor).not.toContain('pace');
   });
 
-  it('offers speed and power for rides with a power meter', () => {
-    const metrics = availableMetrics(
-      makeActivity({ sportType: 'Ride', averagePowerWatts: 210, weightedAveragePowerWatts: 225 }),
-    );
-    expect(metrics).toEqual(
-      expect.arrayContaining(['speed', 'averagePower', 'weightedAveragePower']),
-    );
-    expect(metrics).not.toContain('pace');
+  it('orders walks by distance, time and elevation, with the pace after them', () => {
+    for (const sportType of ['Walk', 'Hike']) {
+      expect(availableMetrics(makeActivity({ sportType })).slice(0, 5)).toEqual([
+        'distance',
+        'movingTime',
+        'elevationGain',
+        'pace',
+        'averageHeartRate',
+      ]);
+    }
   });
 
-  it('offers pace per 100 m for swims', () => {
+  it('orders swims by distance, pace per 100 m, time and heart rate', () => {
     const metrics = availableMetrics(makeActivity({ sportType: 'Swim', routePolyline: null }));
-    expect(metrics).toContain('swimPace');
+    expect(metrics.slice(0, 4)).toEqual(['distance', 'swimPace', 'movingTime', 'averageHeartRate']);
     expect(metrics).not.toContain('pace');
   });
 
@@ -72,25 +104,32 @@ describe('availableMetrics', () => {
     routePolyline: null,
   };
 
-  it('shows time and effort for a training session', () => {
+  it('orders a training session by time, heart rate and calories', () => {
     const gym = makeActivity({ sportType: 'WeightTraining', ...withoutDistance });
     expect(availableMetrics(gym)).toEqual([
       'movingTime',
       'averageHeartRate',
-      'maxHeartRate',
       'calories',
+      'maxHeartRate',
       'elapsedTime',
     ]);
   });
 
-  it('shows only what a generic activity has (climbing without distance)', () => {
+  it('shows only what a generic activity has, in the order of a training session', () => {
     const climb = makeActivity({ sportType: 'RockClimbing', ...withoutDistance });
     expect(availableMetrics(climb)).toEqual([
       'movingTime',
-      'elapsedTime',
       'averageHeartRate',
-      'maxHeartRate',
       'calories',
+      'maxHeartRate',
+      'elapsedTime',
+    ]);
+    const kayak = makeActivity({ sportType: 'Kayaking' });
+    expect(availableMetrics(kayak).slice(0, 4)).toEqual([
+      'movingTime',
+      'averageHeartRate',
+      'calories',
+      'distance',
     ]);
   });
 });
@@ -206,7 +245,7 @@ describe('withPaceMarks', () => {
 });
 
 describe('cardMetrics', () => {
-  it('shows the distance, how fast as the sport writes it, and the time', () => {
+  it("shows the first three data of the sport's order", () => {
     expect(cardMetrics(makeActivity({ sportType: 'Run' }))).toEqual([
       'distance',
       'pace',
@@ -214,8 +253,8 @@ describe('cardMetrics', () => {
     ]);
     expect(cardMetrics(makeActivity({ sportType: 'Hike' }))).toEqual([
       'distance',
-      'pace',
       'movingTime',
+      'elevationGain',
     ]);
     expect(cardMetrics(makeActivity({ sportType: 'Ride' }))).toEqual([
       'distance',
@@ -227,18 +266,21 @@ describe('cardMetrics', () => {
       'swimPace',
       'movingTime',
     ]);
+    expect(cardMetrics(makeActivity({ sportType: 'Kayaking' }))).toEqual([
+      'movingTime',
+      'averageHeartRate',
+      'calories',
+    ]);
   });
 
   it('shows the time, heart rate and calories without a distance', () => {
-    const gym = makeActivity({
-      sportType: 'WeightTraining',
+    const run = makeActivity({
+      sportType: 'Run',
       distanceMeters: 0,
       averageSpeed: null,
-      averageHeartRate: 128,
-      maxHeartRate: 160,
-      calories: 300,
+      elevationGainMeters: 40,
     });
-    expect(cardMetrics(gym)).toEqual(['movingTime', 'averageHeartRate', 'calories']);
+    expect(cardMetrics(run)).toEqual(['movingTime', 'averageHeartRate', 'calories']);
   });
 
   it('makes up missing data without repeating the time or the heart rate', () => {
@@ -254,10 +296,11 @@ describe('cardMetrics', () => {
     expect(cardMetrics(climb)).toEqual(['movingTime', 'calories', 'elevationGain']);
   });
 
-  it('leaves out how fast when the activity has no speed', () => {
+  it('makes up how fast with the next datum when the activity has no speed', () => {
     expect(cardMetrics(makeActivity({ sportType: 'Run', averageSpeed: null }))).toEqual([
       'distance',
       'movingTime',
+      'elevationGain',
     ]);
   });
 });

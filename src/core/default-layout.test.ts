@@ -12,7 +12,7 @@ describe('defaultActivityTemplate', () => {
     const metrics = template.layers.flatMap((layer) =>
       layer.kind === 'metric' ? [layer.metric] : [],
     );
-    expect(metrics).toEqual(['distance', 'elevationGain', 'movingTime']);
+    expect(metrics).toEqual(['distance', 'pace', 'movingTime']);
   });
 
   it('skips the route for activities without GPS', () => {

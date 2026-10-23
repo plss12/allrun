@@ -19,128 +19,139 @@ export type MetricId =
   | 'averageCadence'
   | 'calories';
 
-const HEART_RATE: readonly MetricId[] = ['averageHeartRate', 'maxHeartRate'];
-const POWER: readonly MetricId[] = ['averagePower', 'weightedAveragePower'];
+/** Every outdoor ride, on the road, on a mountain bike or on gravel. */
+const RIDE: readonly MetricId[] = [
+  'distance',
+  'speed',
+  'movingTime',
+  'elevationGain',
+  'averagePower',
+  'averageHeartRate',
+  'calories',
+  'averageCadence',
+  'maxElevation',
+  'weightedAveragePower',
+  'maxHeartRate',
+  'elapsedTime',
+];
 
 /**
- * Metrics offered for each modality, in the order the editor lists them.
+ * Metrics offered for each modality, in the order every widget writes them (most important
+ * first, by the sport's family):
  *
- * Each modality leads with what matters for it: pace on the road, elevation on trails and hikes,
- * speed and power on the bike, pace per 100 m in the pool. Indoor modalities skip what they
- * can't measure. `other` is the generic profile and only shows what the activity has.
+ * - runs: distance, pace, time, elevation, average heart rate;
+ * - rides: distance, speed, time, elevation, power, average heart rate;
+ * - walks: distance, time, elevation, then their pace (sources don't report steps);
+ * - swims: distance, pace per 100 m, time, average heart rate;
+ * - training and any other sport: time, average heart rate, calories, then what else it has.
+ *
+ * After them come calories, cadence and the highest altitude, and last the second readings of a
+ * datum already shown (weighted power, highest heart rate, elapsed time). Indoor modalities skip
+ * what they can't measure. `other` is the generic profile and only shows what the activity has.
  */
 const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
   roadRun: [
     'distance',
-    'movingTime',
     'pace',
+    'movingTime',
     'elevationGain',
-    'maxElevation',
-    ...HEART_RATE,
-    'averageCadence',
+    'averageHeartRate',
     'calories',
+    'averageCadence',
+    'maxElevation',
+    'maxHeartRate',
     'elapsedTime',
   ],
   trailRun: [
     'distance',
-    'elevationGain',
-    'movingTime',
-    'maxElevation',
     'pace',
-    ...HEART_RATE,
-    'averageCadence',
+    'movingTime',
+    'elevationGain',
+    'averageHeartRate',
     'calories',
+    'averageCadence',
+    'maxElevation',
+    'maxHeartRate',
     'elapsedTime',
   ],
-  treadmillRun: ['distance', 'movingTime', 'pace', ...HEART_RATE, 'averageCadence', 'calories'],
+  treadmillRun: [
+    'distance',
+    'pace',
+    'movingTime',
+    'averageHeartRate',
+    'calories',
+    'averageCadence',
+    'maxHeartRate',
+  ],
   walk: [
     'distance',
     'movingTime',
-    'pace',
     'elevationGain',
-    ...HEART_RATE,
+    'pace',
+    'averageHeartRate',
     'calories',
+    'maxHeartRate',
     'elapsedTime',
   ],
   hike: [
     'distance',
-    'elevationGain',
-    'maxElevation',
     'movingTime',
-    'elapsedTime',
+    'elevationGain',
     'pace',
-    ...HEART_RATE,
+    'averageHeartRate',
     'calories',
-  ],
-  roadRide: [
-    'distance',
-    'movingTime',
-    'speed',
-    'elevationGain',
-    ...POWER,
-    ...HEART_RATE,
-    'averageCadence',
     'maxElevation',
-    'calories',
+    'maxHeartRate',
     'elapsedTime',
   ],
-  mountainBikeRide: [
-    'distance',
-    'elevationGain',
-    'movingTime',
-    'maxElevation',
-    'speed',
-    ...HEART_RATE,
-    ...POWER,
-    'averageCadence',
-    'calories',
-    'elapsedTime',
-  ],
-  gravelRide: [
-    'distance',
-    'movingTime',
-    'speed',
-    'elevationGain',
-    'maxElevation',
-    ...POWER,
-    ...HEART_RATE,
-    'averageCadence',
-    'calories',
-    'elapsedTime',
-  ],
+  roadRide: RIDE,
+  mountainBikeRide: RIDE,
+  gravelRide: RIDE,
   eBikeRide: [
     'distance',
-    'movingTime',
     'speed',
+    'movingTime',
     'elevationGain',
-    'maxElevation',
-    ...HEART_RATE,
+    'averageHeartRate',
     'calories',
+    'maxElevation',
+    'maxHeartRate',
     'elapsedTime',
   ],
   // Virtual platforms (Zwift and similar) simulate elevation, so it stays.
   indoorRide: [
-    'movingTime',
     'distance',
     'speed',
-    ...POWER,
+    'movingTime',
     'elevationGain',
-    ...HEART_RATE,
-    'averageCadence',
+    'averagePower',
+    'averageHeartRate',
     'calories',
+    'averageCadence',
+    'weightedAveragePower',
+    'maxHeartRate',
   ],
-  swim: ['distance', 'movingTime', 'swimPace', ...HEART_RATE, 'calories', 'elapsedTime'],
+  swim: [
+    'distance',
+    'swimPace',
+    'movingTime',
+    'averageHeartRate',
+    'calories',
+    'maxHeartRate',
+    'elapsedTime',
+  ],
   // Sessions measured in time and effort; a cardio machine's distance is rarely real.
-  workout: ['movingTime', ...HEART_RATE, 'calories', 'elapsedTime'],
+  workout: ['movingTime', 'averageHeartRate', 'calories', 'maxHeartRate', 'elapsedTime'],
   other: [
     'movingTime',
-    'elapsedTime',
+    'averageHeartRate',
+    'calories',
     'distance',
     'speed',
     'elevationGain',
-    ...HEART_RATE,
     'averagePower',
-    'calories',
+    'maxHeartRate',
+    'elapsedTime',
   ],
 };
 
@@ -193,32 +204,23 @@ export function availableMetrics(activity: Activity): MetricId[] {
   });
 }
 
-/** Metrics that say how fast an activity went, as its sport writes it. */
-const SPEED_METRICS: readonly MetricId[] = ['pace', 'swimPace', 'speed'];
 /** What a card says of an activity without distance: how long, how hard and how much it burnt. */
 const EFFORT_METRICS: readonly MetricId[] = ['movingTime', 'averageHeartRate', 'calories'];
 /** Second readings of a datum a card already shows, which would only repeat it. */
 const REPEATED_METRICS: readonly MetricId[] = ['elapsedTime', 'maxHeartRate'];
 
 /**
- * The three data an activity's card shows: its distance, how fast it went and its time when it
- * has a distance; otherwise its time, average heart rate and calories, the missing ones made up
- * with other data of its sport that don't repeat these. Time and space O(1).
+ * The three data an activity's card shows: the first three of its sport's order when it has a
+ * distance (see `PROFILES`); otherwise its time, average heart rate and calories, the missing
+ * ones made up with other data of its sport that don't repeat these. Time and space O(1).
  */
 export function cardMetrics(activity: Activity): MetricId[] {
   const available = availableMetrics(activity);
-  if (!available.includes('distance')) {
-    const others = available.filter(
-      (metric) => !EFFORT_METRICS.includes(metric) && !REPEATED_METRICS.includes(metric),
-    );
-    return [...EFFORT_METRICS.filter((metric) => available.includes(metric)), ...others].slice(
-      0,
-      3,
-    );
-  }
-  const speed = available.find((metric) => SPEED_METRICS.includes(metric));
-  const shown: MetricId[] = ['distance', ...(speed === undefined ? [] : [speed]), 'movingTime'];
-  return shown.filter((metric) => available.includes(metric));
+  const first = available.includes('distance') ? [] : EFFORT_METRICS;
+  const others = available.filter(
+    (metric) => !first.includes(metric) && !REPEATED_METRICS.includes(metric),
+  );
+  return [...first.filter((metric) => available.includes(metric)), ...others].slice(0, 3);
 }
 
 /**
