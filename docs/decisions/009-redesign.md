@@ -197,6 +197,12 @@ comes later.
 - **Stickers**: a gallery of mixed widgets ready to copy (tap) or save (long press), as PNGs cut
   to the widget, not a whole transparent canvas, with a button to change their font and color.
 - **Sharing**: Story (straight to an Instagram story), Copy, Save and Share.
+- **Filters on the photo**, changed by swiping sideways over it, as on Instagram: Zoom Blur, Motion
+  Blur, Portra, Mono and Ink. Drawn with Skia (color matrices for the looks, runtime shaders for
+  the blurs), so the exported image is the same as the canvas.
+- **Images from the gallery as widgets**, picked from the same in-app grid: a plain image (the
+  image layer of R3), and an instant photo, a white frame around it with handwritten text under
+  it (date and start time, two data; Permanent Marker).
 
 ### Everything visible now
 
@@ -213,7 +219,8 @@ with a migration from version 1 (R3 and R4).
 
 ## Milestones
 
-R1 home · R2 mixed widgets · R3 editor · R4 choosing, designs and stickers. Then milestone 4
+R1 home · R2 mixed widgets · R3 editor · R4 choosing, designs, stickers, the photo's filters and
+the images as widgets. Then milestone 4
 (Strava, Supabase, the map under routes) and 5 (depth, the image sticker's cut-out, Instagram
 Story, Sentry, TestFlight). Video after the MVP.
 
