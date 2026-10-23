@@ -59,6 +59,16 @@ export function formatActivityDate(
 }
 
 /**
+ * The wall-clock time `seconds` after an activity's start, as its start time is written: when it
+ * finished, "10:36" for an hour and five minutes after 9:31.
+ */
+export function formatTimeAfter(startLocal: string, seconds: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { ...DATE_FORMAT_OPTIONS.time, timeZone: 'UTC' }).format(
+    new Date(asUtc(startLocal).getTime() + seconds * 1000),
+  );
+}
+
+/**
  * The weekday of an activity's start, short and without the abbreviation's dot: "Wed", "Mié".
  */
 export function formatShortWeekday(startLocal: string, locale: string): string {

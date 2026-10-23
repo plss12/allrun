@@ -22,6 +22,7 @@ import {
   blockMetrics,
   fastestIndex,
   isAppReplica,
+  sentencePlan,
   sportIcon,
   type SportIconId,
   type TyreCompound,
@@ -29,7 +30,7 @@ import {
 } from '@/core/activity-block';
 import { splitRows } from '@/core/activity-charts';
 import { castsShadow } from '@/core/layer-style';
-import type { MetricId } from '@/core/metrics';
+import { metricValue, type MetricId } from '@/core/metrics';
 import { formatPlace } from '@/core/place';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
@@ -37,7 +38,8 @@ import { type Point, projectRoutes } from '@/core/route-projection';
 import type { HitHole } from '@/core/layer-transform';
 import type { Size } from '@/core/photo-framing';
 import type { FontId, Layer } from '@/core/template';
-import { formatActivityDate, formatShortWeekday } from '@/ui/format';
+import { durationParts } from '@/core/units';
+import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 
 import { PlainWordmark, wordmarkHeight } from './brand/brand-art';
 import {
@@ -132,6 +134,41 @@ type Piece =
       };
     }
   | {
+      /**
+       * A sheet of paper that lifts off the photo with a shadow: a receipt, torn in teeth at its
+       * top and bottom (`receipt`), or a boarding pass, its corners rounded and notched on both
+       * sides where its stub tears off, `cut` down from its top (`pass`).
+       */
+      readonly kind: 'paper';
+      readonly shape: 'receipt' | 'pass';
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+      readonly color: string;
+      readonly cut?: number;
+    }
+  | {
+      /** The grain of a sheet of paper over a rectangle: specks of `color`, the same every time. */
+      readonly kind: 'grain';
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+      readonly color: string;
+    }
+  | {
+      /** A marker's strokes behind words, one rectangle per stretch of a line. */
+      readonly kind: 'highlight';
+      readonly rects: readonly {
+        readonly x: number;
+        readonly y: number;
+        readonly width: number;
+        readonly height: number;
+      }[];
+      readonly color: string;
+    }
+  | {
       /** A replica's thin line in its own color, without a shadow: the camera's grid. */
       readonly kind: 'hairline';
       readonly x1: number;
@@ -202,7 +239,16 @@ type Piece =
 
 /** The controls of the apps a replica recreates. */
 type AppSymbol =
-  'backward' | 'pause' | 'forward' | 'airplay' | 'waveform' | 'flip' | 'pin' | 'stopwatch';
+  | 'backward'
+  | 'pause'
+  | 'forward'
+  | 'airplay'
+  | 'waveform'
+  | 'flip'
+  | 'pin'
+  | 'stopwatch'
+  | 'badge'
+  | 'check';
 
 /** A measured part of a block, which places its pieces with its top-left corner at (x, y). */
 interface Box {
@@ -547,6 +593,64 @@ const hairlineBox = (dx: number, dy: number, width: number, color: string): Box 
   place: (x, y) => [{ kind: 'hairline', x1: x, y1: y, x2: x + dx, y2: y + dy, width, color }],
 });
 
+/** A replica's dashed line `width` long, `dash` long dashes `gap` apart, `thick` thick. */
+function dashedBox(width: number, dash: number, gap: number, thick: number, color: string): Box {
+  const count = Math.max(1, Math.floor((width + gap) / (dash + gap)));
+  // Spread so that the line starts and ends with a whole dash.
+  const step = count === 1 ? 0 : (width - dash) / (count - 1);
+  return placed(
+    width,
+    thick,
+    Array.from({ length: count }, (_, i) => ({
+      box: hairlineBox(dash, 0, thick, color),
+      x: i * step,
+      y: thick / 2,
+    })),
+  );
+}
+
+/**
+ * Pseudo-random numbers in [0, 1) from `seed`, the same for the same seed (a linear congruential
+ * generator, Numerical Recipes' constants): a receipt's barcode and the paper's grain look alike
+ * every time they are drawn.
+ */
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    return state / 2 ** 32;
+  };
+}
+
+/** A number from a text, to seed a barcode: the same text, the same bars. Time O(n). */
+const seedOf = (text: string): number =>
+  [...text].reduce(
+    (hash, char) => Math.imul(hash ^ (char.codePointAt(0) ?? 0), 16_777_619),
+    2_166_136_261,
+  );
+
+/**
+ * A barcode `width` × `height` of `color`: bars and gaps of one to four units, from `seed`, with
+ * a bar at each end.
+ */
+function barcodeBox(width: number, height: number, seed: number, color: string): Box {
+  const random = seededRandom(seed);
+  const unit = width / 120;
+  const bars: { x: number; width: number }[] = [];
+  let x = 0;
+  while (x < width - 4 * unit) {
+    const bar = (1 + Math.floor(random() * 4)) * unit;
+    bars.push({ x, width: bar });
+    x += bar + (1 + Math.floor(random() * 3)) * unit;
+  }
+  bars.push({ x: width - 2 * unit, width: 2 * unit });
+  return placed(
+    width,
+    height,
+    bars.map((bar) => ({ box: fillBox(bar.width, height, 0, color, {}), x: bar.x, y: 0 })),
+  );
+}
+
 const textBox = (paragraph: SkParagraph): Box => ({
   width: Math.ceil(paragraph.getLongestLine()) + 1,
   height: paragraph.getHeight(),
@@ -644,6 +748,10 @@ interface TextLook {
    * Broken into centered lines no longer than this, as even as they can be, instead of one line.
    */
   readonly wrapWidth?: number;
+  /** Lines of a wrapped text aligned to their start instead (a chat message, a sentence). */
+  readonly wrapStart?: boolean;
+  /** Numbers as tall as capitals, in a font whose numbers are old-style (Playfair's). */
+  readonly lining?: boolean;
 }
 
 /**
@@ -654,7 +762,13 @@ function paragraph(
   runs: readonly Run[],
   fonts: SkTypefaceFontProvider,
   style: BlockStyle,
-  { shadow = true, maxWidth = NO_WRAP_WIDTH, wrapWidth }: TextLook = {},
+  {
+    shadow = true,
+    maxWidth = NO_WRAP_WIDTH,
+    wrapWidth,
+    wrapStart = false,
+    lining = false,
+  }: TextLook = {},
 ) {
   const tightening = TIGHT_FONTS[style.font] ?? 0;
   const shadows = shadow ? textShadows(style.color) : [];
@@ -662,7 +776,9 @@ function paragraph(
     const builder = Skia.ParagraphBuilder.Make(
       cut
         ? { textAlign: TextAlign.Left, maxLines: 1, ellipsis: '…' }
-        : { textAlign: wrapWidth === undefined ? TextAlign.Left : TextAlign.Center },
+        : {
+            textAlign: wrapWidth === undefined || wrapStart ? TextAlign.Left : TextAlign.Center,
+          },
       fonts,
     );
     for (const run of runs) {
@@ -686,6 +802,7 @@ function paragraph(
           },
           letterSpacing: run.size * ((run.spacing ?? 0) + tightening),
           shadows,
+          ...(lining ? { fontFeatures: [{ name: 'lnum', value: 1 }] } : {}),
         })
         .addText(style.uppercase ? run.text.toLocaleUpperCase() : run.text)
         .pop();
@@ -778,7 +895,11 @@ const SIZES = {
     inline: { weekday: 140, value: 40 },
   },
   serif: { title: 40, label: 34, value: 80 },
-  quotation: { text: 64, width: 820, source: 36 },
+  /**
+   * A quotation's words: at most `lines` lines no wider than `width`, as big as `text` when they
+   * fit, smaller (down to `minText`) when they don't, so a long verse is wide rather than tall.
+   */
+  quotation: { text: 64, minText: 34, width: 900, lines: 3, source: 36 },
   notes: { bar: 34, icon: 40, title: 74, row: 40 },
   message: { text: 50, meta: 26 },
 } as const;
@@ -1002,6 +1123,132 @@ const LOCATION_COLORS = {
 } as const;
 const LOCATION = { text: 40, pin: 1.15, gap: 14, padX: 30, padY: 18, radius: 24 } as const;
 
+/**
+ * AURA's board of splits: the names of its columns, then a row per split, its number at the top
+ * left of a dark see-through band and a grey bar from the right as long as the split took (between
+ * `shortest` and `longest` of the width), its time at the bar's end; the distance and the time
+ * under it.
+ */
+const SPLIT_BARS = {
+  width: 760,
+  header: 20,
+  number: 20,
+  value: 44,
+  total: 64,
+  rowHeight: 66,
+  rowGap: 4,
+  pad: 14,
+  headerGap: 12,
+  totalGap: 22,
+  shortest: 0.3,
+  longest: 0.85,
+  colors: { band: '#0000008C', bar: '#8E8E93', ink: '#FFFFFF' },
+} as const;
+/** Most splits the board lists one by one; more are grouped, as in the note. */
+const SPLIT_BARS_ROWS = 20;
+
+/**
+ * A ladder of splits: white tags in a typewriter's letters under their title, each wider the
+ * faster it went (up to `stretch` times the narrowest), the fastest in a brand color.
+ */
+const SPLIT_LADDER = {
+  title: 40,
+  text: 34,
+  rowHeight: 58,
+  rowGap: 10,
+  padX: 16,
+  gap: 34,
+  stretch: 2,
+  radius: 5,
+  titleGap: 14,
+  colors: { tag: '#FFFFFF', ink: '#000000', title: '#FFFFFF', chosen: '#FFFFFF' },
+} as const;
+const SPLIT_LADDER_ROWS = 20;
+
+/** Instagram's verified badge after a datum, in its blue, its check white; the text's color. */
+const VERIFIED = {
+  text: 66,
+  badge: 1.0,
+  gap: 0.22,
+  scallops: 8,
+  blue: '#3897F0',
+  check: '#FFFFFF',
+} as const;
+const VERIFIED_COLORS = { dark: '#FFFFFF', light: '#000000' } as const;
+
+/** Sizes of a chat message with a phrase: the phrase, wrapped when long, and the line under it. */
+const CHAT = { text: 50, meta: 26, wrap: 680, metaGap: 40 } as const;
+
+/**
+ * A sentence on a sheet of paper, as AURA's: the paper and its grain, the serif text and the
+ * yellow of the marker over the data, a little wider than the words.
+ */
+const SENTENCE = {
+  text: 58,
+  wrap: 800,
+  padX: 48,
+  padY: 40,
+  colors: { paper: '#EEEBE5', grain: '#00000024', ink: '#151515', marker: '#F5C542' },
+  /**
+   * Its band reaches this far above and below the baseline, and out of the words' ends: into the
+   * space around them, or only a little next to a stop.
+   */
+  marker: { padX: 0.2, tight: 0.04, above: 0.95, below: 0.3 },
+} as const;
+/**
+ * How a marker's stroke strays from a rectangle, as AURA's: its ends straight, its top and bottom
+ * edges leaning together from one end to the other (by up to `tilt` of its height) and slightly
+ * wavy along the way (up to `wave` of its height, a wave every `step` heights), as a stroke drawn
+ * by hand.
+ */
+const MARKER_WOBBLE = { tilt: 0.07, wave: 0.025, step: 0.6 } as const;
+/** Room the paper's grain leaves between its specks, in square pixels per speck. */
+const GRAIN_AREA = 260;
+
+/**
+ * A shop's receipt on thermal paper, in a typewriter's letters: the shop (AllRun), the activity
+ * and its day, a line per datum, the total (the main datum), thanks and a barcode, between dashed
+ * lines; its top and bottom torn in teeth.
+ */
+const RECEIPT = {
+  width: 620,
+  shop: 50,
+  text: 28,
+  total: 36,
+  padX: 40,
+  padY: 46,
+  tooth: 14,
+  gap: 22,
+  dash: { length: 10, gap: 8, thick: 2 },
+  barcode: 86,
+  colors: { paper: '#FBFAF6', ink: '#1C1C1E' },
+} as const;
+
+/**
+ * A boarding pass: the band in a brand color with its title and the sport's icon; from the start
+ * (no distance yet, its time) to the finish (the distance, when it ended), with the sport's icon
+ * on the dashed line between them; the date and the data in a row; and the stub with its barcode,
+ * apart by the notches where it tears off.
+ */
+const BOARDING_PASS = {
+  width: 880,
+  radius: 30,
+  padX: 44,
+  band: 96,
+  title: 28,
+  icon: 46,
+  label: 21,
+  big: 84,
+  time: 30,
+  field: 32,
+  routeIcon: 52,
+  gap: 26,
+  notch: 18,
+  barcode: 92,
+  dash: { length: 14, gap: 10, thick: 3 },
+  colors: { paper: '#FFFFFF', ink: '#141B2D', faded: '#8A8F98', band: '#F6F1EA', rule: '#C9CDD3' },
+} as const;
+
 /** Width of the AllRun name signing a block, and its room above. */
 const LOGO_WIDTH = 190;
 const LOGO_GAP = 40;
@@ -1061,6 +1308,27 @@ export function prepareActivityBlock(
   const written = (metric: MetricId): string => {
     const { value: amount, unit } = metricText(activity, metric, textContext);
     return unit === null ? amount : `${amount} ${textContext.unitLabel(unit)}`;
+  };
+  /**
+   * A datum in words: a time in units ("1h 5min 22s"), a distance with its unit's name, as the
+   * verified badge writes it ("11,34 kilometers") or before a sport's word ("11.34 kilometer
+   * run"); any other datum as written.
+   */
+  const inWords = (metric: MetricId, words: 'verified' | 'sentence'): string => {
+    const seconds =
+      metric === 'movingTime' || metric === 'elapsedTime' ? metricValue(activity, metric) : null;
+    if (seconds !== null) {
+      return durationParts(seconds, 'seconds')
+        .map(({ amount, unit }) => `${amount}${textContext.durationUnits[unit]}`)
+        .join(' ');
+    }
+    const { value, unit } = metricText(activity, metric, textContext);
+    if (unit !== 'km' && unit !== 'mi') {
+      return written(metric);
+    }
+    return words === 'verified'
+      ? translate(`widgets.verified.${unit}`, { value })
+      : translate(`widgets.sentence.units.${unit}`, { value });
   };
   /** A datum at `size`, its unit as big as its value, as AURA writes "11.3 KM". */
   const datum = (metric: MetricId, size: number) =>
@@ -1143,27 +1411,29 @@ export function prepareActivityBlock(
       : textContext.unit === 'mi'
         ? data.detail.splits.imperial
         : data.detail.splits.metric;
-  /** Words in quotation marks, wrapped in even lines, and who said them or where, under them. */
+  /**
+   * Words in quotation marks, wrapped in even lines (at most `SIZES.quotation.lines`, shrunk until
+   * they fit), and who said them or where, under them. Time O(s log w) layouts for the s sizes
+   * tried, each balanced in O(log w).
+   */
   const quotation = (words: string, source: string): Box => {
     const sizes = SIZES.quotation;
+    const laidOut = (size: number) =>
+      paragraph(
+        [{ text: translate('widgets.quoted', { text: words }), size, bold: style.bold }],
+        fonts,
+        style,
+        { wrapWidth: sizes.width },
+      );
+    let size: number = sizes.text;
+    let fitted = laidOut(size);
+    while (fitted.getLineMetrics().length > sizes.lines && size > sizes.minText) {
+      size = Math.max(sizes.minText, size * 0.92);
+      fitted = laidOut(size);
+    }
     return column(
       [
-        wrappedBox(
-          paragraph(
-            [
-              {
-                text: translate('widgets.quoted', { text: words }),
-                size: sizes.text,
-                bold: style.bold,
-              },
-            ],
-            fonts,
-            style,
-            { wrapWidth: sizes.width },
-          ),
-          sizes.text,
-          style.italic,
-        ),
+        wrappedBox(fitted, size, style.italic),
         text([
           { text: source, size: sizes.source, bold: false, faded: true, spacing: LABEL_SPACING },
         ]),
@@ -2043,6 +2313,502 @@ export function prepareActivityBlock(
           colors.bubble,
         );
       }
+      case 'splitBars': {
+        // The splits as AURA's board: a bar per split as long as it took, the totals under it.
+        const rows = splitRows(splits, SPLIT_BARS_ROWS);
+        if (rows.length === 0) {
+          return null;
+        }
+        const sizes = SPLIT_BARS;
+        const { colors } = sizes;
+        const speed = speedMeasure(activity.sportFamily);
+        const wide = (content: string, size: number, bold: boolean, shadow = false) =>
+          appText([{ text: content.toLocaleUpperCase(), size, bold }], colors.ink, {
+            font: 'unbounded',
+            shadow,
+          });
+        const names = spread(
+          wide(translate(`widgets.splitBars.${textContext.unit}`), sizes.header, true, true),
+          wide(
+            translate(speed === 'speed' ? 'widgets.laps.speed' : 'widgets.laps.pace'),
+            sizes.header,
+            true,
+            true,
+          ),
+          sizes.width,
+        );
+        // How long each split took per unit: the slowest gets the longest bar.
+        const times = rows.map((split) => (split.speed > 0 ? 1 / split.speed : 0));
+        const quickest = Math.min(...times);
+        const slowest = Math.max(...times);
+        const share = (time: number) =>
+          slowest === quickest
+            ? (sizes.shortest + sizes.longest) / 2
+            : sizes.shortest +
+              ((sizes.longest - sizes.shortest) * (time - quickest)) / (slowest - quickest);
+        const lines = rows.map((split, i) => {
+          const texts = splitRowTexts(split, speed, textContext);
+          const value = wide(texts.value, sizes.value, false);
+          const number = wide(
+            split.first === split.last ? texts.number.padStart(2, '0') : texts.number,
+            sizes.number,
+            true,
+          );
+          // Never shorter than its time.
+          const bar = Math.max(sizes.width * share(times[i]), value.width + 2 * sizes.pad);
+          return placed(sizes.width, sizes.rowHeight, [
+            { box: fillBox(sizes.width, sizes.rowHeight, 0, colors.band, {}), x: 0, y: 0 },
+            { box: fillBox(bar, sizes.rowHeight, 0, colors.bar, {}), x: sizes.width - bar, y: 0 },
+            { box: number, x: sizes.pad * 0.7, y: sizes.pad * 0.4 },
+            {
+              box: value,
+              x: sizes.width - sizes.pad - value.width,
+              y: (sizes.rowHeight - value.height) / 2,
+            },
+          ]);
+        });
+        const total = (metric: MetricId) =>
+          appText([{ text: written(metric), size: sizes.total, bold: true }], colors.ink, {
+            shadow: true,
+          });
+        return column(
+          [
+            column([names, column(lines, sizes.rowGap, 'start')], sizes.headerGap, 'start'),
+            spread(total('distance'), total('movingTime'), sizes.width),
+          ],
+          sizes.totalGap,
+          'start',
+        );
+      }
+      case 'splitLadder': {
+        // The splits as a ladder of tags, each as wide as it was fast, the fastest in a brand
+        // color.
+        const rows = splitRows(splits, SPLIT_LADDER_ROWS);
+        if (rows.length === 0) {
+          return null;
+        }
+        const sizes = SPLIT_LADDER;
+        const { colors } = sizes;
+        const speed = speedMeasure(activity.sportFamily);
+        const speeds = rows.map((split) => split.speed);
+        const fastest = fastestIndex(speeds);
+        const slowest = Math.min(...speeds);
+        const mono = (content: string, color: string) =>
+          appText([{ text: content, size: sizes.text, bold: false }], color, { font: 'spaceMono' });
+        const cells = rows.map((split, i) => {
+          const texts = splitRowTexts(split, speed, textContext);
+          const ink = i === fastest ? colors.chosen : colors.ink;
+          return { number: mono(texts.number, ink), value: mono(texts.value, ink) };
+        });
+        const narrowest =
+          2 * sizes.padX +
+          Math.max(...cells.map((cell) => cell.number.width)) +
+          sizes.gap +
+          Math.max(...cells.map((cell) => cell.value.width));
+        const tags = cells.map((cell, i) => {
+          const share =
+            speeds[fastest] === slowest ? 1 : (speeds[i] - slowest) / (speeds[fastest] - slowest);
+          const width = narrowest * (1 + (sizes.stretch - 1) * share);
+          const middle = (box: Box) => (sizes.rowHeight - box.height) / 2;
+          return placed(width, sizes.rowHeight, [
+            {
+              box: fillBox(
+                width,
+                sizes.rowHeight,
+                sizes.radius,
+                i === fastest ? BRAND_COVER_COLORS[block.cover] : colors.tag,
+              ),
+              x: 0,
+              y: 0,
+            },
+            { box: cell.number, x: sizes.padX, y: middle(cell.number) },
+            { box: cell.value, x: width - sizes.padX - cell.value.width, y: middle(cell.value) },
+          ]);
+        });
+        const title = appText(
+          [{ text: translate('widgets.splitLadder.title'), size: sizes.title, bold: false }],
+          colors.title,
+          { font: 'spaceMono', shadow: true },
+        );
+        return column([title, column(tags, sizes.rowGap, 'start')], sizes.titleGap, 'start');
+      }
+      case 'verified': {
+        // The main datum in words, verified.
+        const color = VERIFIED_COLORS[block.layout];
+        const badge = VERIFIED.text * VERIFIED.badge;
+        return row(
+          [
+            appText(
+              [{ text: inWords(metrics[0], 'verified'), size: VERIFIED.text, bold: true }],
+              color,
+              {
+                shadow: true,
+              },
+            ),
+            overlay(
+              symbolBox('badge', badge, VERIFIED.blue),
+              symbolBox('check', badge, VERIFIED.check),
+            ),
+          ],
+          VERIFIED.text * VERIFIED.gap,
+          'center',
+        );
+      }
+      case 'chat': {
+        // A phrase as a sent chat message: the second datum where the time goes, the main one by
+        // the read ticks.
+        const colors = MESSAGE_COLORS[block.layout];
+        const said = appText(
+          [
+            {
+              text:
+                typeof block.phrase === 'string'
+                  ? translate(`widgets.phrases.${block.phrase}`)
+                  : block.phrase.own,
+              size: CHAT.text,
+              bold: false,
+            },
+          ],
+          colors.ink,
+          { wrapWidth: CHAT.wrap, wrapStart: true },
+        );
+        const meta = (metric: MetricId) =>
+          appText([{ text: written(metric), size: CHAT.meta, bold: false }], colors.meta);
+        const read = row(
+          [meta(metrics[0]), markBox('ticks', CHAT.meta * 0.8, colors.ticks)],
+          CHAT.meta * 0.3,
+          'center',
+        );
+        const line =
+          metrics.length > 1
+            ? (() => {
+                const other = meta(metrics[1]);
+                return spread(
+                  other,
+                  read,
+                  Math.max(said.width, other.width + CHAT.metaGap + read.width),
+                );
+              })()
+            : widened(read, said.width, 'end');
+        return messageBubble(column([said, line], CHAT.meta * 0.2, 'start'), colors.bubble);
+      }
+      case 'sentence': {
+        // The activity as a sentence on paper, its data highlighted.
+        const place = data.place === null ? null : formatPlace(data.place, 'cityRegion');
+        const plan = sentencePlan(activity, place !== null);
+        if (plan === null) {
+          return null;
+        }
+        const sizes = SENTENCE;
+        const { colors } = sizes;
+        /** A datum as the sentence writes it, in one piece: the marker never breaks a line. */
+        const marked = (content: string) => ({
+          text: content.replace(/ /gu, '\u00A0'),
+          marked: true,
+        });
+        const values: Readonly<Record<string, { text: string; marked: boolean }>> = {
+          // Before a sport's own word, the distance reads as one word with it ("11.34 kilometer
+          // run"); before a sport's name, it is a number of kilometers.
+          distance: marked(
+            inWords('distance', plan.lead.lead === 'distance' ? 'verified' : 'sentence'),
+          ),
+          time: marked(inWords('movingTime', 'sentence')),
+          sport: {
+            text: translate(`modalities.${activity.sportModality}`).toLocaleLowerCase(
+              textContext.locale,
+            ),
+            marked: false,
+          },
+          place: { text: place ?? '', marked: false },
+          ...Object.fromEntries(
+            plan.clauses.flatMap(({ clause, metric }) =>
+              metric === null || clause === 'time' ? [] : [[clause, marked(written(metric))]],
+            ),
+          ),
+        };
+        // Placeholders come back as markers (and as they are where nothing fills them).
+        const holders = Object.fromEntries(
+          Object.keys(values).map((name) => [name, `\uE000${name}\uE001`]),
+        );
+        const parts = [
+          translate(`widgets.sentence.leads.${plan.lead.lead}`, holders),
+          ...plan.clauses.map(({ clause }) =>
+            translate(`widgets.sentence.clauses.${clause}`, holders),
+          ),
+          translate('widgets.sentence.end'),
+        ].flatMap((template) =>
+          template
+            .replace(/\uE000(\w+)\uE001/gu, '{{$1}}')
+            .split(/\{\{(\w+)\}\}/u)
+            .flatMap((part, i) => {
+              if (i % 2 === 0) {
+                return part === '' ? [] : [{ text: part, marked: false }];
+              }
+              const value = values[part];
+              if (value === undefined) {
+                throw new Error(`Nothing to write for {{${part}}} in a sentence`);
+              }
+              return [value];
+            }),
+        );
+        const laidOut = paragraph(
+          parts.map((part) => ({ text: part.text, size: sizes.text, bold: false })),
+          fonts,
+          {
+            font: 'playfairDisplay',
+            color: colors.ink,
+            bold: false,
+            uppercase: false,
+            italic: false,
+          },
+          { shadow: false, wrapWidth: sizes.wrap, wrapStart: true, lining: true },
+        );
+        // Where each datum lies in the laid out text: a band per line it is on, from its first
+        // letter to its last, as tall on every line whatever its letters (around the line's
+        // baseline), as a marker draws it.
+        const lines = laidOut.getLineMetrics();
+        const { marker } = sizes;
+        /** How far the band goes out of a datum's end: into a space, not over a stop. */
+        const reach = (next: string | undefined) =>
+          (next === undefined || /^\s/u.test(next) ? marker.padX : marker.tight) * sizes.text;
+        let index = 0;
+        const rects = parts.flatMap((part, i) => {
+          const start = index;
+          index += part.text.length;
+          if (!part.marked) {
+            return [];
+          }
+          const before = reach(parts[i - 1]?.text.slice(-1));
+          const after = reach(parts[i + 1]?.text);
+          const pieces = laidOut.getRectsForRange(start, index);
+          return lines.flatMap((line) => {
+            const on = pieces.filter(
+              (rect) => rect.y <= line.baseline && line.baseline <= rect.y + rect.height,
+            );
+            if (on.length === 0) {
+              return [];
+            }
+            const left = Math.min(...on.map((rect) => rect.x));
+            const right = Math.max(...on.map((rect) => rect.x + rect.width));
+            return [
+              { x: left - before, baseline: line.baseline, width: right - left + before + after },
+            ];
+          });
+        });
+        const text = textBox(laidOut);
+        const width = text.width + 2 * sizes.padX;
+        const height = text.height + 2 * sizes.padY;
+        return {
+          width,
+          height,
+          place: (x, y) => {
+            const left = x + sizes.padX;
+            const top = y + sizes.padY;
+            return [
+              { kind: 'panel', x, y, width, height, radius: 0, color: colors.paper },
+              { kind: 'grain', x, y, width, height, color: colors.grain },
+              {
+                kind: 'highlight',
+                color: colors.marker,
+                rects: rects.map((rect) => ({
+                  x: left + rect.x,
+                  y: top + rect.baseline - marker.above * sizes.text,
+                  width: rect.width,
+                  height: (marker.above + marker.below) * sizes.text,
+                })),
+              },
+              ...text.place(left, top),
+            ];
+          },
+        };
+      }
+      case 'receipt': {
+        // The data as a shop's receipt: a line each, the main datum as the total.
+        const sizes = RECEIPT;
+        const { colors } = sizes;
+        const inner = sizes.width - 2 * sizes.padX;
+        const mono = (content: string, size: number, bold = false) =>
+          appText([{ text: content, size, bold }], colors.ink, {
+            font: 'spaceMono',
+            maxWidth: inner,
+          });
+        const dashes = () =>
+          dashedBox(inner, sizes.dash.length, sizes.dash.gap, sizes.dash.thick, colors.ink);
+        const name = activity.name.trim();
+        const day = [
+          formatActivityDate(activity.startLocal, textContext.locale, 'numeric'),
+          formatActivityDate(activity.startLocal, textContext.locale, 'time'),
+        ].join('  ');
+        const item = (name: string, value: string, size: number, bold: boolean) =>
+          spread(mono(name.toLocaleUpperCase(), size, bold), mono(value, size, bold), inner);
+        const content = column(
+          [
+            column(
+              [
+                mono('AllRun', sizes.shop, true),
+                ...(name === '' ? [] : [mono(name, sizes.text)]),
+                mono(day, sizes.text),
+              ],
+              sizes.gap * 0.3,
+              'center',
+            ),
+            dashes(),
+            column(
+              metrics.map((metric) =>
+                item(translate(`metrics.${metric}`), written(metric), sizes.text, false),
+              ),
+              sizes.gap * 0.5,
+              'start',
+            ),
+            dashes(),
+            item(translate('widgets.receipt.total'), written(metrics[0]), sizes.total, true),
+            dashes(),
+            mono(translate('widgets.receipt.thanks'), sizes.text),
+            barcodeBox(inner, sizes.barcode, seedOf(activity.id), colors.ink),
+          ],
+          sizes.gap,
+          'center',
+        );
+        const width = content.width + 2 * sizes.padX;
+        const height = content.height + 2 * sizes.padY;
+        return {
+          width,
+          height,
+          place: (x, y) => [
+            { kind: 'paper', shape: 'receipt', x, y, width, height, color: colors.paper },
+            ...content.place(x + sizes.padX, y + sizes.padY),
+          ],
+        };
+      }
+      case 'boardingPass': {
+        // The activity as a flight from its start to its finish.
+        const sizes = BOARDING_PASS;
+        const { colors } = sizes;
+        const cover = BRAND_COVER_COLORS[block.cover];
+        const label = (content: string) =>
+          appText(
+            [{ text: content.toLocaleUpperCase(), size: sizes.label, bold: true, spacing: 0.08 }],
+            colors.faded,
+          );
+        const strong = (content: string, size: number) =>
+          appText([{ text: content, size, bold: true }], colors.ink);
+        /** A value written big, its unit after it, smaller. */
+        const big = (value: string, unit: string | null) =>
+          appText(
+            [
+              { text: value, size: sizes.big, bold: true },
+              ...(unit === null ? [] : [{ text: ` ${unit}`, size: sizes.big * 0.45, bold: true }]),
+            ],
+            colors.ink,
+          );
+        const departure = formatActivityDate(activity.startLocal, textContext.locale, 'time');
+        const arrival = formatTimeAfter(
+          activity.startLocal,
+          activity.elapsedTimeSeconds,
+          textContext.locale,
+        );
+        const distance = metrics.includes('distance')
+          ? metricText(activity, 'distance', textContext)
+          : null;
+        const unit =
+          distance === null || distance.unit === null ? null : textContext.unitLabel(distance.unit);
+        // From no distance at the start to all of it at the finish, under their times; without a
+        // distance, the times alone.
+        const end = (name: LabelKey, value: string, time: string, align: Align) =>
+          column(
+            distance === null
+              ? [label(translate(name)), big(time, null)]
+              : [label(translate(name)), big(value, unit), strong(time, sizes.time)],
+            4,
+            align,
+          );
+        const from = end('widgets.boardingPass.departure', '0', departure, 'start');
+        const to = end('widgets.boardingPass.arrival', distance?.value ?? '', arrival, 'end');
+        const dash = (length: number) =>
+          dashedBox(length, sizes.dash.length, sizes.dash.gap, sizes.dash.thick, colors.rule);
+        const minRoute = sizes.routeIcon * 3;
+        const inner = Math.max(
+          sizes.width - 2 * sizes.padX,
+          from.width + to.width + 2 * sizes.gap + minRoute,
+        );
+        const routeWidth = inner - from.width - to.width - 2 * sizes.gap;
+        const leg = (routeWidth - sizes.routeIcon) / 2 - sizes.gap * 0.4;
+        const trip = placed(inner, Math.max(from.height, to.height), [
+          { box: from, x: 0, y: 0 },
+          centeredAt(
+            row(
+              [dash(leg), iconBox(sportIcon(activity), sizes.routeIcon, colors.ink), dash(leg)],
+              sizes.gap * 0.4,
+              'center',
+            ),
+            from.width + sizes.gap + routeWidth / 2,
+            Math.max(from.height, to.height) / 2,
+          ),
+          { box: to, x: inner - to.width, y: 0 },
+        ]);
+        const fields = justified(
+          [
+            {
+              name: translate('widgets.boardingPass.date'),
+              value: formatActivityDate(activity.startLocal, textContext.locale, 'short'),
+            },
+            ...metrics
+              .filter((metric) => metric !== 'distance')
+              .slice(0, 3)
+              .map((metric) => ({ name: translate(`metrics.${metric}`), value: written(metric) })),
+          ].map((field) =>
+            column([label(field.name), strong(field.value, sizes.field)], 4, 'start'),
+          ),
+          inner,
+          sizes.gap,
+        );
+        const title = appText(
+          [
+            {
+              text: translate('widgets.boardingPass.title').toLocaleUpperCase(),
+              size: sizes.title,
+              bold: true,
+              spacing: 0.12,
+            },
+          ],
+          colors.band,
+        );
+        const width = inner + 2 * sizes.padX;
+        const body = sizes.band + sizes.gap * 1.2;
+        const cut = body + trip.height + sizes.gap * 1.4 + fields.height + sizes.gap * 1.4;
+        const height = cut + sizes.gap * 1.4 + sizes.barcode + sizes.gap * 1.4;
+        const inset = sizes.notch + sizes.gap * 0.4;
+        return {
+          width,
+          height,
+          place: (x, y) => [
+            { kind: 'paper', shape: 'pass', x, y, width, height, color: colors.paper, cut },
+            ...placed(width, height, [
+              // The band, its top corners rounded as the pass's, its bottom ones square.
+              { box: fillBox(width, sizes.band, sizes.radius, cover, {}), x: 0, y: 0 },
+              {
+                box: fillBox(width, sizes.band - sizes.radius, 0, cover, {}),
+                x: 0,
+                y: sizes.radius,
+              },
+              { box: title, x: sizes.padX, y: (sizes.band - title.height) / 2 },
+              {
+                box: iconBox(sportIcon(activity), sizes.icon, colors.band),
+                x: width - sizes.padX - sizes.icon,
+                y: (sizes.band - sizes.icon) / 2,
+              },
+              { box: trip, x: sizes.padX, y: body },
+              { box: fields, x: sizes.padX, y: body + trip.height + sizes.gap * 1.4 },
+              { box: dash(width - 2 * inset), x: inset, y: cut - sizes.dash.thick / 2 },
+              {
+                box: barcodeBox(inner, sizes.barcode, seedOf(activity.id), colors.ink),
+                x: sizes.padX,
+                y: cut + sizes.gap * 1.4,
+              },
+            ]).place(x, y),
+          ],
+        };
+      }
       case 'tall': {
         // The main datum tall, the others small under it, without names.
         const sizes = SIZES.tall[block.layout];
@@ -2191,6 +2957,109 @@ function messageTailPath(x: number, y: number): SkPath {
   builder.lineTo(x, y + MESSAGE_RADIUS * 1.1);
   builder.lineTo(x - MESSAGE_RADIUS, y + MESSAGE_RADIUS * 1.1);
   builder.close();
+  return builder.detach();
+}
+
+/**
+ * The outline of a sheet of paper (see `Piece`): a receipt's, torn in teeth at its top and bottom,
+ * or a boarding pass's, its corners rounded and a round notch on each side at its cut.
+ */
+function paperPath(piece: Extract<Piece, { kind: 'paper' }>): SkPath {
+  const { x, y, width, height } = piece;
+  const builder = Skia.PathBuilder.Make();
+  if (piece.shape === 'receipt') {
+    const teeth = Math.max(1, Math.round(width / (2 * RECEIPT.tooth)));
+    const step = width / teeth;
+    const depth = RECEIPT.tooth * 0.7;
+    builder.moveTo(x, y + depth);
+    for (let i = 0; i < teeth; i++) {
+      builder.lineTo(x + step * (i + 0.5), y);
+      builder.lineTo(x + step * (i + 1), y + depth);
+    }
+    builder.lineTo(x + width, y + height - depth);
+    for (let i = teeth - 1; i >= 0; i--) {
+      builder.lineTo(x + step * (i + 0.5), y + height);
+      builder.lineTo(x + step * i, y + height - depth);
+    }
+    builder.close();
+    return builder.detach();
+  }
+  const r = BOARDING_PASS.radius;
+  const notch = BOARDING_PASS.notch;
+  const cut = y + (piece.cut ?? height / 2);
+  /** A quarter of a circle `r` round (cx, cy), clockwise from `start` degrees. */
+  const corner = (cx: number, cy: number, start: number) =>
+    builder.arcToOval({ x: cx - r, y: cy - r, width: 2 * r, height: 2 * r }, start, 90, false);
+  /** Half a circle into the pass, round (cx, cut), from `start` degrees. */
+  const bite = (cx: number, start: number) =>
+    builder.arcToOval(
+      { x: cx - notch, y: cut - notch, width: 2 * notch, height: 2 * notch },
+      start,
+      -180,
+      false,
+    );
+  builder.moveTo(x + r, y);
+  builder.lineTo(x + width - r, y);
+  corner(x + width - r, y + r, 270);
+  bite(x + width, 270);
+  corner(x + width - r, y + height - r, 0);
+  corner(x + r, y + height - r, 90);
+  bite(x, 90);
+  corner(x + r, y + r, 180);
+  builder.close();
+  return builder.detach();
+}
+
+/**
+ * A marker's strokes over `rects`, drawn by hand (see `MARKER_WOBBLE`): each a band with straight
+ * ends whose top and bottom edges lean together and waver a little, the same every time for the
+ * same place (seeded by it), so the canvas and the exported image match. Time O(w / h) per band.
+ */
+function markerPath(rects: Extract<Piece, { kind: 'highlight' }>['rects']): SkPath {
+  const builder = Skia.PathBuilder.Make();
+  for (const { x, y, width, height } of rects) {
+    const random = seededRandom(Math.round(x) * 7_919 + Math.round(y));
+    // From one end to the other, both edges go this much up (or down), the bottom a bit less.
+    const tilt = (random() * 2 - 1) * MARKER_WOBBLE.tilt * height;
+    const steps = Math.max(2, Math.round(width / (MARKER_WOBBLE.step * height)));
+    /** An edge's wave: a gentle drift, step by step, that never strays past `wave`. */
+    const wave = () => {
+      const limit = MARKER_WOBBLE.wave * height;
+      let drift = 0;
+      return Array.from({ length: steps + 1 }, () => {
+        drift = Math.max(-limit, Math.min(limit, drift + (random() * 2 - 1) * limit * 0.8));
+        return drift;
+      });
+    };
+    const top = wave();
+    const bottom = wave();
+    const at = (i: number) => x + (width * i) / steps;
+    const lean = (i: number) => tilt * (0.5 - i / steps);
+    // Along the top from left to right, then back along the bottom: the ends are straight.
+    for (let i = 0; i <= steps; i++) {
+      const py = y + lean(i) + top[i];
+      if (i === 0) {
+        builder.moveTo(at(i), py);
+      } else {
+        builder.lineTo(at(i), py);
+      }
+    }
+    for (let i = steps; i >= 0; i--) {
+      builder.lineTo(at(i), y + height + lean(i) * 0.8 + bottom[i]);
+    }
+    builder.close();
+  }
+  return builder.detach();
+}
+
+/** The paper's grain over a piece's rectangle: specks scattered alike every time. */
+function grainPath({ x, y, width, height }: Extract<Piece, { kind: 'grain' }>): SkPath {
+  const random = seededRandom(Math.round(width) * 31 + Math.round(height));
+  const builder = Skia.PathBuilder.Make();
+  const count = Math.round((width * height) / GRAIN_AREA);
+  for (let i = 0; i < count; i++) {
+    builder.addCircle(x + random() * width, y + random() * height, 0.6 + random() * 1.2);
+  }
   return builder.detach();
 }
 
@@ -2404,6 +3273,37 @@ function symbolPaths(piece: Extract<Piece, { kind: 'symbol' }>): {
       });
       break;
     }
+    case 'badge': {
+      // Instagram's verified badge: a round seal with scalloped edges.
+      const cx = x + 0.5 * size;
+      const cy = y + 0.5 * size;
+      const steps = 120;
+      for (let i = 0; i < steps; i++) {
+        const angle = (i / steps) * 2 * Math.PI;
+        const r = size * (0.465 + 0.035 * Math.cos(VERIFIED.scallops * angle));
+        const px = cx + r * Math.sin(angle);
+        const py = cy - r * Math.cos(angle);
+        if (i === 0) {
+          fill.moveTo(px, py);
+        } else {
+          fill.lineTo(px, py);
+        }
+      }
+      fill.close();
+      break;
+    }
+    case 'check':
+      polygon(
+        line,
+        piece,
+        [
+          [0.3, 0.51],
+          [0.44, 0.65],
+          [0.71, 0.37],
+        ],
+        false,
+      );
+      break;
   }
   return {
     fill: fill.isEmpty() ? null : fill.detach(),
@@ -2530,6 +3430,10 @@ function appMark(piece: Piece, i: number): ReactElement | null {
           </Rect>
         </Group>
       );
+    case 'grain':
+      return <Path key={i} path={grainPath(piece)} color={piece.color} />;
+    case 'highlight':
+      return <Path key={i} path={markerPath(piece.rects)} color={piece.color} />;
     case 'hairline':
       return (
         <Line
@@ -2542,6 +3446,7 @@ function appMark(piece: Piece, i: number): ReactElement | null {
       );
     case 'text':
     case 'messageTail':
+    case 'paper':
     case 'rule':
     case 'dot':
     case 'logo':
@@ -2568,6 +3473,9 @@ function BlockArt({
     switch (piece.kind) {
       case 'text':
       case 'panel':
+      case 'paper':
+      case 'grain':
+      case 'highlight':
       case 'shade':
       case 'hairline':
       case 'messageTail':
@@ -2660,6 +3568,8 @@ function BlockArt({
             />
           ) : piece.kind === 'messageTail' ? (
             <Path key={i} path={messageTailPath(piece.x, piece.y)} color={piece.color} />
+          ) : piece.kind === 'paper' ? (
+            <Path key={i} path={paperPath(piece)} color={piece.color} />
           ) : null,
         )}
       </Group>

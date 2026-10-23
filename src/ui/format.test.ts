@@ -3,6 +3,7 @@ import { bucketize } from '@/core/summary';
 
 import {
   formatActivityDate,
+  formatTimeAfter,
   formatBucketLabels,
   formatChartValue,
   formatMetric,
@@ -24,6 +25,18 @@ describe('formatMetric', () => {
       value: '4:35',
       unit: 'min/km',
     });
+  });
+});
+
+describe('formatTimeAfter', () => {
+  it('writes when an activity ended, by the clock of the locale', () => {
+    // 1h 5min 22s after 9:31.
+    expect(formatTimeAfter('2026-10-15T09:31:00', 3922, 'es')).toBe('10:36');
+    expect(formatTimeAfter('2026-10-15T09:31:00', 3922, 'en')).toBe('10:36 AM');
+  });
+
+  it('goes past midnight without the device time zone moving it', () => {
+    expect(formatTimeAfter('2026-10-15T23:30:00', 3600, 'es')).toBe('0:30');
   });
 });
 

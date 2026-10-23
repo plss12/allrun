@@ -24,7 +24,7 @@ import {
 } from '@/core/summary-metrics';
 import type { DistanceUnit } from '@/core/units';
 import { useActivitySource } from '@/data/activity-source';
-import { cardSurface } from '@/theme/card-surface';
+import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { DateRangeField } from '@/ui/date-range-field';
 import { formatBucketLabels, formatChartValue, formatMetric, formatPeriodName } from '@/ui/format';
@@ -147,7 +147,8 @@ export function PeriodCard({
           kind={kind}
           range={range}
           activities={activities.data}
-          width={width}
+          // Pages as wide as the inside of the card's edge, which is what the pager pages by.
+          width={width - 2 * CARD_BORDER}
           page={page}
           onPage={setPage}
           unit={unit}

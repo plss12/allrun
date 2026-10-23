@@ -8,13 +8,21 @@ import {
   ScrollView,
   SectionList,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
-import { type CanvasFormat, type FontId, QUOTES, VERSES } from '@/core/template';
-import { cardSurface } from '@/theme/card-surface';
+import {
+  type CanvasFormat,
+  CHAT_PHRASES,
+  type FontId,
+  MAX_CHAT_LENGTH,
+  QUOTES,
+  VERSES,
+} from '@/core/template';
+import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
 import { layerText } from './editor-data';
@@ -43,19 +51,33 @@ interface LayerSheetProps {
   readonly onClose: () => void;
 }
 
-/** Widgets whose words are chosen from a list: a Bible verse or a quote. */
-type Choice = 'verse' | 'quote';
+type Block = Extract<NewLayer, { kind: 'activityBlock' }>['block'];
+
+/**
+ * Widgets whose words are chosen from a list: a Bible verse, a quote, or a chat message's phrase
+ * (or one of the user's), as the version tapped (a dark or a light message).
+ */
+type Choice = Extract<Block, { design: 'verse' | 'quote' | 'chat' }>;
 
 /** The list a gallery item is chosen from, if it is. */
 const choiceOf = (item: CatalogItem): Choice | null =>
-  item.kind === 'activityBlock' && (item.block.design === 'verse' || item.block.design === 'quote')
-    ? item.block.design
+  item.kind === 'activityBlock' &&
+  (item.block.design === 'verse' || item.block.design === 'quote' || item.block.design === 'chat')
+    ? item.block
     : null;
+
+/** The title of each list to choose from. */
+const CHOICE_TITLES = {
+  verse: 'gallery.chooseVerse',
+  quote: 'gallery.chooseQuote',
+  chat: 'gallery.chooseChat',
+} as const;
 
 /**
  * Sheet to add a widget: a gallery of every widget drawn live with the user's data, in sections,
  * each tile scrolling sideways through the widget's variants (see `widget-gallery.ts`). A tap
- * adds the variant shown; a verse or a quote is chosen first from its list.
+ * adds the variant shown; a verse, a quote or a chat message's phrase is chosen first from its
+ * list.
  */
 export function LayerSheet({
   visible,
@@ -109,7 +131,7 @@ export function LayerSheet({
     >
       {choosing !== null ? (
         <SheetFrame
-          title={t(choosing === 'verse' ? 'gallery.chooseVerse' : 'gallery.chooseQuote')}
+          title={t(CHOICE_TITLES[choosing.design])}
           closeLabel={t('editor.back')}
           onClose={() => setChoosing(null)}
         >
@@ -174,41 +196,67 @@ export function LayerSheet({
   );
 }
 
+/** One entry of a list to choose from: its words, where they come from, and the widget. */
+interface ChoiceEntry {
+  readonly key: string;
+  readonly words: string;
+  readonly source: string | null;
+  readonly block: Block;
+}
+
 /**
- * The verses or quotes to choose from, each on a card: its words in quotation marks, and where
- * it comes from or who said it under them. A tap adds it.
+ * The verses, quotes or phrases to choose from, each on a card: a verse's or a quote's words in
+ * quotation marks, and where they come from or who said them under them; a phrase as it is, after
+ * a field to write one's own. A tap adds it.
  */
 function ChoiceList({
   choice,
   onChoose,
 }: {
   readonly choice: Choice;
-  readonly onChoose: (block: Extract<NewLayer, { kind: 'activityBlock' }>['block']) => void;
+  readonly onChoose: (block: Block) => void;
 }) {
   const { t } = useTranslation();
-  const entries =
-    choice === 'verse'
-      ? VERSES.map((verse) => ({
+  const entries = ((): ChoiceEntry[] => {
+    switch (choice.design) {
+      case 'verse':
+        return VERSES.map((verse) => ({
           key: verse,
-          words: t(`widgets.verses.${verse}.text`),
+          words: t('widgets.quoted', { text: t(`widgets.verses.${verse}.text`) }),
           source: t(`widgets.verses.${verse}.source`),
-          block: { design: 'verse', verse } as const,
-        }))
-      : QUOTES.map((quote) => ({
-          key: quote,
-          words: t(`widgets.quotes.${quote}.text`),
-          source: t(`widgets.quotes.${quote}.author`),
-          block: { design: 'quote', quote } as const,
+          block: { design: 'verse', verse },
         }));
+      case 'quote':
+        return QUOTES.map((quote) => ({
+          key: quote,
+          words: t('widgets.quoted', { text: t(`widgets.quotes.${quote}.text`) }),
+          source: t(`widgets.quotes.${quote}.author`),
+          block: { design: 'quote', quote },
+        }));
+      case 'chat':
+        return CHAT_PHRASES.map((phrase) => ({
+          key: phrase,
+          words: t(`widgets.phrases.${phrase}`),
+          source: null,
+          block: { ...choice, phrase },
+        }));
+    }
+  })();
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: GALLERY_PADDING, gap: GALLERY_GAP, paddingBottom: 32 }}
     >
+      {choice.design === 'chat' ? (
+        <OwnPhrase onAdd={(own) => onChoose({ ...choice, phrase: { own } })} />
+      ) : null}
       {entries.map((entry) => (
         <Pressable
           key={entry.key}
           accessibilityRole="button"
-          accessibilityLabel={`${entry.words} ${entry.source}`}
+          accessibilityLabel={
+            entry.source === null ? entry.words : `${entry.words} ${entry.source}`
+          }
           onPress={() => onChoose(entry.block)}
           style={({ pressed }) => ({
             ...cardSurface(14),
@@ -218,15 +266,63 @@ function ChoiceList({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text style={{ color: colors.label, fontSize: 17, lineHeight: 23 }}>
-            {t('widgets.quoted', { text: entry.words })}
-          </Text>
-          <Text style={{ color: colors.secondaryLabel, fontSize: 15, fontStyle: 'italic' }}>
-            {entry.source}
-          </Text>
+          <Text style={{ color: colors.label, fontSize: 17, lineHeight: 23 }}>{entry.words}</Text>
+          {entry.source === null ? null : (
+            <Text style={{ color: colors.secondaryLabel, fontSize: 15, fontStyle: 'italic' }}>
+              {entry.source}
+            </Text>
+          )}
         </Pressable>
       ))}
     </ScrollView>
+  );
+}
+
+/** A card to write one's own phrase, and its button to add it, on once there is something. */
+function OwnPhrase({ onAdd }: { readonly onAdd: (phrase: string) => void }) {
+  const { t } = useTranslation();
+  const [phrase, setPhrase] = useState('');
+  const written = phrase.trim();
+  const add = () => {
+    if (written !== '') {
+      onAdd(written);
+    }
+  };
+  return (
+    <View
+      style={{
+        ...cardSurface(14),
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+      }}
+    >
+      <TextInput
+        value={phrase}
+        onChangeText={setPhrase}
+        onSubmitEditing={add}
+        placeholder={t('gallery.ownPhrase')}
+        placeholderTextColor={colors.secondaryLabel}
+        accessibilityLabel={t('gallery.ownPhrase')}
+        maxLength={MAX_CHAT_LENGTH}
+        returnKeyType="done"
+        style={{ flex: 1, color: colors.label, fontSize: 17, paddingVertical: 8 }}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: written === '' }}
+        disabled={written === ''}
+        onPress={add}
+        hitSlop={8}
+        style={({ pressed }) => ({ opacity: written === '' ? 0.35 : pressed ? 0.6 : 1 })}
+      >
+        <Text style={{ color: colors.tint, fontSize: 17, fontWeight: '600' }}>
+          {t('gallery.addOwnPhrase')}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -298,6 +394,15 @@ function pageLabel(
         if (block.design === 'quote') {
           return [name, t(`widgets.quotes.${block.quote}.author`)];
         }
+        if (block.design === 'chat') {
+          return [
+            name,
+            t(`gallery.blockLayouts.${block.layout}`),
+            typeof block.phrase === 'string'
+              ? t(`widgets.phrases.${block.phrase}`)
+              : block.phrase.own,
+          ];
+        }
         if (!('layout' in block)) {
           return [name];
         }
@@ -331,6 +436,9 @@ function WidgetTile({
   const { t } = useTranslation();
   const [shown, setShown] = useState(0);
   const several = widget.pages.length > 1;
+  // Pages as wide as the inside of the card's edge, which is what the pager pages by.
+  const pageWidth = width - 2 * CARD_BORDER;
+  const pageHeight = height - 2 * CARD_BORDER;
   return (
     <View
       style={{
@@ -348,7 +456,7 @@ function WidgetTile({
         // The dot follows the finger, not only the end of the swipe.
         scrollEventThrottle={16}
         onScroll={(event) =>
-          setShown(pageAt(event.nativeEvent.contentOffset.x, width, widget.pages.length))
+          setShown(pageAt(event.nativeEvent.contentOffset.x, pageWidth, widget.pages.length))
         }
       >
         {widget.pages.map((page, i) => (
@@ -360,12 +468,20 @@ function WidgetTile({
             accessibilityElementsHidden={i !== shown}
             importantForAccessibility={i === shown ? 'auto' : 'no-hide-descendants'}
             onPress={() => onPress(page)}
-            style={({ pressed }) => ({ width, height, opacity: pressed ? 0.6 : 1 })}
+            style={({ pressed }) => ({
+              width: pageWidth,
+              height: pageHeight,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
             <PageCanvas
               page={page}
-              width={width}
-              height={several || hint !== undefined ? height - GALLERY_DOTS_HEIGHT : height}
+              width={pageWidth}
+              height={
+                // The hint goes where the dots would, or over them without taking room: the
+                // widget sits as high as in the tiles next to it.
+                several || hint !== undefined ? pageHeight - GALLERY_DOTS_HEIGHT : pageHeight
+              }
             />
           </Pressable>
         ))}
@@ -373,7 +489,14 @@ function WidgetTile({
       {hint !== undefined ? (
         <View
           pointerEvents="none"
-          style={{ position: 'absolute', bottom: 6, left: 0, right: 0, alignItems: 'center' }}
+          // Over the dots, when there are some.
+          style={{
+            position: 'absolute',
+            bottom: several ? GALLERY_DOTS_HEIGHT + 2 : 6,
+            left: 0,
+            right: 0,
+            alignItems: 'center',
+          }}
         >
           <Text
             style={{

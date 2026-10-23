@@ -77,10 +77,20 @@ describe('activityCatalog', () => {
       'block-serif',
       'block-verse',
       'block-quote',
+      'block-sentence',
+      'block-verified',
       'block-message',
+      'block-chat',
       'block-music',
       'block-camera',
       'block-alarm',
+      'block-receipt',
+      'block-boardingPass',
+    ]);
+    // The chat message comes with its first phrase, in dark and light mode.
+    expect(variantKeys(trail, 'block-chat')).toEqual([
+      'block-chat-dark-zombieMode',
+      'block-chat-light-zombieMode',
     ]);
     // A design of a single version is its tile's only page.
     expect(variantKeys(trail, 'block-poster')).toEqual(['block-poster']);
@@ -88,11 +98,24 @@ describe('activityCatalog', () => {
     expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
     // The note and the timing tower come with the activity's splits; the laps, with its laps.
     const withSplits = tileKeys(activityCatalog(makeActivity(), ['splits']), 'mixed');
-    expect(withSplits).toEqual(expect.arrayContaining(['block-notes', 'block-grandPrix']));
-    expect(withSplits).not.toContain('block-laps');
-    expect(tileKeys(activityCatalog(makeActivity(), [], false, false, true), 'mixed')).toContain(
-      'block-laps',
+    expect(withSplits).toEqual(
+      expect.arrayContaining([
+        'block-notes',
+        'block-grandPrix',
+        'block-splitBars',
+        'block-splitLadder',
+      ]),
     );
+    expect(withSplits.filter((key) => key.startsWith('block-laps'))).toEqual([]);
+    // A tile per look of the laps, each in both brand colors.
+    const withLaps = activityCatalog(makeActivity(), [], false, false, true);
+    expect(tileKeys(withLaps, 'mixed')).toEqual(
+      expect.arrayContaining(['block-laps-board', 'block-laps-sheet']),
+    );
+    expect(variantKeys(withLaps, 'block-laps-sheet')).toEqual([
+      'block-laps-sheet-red',
+      'block-laps-sheet-ink',
+    ]);
     expect(variantKeys(trail, 'block-headline')).toEqual([
       'block-headline-stacked',
       'block-headline-inline',
@@ -222,8 +245,9 @@ describe('activityCatalog', () => {
       'info-activityDate',
       'info-activityPlace',
     ]);
-    // And the location sticker, after the other replicas.
-    expect(tileKeys(named, 'mixed').at(-1)).toBe('block-location');
+    // And the location sticker, after the alarm.
+    const mixed = tileKeys(named, 'mixed');
+    expect(mixed[mixed.indexOf('block-alarm') + 1]).toBe('block-location');
     expect(tileKeys(activityCatalog(makeActivity()), 'mixed')).not.toContain('block-location');
     expect(variantKeys(named, 'info-activityPlace')).toEqual([
       'info-activityPlace',

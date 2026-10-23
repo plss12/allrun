@@ -125,6 +125,13 @@ export const es: Translations = {
       grandPrix: 'Gran Premio',
       alarm: 'Alarma',
       location: 'Ubicación',
+      splitBars: 'Barras de parciales',
+      splitLadder: 'Escalera de parciales',
+      verified: 'Verificado',
+      chat: 'Frase',
+      sentence: 'Subrayado',
+      receipt: 'Ticket',
+      boardingPass: 'Tarjeta de embarque',
     },
     cameraModes: { video: 'VÍDEO', photo: 'FOTO' },
     cameraZoom: { wide: '0,5', main: 'x1', tele: '2' },
@@ -132,45 +139,154 @@ export const es: Translations = {
     quoted: '«{{text}}»',
     /** Versículos de la Reina-Valera 1909 (dominio público). */
     verses: {
-      romans8v18: {
-        text: 'Porque tengo por cierto que lo que en este tiempo se padece, no es de comparar con la gloria venidera que en nosotros ha de ser manifestada.',
-        source: 'Romanos 8:18',
-      },
       philippians4v13: {
         text: 'Todo lo puedo en Cristo que me fortalece.',
         source: 'Filipenses 4:13',
       },
-      isaiah40v31: {
-        text: 'Correrán, y no se cansarán; caminarán, y no se fatigarán.',
-        source: 'Isaías 40:31',
-      },
-      timothy4v7: {
-        text: 'He peleado la buena batalla, he acabado la carrera, he guardado la fe.',
-        source: '2 Timoteo 4:7',
-      },
-      hebrews12v1: {
-        text: 'Corramos con paciencia la carrera que nos es propuesta.',
-        source: 'Hebreos 12:1',
+      romans8v18: {
+        text: 'Porque tengo por cierto que lo que en este tiempo se padece, no es de comparar con la gloria venidera que en nosotros ha de ser manifestada.',
+        source: 'Romanos 8:18',
       },
       corinthians9v24: {
         text: 'Corred de tal manera que lo obtengáis.',
         source: '1 Corintios 9:24',
       },
+      hebrews12v1: {
+        text: 'Corramos con paciencia la carrera que nos es propuesta.',
+        source: 'Hebreos 12:1',
+      },
+      isaiah40v31: {
+        text: 'Correrán, y no se cansarán; caminarán, y no se fatigarán.',
+        source: 'Isaías 40:31',
+      },
+      isaiah40v29: {
+        text: 'Él da esfuerzo al cansado, y multiplica las fuerzas al que no tiene ningunas.',
+        source: 'Isaías 40:29',
+      },
+      psalms18v33: {
+        text: 'Quien pone mis pies como pies de ciervas, e hízome estar sobre mis alturas.',
+        source: 'Salmos 18:33',
+      },
+      galatians6v9: {
+        text: 'No nos cansemos, pues, de hacer bien; que a su tiempo segaremos, si no hubiéremos desmayado.',
+        source: 'Gálatas 6:9',
+      },
+      timothy4v7: {
+        text: 'He peleado la buena batalla, he acabado la carrera, he guardado la fe.',
+        source: '2 Timoteo 4:7',
+      },
+      proverbs24v16: {
+        text: 'Siete veces cae el justo, y se torna a levantar.',
+        source: 'Proverbios 24:16',
+      },
+      joshua1v9: {
+        text: 'Mira que te mando que te esfuerces y seas valiente: no temas ni desmayes.',
+        source: 'Josué 1:9',
+      },
+      psalms28v7: {
+        text: 'Jehová es mi fortaleza y mi escudo: en él esperó mi corazón, y fui ayudado.',
+        source: 'Salmos 28:7',
+      },
+      james1v12: {
+        text: 'Bienaventurado el varón que sufre la tentación; porque cuando fuere probado, recibirá la corona de vida.',
+        source: 'Santiago 1:12',
+      },
+      corinthians9v25: {
+        text: 'Todo aquel que lucha, de todo se abstiene.',
+        source: '1 Corintios 9:25',
+      },
+      psalms119v32: {
+        text: 'Por el camino de tus mandamientos correré, cuando ensanchares mi corazón.',
+        source: 'Salmos 119:32',
+      },
+      deuteronomy31v6: {
+        text: 'Esforzaos y cobrad ánimo; no temáis, ni tengáis miedo.',
+        source: 'Deuteronomio 31:6',
+      },
+      philippians3v13: {
+        text: 'Olvidando ciertamente lo que queda atrás, y extendiéndome a lo que está delante, prosigo al blanco.',
+        source: 'Filipenses 3:13-14',
+      },
+      psalms60v12: { text: 'En Dios haremos proezas.', source: 'Salmos 60:12' },
+      romans5v3: {
+        text: 'La tribulación produce paciencia; y la paciencia, prueba; y la prueba, esperanza.',
+        source: 'Romanos 5:3-4',
+      },
+      colossians3v23: {
+        text: 'Todo lo que hagáis, hacedlo de ánimo, como al Señor, y no a los hombres.',
+        source: 'Colosenses 3:23',
+      },
     },
     quotes: {
+      kipchoge: { text: 'Ningún ser humano tiene límites.', author: 'Eliud Kipchoge' },
+      phelps: {
+        text: 'No puedes ponerle límite a nada. Cuanto más sueñas, más lejos llegas.',
+        author: 'Michael Phelps',
+      },
+      lemond: { text: 'Nunca se vuelve más fácil, solo vas más rápido.', author: 'Greg LeMond' },
+      zatopek: {
+        text: 'Si quieres correr, corre una milla. Si quieres experimentar una vida diferente, corre un maratón.',
+        author: 'Emil Zátopek',
+      },
       prefontaine: {
-        text: 'Dar menos de lo mejor de ti es desperdiciar el don.',
+        text: 'Dar menos que lo mejor de ti es sacrificar el don.',
         author: 'Steve Prefontaine',
+      },
+      merckx: {
+        text: 'Pedalea tanto o tan poco, o tan largo o tan corto como sientas. Pero pedalea.',
+        author: 'Eddy Merckx',
+      },
+      jordan: {
+        text: 'He fracasado una y otra y otra vez en mi vida. Y es por eso que tengo éxito.',
+        author: 'Michael Jordan',
+      },
+      ali: {
+        text: 'Sufre ahora y vive el resto de tu vida como un campeón.',
+        author: 'Muhammad Ali',
+      },
+      serenaWilliams: {
+        text: 'Un campeón no se define por sus victorias, sino por cómo puede recuperarse cuando cae.',
+        author: 'Serena Williams',
+      },
+      bolt: { text: 'No pienso en los límites.', author: 'Usain Bolt' },
+      nyad: { text: 'Nunca, jamás te rindas.', author: 'Diana Nyad' },
+      ashe: {
+        text: 'Empieza donde estás. Usa lo que tienes. Haz lo que puedas.',
+        author: 'Arthur Ashe',
+      },
+      gretzky: { text: 'Fallas el 100% de los tiros que no intentas.', author: 'Wayne Gretzky' },
+      billieJeanKing: {
+        text: 'Los campeones siguen jugando hasta que lo hacen bien.',
+        author: 'Billie Jean King',
+      },
+      pele: {
+        text: 'El éxito no es un accidente. Es trabajo duro, perseverancia, aprendizaje, estudio y sacrificio.',
+        author: 'Pelé',
+      },
+      owens: {
+        text: 'Para que los sueños se hagan realidad, se necesita muchísima determinación, dedicación, autodisciplina y esfuerzo.',
+        author: 'Jesse Owens',
+      },
+      nadal: {
+        text: 'Juego cada punto como si mi vida dependiera de ello.',
+        author: 'Rafael Nadal',
+      },
+      kobe: {
+        text: 'Lo más importante es intentar inspirar a las personas para que puedan ser grandes en lo que quieran hacer.',
+        author: 'Kobe Bryant',
+      },
+      biles: {
+        text: 'Prefiero arrepentirme de los riesgos que no funcionaron que de las oportunidades que no tomé en absoluto.',
+        author: 'Simone Biles',
+      },
+      switzer: {
+        text: 'La vida es para participar, no para ser espectador.',
+        author: 'Kathrine Switzer',
       },
       murakami: {
         text: 'El dolor es inevitable. El sufrimiento es opcional.',
         author: 'Haruki Murakami',
       },
-      zatopek: {
-        text: 'Si quieres correr, corre una milla. Si quieres vivir otra vida, corre una maratón.',
-        author: 'Emil Zátopek',
-      },
-      kipchoge: { text: 'Ningún ser humano tiene límites.', author: 'Eliud Kipchoge' },
       karnazes: {
         text: 'Corre cuando puedas, camina si tienes que hacerlo, gatea si no queda otra; pero nunca te rindas.',
         author: 'Dean Karnazes',
@@ -179,19 +295,10 @@ export const es: Translations = {
         text: 'El milagro no es haber terminado. El milagro es haber tenido el valor de empezar.',
         author: 'John Bingham',
       },
-      jordan: {
-        text: 'He fallado una y otra vez en mi vida. Y por eso tengo éxito.',
-        author: 'Michael Jordan',
-      },
       notke: {
         text: 'El trabajo duro vence al talento cuando el talento no trabaja duro.',
         author: 'Tim Notke',
       },
-      billieJeanKing: {
-        text: 'Los campeones siguen jugando hasta que lo hacen bien.',
-        author: 'Billie Jean King',
-      },
-      ali: { text: 'No cuentes los días: haz que los días cuenten.', author: 'Muhammad Ali' },
     },
     laps: {
       title: 'Vueltas',
@@ -204,6 +311,63 @@ export const es: Translations = {
     grandPrix: { leader: 'Líder' },
     alarmLabel: '{{sport}}, {{datum}}',
     locationLine: '{{place}}, {{datum}}',
+    splitBars: { km: 'Kilómetro', mi: 'Milla' },
+    splitLadder: { title: 'Parciales' },
+    verified: { km: '{{value}} kilómetros', mi: '{{value}} millas' },
+    phrases: {
+      zombieMode: 'Modo zombie activado.',
+      sweatOrTears: 'No sé si es sudor o mis lágrimas.',
+      soulLeft: 'Mi alma abandonó mi cuerpo a la mitad.',
+      stairsEnemy: 'Mañana las escaleras y yo somos enemigos mortales.',
+      survived: 'He sobrevivido, pero ¿a qué costo?',
+      whoToldMe: '¿Quién me mandaría a mí hacer esto?',
+      foodMotivation: 'Todo sea por la comida de después.',
+      crawling: 'Llegando a la ducha a gatas.',
+      seemedGood: 'Parecía buena idea hace una hora.',
+      jellyLegs: 'Oficialmente tengo piernas de gelatina.',
+      rebooting: 'Sistema reiniciando... por favor espere.',
+      couchCalling: 'El sofá me está llamando a gritos.',
+      fakeSmile: 'Esta sonrisa esconde mucho dolor muscular.',
+      alienAbduction: 'Si me abducen ahora, que me lleven en brazos.',
+      endorphins: 'Las endorfinas están trabajando horas extra.',
+      sleep2030: 'Me voy a dormir hasta el año 2030.',
+      ghostedBreath: 'Mi propio aliento me ha dejado en visto.',
+      hungryBear: 'Hambre nivel: me comería la nevera entera.',
+      willToLive: 'Buscando mis ganas de vivir por la ruta.',
+      brainEmpty: 'Cerebro apagado, que decidan las piernas.',
+      therapy: 'Más barato que el psicólogo.',
+      easyOne: 'Iba a ser un rodaje suave.',
+      coachProud: 'Mi entrenador estaría orgulloso.',
+      beforeCoffee: 'Hecho antes del café.',
+    },
+    sentence: {
+      leads: {
+        run: '{{distance}} corriendo',
+        ride: '{{distance}} en bici',
+        walk: '{{distance}} caminando',
+        hike: '{{distance}} de ruta',
+        swim: '{{distance}} nadando',
+        distance: '{{distance}} de {{sport}}',
+        time: '{{time}} de {{sport}}',
+      },
+      units: { km: '{{value}} kilómetros', mi: '{{value}} millas' },
+      clauses: {
+        place: ' por {{place}}',
+        time: ' en {{time}}',
+        pace: ', a {{pace}}',
+        speed: ', a {{speed}}',
+        calories: ' quemando {{calories}}',
+        heartRate: ' a {{heartRate}}',
+      },
+      end: '.',
+    },
+    receipt: { total: 'Total', thanks: '¡Gracias por moverte!' },
+    boardingPass: {
+      title: 'Tarjeta de embarque',
+      departure: 'Salida',
+      arrival: 'Llegada',
+      date: 'Fecha',
+    },
   },
   style: {
     color: 'Color',
@@ -339,6 +503,9 @@ export const es: Translations = {
     choose: 'Toca para elegir',
     chooseVerse: 'Elige un versículo',
     chooseQuote: 'Elige una cita',
+    chooseChat: 'Elige una frase',
+    ownPhrase: 'Escribe la tuya',
+    addOwnPhrase: 'Añadir',
     dataCount: 'Datos: {{count}}',
   },
   metrics: {

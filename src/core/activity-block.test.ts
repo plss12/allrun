@@ -8,6 +8,7 @@ import {
   fastestIndex,
   framesCanvas,
   isAppReplica,
+  sentencePlan,
   sportIcon,
   tyreCompounds,
 } from './activity-block';
@@ -100,8 +101,14 @@ describe('activityBlocks', () => {
       // The verse and the quote with their first phrase: the others are chosen from a list.
       { design: 'verse', verse: 'philippians4v13' },
       { design: 'quote', quote: 'kipchoge' },
+      { design: 'sentence' },
+      { design: 'verified', layout: 'dark' },
+      { design: 'verified', layout: 'light' },
       { design: 'message', layout: 'dark' },
       { design: 'message', layout: 'light' },
+      // The chat message with its first phrase: the others are chosen from a list.
+      { design: 'chat', layout: 'dark', phrase: 'zombieMode' },
+      { design: 'chat', layout: 'light', phrase: 'zombieMode' },
       { design: 'music', layout: 'dark', cover: 'red' },
       { design: 'music', layout: 'dark', cover: 'ink' },
       { design: 'music', layout: 'light', cover: 'red' },
@@ -110,29 +117,27 @@ describe('activityBlocks', () => {
       { design: 'camera', cover: 'ink' },
       { design: 'alarm', layout: 'dark' },
       { design: 'alarm', layout: 'light' },
+      { design: 'receipt' },
+      { design: 'boardingPass', cover: 'red' },
+      { design: 'boardingPass', cover: 'ink' },
     ]);
   });
 
-  it('offers the splits and the laps only for an activity with them, first of the replicas', () => {
+  it('offers the timing tables only for an activity with splits or laps, each by its look', () => {
     const designs = activityBlocks(makeActivity(), true, false, true).map((block) => block.design);
-    expect(designs.slice(designs.indexOf('quote') + 1)).toEqual([
-      'notes',
-      'notes',
+    expect(designs.slice(designs.indexOf('verified') + 2, designs.indexOf('message'))).toEqual([
+      // AURA's board of laps and its bars of splits; the karting's sheet and the ladder of
+      // splits; the race on TV and the note.
       'laps',
       'laps',
+      'splitBars',
       'laps',
       'laps',
+      'splitLadder',
+      'splitLadder',
       'grandPrix',
-      'message',
-      'message',
-      'music',
-      'music',
-      'music',
-      'music',
-      'camera',
-      'camera',
-      'alarm',
-      'alarm',
+      'notes',
+      'notes',
     ]);
     expect(activityBlocks(makeActivity()).map((block) => block.design)).not.toContain('notes');
     // The laps need laps, not splits.
@@ -150,12 +155,46 @@ describe('activityBlocks', () => {
     ]);
   });
 
-  it('offers the location sticker last, dark and light, only when the place can be named', () => {
-    expect(activityBlocks(makeActivity(), false, true).slice(-2)).toEqual([
+  it('offers the location sticker after the alarm, only when the place can be named', () => {
+    const blocks = activityBlocks(makeActivity(), false, true);
+    const alarm = blocks.findIndex((block) => block.design === 'location') - 2;
+    expect(blocks.slice(alarm, alarm + 4)).toEqual([
+      { design: 'alarm', layout: 'dark' },
+      { design: 'alarm', layout: 'light' },
       { design: 'location', layout: 'dark' },
       { design: 'location', layout: 'light' },
     ]);
     expect(activityBlocks(makeActivity()).map((block) => block.design)).not.toContain('location');
+  });
+
+  it('offers the bars and the ladder of splits only with splits, the ladder in both brand colors', () => {
+    expect(
+      activityBlocks(makeActivity(), true).filter((block) => block.design.startsWith('split')),
+    ).toEqual([
+      { design: 'splitBars' },
+      { design: 'splitLadder', cover: 'red' },
+      { design: 'splitLadder', cover: 'ink' },
+    ]);
+    const designs = activityBlocks(makeActivity()).map((block) => block.design);
+    expect(designs).not.toContain('splitBars');
+    expect(designs).not.toContain('splitLadder');
+  });
+
+  it('offers the sentence only when it can be written', () => {
+    const designs = (activity: ReturnType<typeof makeActivity>) =>
+      activityBlocks(activity).map((block) => block.design);
+    expect(designs(makeActivity())).toContain('sentence');
+    // Heart rate and calories alone don't make a sentence: it opens with a distance or a time.
+    expect(
+      designs(
+        makeActivity({
+          sportType: 'Workout',
+          distanceMeters: 0,
+          movingTimeSeconds: 0,
+          averageSpeed: null,
+        }),
+      ),
+    ).not.toContain('sentence');
   });
 
   it('offers columns only up to the data the activity has', () => {
@@ -225,6 +264,14 @@ describe('blockDataCount', () => {
     expect(blockDataCount({ design: 'grandPrix' })).toBe(1);
     expect(blockDataCount({ design: 'alarm', layout: 'light' })).toBe(1);
     expect(blockDataCount({ design: 'location', layout: 'dark' })).toBe(1);
+    // The bars, the ladder and the badge show the main datum or the splits; the chat message
+    // two data, the receipt a line per datum and the boarding pass its data under the trip.
+    expect(blockDataCount({ design: 'splitBars' })).toBe(1);
+    expect(blockDataCount({ design: 'splitLadder', cover: 'ink' })).toBe(1);
+    expect(blockDataCount({ design: 'verified', layout: 'dark' })).toBe(1);
+    expect(blockDataCount({ design: 'chat', layout: 'light', phrase: { own: 'hola' } })).toBe(3);
+    expect(blockDataCount({ design: 'receipt' })).toBe(6);
+    expect(blockDataCount({ design: 'boardingPass', cover: 'red' })).toBe(4);
     // A verse or a quote shows none.
     expect(blockDataCount({ design: 'verse', verse: 'romans8v18' })).toBe(0);
     expect(blockDataCount({ design: 'quote', quote: 'kipchoge' })).toBe(0);
@@ -258,6 +305,14 @@ describe('isAppReplica and blockLettering', () => {
     expect(isAppReplica('grandPrix')).toBe(true);
     expect(isAppReplica('alarm')).toBe(true);
     expect(isAppReplica('location')).toBe(true);
+    // Things with a look of their own too: paper, a receipt, a boarding pass.
+    expect(isAppReplica('splitBars')).toBe(true);
+    expect(isAppReplica('splitLadder')).toBe(true);
+    expect(isAppReplica('verified')).toBe(true);
+    expect(isAppReplica('chat')).toBe(true);
+    expect(isAppReplica('sentence')).toBe(true);
+    expect(isAppReplica('receipt')).toBe(true);
+    expect(isAppReplica('boardingPass')).toBe(true);
     expect(isAppReplica('verse')).toBe(false);
     expect(isAppReplica('quote')).toBe(false);
     expect(isAppReplica('poster')).toBe(false);
@@ -311,6 +366,72 @@ describe('isAppReplica and blockLettering', () => {
       bold: true,
       ...capitals,
     });
+  });
+});
+
+describe('sentencePlan', () => {
+  const datum = <C extends string, M extends string>(clause: C, metric: M) => ({ clause, metric });
+  const PLACE = { clause: 'place', metric: null };
+
+  it('writes a run with its distance, where, how long and its pace', () => {
+    expect(sentencePlan(makeActivity({ sportType: 'Run' }), true)).toEqual({
+      lead: { lead: 'run', metric: 'distance' },
+      clauses: [PLACE, datum('time', 'movingTime'), datum('pace', 'pace')],
+    });
+    // Without a place to name, the rest.
+    expect(sentencePlan(makeActivity({ sportType: 'Run' }), false)?.clauses).toEqual([
+      datum('time', 'movingTime'),
+      datum('pace', 'pace'),
+    ]);
+  });
+
+  it('gives each sport its word and its way of going fast; a walk says how long, not how fast', () => {
+    expect(sentencePlan(makeActivity({ sportType: 'Ride' }), false)).toEqual({
+      lead: { lead: 'ride', metric: 'distance' },
+      clauses: [datum('time', 'movingTime'), datum('speed', 'speed')],
+    });
+    expect(sentencePlan(makeActivity({ sportType: 'Walk' }), true)).toEqual({
+      lead: { lead: 'walk', metric: 'distance' },
+      clauses: [PLACE, datum('time', 'movingTime')],
+    });
+    expect(sentencePlan(makeActivity({ sportType: 'Hike' }), false)?.lead.lead).toBe('hike');
+    // A swim has no place to go through, and its pace is per 100 m.
+    expect(sentencePlan(makeActivity({ sportType: 'Swim' }), true)).toEqual({
+      lead: { lead: 'swim', metric: 'distance' },
+      clauses: [datum('time', 'movingTime'), datum('pace', 'swimPace')],
+    });
+    // A sport without a word of its own goes by its name, after the distance.
+    expect(sentencePlan(makeActivity({ sportType: 'AlpineSki' }), false)?.lead.lead).toBe(
+      'distance',
+    );
+  });
+
+  it('writes a session without distance with its time and its calories, or else its heart rate', () => {
+    const gym = { sportType: 'WeightTraining', distanceMeters: 0, averageSpeed: null } as const;
+    expect(sentencePlan(makeActivity(gym), true)).toEqual({
+      lead: { lead: 'time', metric: 'movingTime' },
+      clauses: [datum('calories', 'calories')],
+    });
+    expect(sentencePlan(makeActivity({ ...gym, calories: null }), true)?.clauses).toEqual([
+      datum('heartRate', 'averageHeartRate'),
+    ]);
+    expect(
+      sentencePlan(makeActivity({ ...gym, calories: null, averageHeartRate: null }), true)?.clauses,
+    ).toEqual([]);
+  });
+
+  it('has nothing to say without a distance or a time', () => {
+    expect(
+      sentencePlan(
+        makeActivity({
+          sportType: 'Workout',
+          distanceMeters: 0,
+          movingTimeSeconds: 0,
+          averageSpeed: null,
+        }),
+        true,
+      ),
+    ).toBeNull();
   });
 });
 

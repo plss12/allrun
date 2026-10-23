@@ -104,7 +104,10 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'summaryChart':
       return `summaryChart-${item.value}`;
     case 'activityBlock':
-      return `block-${item.block.design}`;
+      // The laps' looks are apart: a tile each, with its two brand colors.
+      return item.block.design === 'laps'
+        ? `block-laps-${item.block.layout}`
+        : `block-${item.block.design}`;
     case 'text':
     case 'route':
     case 'summaryRoutes':
@@ -152,17 +155,21 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         return [item.line, flag(item.glow, 'glow')];
       case 'activityBlock':
         // Every version is named, the first too: they are designs, not options of one. A
-        // design of a single version has nothing to add; a cover adds its color, and a verse or a
-        // quote its name.
+        // design of a single version has nothing to add; a cover adds its color, and a verse, a
+        // quote or a chat message's phrase its name (a phrase of the user's, nothing).
         return [
           item.block.design === 'columns'
             ? item.block.count
-            : 'layout' in item.block
+            : // The laps' look is in their widget's key already.
+              'layout' in item.block && item.block.design !== 'laps'
               ? item.block.layout
               : undefined,
           'cover' in item.block ? item.block.cover : undefined,
           'verse' in item.block ? item.block.verse : undefined,
           'quote' in item.block ? item.block.quote : undefined,
+          'phrase' in item.block && typeof item.block.phrase === 'string'
+            ? item.block.phrase
+            : undefined,
         ];
       case 'text':
         return [];

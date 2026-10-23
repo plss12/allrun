@@ -10,6 +10,7 @@ import {
   type FontId,
   HEADLINE_LAYOUTS,
   BRAND_COVERS,
+  CHAT_PHRASES,
   LAPS_LAYOUTS,
   QUOTES,
   ROUTE_LAYOUTS,
@@ -68,11 +69,18 @@ export function blockDataCount(block: ActivityBlock): number {
       return 4;
     case 'music':
       return 2;
+    case 'receipt':
+      return 6;
+    case 'boardingPass':
+      return 4;
     case 'notes':
     case 'laps':
     case 'grandPrix':
     case 'alarm':
     case 'location':
+    case 'splitBars':
+    case 'splitLadder':
+    case 'verified':
       return 1;
     case 'headline':
     case 'day':
@@ -81,6 +89,8 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'serif':
     case 'message':
     case 'camera':
+    case 'chat':
+    case 'sentence':
       return 3;
     case 'verse':
     case 'quote':
@@ -93,9 +103,10 @@ export function blockDataCount(block: ActivityBlock): number {
  * the gallery. Columns are only offered up to the number of data it has (a gym session has fewer
  * than six), the route's only when it has one, the splits only `withSplits` (when its detail has
  * them), the laps only `withLaps` (when it has more than one), the location only `withPlace` (when
- * its place can be named), and nothing for an activity without data. The verse and the quote come
- * with their first phrase: the gallery lists the others to choose from. Time O(m) for the m
- * metrics of its sport.
+ * its place can be named), the sentence only when it can be written (see `sentencePlan`), and
+ * nothing for an activity without data. The verse, the quote and the chat message come with their
+ * first phrase: the gallery lists the others to choose from. Time O(m) for the m metrics of its
+ * sport.
  */
 export function activityBlocks(
   activity: Activity,
@@ -124,14 +135,24 @@ export function activityBlocks(
     { design: 'serif' } as const,
     { design: 'verse', verse: VERSES[0] } as const,
     { design: 'quote', quote: QUOTES[0] } as const,
-    ...(withSplits ? APP_MODES.map((layout) => ({ design: 'notes', layout }) as const) : []),
-    ...(withLaps
-      ? LAPS_LAYOUTS.flatMap((layout) =>
-          BRAND_COVERS.map((cover) => ({ design: 'laps', layout, cover }) as const),
-        )
+    ...(sentencePlan(activity, withPlace) === null ? [] : [{ design: 'sentence' } as const]),
+    ...APP_MODES.map((layout) => ({ design: 'verified', layout }) as const),
+    // The timing tables, each next to the one of its look: AURA's board of laps and its bars of
+    // splits; the karting's sheet and the ladder of splits, as plain; then a race on TV, and the
+    // note.
+    ...(withLaps ? lapsOf('board') : []),
+    ...(withSplits ? [{ design: 'splitBars' } as const] : []),
+    ...(withLaps ? lapsOf('sheet') : []),
+    ...(withSplits
+      ? [
+          ...BRAND_COVERS.map((cover) => ({ design: 'splitLadder', cover }) as const),
+          { design: 'grandPrix' } as const,
+          ...APP_MODES.map((layout) => ({ design: 'notes', layout }) as const),
+        ]
       : []),
-    ...(withSplits ? [{ design: 'grandPrix' } as const] : []),
+    // The phone's apps: the two chat messages together.
     ...APP_MODES.map((layout) => ({ design: 'message', layout }) as const),
+    ...APP_MODES.map((layout) => ({ design: 'chat', layout, phrase: CHAT_PHRASES[0] }) as const),
     ...APP_MODES.flatMap((layout) =>
       BRAND_COVERS.map((cover) => ({ design: 'music', layout, cover }) as const),
     ),
@@ -141,7 +162,96 @@ export function activityBlocks(
       : BRAND_COVERS.map((cover) => ({ design: 'camera', cover }) as const)),
     ...APP_MODES.map((layout) => ({ design: 'alarm', layout }) as const),
     ...(withPlace ? APP_MODES.map((layout) => ({ design: 'location', layout }) as const) : []),
+    // Things of paper.
+    { design: 'receipt' } as const,
+    ...BRAND_COVERS.map((cover) => ({ design: 'boardingPass', cover }) as const),
   ];
+}
+
+/** The laps in one look, in both brand colors. */
+const lapsOf = (layout: (typeof LAPS_LAYOUTS)[number]): ActivityBlock[] =>
+  BRAND_COVERS.map((cover) => ({ design: 'laps', layout, cover }));
+
+/**
+ * How the highlighted sentence opens: with the distance and its sport's word ("11.34 kilometer
+ * run"), with the distance and the sport's name, for sports without a word of their own, or with
+ * the time and the sport's name, for those without a distance ("45min of weight training").
+ */
+export type SentenceLead = 'run' | 'ride' | 'walk' | 'hike' | 'swim' | 'distance' | 'time';
+
+/** What the sentence says after its lead: where, how long, how fast, how hard. */
+export type SentenceClause = 'place' | 'time' | 'pace' | 'speed' | 'calories' | 'heartRate';
+
+/** A highlighted sentence: its lead and clauses, each with the datum it writes (none for the place). */
+export interface SentencePlan {
+  readonly lead: { readonly lead: SentenceLead; readonly metric: MetricId };
+  readonly clauses: readonly {
+    readonly clause: SentenceClause;
+    readonly metric: MetricId | null;
+  }[];
+}
+
+/** The lead of an activity with a distance, by its sport's family. */
+const DISTANCE_LEADS: Readonly<Record<SportFamily, SentenceLead>> = {
+  run: 'run',
+  ride: 'ride',
+  walk: 'walk',
+  swim: 'swim',
+  training: 'distance',
+  other: 'distance',
+};
+
+/** How fast each family goes, in the sentence: walks say only how long they took. */
+const SENTENCE_SPEEDS: Readonly<
+  Record<SportFamily, { readonly clause: SentenceClause; readonly metric: MetricId } | null>
+> = {
+  run: { clause: 'pace', metric: 'pace' },
+  swim: { clause: 'pace', metric: 'swimPace' },
+  ride: { clause: 'speed', metric: 'speed' },
+  training: { clause: 'speed', metric: 'speed' },
+  other: { clause: 'speed', metric: 'speed' },
+  walk: null,
+};
+
+/**
+ * The sentence that tells `activity`, as AURA writes it: "11.3 kilometer run through Andújar, Jaén
+ * in 1h 5m, at 5:45/km pace." With a distance: the distance and the sport, where it went (when
+ * `withPlace`, but for a swim), how long it took and how fast. Without one: how long, and the
+ * calories it burned, or else its heart rate ("45 minute workout burning 628 calories."). Each part
+ * only when the activity has its datum; `null` without a distance or a time to open with. Time
+ * O(m) for the m metrics of its sport.
+ */
+export function sentencePlan(activity: Activity, withPlace: boolean): SentencePlan | null {
+  const available = availableMetrics(activity);
+  const has = (metric: MetricId) => available.includes(metric);
+  if (has('distance')) {
+    const speed = SENTENCE_SPEEDS[activity.sportFamily];
+    return {
+      lead: {
+        lead: activity.sportModality === 'hike' ? 'hike' : DISTANCE_LEADS[activity.sportFamily],
+        metric: 'distance',
+      },
+      clauses: [
+        ...(withPlace && activity.sportFamily !== 'swim'
+          ? [{ clause: 'place', metric: null } as const]
+          : []),
+        ...(has('movingTime') ? [{ clause: 'time', metric: 'movingTime' } as const] : []),
+        ...(speed !== null && has(speed.metric) ? [speed] : []),
+      ],
+    };
+  }
+  if (!has('movingTime')) {
+    return null;
+  }
+  const effort = has('calories')
+    ? ({ clause: 'calories', metric: 'calories' } as const)
+    : has('averageHeartRate')
+      ? ({ clause: 'heartRate', metric: 'averageHeartRate' } as const)
+      : null;
+  return {
+    lead: { lead: 'time', metric: 'movingTime' },
+    clauses: effort === null ? [] : [effort],
+  };
 }
 
 /** How a split compares with the others in a race's timing tower, as a tyre compound. */
@@ -177,7 +287,10 @@ export function sportIcon(activity: Activity): SportIconId {
   return activity.sportModality === 'hike' ? 'hike' : activity.sportFamily;
 }
 
-/** Mixed widgets that recreate another app: their look is fixed, not the user's to style. */
+/**
+ * Mixed widgets that recreate another app or a thing (a receipt, a boarding pass, a sheet of paper
+ * with highlights): their look is fixed, not the user's to style.
+ */
 const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set([
   'notes',
   'message',
@@ -187,6 +300,13 @@ const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set([
   'grandPrix',
   'alarm',
   'location',
+  'splitBars',
+  'splitLadder',
+  'verified',
+  'chat',
+  'sentence',
+  'receipt',
+  'boardingPass',
 ]);
 
 /**
@@ -258,6 +378,13 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
     case 'grandPrix':
     case 'alarm':
     case 'location':
+    case 'splitBars':
+    case 'splitLadder':
+    case 'verified':
+    case 'chat':
+    case 'sentence':
+    case 'receipt':
+    case 'boardingPass':
       return lettering('inter', false);
     case 'columns':
     case 'route':

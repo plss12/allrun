@@ -126,6 +126,13 @@ export const en = {
       grandPrix: 'Grand Prix',
       alarm: 'Alarm',
       location: 'Location',
+      splitBars: 'Split bars',
+      splitLadder: 'Split ladder',
+      verified: 'Verified',
+      chat: 'Phrase',
+      sentence: 'Highlighted',
+      receipt: 'Receipt',
+      boardingPass: 'Boarding pass',
     },
     /** The camera's modes, as the iPhone writes them: photo is the one chosen. */
     cameraModes: { video: 'VIDEO', photo: 'PHOTO' },
@@ -137,40 +144,146 @@ export const en = {
     quoted: '“{{text}}”',
     /** Bible verses from the World English Bible (public domain), with their references. */
     verses: {
+      philippians4v13: {
+        text: 'I can do all things through Christ, who strengthens me.',
+        source: 'Philippians 4:13',
+      },
       romans8v18: {
         text: 'For I consider that the sufferings of this present time are not worthy to be compared with the glory which will be revealed toward us.',
         source: 'Romans 8:18',
       },
-      philippians4v13: {
-        text: 'I can do all things through Christ, who strengthens me.',
-        source: 'Philippians 4:13',
+      corinthians9v24: { text: 'Run like that, that you may win.', source: '1 Corinthians 9:24' },
+      hebrews12v1: {
+        text: 'Let us run with perseverance the race that is set before us.',
+        source: 'Hebrews 12:1',
       },
       isaiah40v31: {
         text: 'They will run, and not be weary. They will walk, and not faint.',
         source: 'Isaiah 40:31',
       },
+      isaiah40v29: {
+        text: 'He gives power to the weak. He increases the strength of him who has no might.',
+        source: 'Isaiah 40:29',
+      },
+      psalms18v33: {
+        text: 'He makes my feet like deer’s feet, and sets me on my high places.',
+        source: 'Psalms 18:33',
+      },
+      galatians6v9: {
+        text: 'Let us not be weary in doing good, for we will reap in due season, if we don’t give up.',
+        source: 'Galatians 6:9',
+      },
       timothy4v7: {
         text: 'I have fought the good fight. I have finished the course. I have kept the faith.',
         source: '2 Timothy 4:7',
       },
-      hebrews12v1: {
-        text: "Let's run with perseverance the race that is set before us.",
-        source: 'Hebrews 12:1',
+      proverbs24v16: {
+        text: 'A righteous man falls seven times, and rises up again.',
+        source: 'Proverbs 24:16',
       },
-      corinthians9v24: { text: 'Run like that, that you may win.', source: '1 Corinthians 9:24' },
+      joshua1v9: {
+        text: 'Be strong and courageous. Don’t be afraid. Don’t be dismayed.',
+        source: 'Joshua 1:9',
+      },
+      psalms28v7: {
+        text: 'Yahweh is my strength and my shield. My heart has trusted in him, and I am helped.',
+        source: 'Psalms 28:7',
+      },
+      james1v12: {
+        text: 'Blessed is the man who endures temptation, for when he has been approved, he will receive the crown of life.',
+        source: 'James 1:12',
+      },
+      corinthians9v25: {
+        text: 'Every man who strives in the games exercises self-control in all things.',
+        source: '1 Corinthians 9:25',
+      },
+      psalms119v32: {
+        text: 'I run in the path of your commandments, for you have set my heart free.',
+        source: 'Psalms 119:32',
+      },
+      deuteronomy31v6: {
+        text: 'Be strong and courageous. Don’t be afraid or scared.',
+        source: 'Deuteronomy 31:6',
+      },
+      philippians3v13: {
+        text: 'Forgetting the things which are behind, and stretching forward to the things which are before, I press on toward the goal.',
+        source: 'Philippians 3:13-14',
+      },
+      psalms60v12: { text: 'Through God we shall do valiantly.', source: 'Psalms 60:12' },
+      romans5v3: {
+        text: 'Suffering produces perseverance; and perseverance, proven character; and proven character, hope.',
+        source: 'Romans 5:3-4',
+      },
+      colossians3v23: {
+        text: 'Whatever you do, work heartily, as for the Lord, and not for men.',
+        source: 'Colossians 3:23',
+      },
     },
     /** Motivating quotes, with their authors. */
     quotes: {
-      prefontaine: {
-        text: 'To give anything less than your best is to sacrifice the gift.',
-        author: 'Steve Prefontaine',
+      kipchoge: { text: 'No human is limited.', author: 'Eliud Kipchoge' },
+      phelps: {
+        text: "You can't put a limit on anything. The more you dream, the farther you get.",
+        author: 'Michael Phelps',
       },
-      murakami: { text: 'Pain is inevitable. Suffering is optional.', author: 'Haruki Murakami' },
+      lemond: { text: 'It never gets easier, you just go faster.', author: 'Greg LeMond' },
       zatopek: {
         text: 'If you want to run, run a mile. If you want to experience a different life, run a marathon.',
         author: 'Emil Zátopek',
       },
-      kipchoge: { text: 'No human is limited.', author: 'Eliud Kipchoge' },
+      prefontaine: {
+        text: 'To give anything less than your best is to sacrifice the gift.',
+        author: 'Steve Prefontaine',
+      },
+      merckx: {
+        text: 'Ride as much or as little, or as long or as short as you feel. But ride.',
+        author: 'Eddy Merckx',
+      },
+      jordan: {
+        text: "I've failed over and over and over again in my life. And that is why I succeed.",
+        author: 'Michael Jordan',
+      },
+      ali: {
+        text: 'Suffer now and live the rest of your life as a champion.',
+        author: 'Muhammad Ali',
+      },
+      serenaWilliams: {
+        text: 'A champion is defined not by their wins but by how they can recover when they fall.',
+        author: 'Serena Williams',
+      },
+      bolt: { text: "I don't think limits.", author: 'Usain Bolt' },
+      nyad: { text: 'Never, ever give up.', author: 'Diana Nyad' },
+      ashe: {
+        text: 'Start where you are. Use what you have. Do what you can.',
+        author: 'Arthur Ashe',
+      },
+      gretzky: { text: "You miss 100% of the shots you don't take.", author: 'Wayne Gretzky' },
+      billieJeanKing: {
+        text: 'Champions keep playing until they get it right.',
+        author: 'Billie Jean King',
+      },
+      pele: {
+        text: 'Success is no accident. It is hard work, perseverance, learning, studying, sacrifice.',
+        author: 'Pelé',
+      },
+      owens: {
+        text: 'In order to make dreams come into reality, it takes an awful lot of determination, dedication, self-discipline, and effort.',
+        author: 'Jesse Owens',
+      },
+      nadal: { text: 'I play each point like my life depends on it.', author: 'Rafael Nadal' },
+      kobe: {
+        text: 'The most important thing is to try and inspire people so that they can be great in whatever they want to do.',
+        author: 'Kobe Bryant',
+      },
+      biles: {
+        text: "I'd rather regret the risks that didn't work out than the chances I didn't take at all.",
+        author: 'Simone Biles',
+      },
+      switzer: {
+        text: 'Life is for participating, not for spectating.',
+        author: 'Kathrine Switzer',
+      },
+      murakami: { text: 'Pain is inevitable. Suffering is optional.', author: 'Haruki Murakami' },
       karnazes: {
         text: 'Run when you can, walk if you have to, crawl if you must; just never give up.',
         author: 'Dean Karnazes',
@@ -179,19 +292,7 @@ export const en = {
         text: "The miracle isn't that I finished. The miracle is that I had the courage to start.",
         author: 'John Bingham',
       },
-      jordan: {
-        text: "I've failed over and over and over again in my life. And that is why I succeed.",
-        author: 'Michael Jordan',
-      },
-      notke: {
-        text: "Hard work beats talent when talent doesn't work hard.",
-        author: 'Tim Notke',
-      },
-      billieJeanKing: {
-        text: 'Champions keep playing until they get it right.',
-        author: 'Billie Jean King',
-      },
-      ali: { text: "Don't count the days. Make the days count.", author: 'Muhammad Ali' },
+      notke: { text: "Hard work beats talent when talent doesn't work hard.", author: 'Tim Notke' },
     },
     laps: {
       title: 'Laps',
@@ -206,6 +307,72 @@ export const en = {
     /** An alarm's label, and a location sticker's line: the sport or place and a datum. */
     alarmLabel: '{{sport}}, {{datum}}',
     locationLine: '{{place}}, {{datum}}',
+    /** The names over the splits' bars: the unit each split covers. */
+    splitBars: { km: 'Kilometer', mi: 'Mile' },
+    splitLadder: { title: 'Splits' },
+    /** The main datum in words, by its unit, next to the verified badge. */
+    verified: { km: '{{value}} kilometers', mi: '{{value}} miles' },
+    /** Phrases of the chat message: funny ones about how training leaves you. The first is short. */
+    phrases: {
+      zombieMode: 'Zombie mode activated.',
+      sweatOrTears: "I don't know if this is sweat or tears.",
+      soulLeft: 'My soul left my body halfway through.',
+      stairsEnemy: 'Tomorrow, stairs and I are mortal enemies.',
+      survived: 'I survived, but at what cost?',
+      whoToldMe: 'Who talked me into doing this?',
+      foodMotivation: 'I only did this for the post-workout food.',
+      crawling: 'Crawling to the shower right now.',
+      seemedGood: 'It seemed like a good idea an hour ago.',
+      jellyLegs: 'My legs are officially made of jelly.',
+      rebooting: 'System rebooting... please wait.',
+      couchCalling: 'The couch is screaming my name.',
+      fakeSmile: 'This smile hides a lot of muscle pain.',
+      alienAbduction: 'If aliens abduct me now, they better carry me.',
+      endorphins: 'Endorphins are working overtime.',
+      sleep2030: 'Going to sleep until the year 2030.',
+      ghostedBreath: 'My own breath ghosted me.',
+      hungryBear: 'Hunger level: I could eat the whole fridge.',
+      willToLive: 'Searching for my will to live on the trail.',
+      brainEmpty: 'Brain empty, let the legs decide.',
+      therapy: 'Cheaper than therapy.',
+      easyOne: 'It was supposed to be an easy one.',
+      coachProud: 'My coach would be proud.',
+      beforeCoffee: 'Done before coffee.',
+    },
+    /**
+     * The highlighted sentence, built from its lead, its clauses and its end: "11.34 kilometer run
+     * through Andújar, Jaén in 1h 5m 22s, at 5:45 min/km pace." The data in double braces are
+     * highlighted; the sport is its name, in lowercase.
+     */
+    sentence: {
+      leads: {
+        run: '{{distance}} run',
+        ride: '{{distance}} ride',
+        walk: '{{distance}} walk',
+        hike: '{{distance}} hike',
+        swim: '{{distance}} swim',
+        distance: '{{distance}} of {{sport}}',
+        time: '{{time}} of {{sport}}',
+      },
+      /** A distance before the sport's word, which reads as one: "11.34 kilometer run". */
+      units: { km: '{{value}} kilometer', mi: '{{value}} mile' },
+      clauses: {
+        place: ' through {{place}}',
+        time: ' in {{time}}',
+        pace: ', at {{pace}} pace',
+        speed: ', at {{speed}}',
+        calories: ' burning {{calories}}',
+        heartRate: ' at {{heartRate}}',
+      },
+      end: '.',
+    },
+    receipt: { total: 'Total', thanks: 'Thanks for moving!' },
+    boardingPass: {
+      title: 'Boarding pass',
+      departure: 'Departure',
+      arrival: 'Arrival',
+      date: 'Date',
+    },
   },
   style: {
     color: 'Color',
@@ -342,6 +509,10 @@ export const en = {
     choose: 'Tap to choose',
     chooseVerse: 'Choose a verse',
     chooseQuote: 'Choose a quote',
+    chooseChat: 'Choose a phrase',
+    /** The chat message the user writes: the field's hint and its button. */
+    ownPhrase: 'Write your own',
+    addOwnPhrase: 'Add',
     dataCount: 'Data: {{count}}',
   },
   metrics: {

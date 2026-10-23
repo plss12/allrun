@@ -1,4 +1,5 @@
 import type { Activity } from '@/core/activity';
+import type { SentenceClause, SentenceLead } from '@/core/activity-block';
 import type { BarSeries, LineSeries, SplitRow } from '@/core/activity-charts';
 import type { ActivityDetail } from '@/core/activity-detail';
 import type { HeartRateZones } from '@/core/heart-rate-zones';
@@ -16,7 +17,14 @@ import { formatPlace, type Place } from '@/core/place';
 import type { SportFamily, SportModality } from '@/core/sports';
 import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
 import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
-import type { ActivityChartSeries, Layer, Quote, SummaryMetricId, Verse } from '@/core/template';
+import type {
+  ActivityChartSeries,
+  ChatPhrase,
+  Layer,
+  Quote,
+  SummaryMetricId,
+  Verse,
+} from '@/core/template';
 import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
 import {
   formatActivityDate,
@@ -93,6 +101,16 @@ export type LabelKey =
   | `widgets.quotes.${Quote}.${'text' | 'author'}`
   | `widgets.laps.${'title' | 'lap' | 'distance' | 'time' | 'pace' | 'speed'}`
   | 'widgets.grandPrix.leader'
+  | `widgets.splitBars.${DistanceUnit}`
+  | 'widgets.splitLadder.title'
+  | `widgets.verified.${DistanceUnit}`
+  | `widgets.phrases.${ChatPhrase}`
+  | `widgets.sentence.leads.${SentenceLead}`
+  | `widgets.sentence.units.${DistanceUnit}`
+  | `widgets.sentence.clauses.${SentenceClause}`
+  | 'widgets.sentence.end'
+  | `widgets.receipt.${'total' | 'thanks'}`
+  | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date'}`
   | `widgets.cameraModes.${'video' | 'photo'}`
   | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`
   | `chartCaptions.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;

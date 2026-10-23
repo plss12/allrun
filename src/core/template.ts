@@ -207,7 +207,20 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * - `alarm` (replica): the start time as an alarm of the iPhone, the sport and distance as its
  *   label, in dark or light mode;
  * - `location` (replica): the place and the distance as a location sticker, in light or dark
- *   mode; only when the place is known.
+ *   mode; only when the place is known;
+ * - `splitBars` (replica): the splits as AURA's board, a bar per split as long as its time, over
+ *   the distance and the time; only for activities with splits;
+ * - `splitLadder` (replica): the splits as white tags in a typewriter's letters, each as wide as
+ *   it was fast, the fastest in a brand color (`cover`); only for activities with splits;
+ * - `verified` (replica): the main datum in words with Instagram's verified badge, its text white
+ *   (`dark`) or black (`light`);
+ * - `chat` (replica): a phrase as a sent chat message, chosen from a list (`phrase`) or written
+ *   by the user (`{ own }`), two data where the time goes, in dark or light mode;
+ * - `sentence`: the activity written as a sentence on a sheet of paper, its data highlighted with
+ *   a marker;
+ * - `receipt`: the data as a shop's receipt, on thermal paper, with its total and barcode;
+ * - `boardingPass`: the activity as a boarding pass, from its start to its finish, its band in a
+ *   brand color (`cover`).
  */
 export const ACTIVITY_BLOCK_DESIGNS = [
   'headline',
@@ -230,6 +243,13 @@ export const ACTIVITY_BLOCK_DESIGNS = [
   'grandPrix',
   'alarm',
   'location',
+  'splitBars',
+  'splitLadder',
+  'verified',
+  'chat',
+  'sentence',
+  'receipt',
+  'boardingPass',
 ] as const;
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
@@ -259,27 +279,89 @@ export const LAPS_LAYOUTS = ['board', 'sheet'] as const;
 export const VERSES = [
   'philippians4v13',
   'romans8v18',
-  'isaiah40v31',
-  'timothy4v7',
-  'hebrews12v1',
   'corinthians9v24',
+  'hebrews12v1',
+  'isaiah40v31',
+  'isaiah40v29',
+  'psalms18v33',
+  'galatians6v9',
+  'timothy4v7',
+  'proverbs24v16',
+  'joshua1v9',
+  'psalms28v7',
+  'james1v12',
+  'corinthians9v25',
+  'psalms119v32',
+  'deuteronomy31v6',
+  'philippians3v13',
+  'psalms60v12',
+  'romans5v3',
+  'colossians3v23',
 ] as const;
 /** Quotes of the quote widget, by their author; their texts are in the locales. */
 export const QUOTES = [
   'kipchoge',
-  'prefontaine',
-  'murakami',
+  'phelps',
+  'lemond',
   'zatopek',
+  'prefontaine',
+  'merckx',
+  'jordan',
+  'ali',
+  'serenaWilliams',
+  'bolt',
+  'nyad',
+  'ashe',
+  'gretzky',
+  'billieJeanKing',
+  'pele',
+  'owens',
+  'nadal',
+  'kobe',
+  'biles',
+  'switzer',
+  'murakami',
   'karnazes',
   'bingham',
-  'jordan',
   'notke',
-  'billieJeanKing',
-  'ali',
 ] as const;
+
+/**
+ * Phrases of the chat message, by name; their texts are in the locales. The first is the one the
+ * gallery shows, under its "Tap to choose" hint, so it is a short one.
+ */
+export const CHAT_PHRASES = [
+  'zombieMode',
+  'sweatOrTears',
+  'soulLeft',
+  'stairsEnemy',
+  'survived',
+  'whoToldMe',
+  'foodMotivation',
+  'crawling',
+  'seemedGood',
+  'jellyLegs',
+  'rebooting',
+  'couchCalling',
+  'fakeSmile',
+  'alienAbduction',
+  'endorphins',
+  'sleep2030',
+  'ghostedBreath',
+  'hungryBear',
+  'willToLive',
+  'brainEmpty',
+  'therapy',
+  'easyOne',
+  'coachProud',
+  'beforeCoffee',
+] as const;
+/** Longest phrase the user can write in a chat message, in characters. */
+export const MAX_CHAT_LENGTH = 60;
 
 export type Verse = (typeof VERSES)[number];
 export type Quote = (typeof QUOTES)[number];
+export type ChatPhrase = (typeof CHAT_PHRASES)[number];
 
 const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('headline'), layout: z.enum(HEADLINE_LAYOUTS) }),
@@ -310,6 +392,20 @@ const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('grandPrix') }),
   z.object({ design: z.literal('alarm'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('location'), layout: z.enum(APP_MODES) }),
+  z.object({ design: z.literal('splitBars') }),
+  z.object({ design: z.literal('splitLadder'), cover: z.enum(BRAND_COVERS) }),
+  z.object({ design: z.literal('verified'), layout: z.enum(APP_MODES) }),
+  z.object({
+    design: z.literal('chat'),
+    layout: z.enum(APP_MODES),
+    phrase: z.union([
+      z.enum(CHAT_PHRASES),
+      z.object({ own: z.string().trim().min(1).max(MAX_CHAT_LENGTH) }),
+    ]),
+  }),
+  z.object({ design: z.literal('sentence') }),
+  z.object({ design: z.literal('receipt') }),
+  z.object({ design: z.literal('boardingPass'), cover: z.enum(BRAND_COVERS) }),
 ]);
 
 export type ActivityBlock = z.infer<typeof activityBlockSchema>;
