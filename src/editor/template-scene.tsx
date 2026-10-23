@@ -62,7 +62,7 @@ import {
 import { prepareActivityBlock } from './activity-blocks';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
-import { FONT_FAMILIES } from './fonts';
+import { CAP_HEIGHTS, FONT_FAMILIES } from './fonts';
 import {
   addLeanRoom,
   DropShadow,
@@ -743,16 +743,20 @@ const ALIGN = { left: TextAlign.Left, center: TextAlign.Center, right: TextAlign
 
 /**
  * Lays out a text widget, wrapping lines longer than `wrapWidth` (line breaks in the text always
- * apply), then shrinks the paragraph to its longest line so it centers on (0, 0).
+ * apply), then shrinks the paragraph to its longest line so it centers on (0, 0). Its letters are
+ * `opacity` times as opaque as its color.
  */
 function buildParagraph(
   fonts: SkTypefaceFontProvider,
   style: TextStyle,
   content: ParagraphContent,
   wrapWidth = MAX_TEXT_WIDTH,
+  opacity = 1,
 ): SkParagraph {
+  const color = Skia.Color(style.color);
+  color[3] *= opacity;
   const textStyle = (fontSize: number, bold: boolean): SkTextStyle => ({
-    color: Skia.Color(style.color),
+    color,
     fontFamilies: [FONT_FAMILIES[style.font]],
     fontSize,
     fontStyle: {
@@ -937,16 +941,32 @@ const ZONE_COLORS = ['#A1A1A6', '#3D8BFD', '#34C759', '#FF9F0A', '#FF453A'] as c
 
 const zoneColor = (index: number): string => ZONE_COLORS[Math.min(index, ZONE_COLORS.length - 1)];
 
-/** A chart's header laid out: its two data, side by side, each its name over its value. */
+/**
+ * A datum of a chart's header laid out: its name (none for a chart's name alone) over its value,
+ * `valueY` down, both aligned within `width` as the header is.
+ */
+interface HeaderCell {
+  readonly label: SkParagraph | null;
+  readonly value: SkParagraph;
+  readonly valueY: number;
+  readonly width: number;
+}
+
+/** A chart's header laid out: its two data side by side. */
 interface PreparedHeader {
-  readonly cells: readonly SkParagraph[];
+  readonly cells: readonly HeaderCell[];
   readonly width: number;
   readonly height: number;
 }
 
-/** Size of a header's values (their names are a third of it), and the room between the two. */
-const HEADER_VALUE_SIZE = 76;
+/**
+ * Size of a header's values, their units as big; the room between the two data. Their names are
+ * smaller, fainter as the chart's area fades, and close over them, the room between a name's
+ * baseline and its value's capitals a share of the value's size: the value stands out.
+ */
+const HEADER_VALUE_SIZE = 100;
 const HEADER_CELL_GAP = 64;
+const HEADER_LABEL = { size: 0.4, opacity: 0.65, gap: 0.14 } as const;
 /** Room between the header and the chart under it. */
 const HEADER_GAP = 34;
 
@@ -960,29 +980,46 @@ function prepareHeader(
   style: TextStyle,
   translate: (key: LabelKey) => string,
 ): PreparedHeader {
-  const build = (size: number) =>
-    data.map((datum) =>
-      buildParagraph(
-        fonts,
-        style,
-        { label: translate(datum.label), value: datum.value, unit: datum.unit, valueSize: size },
-        NO_WRAP_WIDTH,
-      ),
+  const line = (text: string, size: number, opacity = 1) =>
+    buildParagraph(
+      fonts,
+      style,
+      { label: null, value: text, unit: null, valueSize: size },
+      NO_WRAP_WIDTH,
+      opacity,
     );
-  const widthOf = (cells: readonly SkParagraph[]) =>
-    cells.reduce((sum, cell) => sum + Math.ceil(cell.getLongestLine()) + 1, 0);
+  const build = (size: number): HeaderCell[] =>
+    data.map((datum) => {
+      const label = line(translate(datum.label), size * HEADER_LABEL.size, HEADER_LABEL.opacity);
+      const value = line(datum.unit === null ? datum.value : `${datum.value} ${datum.unit}`, size);
+      const baseline = (paragraph: SkParagraph) =>
+        paragraph.getLineMetrics()[0]?.baseline ?? paragraph.getHeight();
+      // The value's capitals start just under the name's baseline.
+      const capitalsTop = baseline(value) - CAP_HEIGHTS[style.font] * size;
+      return {
+        label,
+        value,
+        valueY: baseline(label) + HEADER_LABEL.gap * size - capitalsTop,
+        width: Math.max(widthOf(label), widthOf(value)),
+      };
+    });
+  const cellsWidth = (cells: readonly HeaderCell[]) =>
+    cells.reduce((sum, cell) => sum + cell.width, 0);
   const gaps = HEADER_CELL_GAP * (data.length - 1);
   const natural = build(HEADER_VALUE_SIZE);
   const cells =
-    widthOf(natural) + gaps <= CHART_WIDTH
+    cellsWidth(natural) + gaps <= CHART_WIDTH
       ? natural
-      : build((HEADER_VALUE_SIZE * (CHART_WIDTH - gaps)) / widthOf(natural));
+      : build((HEADER_VALUE_SIZE * (CHART_WIDTH - gaps)) / cellsWidth(natural));
   return {
     cells,
-    width: widthOf(cells) + gaps,
-    height: Math.max(...cells.map((cell) => cell.getHeight())),
+    width: cellsWidth(cells) + gaps,
+    height: Math.max(...cells.map((cell) => cell.valueY + cell.value.getHeight())),
   };
 }
+
+/** Width a paragraph takes on the canvas: its longest line, to the next pixel and one more. */
+const widthOf = (paragraph: SkParagraph): number => Math.ceil(paragraph.getLongestLine()) + 1;
 
 /** Size of a chart's name, written over it in place of its header. */
 const CAPTION_SIZE = 34;
@@ -999,9 +1036,10 @@ function prepareCaption(
     { label: null, value: text, unit: null, valueSize: CAPTION_SIZE },
     CHART_WIDTH,
   );
+  const width = widthOf(caption);
   return {
-    cells: [caption],
-    width: Math.ceil(caption.getLongestLine()) + 1,
+    cells: [{ label: null, value: caption, valueY: 0, width }],
+    width,
     height: caption.getHeight(),
   };
 }
@@ -1032,10 +1070,27 @@ function ChartFrame({
   return (
     <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
       {header?.cells.map((cell, i) => {
-        const width = Math.ceil(cell.getLongestLine()) + 1;
         const x = left;
-        left += width + HEADER_CELL_GAP;
-        return <Paragraph key={i} paragraph={cell} x={x} y={0} width={width} />;
+        left += cell.width + HEADER_CELL_GAP;
+        const at = (paragraph: SkParagraph) => x + alignedX(align, widthOf(paragraph), cell.width);
+        return (
+          <Group key={i}>
+            {cell.label === null ? null : (
+              <Paragraph
+                paragraph={cell.label}
+                x={at(cell.label)}
+                y={0}
+                width={widthOf(cell.label)}
+              />
+            )}
+            <Paragraph
+              paragraph={cell.value}
+              x={at(cell.value)}
+              y={cell.valueY}
+              width={widthOf(cell.value)}
+            />
+          </Group>
+        );
       })}
       <Group transform={[{ translateY: top }]}>{children}</Group>
     </Group>

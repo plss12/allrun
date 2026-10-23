@@ -602,17 +602,26 @@ export function splitGapText(
 export interface HeaderDatum {
   readonly label: LabelKey;
   readonly value: string;
-  /** The unit in the app language ("min/km", "ppm"), or `null` for a time. */
+  /** The unit in the app language ("km", "ppm"), or `null` for a time or a pace (`5'44"`). */
   readonly unit: string | null;
 }
 
-/** A value of a chart's `measure` as a datum of its header. */
+/**
+ * A value of a chart's `measure` as a datum of its header; a pace with its marks and no unit
+ * (`5'44"`), shorter, as data widgets without names write it.
+ */
 function headerDatum(
   label: LabelKey,
   measure: ChartMeasure,
   value: number,
   context: TextContext,
 ): HeaderDatum {
+  if (measure === 'pace' || measure === 'swimPace') {
+    const display = withPaceMarks(
+      toDisplayMetric(CHART_METRICS[measure], value, { unit: context.unit, sportFamily: 'run' }),
+    );
+    return { label, value: formatMetric(display, context.locale).value, unit: null };
+  }
   const written = chartValue(measure, value, context);
   return {
     label,

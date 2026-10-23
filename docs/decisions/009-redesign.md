@@ -107,7 +107,9 @@ comes later.
   line over an area that fades out downwards. The title under the chart, the labels at the ends
   of a line and its marked peak go: the header says it, and an average is a dashed line without
   text (its value is in the header), so nothing covers the data. The header is centered over the
-  chart by default. Each chart also comes without its two data, under its name ("DESNIVEL", "KM
+  chart by default; each datum's value stands out, big, with its unit as big ("152 BPM"; a pace
+  with its marks and no unit, `5'44"`), under its name, small, close and fainter, as the chart's
+  area fades. Each chart also comes without its two data, under its name ("DESNIVEL", "KM
   POR SEMANA"), so it still says what it shows. Splits are a table as on Strava: number and pace,
   a bar per split, then the change in altitude and the heart rate (Strava gives each split's),
   right-aligned and without units, under short names of the columns ("Desn.", "FC"); no average.

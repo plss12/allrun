@@ -2894,7 +2894,7 @@ export function prepareActivityBlock(
         };
       }
       case 'boardingPass': {
-        // The activity as a flight from its start to its finish.
+        // The activity as a flight from its start to its finish, in the city it started in.
         const sizes = BOARDING_PASS;
         const { colors } = sizes;
         const cover = BRAND_COVER_COLORS[block.cover];
@@ -2975,16 +2975,20 @@ export function prepareActivityBlock(
           inner,
           sizes.gap,
         );
+        // Its band names the city it started in, as a pass names its destination; while the
+        // place is unknown, it says what it is. A long name is cut short before the icon.
+        const city = data.place === null ? null : formatPlace(data.place, 'city');
         const title = appText(
           [
             {
-              text: translate('widgets.boardingPass.title').toLocaleUpperCase(),
+              text: (city ?? translate('widgets.boardingPass.title')).toLocaleUpperCase(),
               size: sizes.title,
               bold: true,
               spacing: 0.12,
             },
           ],
           colors.band,
+          { maxWidth: inner - sizes.icon - sizes.gap },
         );
         const width = inner + 2 * sizes.padX;
         const body = sizes.band + sizes.gap * 1.2;

@@ -349,10 +349,10 @@ describe('activityChartHeader', () => {
     ]);
   });
 
-  it("writes a pace's average (the activity's own) and fastest, or a ride's speeds", () => {
+  it("writes a pace's average (the activity's own) and fastest with marks, or a ride's speeds", () => {
     expect(activityChartHeader('pace', run, line(4, 3), context)).toEqual([
-      { label: 'chartHeaders.averagePace', value: '5:00', unit: 'min/km' },
-      { label: 'chartHeaders.fastestPace', value: '4:10', unit: 'min/km' },
+      { label: 'chartHeaders.averagePace', value: `5'00"`, unit: null },
+      { label: 'chartHeaders.fastestPace', value: `4'10"`, unit: null },
     ]);
     const ride = makeActivity({ sportType: 'Ride', averageSpeed: 30 / 3.6 });
     expect(activityChartHeader('pace', ride, line(50 / 3.6), context)).toEqual([
@@ -385,8 +385,8 @@ describe('activityChartHeader', () => {
       splits: [split(3), split(4)],
     } as const;
     expect(activityChartHeader('splits', run, bars, context)).toEqual([
-      { label: 'chartHeaders.averagePace', value: '5:00', unit: 'min/km' },
-      { label: 'chartHeaders.fastestSplit', value: '4:10', unit: 'min/km' },
+      { label: 'chartHeaders.averagePace', value: `5'00"`, unit: null },
+      { label: 'chartHeaders.fastestSplit', value: `4'10"`, unit: null },
     ]);
   });
 });
