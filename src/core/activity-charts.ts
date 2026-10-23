@@ -164,12 +164,15 @@ export function activityChartSeries(
   }
 }
 
-/** The charts an activity can show, in the order the editor offers them. Time O(n log n). */
+/**
+ * The charts an activity can show, in the order the editor offers them: the two of its pace (the
+ * line and the splits) first, then its elevation, heart rate and power. Time O(n log n).
+ */
 export function availableActivityCharts(
   detail: ActivityDetail,
   unit: DistanceUnit,
 ): ActivityChartSeries[] {
-  const all: readonly ActivityChartSeries[] = ['elevation', 'pace', 'splits', 'heartRate', 'power'];
+  const all: readonly ActivityChartSeries[] = ['pace', 'splits', 'elevation', 'heartRate', 'power'];
   return all.filter((series) => activityChartSeries(detail, series, unit) !== null);
 }
 

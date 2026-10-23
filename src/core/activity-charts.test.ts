@@ -96,11 +96,11 @@ describe('activityChartSeries', () => {
 });
 
 describe('availableActivityCharts', () => {
-  it('offers the charts the activity recorded data for, in order', () => {
+  it('offers the charts the activity recorded data for, the two of its pace first', () => {
     expect(availableActivityCharts(detail(), 'km')).toEqual([
-      'elevation',
       'pace',
       'splits',
+      'elevation',
       'heartRate',
     ]);
     expect(availableActivityCharts(detail({ streams: null }), 'mi')).toEqual([]);
