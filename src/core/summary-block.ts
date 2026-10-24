@@ -71,6 +71,7 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodWrapped',
   'periodNotes',
   'periodLaps',
+  'periodGrandPrix',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -242,6 +243,22 @@ export function periodWrapped(activities: readonly Activity[]): PeriodWrapped {
   };
 }
 
+/** Most activities a race of a month or a year classifies: its longest. */
+export const GRAND_PRIX_TOP = 10;
+
+/**
+ * A period's activities as a race classifies them, longest in time first: a week's all (as its
+ * note lists them, see `listsNoteActivities`), a longer period's longest {@link GRAND_PRIX_TOP}.
+ * Time O(n log n) for n activities, space O(n).
+ */
+export function grandPrixActivities(
+  summary: PeriodSummary,
+  activities: readonly Activity[],
+): Activity[] {
+  const ranked = [...activities].sort((a, b) => b.movingTimeSeconds - a.movingTimeSeconds);
+  return listsNoteActivities(summary) ? ranked : ranked.slice(0, GRAND_PRIX_TOP);
+}
+
 /**
  * The sport a period was mostly about: the family it spent most time on (the first, on a tie).
  * Time O(n · f) for n activities and f families.
@@ -305,8 +322,8 @@ export function noteActivities(activities: readonly Activity[]): NoteActivity[] 
  * highlighted sentence; its playlist and its review, in dark and light mode and each brand
  * color; its note,
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
- * days, weeks or months; its laps, on a board and a timing sheet in each brand color. None for a
- * period without activities. Time O(1).
+ * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race.
+ * None for a period without activities. Time O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -345,6 +362,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     ...LAPS_LAYOUTS.flatMap((layout) =>
       BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodLaps', layout, cover })),
     ),
+    { design: 'periodGrandPrix' },
   ];
 }
 
@@ -380,6 +398,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodWrapped':
     case 'periodNotes':
     case 'periodLaps':
+    case 'periodGrandPrix':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

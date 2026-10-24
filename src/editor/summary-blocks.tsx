@@ -39,6 +39,7 @@ import {
 import { CAP_HEIGHTS } from './fonts';
 import { softBackdrop } from './scene-text';
 import {
+  periodGrandPrixBox,
   periodLapsBox,
   periodNotesBox,
   periodPlaylistBox,
@@ -589,6 +590,8 @@ export function prepareSummaryBlock(
         return periodWrappedBox(block, data, { fonts, textContext, translate });
       case 'periodLaps':
         return periodLapsBox(block, data, { fonts, textContext, translate });
+      case 'periodGrandPrix':
+        return periodGrandPrixBox(data, { fonts, textContext, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

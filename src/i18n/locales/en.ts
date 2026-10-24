@@ -158,6 +158,7 @@ export const en = {
       periodWrapped: 'Recap',
       periodNotes: 'Notes',
       periodLaps: 'Laps',
+      periodGrandPrix: 'Grand Prix',
     },
     blocks: {
       bigTrio: 'Big datum and three',

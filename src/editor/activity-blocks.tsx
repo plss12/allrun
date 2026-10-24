@@ -457,6 +457,19 @@ export const iconBox = (icon: SportIconId, size: number, color?: string): Box =>
   place: (x, y) => [{ kind: 'icon', icon, x, y, size, ...(color === undefined ? {} : { color }) }],
 });
 
+/**
+ * What a summary's widget shows of its sport: one sport's icon `size` big, or, for a summary of
+ * every sport (`allrun`), AllRun's monogram, a little lower so it weighs about as much.
+ */
+export type SportMark = SportIconId | 'allrun';
+
+/** AllRun's monogram's height, a share of a sport's icon's size: about as heavy. */
+const SPORT_MARK_HEIGHT = 0.62;
+
+/** A sport's icon, or AllRun's monogram (see `SportMark`), in `color`. */
+export const sportMarkBox = (mark: SportMark, size: number, color: string): Box =>
+  mark === 'allrun' ? markBrandBox(size * SPORT_MARK_HEIGHT, color) : iconBox(mark, size, color);
+
 /** AllRun's monogram `height` tall, in a replica's own `color`. */
 export const markBrandBox = (height: number, color: string): Box => ({
   width: markWidth(height),
@@ -1313,10 +1326,10 @@ export interface LapsTable {
   /** The sheet's title. */
   readonly title: string;
   /**
-   * The sport the laps are all of, its icon before the board's first column name (a summary of
-   * one sport: the sheet says it in its title).
+   * The sport the laps are all of, its icon (or AllRun's monogram for every sport) before the
+   * board's first column name; a summary's laps (the sheet says it in its title).
    */
-  readonly icon?: SportIconId;
+  readonly icon?: SportMark;
 }
 
 /**
@@ -1357,7 +1370,7 @@ export function lapsTableBox(
       );
       return i === 0 && table.icon !== undefined
         ? row(
-            [iconBox(table.icon, board.header * LAPS_ICON, colors.ink), written],
+            [sportMarkBox(table.icon, board.header * LAPS_ICON, colors.ink), written],
             board.header * 0.35,
             'center',
           )
@@ -1530,6 +1543,129 @@ const GRAND_PRIX = {
 } as const;
 /** How a tyre compound is written on the tower, as TV writes it in any language. */
 const TYRE_LETTERS: Readonly<Record<TyreCompound, string>> = { soft: 'S', medium: 'M', hard: 'H' };
+
+/** A race's timing tower as `timingTowerBox` draws it. */
+export interface TimingTower {
+  /** The race's sport, its icon (or AllRun's monogram for every sport) before the title, if any. */
+  readonly icon?: SportMark;
+  readonly title: string;
+  /** Under the title, where TV writes the lap. */
+  readonly subtitle: string;
+  readonly rows: readonly {
+    readonly number: string;
+    /** The row's own sport, its icon before its value (a period's activities). */
+    readonly icon?: SportIconId;
+    readonly value: string;
+    /** Its gap to the leader, or the leader's word. */
+    readonly gap: string;
+    /** Its tyre, or the leader's purple stopwatch. */
+    readonly mark: TyreCompound | 'fastest';
+  }[];
+}
+
+/**
+ * A race's timing tower, as TV shows one (see `GRAND_PRIX`), of an activity's splits or a
+ * period's activities alike: the header lit from above over the rows, each its number and value
+ * at the left, its gap and its tyre (the leader's stopwatch) at the right, in a condensed italic.
+ */
+export function timingTowerBox(fonts: SkTypefaceFontProvider, tower: TimingTower): Box {
+  const sizes = GRAND_PRIX;
+  const { colors } = sizes;
+  const race = (content: string, size: number, color: string, bold = true) =>
+    appTextBox(fonts, [{ text: content, size, bold }], color, {
+      font: 'barlowCondensed',
+      italic: true,
+    });
+  const cells = tower.rows.map((line) => {
+    const value = race(line.value, sizes.row, colors.ink);
+    return [
+      race(line.number, sizes.row, colors.ink, false),
+      line.icon === undefined
+        ? value
+        : row([iconBox(line.icon, sizes.row, colors.ink), value], sizes.gap * 0.35, 'center'),
+      race(line.gap, sizes.row, colors.faded, false),
+      line.mark === 'fastest'
+        ? overlay(
+            discBox(sizes.row * 0.5, colors.fastest),
+            symbolBox('stopwatch', sizes.row * 0.82, colors.ink),
+          )
+        : race(TYRE_LETTERS[line.mark], sizes.row, sizes.tyres[line.mark]),
+    ];
+  });
+  const title = race(tower.title.toLocaleUpperCase(), sizes.title, colors.ink);
+  const header = column(
+    [
+      tower.icon === undefined
+        ? title
+        : row([sportMarkBox(tower.icon, sizes.icon, colors.ink), title], sizes.gap * 0.5, 'center'),
+      race(tower.subtitle.toLocaleUpperCase(), sizes.lap, colors.faded, false),
+    ],
+    0,
+    'center',
+  );
+  const widths = columnWidths(cells);
+  const inner = Math.max(header.width, tableWidth(widths, sizes.gap, 0));
+  // The number and the pace at the left, the gap and the tyre at the right end, as on TV.
+  const lines = cells.map((boxes) =>
+    placed(inner, sizes.rowHeight, [
+      { box: boxes[0], x: 0, y: (sizes.rowHeight - boxes[0].height) / 2 },
+      {
+        box: boxes[1],
+        x: widths[0] + sizes.gap,
+        y: (sizes.rowHeight - boxes[1].height) / 2,
+      },
+      {
+        box: boxes[2],
+        x: inner - widths[3] - sizes.gap - boxes[2].width,
+        y: (sizes.rowHeight - boxes[2].height) / 2,
+      },
+      centeredAt(boxes[3], inner - widths[3] / 2, sizes.rowHeight / 2),
+    ]),
+  );
+  const rows = placed(
+    inner,
+    sizes.rowHeight * lines.length,
+    lines.flatMap((line, i) => [
+      ...(i === 0
+        ? []
+        : [
+            {
+              box: hairlineBox(inner, 0, sizes.rule, colors.rule),
+              x: 0,
+              y: sizes.rowHeight * i,
+            },
+          ]),
+      { box: line, x: 0, y: sizes.rowHeight * i },
+    ]),
+  );
+  // The header lit from above, apart from the rows by the shadow it casts on them.
+  const width = inner + 2 * sizes.padX;
+  const headerHeight = sizes.padY + header.height + sizes.padY * 0.6;
+  const height = headerHeight + rows.height + sizes.padY;
+  // `y` down the card: the card's top is that far above where the shade is placed.
+  const shade = (y: number, tall: number, shades: readonly [string, string]): Box => ({
+    width,
+    height: tall,
+    place: (x, top) => [
+      {
+        kind: 'shade',
+        x,
+        y: top,
+        width,
+        height: tall,
+        colors: shades,
+        card: { x, y: top - y, width, height, radius: sizes.radius },
+      },
+    ],
+  });
+  return placed(width, height, [
+    { box: fillBox(width, height, sizes.radius, colors.panel), x: 0, y: 0 },
+    { box: shade(0, headerHeight, colors.header), x: 0, y: 0 },
+    { box: shade(headerHeight, sizes.shadow, colors.shadow), x: 0, y: headerHeight },
+    { box: widened(header, inner, 'center'), x: sizes.padX, y: sizes.padY },
+    { box: rows, x: sizes.padX, y: headerHeight },
+  ]);
+}
 
 /**
  * An alarm of the iPhone's Clock (iOS 26) in dark and light mode: its card, its time and label,
@@ -2563,120 +2699,28 @@ export function prepareActivityBlock(
         if (rows.length === 0) {
           return null;
         }
-        const sizes = GRAND_PRIX;
-        const { colors } = sizes;
         const speed = speedMeasure(activity.sportFamily);
         const speeds = rows.map((split) => split.speed);
         const fastest = fastestIndex(speeds);
         const tyres = tyreCompounds(speeds);
-        const race = (content: string, size: number, color: string, bold = true) =>
-          appText([{ text: content, size, bold }], color, {
-            font: 'barlowCondensed',
-            italic: true,
-          });
-        const cells = rows.map((split, i) => {
-          const written = splitRowTexts(split, speed, textContext);
-          return [
-            race(written.number, sizes.row, colors.ink, false),
-            race(written.value, sizes.row, colors.ink),
-            race(
-              i === fastest
-                ? translate('widgets.grandPrix.leader')
-                : splitGapText(split, rows[fastest], speed, textContext),
-              sizes.row,
-              colors.faded,
-              false,
-            ),
-            i === fastest
-              ? overlay(
-                  discBox(sizes.row * 0.5, colors.fastest),
-                  symbolBox('stopwatch', sizes.row * 0.82, colors.ink),
-                )
-              : race(TYRE_LETTERS[tyres[i]], sizes.row, sizes.tyres[tyres[i]]),
-          ];
+        return timingTowerBox(fonts, {
+          icon: sportIcon(activity),
+          title: translate(`modalities.${activity.sportModality}`),
+          // How far the race went, exactly, where TV writes the lap.
+          subtitle: written('distance'),
+          rows: rows.map((split, i) => {
+            const texts = splitRowTexts(split, speed, textContext);
+            return {
+              number: texts.number,
+              value: texts.value,
+              gap:
+                i === fastest
+                  ? translate('widgets.grandPrix.leader')
+                  : splitGapText(split, rows[fastest], speed, textContext),
+              mark: i === fastest ? 'fastest' : tyres[i],
+            };
+          }),
         });
-        const header = column(
-          [
-            row(
-              [
-                iconBox(sportIcon(activity), sizes.icon, colors.ink),
-                race(
-                  translate(`modalities.${activity.sportModality}`).toLocaleUpperCase(),
-                  sizes.title,
-                  colors.ink,
-                ),
-              ],
-              sizes.gap * 0.5,
-              'center',
-            ),
-            // How far the race went, exactly, where TV writes the lap.
-            race(written('distance').toLocaleUpperCase(), sizes.lap, colors.faded, false),
-          ],
-          0,
-          'center',
-        );
-        const widths = columnWidths(cells);
-        const inner = Math.max(header.width, tableWidth(widths, sizes.gap, 0));
-        // The number and the pace at the left, the gap and the tyre at the right end, as on TV.
-        const lines = cells.map((boxes) =>
-          placed(inner, sizes.rowHeight, [
-            { box: boxes[0], x: 0, y: (sizes.rowHeight - boxes[0].height) / 2 },
-            {
-              box: boxes[1],
-              x: widths[0] + sizes.gap,
-              y: (sizes.rowHeight - boxes[1].height) / 2,
-            },
-            {
-              box: boxes[2],
-              x: inner - widths[3] - sizes.gap - boxes[2].width,
-              y: (sizes.rowHeight - boxes[2].height) / 2,
-            },
-            centeredAt(boxes[3], inner - widths[3] / 2, sizes.rowHeight / 2),
-          ]),
-        );
-        const tower = placed(
-          inner,
-          sizes.rowHeight * lines.length,
-          lines.flatMap((line, i) => [
-            ...(i === 0
-              ? []
-              : [
-                  {
-                    box: hairlineBox(inner, 0, sizes.rule, colors.rule),
-                    x: 0,
-                    y: sizes.rowHeight * i,
-                  },
-                ]),
-            { box: line, x: 0, y: sizes.rowHeight * i },
-          ]),
-        );
-        // The header lit from above, apart from the rows by the shadow it casts on them.
-        const width = inner + 2 * sizes.padX;
-        const headerHeight = sizes.padY + header.height + sizes.padY * 0.6;
-        const height = headerHeight + tower.height + sizes.padY;
-        // `y` down the card: the card's top is that far above where the shade is placed.
-        const shade = (y: number, tall: number, shades: readonly [string, string]): Box => ({
-          width,
-          height: tall,
-          place: (x, top) => [
-            {
-              kind: 'shade',
-              x,
-              y: top,
-              width,
-              height: tall,
-              colors: shades,
-              card: { x, y: top - y, width, height, radius: sizes.radius },
-            },
-          ],
-        });
-        return placed(width, height, [
-          { box: fillBox(width, height, sizes.radius, colors.panel), x: 0, y: 0 },
-          { box: shade(0, headerHeight, colors.header), x: 0, y: 0 },
-          { box: shade(headerHeight, sizes.shadow, colors.shadow), x: 0, y: headerHeight },
-          { box: widened(header, inner, 'center'), x: sizes.padX, y: sizes.padY },
-          { box: tower, x: sizes.padX, y: headerHeight },
-        ]);
       }
       case 'alarm': {
         // The start time as an alarm, on: the sport and the main datum as its label.

@@ -3,6 +3,8 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { customRange, type DateRange, monthRange, weekRange, yearRange } from './dates';
 import { summarize } from './summary';
 import {
+  GRAND_PRIX_TOP,
+  grandPrixActivities,
   gridColumns,
   isSummaryDataWidget,
   isSummaryReplica,
@@ -74,6 +76,7 @@ describe('summaryBlocks', () => {
       { design: 'periodLaps', layout: 'board', cover: 'ink' },
       { design: 'periodLaps', layout: 'sheet', cover: 'red' },
       { design: 'periodLaps', layout: 'sheet', cover: 'ink' },
+      { design: 'periodGrandPrix' },
     ]);
   });
 
@@ -125,6 +128,7 @@ describe('summaryBlocks', () => {
       { design: 'periodLaps', layout: 'board', cover: 'ink' },
       { design: 'periodLaps', layout: 'sheet', cover: 'red' },
       { design: 'periodLaps', layout: 'sheet', cover: 'ink' },
+      { design: 'periodGrandPrix' },
     ]);
   });
 
@@ -151,6 +155,7 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodPlaylist')).toBe(true);
     expect(isSummaryReplica('periodWrapped')).toBe(true);
     expect(isSummaryReplica('periodLaps')).toBe(true);
+    expect(isSummaryReplica('periodGrandPrix')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
@@ -249,6 +254,31 @@ describe('periodWrapped', () => {
 
   it('has nothing to review without activities', () => {
     expect(() => periodWrapped([])).toThrow(RangeError);
+  });
+});
+
+describe('grandPrixActivities', () => {
+  const run = (day: number, minutes: number) =>
+    makeActivity({
+      sportType: 'Run',
+      localDate: `2026-10-${String(day).padStart(2, '0')}`,
+      movingTimeSeconds: minutes * 60,
+    });
+
+  it("classifies a week's activities, longest first", () => {
+    const week = [run(13, 30), run(14, 50), run(15, 40)];
+    expect(
+      grandPrixActivities(summarize(week, weekRange('2026-10-14')), week).map(
+        (activity) => activity.movingTimeSeconds / 60,
+      ),
+    ).toEqual([50, 40, 30]);
+  });
+
+  it("classifies a month's longest only", () => {
+    const month = Array.from({ length: GRAND_PRIX_TOP + 3 }, (_, i) => run(i + 1, 10 + i));
+    const racers = grandPrixActivities(summarize(month, monthRange('2026-10-01')), month);
+    expect(racers).toHaveLength(GRAND_PRIX_TOP);
+    expect(racers[0].movingTimeSeconds).toBe((10 + GRAND_PRIX_TOP + 2) * 60);
   });
 });
 

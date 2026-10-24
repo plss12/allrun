@@ -1,8 +1,9 @@
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { projectRoutes } from '@/core/route-projection';
-import { sportIcon } from '@/core/activity-block';
+import { sportIcon, tyreCompounds } from '@/core/activity-block';
 import {
+  grandPrixActivities,
   listsNoteActivities,
   mainFamily,
   periodSentencePlan,
@@ -10,7 +11,7 @@ import {
   playlistSongs,
 } from '@/core/summary-block';
 import { toDisplaySummaryMetric } from '@/core/summary-metrics';
-import { durationParts } from '@/core/units';
+import { durationParts, formatDuration } from '@/core/units';
 import { formatActivityDate, formatMetric } from '@/ui/format';
 import type { BRAND_COVERS, SummaryBlock } from '@/core/template';
 
@@ -42,7 +43,9 @@ import {
   row,
   type SentencePart,
   sentenceParts,
+  sportMarkBox,
   symbolBox,
+  timingTowerBox,
   turned,
 } from './activity-blocks';
 import { markWidth } from './brand/brand-art';
@@ -72,7 +75,7 @@ const NOTE_RING = { dark: '#5E5E62', light: '#C7C7CC' } as const;
 /**
  * A period's note of the iPhone's Notes, as a checklist of what it got done (see
  * `periodNoteLines`): its name as the title (and its sport at the end of the bar, as an activity's
- * note, when it is of one), and a line per activity, or per day, week or month, each ticked off in
+ * note, when it is of one; AllRun's monogram for every sport), and a line per activity, or per day, week or month, each ticked off in
  * the accent's round box or left empty, the longest in the accent, a day with its sports' icons. A
  * period
  * whose activities a note doesn't list (see `listsNoteActivities`) lists its days, weeks or months
@@ -112,9 +115,10 @@ export function periodNotesBox(
     block.layout,
     periodName(data, textContext, translate),
     lines,
+    // Its sport at the end of its bar, as an activity's note; AllRun's monogram for every sport.
     data.families.length === 1
       ? noteSportBox(fonts, block.layout, translate(`families.${sport}`), sport)
-      : undefined,
+      : sportMarkBox('allrun', NOTES_SIZES.icon, NOTES_COLORS[block.layout].accent),
   );
 }
 
@@ -556,8 +560,8 @@ export function periodWrappedBox(
 
 /**
  * A period's days, weeks or months as laps (see `periodLaps`), on the activities' board or timing
- * sheet (see `lapsTableBox`), its longest lap in AllRun's red or night ink; a summary of one sport
- * with its icon on the board (the sheet's title names it).
+ * sheet (see `lapsTableBox`), its longest lap in AllRun's red or night ink; on the board, its
+ * sport's icon (AllRun's monogram for every sport; the sheet's title names it).
  */
 export function periodLapsBox(
   block: Extract<SummaryBlock, { design: 'periodLaps' }>,
@@ -568,10 +572,10 @@ export function periodLapsBox(
   if (laps.rows.length === 0) {
     return null;
   }
-  const [sport] = data.families;
   return lapsTableBox(fonts, block.layout, block.cover, {
     ...laps,
-    ...(data.families.length === 1 ? { icon: sport } : {}),
+    // Its sport when of one; AllRun's monogram for every sport.
+    icon: data.families.length === 1 ? data.families[0] : 'allrun',
     // A pace as a timing sheet writes it, 5'42"; a count says what it counts, "2 act." (the
     // board's names it in its header, the sheet has none).
     sheetValue: (value) =>
@@ -580,5 +584,43 @@ export function periodLapsBox(
         : laps.value === 'count'
           ? translate('widgets.activities', { number: value })
           : value,
+  });
+}
+
+/**
+ * A period's activities as a race (see `grandPrixActivities`) on the activities' timing tower (see
+ * `timingTowerBox`): the period's name and how many activities (by their sport's name, with its
+ * icon, when the summary is of one; AllRun's monogram for every sport); each activity by its position, its sport's icon, its time and
+ * its gap to the leader, the longest a third soft, the middle medium and the shortest hard, the
+ * leader with the purple stopwatch.
+ */
+export function periodGrandPrixBox(
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const racers = grandPrixActivities(data.summary, data.activities);
+  const times = racers.map((activity) => activity.movingTimeSeconds);
+  const tyres = tyreCompounds(times);
+  const [leader] = times;
+  const kind = data.families.length === 1 ? data.families[0] : 'all';
+  const count = data.activities.length;
+  return timingTowerBox(fonts, {
+    // Its sport when of one; AllRun's monogram for every sport.
+    icon: data.families.length === 1 ? data.families[0] : 'allrun',
+    title: periodName(data, textContext, translate),
+    subtitle:
+      count === 1
+        ? translate(`widgets.playlist.counts.${kind}.one`)
+        : translate(`widgets.playlist.counts.${kind}.other`, { count: String(count) }),
+    rows: racers.map((activity, i) => ({
+      number: String(i + 1),
+      icon: sportIcon(activity),
+      value: formatDuration(activity.movingTimeSeconds),
+      gap:
+        i === 0
+          ? translate('widgets.grandPrix.leader')
+          : `+${formatDuration(leader - activity.movingTimeSeconds)}`,
+      mark: i === 0 ? 'fastest' : tyres[i],
+    })),
   });
 }

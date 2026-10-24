@@ -153,6 +153,7 @@ export const es: Translations = {
       periodWrapped: 'Resumen',
       periodNotes: 'Notas',
       periodLaps: 'Vueltas',
+      periodGrandPrix: 'Gran Premio',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',

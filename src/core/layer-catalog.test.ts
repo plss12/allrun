@@ -392,6 +392,7 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodWrapped',
       'summaryBlock-periodNotes',
       'summaryBlock-periodLaps',
+      'summaryBlock-periodGrandPrix',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',
