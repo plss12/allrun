@@ -574,6 +574,8 @@ export const es: Translations = {
       },
     },
   },
+  /** What a screen reader says of the launch screen while the app gets ready. */
+  launch: { loading: 'AllRun, cargando' },
   style: {
     color: 'Color',
     font: 'Fuente',

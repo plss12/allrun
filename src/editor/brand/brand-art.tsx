@@ -199,6 +199,35 @@ export function PlainMark({ color, height }: { readonly color: string; readonly 
   );
 }
 
+/** The name on dark backgrounds: "All" in Chalk, "Run" in Track Red. */
+const WORD_ON_DARK: WordPalette = { all: colors.chalk, run: colors.trackRed };
+
+/**
+ * The monogram on a dark background, `width` wide, as the native launch screen shows it: the
+ * launch screen of our own takes over from it without a visible change.
+ */
+export function MarkOnDark({ width }: { readonly width: number }) {
+  const scale = width / BRAND_GEOMETRY.mark.width;
+  return (
+    <Canvas style={{ width, height: BRAND_GEOMETRY.mark.height * scale }}>
+      <Group transform={[{ scale }]}>
+        <MarkShape palette={MARK_ON_DARK} />
+      </Group>
+    </Canvas>
+  );
+}
+
+/** The AllRun name on a dark background, `width` wide (see `WORD_ON_DARK`). */
+export function WordmarkOnDark({ width }: { readonly width: number }) {
+  return (
+    <Canvas style={{ width, height: wordmarkHeight(width) }}>
+      <Group transform={[{ scale: width / BRAND_GEOMETRY.wordmark.width }]}>
+        <WordmarkShape palette={WORD_ON_DARK} />
+      </Group>
+    </Canvas>
+  );
+}
+
 /** The monogram as an interface element (e.g. a header), adapted to light and dark mode. */
 export function BrandMark({ height }: { readonly height: number }) {
   const scheme = useColorScheme();

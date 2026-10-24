@@ -592,6 +592,8 @@ export const en = {
       },
     },
   },
+  /** What a screen reader says of the launch screen while the app gets ready. */
+  launch: { loading: 'AllRun, loading' },
   style: {
     color: 'Color',
     font: 'Font',

@@ -2,7 +2,7 @@ import '@/i18n';
 
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Appearance } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -12,42 +12,38 @@ import { TemplateStoreProvider } from '@/data/user-templates';
 import { BrandMark } from '@/editor/brand/brand-art';
 import { loadEditorFonts } from '@/editor/fonts';
 import { colors } from '@/theme/colors';
+import { LaunchScreen } from '@/ui/launch-screen';
 import { logError } from '@/ui/log';
 
 // The app is always dark (ADR 009): routes, charts and photos stand out on it. `app.json` asks for
 // it in native builds; this also applies it in Expo Go, so semantic colors resolve to dark.
 Appearance.setColorScheme('dark');
 
-// The launch screen, with AllRun's logo, stays until the editor's fonts are loaded, so no screen
-// waits for them later (opening an activity used to). Kept from here, as early as possible: inside
-// a component it could already be gone.
+// The native launch screen stays until ours is on screen, which looks the same (see
+// `LaunchScreen`). Kept from here, as early as possible: inside a component it could be gone.
 SplashScreen.preventAutoHideAsync().catch((error: unknown) =>
   logError('Could not keep the launch screen', error),
 );
-SplashScreen.setOptions({ duration: 300, fade: true });
+SplashScreen.setOptions({ duration: 200, fade: true });
 
 /**
- * Longest the launch screen waits for the fonts: past it, the app shows and the editor waits for
- * them instead, rather than the logo staying while a load is stuck.
+ * Longest our launch screen waits for the editor's fonts: past it, the app shows and the editor
+ * waits for them instead, rather than the logo staying while a load is stuck.
  */
 const MAX_LAUNCH_WAIT_MS = 8000;
 
 export default function RootLayout() {
   const { t } = useTranslation();
+  // Our launch screen stays until the editor's fonts are loaded, so no screen waits for them later
+  // (opening an activity used to); the app loads under it meanwhile.
+  const [launching, setLaunching] = useState(true);
   useEffect(() => {
-    let waiting = true;
-    const show = () => {
-      if (waiting) {
-        waiting = false;
-        SplashScreen.hide();
-      }
-    };
-    const timeout = setTimeout(show, MAX_LAUNCH_WAIT_MS);
+    const timeout = setTimeout(() => setLaunching(false), MAX_LAUNCH_WAIT_MS);
     loadEditorFonts()
       .catch((error: unknown) => logError('Could not load the editor fonts at launch', error))
       .finally(() => {
         clearTimeout(timeout);
-        show();
+        setLaunching(false);
       });
     return () => clearTimeout(timeout);
   }, []);
@@ -76,6 +72,7 @@ export default function RootLayout() {
             </Stack>
           </TemplateStoreProvider>
         </ActivitySourceProvider>
+        {launching ? <LaunchScreen onShown={() => SplashScreen.hide()} /> : null}
       </GestureHandlerRootView>
     </ThemeProvider>
   );

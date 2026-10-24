@@ -196,6 +196,9 @@ const MARK = {
   color: { stem: COLORS.nightInk, lane: COLORS.trackRed, line: COLORS.laneWhite },
   // On dark backgrounds the Night Ink stems would vanish: they turn Chalk.
   onDark: { stem: COLORS.chalk, lane: COLORS.trackRed, line: COLORS.nightInk },
+  // The dark launch screen is black, as the app's background: its lines are black too, so they
+  // read as gaps.
+  onBlack: { stem: COLORS.chalk, lane: COLORS.trackRed, line: '#000000' },
   white: { mono: COLORS.laneWhite },
   black: { mono: COLORS.black },
 };
@@ -277,7 +280,7 @@ emit('splash-icon', iconSvg('simple', MARK.color, null, 0.9, 'sl'), {
   pngWidth: 1024,
   svgFile: false,
 });
-emit('splash-icon-dark', iconSvg('simple', MARK.onDark, null, 0.9, 'sd'), {
+emit('splash-icon-dark', iconSvg('simple', MARK.onBlack, null, 0.9, 'sd'), {
   dir: APP_OUT,
   pngWidth: 1024,
   svgFile: false,
