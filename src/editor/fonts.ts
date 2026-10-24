@@ -211,6 +211,15 @@ export function hasBold(font: FontId): boolean {
 }
 
 /**
+ * Whether a text asked to be `bold` is drawn in its font's bold face: only when the font ships
+ * one. Asked for a weight it lacks, Skia thickens the regular face itself (a fake bold), and the
+ * panel turns bold off for those fonts, but a design made bold in another font keeps it on.
+ */
+export function drawsBold(font: FontId, bold: boolean): boolean {
+  return bold && hasBold(font);
+}
+
+/**
  * Whether a font ships its own italic. Those without one are still slanted on the canvas: Skia
  * leans their letters.
  */

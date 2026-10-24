@@ -55,7 +55,7 @@ import {
   splitRowTexts,
   type TextContext,
 } from './editor-data';
-import { CAP_HEIGHTS, FONT_FAMILIES, lettersExtent } from './fonts';
+import { CAP_HEIGHTS, drawsBold, FONT_FAMILIES, lettersExtent } from './fonts';
 import { SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
 import {
   addLeanRoom,
@@ -760,7 +760,7 @@ function paragraph(
             weight:
               run.light === true
                 ? FontWeight.ExtraLight
-                : run.bold
+                : drawsBold(style.font, run.bold)
                   ? FontWeight.Bold
                   : FontWeight.Normal,
             slant: slantOf(style.italic),

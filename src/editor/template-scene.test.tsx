@@ -383,3 +383,71 @@ describe('TemplateScene opacity', () => {
     expect(maxAlpha(image)).toBeLessThanOrEqual(132);
   });
 });
+
+describe('TemplateScene bold', () => {
+  /** Sum of the alpha of every pixel: any change in how the letters are drawn changes it. */
+  const ink = (image: SkImage): number => {
+    const pixels = image.readPixels(0, 0, image.getImageInfo());
+    if (pixels === null) {
+      throw new Error('Could not read the pixels');
+    }
+    let sum = 0;
+    for (let i = 3; i < pixels.length; i += 4) {
+      sum += pixels[i];
+    }
+    return sum;
+  };
+  /** Draws `layer` alone on a story, with no photo behind it. */
+  const draw = (layer: Layer) =>
+    drawOffscreen(
+      makeOffscreenSurface(1080, 1920),
+      <scene.TemplateScene
+        format="story"
+        layers={scene.prepareLayers(
+          { version: 1, id: 'bold', mode: 'activity', format: 'story', layers: [layer] },
+          {
+            data: { mode: 'activity', activity, detail: null, place: null, zones: null },
+            fonts: loadTestFonts(['anton', 'bowlbyOneSC']),
+            textContext: {
+              unit: 'km',
+              locale: 'en',
+              durationUnits: TEST_DURATION_UNITS,
+              unitLabel: testUnitLabel,
+            },
+            translate: (key) => key,
+          },
+        )}
+        background={{ kind: 'none' }}
+      />,
+    );
+
+  // A font without a bold weight would otherwise be thickened by Skia (a fake bold): the panel
+  // turns bold off for it, but a design made bold in another font keeps it on.
+  it.each(['anton', 'bowlbyOneSC'] as const)(
+    'draws a text in %s, which has no bold, the same with bold on or off',
+    async (font) => {
+      const text = newLayer({ kind: 'text', content: 'Long run' }, 'text', 'story');
+      if (text.kind !== 'text') {
+        throw new Error('Expected a text');
+      }
+      const styled = (bold: boolean): Layer => ({ ...text, style: { ...text.style, font, bold } });
+      expect(ink(await draw(styled(true)))).toBe(ink(await draw(styled(false))));
+    },
+  );
+
+  it('draws a mixed widget in a font without bold the same with bold on or off', async () => {
+    const block = newLayer(
+      { kind: 'activityBlock', block: { design: 'dataLine', layout: 'three' } },
+      'block',
+      'story',
+    );
+    if (block.kind !== 'activityBlock') {
+      throw new Error('Expected a mixed widget');
+    }
+    const styled = (bold: boolean): Layer => ({
+      ...block,
+      style: { ...block.style, font: 'anton', bold },
+    });
+    expect(ink(await draw(styled(true)))).toBe(ink(await draw(styled(false))));
+  });
+});

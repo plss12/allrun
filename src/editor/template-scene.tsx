@@ -62,7 +62,7 @@ import {
 import { prepareActivityBlock } from './activity-blocks';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
-import { CAP_HEIGHTS, FONT_FAMILIES } from './fonts';
+import { CAP_HEIGHTS, drawsBold, FONT_FAMILIES } from './fonts';
 import {
   addLeanRoom,
   DropShadow,
@@ -760,7 +760,7 @@ function buildParagraph(
     fontFamilies: [FONT_FAMILIES[style.font]],
     fontSize,
     fontStyle: {
-      weight: bold ? FontWeight.Bold : FontWeight.Normal,
+      weight: drawsBold(style.font, bold) ? FontWeight.Bold : FontWeight.Normal,
       slant: slantOf(style.italic),
     },
     letterSpacing: fontSize * LETTER_SPACING[style.letterSpacing ?? 'normal'],

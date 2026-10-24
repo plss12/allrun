@@ -508,7 +508,7 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
     case 'dayBetween':
       return lettering('bigShoulders', true);
     case 'dayOver':
-      return block.layout === 'wide' ? lettering('graduate', true) : lettering('anton', false);
+      return block.layout === 'wide' ? lettering('graduate', false) : lettering('anton', false);
     case 'dayColumns':
       return lettering('inter', true);
     case 'dataStack':
