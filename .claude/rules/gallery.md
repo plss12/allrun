@@ -1,0 +1,14 @@
+---
+paths:
+  - 'src/core/layer-catalog*.ts'
+  - 'src/editor/{widget-gallery,layer-sheet,gallery-memory}*.{ts,tsx}'
+---
+
+# Galería de widgets («Añadir elemento»)
+
+- Secciones (`SECTION_ORDER` en `core/layer-catalog.ts`): Datos (los tipográficos con datos: de actividades, `isDataWidget`, y de resúmenes, `isSummaryDataWidget`) · Creativos (réplicas y frases de los dos modos) · Gráficas · Básicos · Logo (nombre y monograma lado a lado, y ambos debajo en una tarjeta que ocupa la fila, igual de alta).
+- Cada página de un widget mixto, de una gráfica o de un texto se dibuja todo lo grande que quepa en su hueco, sin encogerse por otra página más grande de su tarjeta (decisión de producto: ninguna página se ve pequeña desaprovechando el espacio; los de datos, con un tope), y las filas de Datos crecen en alto hasta tarjetas cuadradas (`GROWING_SECTIONS`). Las tarjetas van siempre de dos en dos, salvo las gráficas, que ocupan la fila.
+- Temas de los creativos (`CREATIVE_THEMES`, decisión de producto): la única tabla que ordena los creativos, por modo, en temas sin subtítulo (frases; apps; carreras; papel y viajes), cada uno con sus filas: una pareja que siempre comparte fila (`rowPartner`) o una tarjeta sola. En actividades: cita | versículo, mensaje | chat, subrayado | equivalencias · verificado | ubicación, música | alarma, cámara | Notas · vueltas | Gran Premio, parciales · ticket | información nutricional, tarjeta de embarque. En resúmenes: cita | versículo, subrayado | equivalencias · lista | resumen, Notas | Tiempo, calendario | racha · vueltas | Gran Premio · ticket | información nutricional, tarjeta de embarque | metro. Una tarjeta solo comparte fila con otra de su tema (`creativeTheme`, `gallerySections`): si falta su pareja, espera a la siguiente suelta de su tema. Todo creativo nuevo se declara en su sitio de la tabla (un test lo exige).
+- Comodines (`isCreativeWildcard`, decisión de producto): la tarjeta de embarque y el metro, si se quedan solos, suben junto a la primera tarjeta que se haya quedado sola al final de su tema (la cámara sin Notas, los parciales…); la que siga sola ocupa la fila entera. Las demás se quedan en su tema.
+- Widgets que se eligen de una lista (versículo, cita, frase del chat; `VERSES`, `QUOTES`, `CHAT_PHRASES`): la galería muestra el primero con el aviso «Toca para elegir», así que el primero de la lista es siempre una frase corta, para que el aviso no la tape; la primera página de una tarjeta decide el aviso.
+- Memoria: la galería se maqueta al abrirse, una vez por datos (`useGallery` en `layer-sheet.tsx`, `buildGallery`), sus párrafos se liberan al cerrarse (ver `editor.md`), y solo la página visible de cada carrusel y sus vecinas tienen lienzo (`gallery-memory.test.tsx`).
