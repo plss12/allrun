@@ -1,11 +1,11 @@
 import { BlurMask, Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, Text, View } from 'react-native';
 
 import type { Activity } from '@/core/activity';
+import { sportIcon } from '@/core/activity-block';
 import type { LocalDate } from '@/core/dates';
 import { cardMetrics, metricValue, toDisplayMetric } from '@/core/metrics';
 import { decodePolyline } from '@/core/polyline';
@@ -16,7 +16,7 @@ import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { formatMetric, formatRelativeDay } from '@/ui/format';
 
-import { SPORT_SYMBOLS } from './sport-symbols';
+import { SportIcon } from './sport-icons';
 
 /** Room around the route inside its box, so its line never touches the card's edge. */
 const ROUTE_INSET = 6;
@@ -107,10 +107,10 @@ export function ActivityCard({
             justifyContent: 'center',
           }}
         >
-          <SymbolView
-            name={SPORT_SYMBOLS[activity.sportFamily]}
+          <SportIcon
+            icon={sportIcon(activity)}
             size={routeHeight * 0.45}
-            tintColor={colors.tertiaryLabel}
+            color={colors.tertiaryLabel}
           />
         </View>
       ) : (
@@ -144,11 +144,7 @@ export function ActivityCard({
         >
           {day}
         </Text>
-        <SymbolView
-          name={SPORT_SYMBOLS[activity.sportFamily]}
-          size={20}
-          tintColor={colors.secondaryLabel}
-        />
+        <SportIcon icon={sportIcon(activity)} size={20} color={colors.secondaryLabel} />
       </View>
       <View style={{ position: 'absolute', left: PADDING, bottom: PADDING }}>
         {data.map((text, i) => (

@@ -32,7 +32,7 @@ import { ErrorView } from '@/ui/state-views';
 import { useAsync } from '@/ui/use-async';
 
 import { PeriodLineChart } from './period-line-chart';
-import { SPORT_SYMBOLS } from './sport-symbols';
+import { SportIcon } from './sport-icons';
 
 /** Height of a page, the same while loading, on error or empty, so the list never jumps. */
 const PAGE_HEIGHT = 262;
@@ -289,7 +289,7 @@ function SportPage({
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <SymbolView name={SPORT_SYMBOLS[sport]} size={14} tintColor={colors.secondaryLabel} />
+        <SportIcon icon={sport} size={14} color={colors.secondaryLabel} />
         <Text style={{ color: colors.secondaryLabel, fontSize: 13, fontWeight: '600' }}>
           {name.toLocaleUpperCase(locale)}
         </Text>

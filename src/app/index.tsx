@@ -11,7 +11,7 @@ import { familiesOf } from '@/core/summary';
 import { useActivitySource } from '@/data/activity-source';
 import { ActivityCard } from '@/home/activity-card';
 import { PeriodCard } from '@/home/period-card';
-import { SPORT_SYMBOLS } from '@/home/sport-symbols';
+import { SPORT_MENU_ICONS } from '@/home/sport-icons';
 import { colors } from '@/theme/colors';
 import { useDisplaySettings } from '@/ui/settings';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
@@ -77,7 +77,8 @@ function Activities() {
           title={t('home.filter')}
         >
           <Stack.Toolbar.MenuAction
-            icon={SPORT_SYMBOLS.all.ios}
+            icon={SPORT_MENU_ICONS.all}
+            iconRenderingMode="template"
             isOn={shown === 'all'}
             onPress={() => setSport('all')}
           >
@@ -86,7 +87,8 @@ function Activities() {
           {families.map((family) => (
             <Stack.Toolbar.MenuAction
               key={family}
-              icon={SPORT_SYMBOLS[family].ios}
+              icon={SPORT_MENU_ICONS[family]}
+              iconRenderingMode="template"
               isOn={shown === family}
               onPress={() => setSport(family)}
             >
