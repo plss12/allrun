@@ -19,8 +19,10 @@ import {
   layerText,
   periodChartHeader,
   familyCard,
+  periodBoardingPass,
   periodLaps,
   periodNoteLines,
+  periodReceipt,
   periodTable,
   periodTotalsHeader,
   MISSING_VALUE,
@@ -798,6 +800,84 @@ describe('periodLaps', () => {
     expect(sessions.names[1]).toBe('Kcal');
     expect(sessions.rows.map((row) => row.distance)).toEqual(['400', MISSING_VALUE]);
     expect(sessions.value).toBe('count');
+  });
+});
+
+describe('periodReceipt and periodBoardingPass', () => {
+  const translate = (key: string): string =>
+    ({
+      'modalities.roadRun': 'Carrera',
+      'modalities.workout': 'Entrenamiento',
+      'widgets.receipt.items': 'Artículos',
+      'widgets.receipt.total': 'Total',
+      'widgets.boardingPass.activities': 'Actividades',
+      'widgets.boardingPass.time': 'Tiempo',
+      'widgets.boardingPass.activeDays': 'Días activos',
+      thisWeek: 'Esta semana',
+    })[key] ?? key;
+  const range = weekRange('2026-10-14');
+  const run = (localDate: string, distanceMeters: number) =>
+    makeActivity({
+      sportType: 'Run',
+      localDate,
+      startLocal: `${localDate}T08:00:00`,
+      distanceMeters,
+      movingTimeSeconds: 3_000,
+    });
+  const gym = makeActivity({
+    sportType: 'Workout',
+    localDate: '2026-10-15',
+    startLocal: '2026-10-15T19:00:00',
+    distanceMeters: 0,
+    elevationGainMeters: 0,
+    routePolyline: null,
+    movingTimeSeconds: 3_257,
+  });
+  const summaryOf = (activities: readonly ReturnType<typeof run>[]): SummaryData => ({
+    mode: 'summary',
+    kind: 'week',
+    summary: summarize(activities, range),
+    activities,
+    bucketSize: 'day',
+    families: [],
+    current: true,
+  });
+  const km = testUnitLabel('km');
+
+  it('lists a week by its activities, how far or how long, then how many and the total', () => {
+    const receipt = periodReceipt(
+      summaryOf([run('2026-10-16', 6_000), gym, run('2026-10-13', 10_940)]),
+      context,
+      translate,
+    );
+    expect(receipt.header).toEqual(['Esta semana', '12/10/2026 – 18/10/2026']);
+    expect(receipt.items).toEqual([
+      { name: 'Mar Carrera', value: `10,94 ${km}` },
+      { name: 'Jue Entrenamiento', value: '54:17' },
+      { name: 'Vie Carrera', value: `6,00 ${km}` },
+    ]);
+    expect(receipt.totals).toEqual([
+      { name: 'Artículos', value: '3' },
+      { name: 'Total', value: `16,94 ${km}` },
+    ]);
+  });
+
+  it('flies from the first activity to the last, its activities, time and active days', () => {
+    const pass = periodBoardingPass(
+      summaryOf([run('2026-10-16', 6_000), run('2026-10-13', 10_940), run('2026-10-13', 3_000)]),
+      context,
+      translate,
+    );
+    expect(pass.title).toBe('Esta semana');
+    expect(pass.distance).toEqual({ value: '19,94', unit: km });
+    expect([pass.firstDay, pass.lastDay]).toEqual(['13 oct', '16 oct']);
+    expect(pass.fields.map((field) => field.value)).toEqual([
+      '3',
+      `2:30 ${testUnitLabel('h')}`,
+      '2',
+    ]);
+    // Without any distance, its days alone.
+    expect(periodBoardingPass(summaryOf([gym]), context, translate).distance).toBeNull();
   });
 });
 

@@ -159,6 +159,8 @@ export const en = {
       periodNotes: 'Notes',
       periodLaps: 'Laps',
       periodGrandPrix: 'Grand Prix',
+      periodReceipt: 'Receipt',
+      periodBoardingPass: 'Boarding pass',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -477,12 +479,17 @@ export const en = {
       minutes: 'Minutes Moving',
       favorite: 'Favorite Activity',
     },
-    receipt: { total: 'Total', thanks: 'Thanks for moving!' },
+    /** A receipt: its total, its thanks, and how many items (a period's activities). */
+    receipt: { total: 'Total', thanks: 'Thanks for moving!', items: 'Items' },
     boardingPass: {
       title: 'Boarding pass',
       departure: 'Departure',
       arrival: 'Arrival',
       date: 'Date',
+      /** A period's pass: its activities, its time and its days with any activity. */
+      activities: 'Activities',
+      time: 'Time',
+      activeDays: 'Active days',
     },
   },
   style: {

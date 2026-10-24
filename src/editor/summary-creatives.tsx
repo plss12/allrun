@@ -18,6 +18,7 @@ import type { BRAND_COVERS, SummaryBlock } from '@/core/template';
 import {
   appTextBox,
   type BlockContext,
+  boardingPassBox,
   type Box,
   BRAND_COVER_COLORS,
   column,
@@ -29,6 +30,7 @@ import {
   markBrandBox,
   MUSIC_COLORS,
   placed,
+  receiptBox,
   routeBox,
   widened,
   discBox,
@@ -51,9 +53,11 @@ import {
 import { markWidth } from './brand/brand-art';
 import {
   metricText,
+  periodBoardingPass,
   periodLaps,
   periodName,
   periodNoteLines,
+  periodReceipt,
   type SummaryData,
 } from './editor-data';
 
@@ -622,5 +626,55 @@ export function periodGrandPrixBox(
           : `+${formatDuration(leader - activity.movingTimeSeconds)}`,
       mark: i === 0 ? 'fastest' : tyres[i],
     })),
+  });
+}
+
+/**
+ * A period as a shop's receipt (see `periodReceipt`), on the activities' thermal paper (see
+ * `receiptBox`).
+ */
+export function periodReceiptBox(
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const receipt = periodReceipt(data, textContext, translate);
+  return receiptBox(fonts, {
+    ...receipt,
+    thanks: translate('widgets.receipt.thanks'),
+    seed: `${data.summary.range.start}${data.summary.range.end}`,
+  });
+}
+
+/**
+ * A period as a flight from its first activity to its last (see `periodBoardingPass`), on the
+ * activities' boarding pass (see `boardingPassBox`): its sport's icon on its band and on the
+ * dashed line (AllRun's monogram for every sport).
+ */
+export function periodBoardingPassBox(
+  block: Extract<SummaryBlock, { design: 'periodBoardingPass' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const pass = periodBoardingPass(data, textContext, translate);
+  const { distance } = pass;
+  return boardingPassBox(fonts, block.cover, {
+    title: pass.title,
+    mark: data.families.length === 1 ? data.families[0] : 'allrun',
+    // From no distance at the first activity to all of it at the last, under their days; without
+    // a distance, the days alone.
+    departure:
+      distance === null
+        ? { big: pass.firstDay, unit: null, under: null }
+        : { big: '0', unit: distance.unit, under: pass.firstDay },
+    arrival:
+      distance === null
+        ? { big: pass.lastDay, unit: null, under: null }
+        : { big: distance.value, unit: distance.unit, under: pass.lastDay },
+    names: {
+      departure: translate('widgets.boardingPass.departure'),
+      arrival: translate('widgets.boardingPass.arrival'),
+    },
+    fields: pass.fields,
+    seed: `${data.summary.range.start}${data.summary.range.end}`,
   });
 }

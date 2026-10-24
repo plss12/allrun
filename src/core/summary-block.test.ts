@@ -77,6 +77,9 @@ describe('summaryBlocks', () => {
       { design: 'periodLaps', layout: 'sheet', cover: 'red' },
       { design: 'periodLaps', layout: 'sheet', cover: 'ink' },
       { design: 'periodGrandPrix' },
+      { design: 'periodReceipt' },
+      { design: 'periodBoardingPass', cover: 'red' },
+      { design: 'periodBoardingPass', cover: 'ink' },
     ]);
   });
 
@@ -129,6 +132,9 @@ describe('summaryBlocks', () => {
       { design: 'periodLaps', layout: 'sheet', cover: 'red' },
       { design: 'periodLaps', layout: 'sheet', cover: 'ink' },
       { design: 'periodGrandPrix' },
+      { design: 'periodReceipt' },
+      { design: 'periodBoardingPass', cover: 'red' },
+      { design: 'periodBoardingPass', cover: 'ink' },
     ]);
   });
 
@@ -156,6 +162,8 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodWrapped')).toBe(true);
     expect(isSummaryReplica('periodLaps')).toBe(true);
     expect(isSummaryReplica('periodGrandPrix')).toBe(true);
+    expect(isSummaryReplica('periodReceipt')).toBe(true);
+    expect(isSummaryReplica('periodBoardingPass')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 

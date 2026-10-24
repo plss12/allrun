@@ -39,10 +39,12 @@ import {
 import { CAP_HEIGHTS } from './fonts';
 import { softBackdrop } from './scene-text';
 import {
+  periodBoardingPassBox,
   periodGrandPrixBox,
   periodLapsBox,
   periodNotesBox,
   periodPlaylistBox,
+  periodReceiptBox,
   periodSentenceBox,
   periodWrappedBox,
   routesBox,
@@ -592,6 +594,10 @@ export function prepareSummaryBlock(
         return periodLapsBox(block, data, { fonts, textContext, translate });
       case 'periodGrandPrix':
         return periodGrandPrixBox(data, { fonts, textContext, translate });
+      case 'periodReceipt':
+        return periodReceiptBox(data, { fonts, textContext, translate });
+      case 'periodBoardingPass':
+        return periodBoardingPassBox(block, data, { fonts, textContext, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

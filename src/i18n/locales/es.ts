@@ -154,6 +154,8 @@ export const es: Translations = {
       periodNotes: 'Notas',
       periodLaps: 'Vueltas',
       periodGrandPrix: 'Gran Premio',
+      periodReceipt: 'Ticket',
+      periodBoardingPass: 'Tarjeta de embarque',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',
@@ -455,12 +457,15 @@ export const es: Translations = {
       minutes: 'Minutos en movimiento',
       favorite: 'Actividad favorita',
     },
-    receipt: { total: 'Total', thanks: '¡Gracias por moverte!' },
+    receipt: { total: 'Total', thanks: '¡Gracias por moverte!', items: 'Artículos' },
     boardingPass: {
       title: 'Tarjeta de embarque',
       departure: 'Salida',
       arrival: 'Llegada',
       date: 'Fecha',
+      activities: 'Actividades',
+      time: 'Tiempo',
+      activeDays: 'Días activos',
     },
   },
   style: {

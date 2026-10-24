@@ -1921,6 +1921,86 @@ const RECEIPT = {
   colors: { paper: '#FBFAF6', ink: '#1C1C1E' },
 } as const;
 
+/** A shop's receipt as `receiptBox` prints it. */
+export interface Receipt {
+  /** Under the shop's name (AllRun): what was bought and when. */
+  readonly header: readonly string[];
+  /** A line each, its name at the start and its value at the end. */
+  readonly items: readonly { readonly name: string; readonly value: string }[];
+  /** Under the items, between dashes: the last one is the total, in bold and bigger. */
+  readonly totals: readonly { readonly name: string; readonly value: string }[];
+  readonly thanks: string;
+  /** What its barcode is drawn from, so the same receipt always has the same one. */
+  readonly seed: string;
+}
+
+/**
+ * A shop's receipt on thermal paper, of an activity or a period alike (see `RECEIPT`): the shop
+ * and its header, a line per item, the totals, thanks and a barcode, between dashed lines; its
+ * top and bottom torn in teeth. An item's name is cut short before its value.
+ */
+export function receiptBox(fonts: SkTypefaceFontProvider, receipt: Receipt): Box {
+  const sizes = RECEIPT;
+  const { colors } = sizes;
+  const inner = sizes.width - 2 * sizes.padX;
+  const mono = (content: string, size: number, bold = false, maxWidth = inner) =>
+    appTextBox(fonts, [{ text: content, size, bold }], colors.ink, {
+      font: 'spaceMono',
+      maxWidth,
+    });
+  const dashes = () =>
+    dashedBox(inner, sizes.dash.length, sizes.dash.gap, sizes.dash.thick, colors.ink);
+  const item = (name: string, value: string, size: number, bold: boolean) => {
+    const right = mono(value, size, bold);
+    return spread(
+      mono(name.toLocaleUpperCase(), size, bold, inner - right.width - size),
+      right,
+      inner,
+    );
+  };
+  const last = receipt.totals.length - 1;
+  const content = column(
+    [
+      column(
+        [mono('AllRun', sizes.shop, true), ...receipt.header.map((line) => mono(line, sizes.text))],
+        sizes.gap * 0.3,
+        'center',
+      ),
+      dashes(),
+      column(
+        receipt.items.map((line) => item(line.name, line.value, sizes.text, false)),
+        sizes.gap * 0.5,
+        'start',
+      ),
+      dashes(),
+      column(
+        receipt.totals.map((line, i) =>
+          i === last
+            ? item(line.name, line.value, sizes.total, true)
+            : item(line.name, line.value, sizes.text, false),
+        ),
+        sizes.gap * 0.5,
+        'start',
+      ),
+      dashes(),
+      mono(receipt.thanks, sizes.text),
+      barcodeBox(inner, sizes.barcode, seedOf(receipt.seed), colors.ink),
+    ],
+    sizes.gap,
+    'center',
+  );
+  const width = content.width + 2 * sizes.padX;
+  const height = content.height + 2 * sizes.padY;
+  return {
+    width,
+    height,
+    place: (x, y) => [
+      { kind: 'paper', shape: 'receipt', x, y, width, height, color: colors.paper },
+      ...content.place(x + sizes.padX, y + sizes.padY),
+    ],
+  };
+}
+
 /**
  * A boarding pass: the band in a brand color with its title and the sport's icon; from the start
  * (no distance yet, its time) to the finish (the distance, when it ended), with the sport's icon
@@ -1945,6 +2025,152 @@ const BOARDING_PASS = {
   dash: { length: 14, gap: 10, thick: 3 },
   colors: { paper: '#FFFFFF', ink: '#141B2D', faded: '#8A8F98', band: '#F6F1EA', rule: '#C9CDD3' },
 } as const;
+
+/** One end of a boarding pass's trip: big, its unit after it, and what goes under it. */
+export interface PassEnd {
+  readonly big: string;
+  readonly unit: string | null;
+  readonly under: string | null;
+}
+
+/** A boarding pass as `boardingPassBox` draws it. */
+export interface BoardingPass {
+  /** On its band, as a pass names its destination. */
+  readonly title: string;
+  /** Its sport's icon (or AllRun's monogram), on its band and on the dashed line. */
+  readonly mark: SportMark;
+  readonly departure: PassEnd;
+  readonly arrival: PassEnd;
+  readonly names: { readonly departure: string; readonly arrival: string };
+  /** The data in a row under the trip. */
+  readonly fields: readonly { readonly name: string; readonly value: string }[];
+  /** What its barcode is drawn from, so the same pass always has the same one. */
+  readonly seed: string;
+}
+
+/**
+ * A boarding pass, of an activity or a period alike (see `BOARDING_PASS`): its band in AllRun's
+ * `coverColor` with its title and mark; from its departure to its arrival, the mark on the dashed
+ * line between them; its fields in a row; and the stub with its barcode, apart by the notches
+ * where it tears off.
+ */
+export function boardingPassBox(
+  fonts: SkTypefaceFontProvider,
+  coverColor: (typeof BRAND_COVERS)[number],
+  pass: BoardingPass,
+): Box {
+  const sizes = BOARDING_PASS;
+  const { colors } = sizes;
+  const cover = BRAND_COVER_COLORS[coverColor];
+  const label = (content: string) =>
+    appTextBox(
+      fonts,
+      [{ text: content.toLocaleUpperCase(), size: sizes.label, bold: true, spacing: 0.08 }],
+      colors.faded,
+    );
+  const strong = (content: string, size: number) =>
+    appTextBox(fonts, [{ text: content, size, bold: true }], colors.ink);
+  /** A value written big, its unit after it, smaller. */
+  const big = (value: string, unit: string | null) =>
+    appTextBox(
+      fonts,
+      [
+        { text: value, size: sizes.big, bold: true },
+        ...(unit === null ? [] : [{ text: ` ${unit}`, size: sizes.big * 0.45, bold: true }]),
+      ],
+      colors.ink,
+    );
+  const end = (name: string, at: PassEnd, align: Align) =>
+    column(
+      [
+        label(name),
+        big(at.big, at.unit),
+        ...(at.under === null ? [] : [strong(at.under, sizes.time)]),
+      ],
+      4,
+      align,
+    );
+  const from = end(pass.names.departure, pass.departure, 'start');
+  const to = end(pass.names.arrival, pass.arrival, 'end');
+  const dash = (length: number) =>
+    dashedBox(length, sizes.dash.length, sizes.dash.gap, sizes.dash.thick, colors.rule);
+  const minRoute = sizes.routeIcon * 3;
+  const inner = Math.max(
+    sizes.width - 2 * sizes.padX,
+    from.width + to.width + 2 * sizes.gap + minRoute,
+  );
+  const routeWidth = inner - from.width - to.width - 2 * sizes.gap;
+  const leg = (routeWidth - sizes.routeIcon) / 2 - sizes.gap * 0.4;
+  const trip = placed(inner, Math.max(from.height, to.height), [
+    { box: from, x: 0, y: 0 },
+    centeredAt(
+      row(
+        [dash(leg), sportMarkBox(pass.mark, sizes.routeIcon, colors.ink), dash(leg)],
+        sizes.gap * 0.4,
+        'center',
+      ),
+      from.width + sizes.gap + routeWidth / 2,
+      Math.max(from.height, to.height) / 2,
+    ),
+    { box: to, x: inner - to.width, y: 0 },
+  ]);
+  const fields = justified(
+    pass.fields.map((field) =>
+      column([label(field.name), strong(field.value, sizes.field)], 4, 'start'),
+    ),
+    inner,
+    sizes.gap,
+  );
+  // A long title is cut short before the icon.
+  const title = appTextBox(
+    fonts,
+    [
+      {
+        text: pass.title.toLocaleUpperCase(),
+        size: sizes.title,
+        bold: true,
+        spacing: 0.12,
+      },
+    ],
+    colors.band,
+    { maxWidth: inner - sizes.icon - sizes.gap },
+  );
+  const width = inner + 2 * sizes.padX;
+  const body = sizes.band + sizes.gap * 1.2;
+  const cut = body + trip.height + sizes.gap * 1.4 + fields.height + sizes.gap * 1.4;
+  const height = cut + sizes.gap * 1.4 + sizes.barcode + sizes.gap * 1.4;
+  const inset = sizes.notch + sizes.gap * 0.4;
+  return {
+    width,
+    height,
+    place: (x, y) => [
+      { kind: 'paper', shape: 'pass', x, y, width, height, color: colors.paper, cut },
+      ...placed(width, height, [
+        // The band, its top corners rounded as the pass's, its bottom ones square.
+        { box: fillBox(width, sizes.band, sizes.radius, cover, {}), x: 0, y: 0 },
+        {
+          box: fillBox(width, sizes.band - sizes.radius, 0, cover, {}),
+          x: 0,
+          y: sizes.radius,
+        },
+        { box: title, x: sizes.padX, y: (sizes.band - title.height) / 2 },
+        {
+          box: sportMarkBox(pass.mark, sizes.icon, colors.band),
+          x: width - sizes.padX - sizes.icon,
+          y: (sizes.band - sizes.icon) / 2,
+        },
+        { box: trip, x: sizes.padX, y: body },
+        { box: fields, x: sizes.padX, y: body + trip.height + sizes.gap * 1.4 },
+        { box: dash(width - 2 * inset), x: inset, y: cut - sizes.dash.thick / 2 },
+        {
+          box: barcodeBox(inner, sizes.barcode, seedOf(pass.seed), colors.ink),
+          x: sizes.padX,
+          y: cut + sizes.gap * 1.4,
+        },
+      ]).place(x, y),
+    ],
+  };
+}
 
 /** Width of the AllRun name signing a block, and its room above. */
 const LOGO_WIDTH = 190;
@@ -3093,83 +3319,26 @@ export function prepareActivityBlock(
       }
       case 'receipt': {
         // The data as a shop's receipt: a line each, the main datum as the total.
-        const sizes = RECEIPT;
-        const { colors } = sizes;
-        const inner = sizes.width - 2 * sizes.padX;
-        const mono = (content: string, size: number, bold = false) =>
-          appText([{ text: content, size, bold }], colors.ink, {
-            font: 'spaceMono',
-            maxWidth: inner,
-          });
-        const dashes = () =>
-          dashedBox(inner, sizes.dash.length, sizes.dash.gap, sizes.dash.thick, colors.ink);
         const name = activity.name.trim();
-        const day = [
-          formatActivityDate(activity.startLocal, textContext.locale, 'numeric'),
-          formatActivityDate(activity.startLocal, textContext.locale, 'time'),
-        ].join('  ');
-        const item = (name: string, value: string, size: number, bold: boolean) =>
-          spread(mono(name.toLocaleUpperCase(), size, bold), mono(value, size, bold), inner);
-        const content = column(
-          [
-            column(
-              [
-                mono('AllRun', sizes.shop, true),
-                ...(name === '' ? [] : [mono(name, sizes.text)]),
-                mono(day, sizes.text),
-              ],
-              sizes.gap * 0.3,
-              'center',
-            ),
-            dashes(),
-            column(
-              metrics.map((metric) =>
-                item(translate(`metrics.${metric}`), written(metric), sizes.text, false),
-              ),
-              sizes.gap * 0.5,
-              'start',
-            ),
-            dashes(),
-            item(translate('widgets.receipt.total'), written(metrics[0]), sizes.total, true),
-            dashes(),
-            mono(translate('widgets.receipt.thanks'), sizes.text),
-            barcodeBox(inner, sizes.barcode, seedOf(activity.id), colors.ink),
+        return receiptBox(fonts, {
+          header: [
+            ...(name === '' ? [] : [name]),
+            [
+              formatActivityDate(activity.startLocal, textContext.locale, 'numeric'),
+              formatActivityDate(activity.startLocal, textContext.locale, 'time'),
+            ].join('  '),
           ],
-          sizes.gap,
-          'center',
-        );
-        const width = content.width + 2 * sizes.padX;
-        const height = content.height + 2 * sizes.padY;
-        return {
-          width,
-          height,
-          place: (x, y) => [
-            { kind: 'paper', shape: 'receipt', x, y, width, height, color: colors.paper },
-            ...content.place(x + sizes.padX, y + sizes.padY),
-          ],
-        };
+          items: metrics.map((metric) => ({
+            name: translate(`metrics.${metric}`),
+            value: written(metric),
+          })),
+          totals: [{ name: translate('widgets.receipt.total'), value: written(metrics[0]) }],
+          thanks: translate('widgets.receipt.thanks'),
+          seed: activity.id,
+        });
       }
       case 'boardingPass': {
         // The activity as a flight from its start to its finish, in the city it started in.
-        const sizes = BOARDING_PASS;
-        const { colors } = sizes;
-        const cover = BRAND_COVER_COLORS[block.cover];
-        const label = (content: string) =>
-          appText(
-            [{ text: content.toLocaleUpperCase(), size: sizes.label, bold: true, spacing: 0.08 }],
-            colors.faded,
-          );
-        const strong = (content: string, size: number) =>
-          appText([{ text: content, size, bold: true }], colors.ink);
-        /** A value written big, its unit after it, smaller. */
-        const big = (value: string, unit: string | null) =>
-          appText(
-            [
-              { text: value, size: sizes.big, bold: true },
-              ...(unit === null ? [] : [{ text: ` ${unit}`, size: sizes.big * 0.45, bold: true }]),
-            ],
-            colors.ink,
-          );
         const departure = formatActivityDate(activity.startLocal, textContext.locale, 'time');
         const arrival = formatTimeAfter(
           activity.startLocal,
@@ -3181,42 +3350,27 @@ export function prepareActivityBlock(
           : null;
         const unit =
           distance === null || distance.unit === null ? null : textContext.unitLabel(distance.unit);
-        // From no distance at the start to all of it at the finish, under their times; without a
-        // distance, the times alone.
-        const end = (name: LabelKey, value: string, time: string, align: Align) =>
-          column(
+        // Its band names the city it started in, as a pass names its destination; while the
+        // place is unknown, it says what it is.
+        const city = data.place === null ? null : formatPlace(data.place, 'city');
+        return boardingPassBox(fonts, block.cover, {
+          title: city ?? translate('widgets.boardingPass.title'),
+          mark: sportIcon(activity),
+          // From no distance at the start to all of it at the finish, under their times; without
+          // a distance, the times alone.
+          departure:
             distance === null
-              ? [label(translate(name)), big(time, null)]
-              : [label(translate(name)), big(value, unit), strong(time, sizes.time)],
-            4,
-            align,
-          );
-        const from = end('widgets.boardingPass.departure', '0', departure, 'start');
-        const to = end('widgets.boardingPass.arrival', distance?.value ?? '', arrival, 'end');
-        const dash = (length: number) =>
-          dashedBox(length, sizes.dash.length, sizes.dash.gap, sizes.dash.thick, colors.rule);
-        const minRoute = sizes.routeIcon * 3;
-        const inner = Math.max(
-          sizes.width - 2 * sizes.padX,
-          from.width + to.width + 2 * sizes.gap + minRoute,
-        );
-        const routeWidth = inner - from.width - to.width - 2 * sizes.gap;
-        const leg = (routeWidth - sizes.routeIcon) / 2 - sizes.gap * 0.4;
-        const trip = placed(inner, Math.max(from.height, to.height), [
-          { box: from, x: 0, y: 0 },
-          centeredAt(
-            row(
-              [dash(leg), iconBox(sportIcon(activity), sizes.routeIcon, colors.ink), dash(leg)],
-              sizes.gap * 0.4,
-              'center',
-            ),
-            from.width + sizes.gap + routeWidth / 2,
-            Math.max(from.height, to.height) / 2,
-          ),
-          { box: to, x: inner - to.width, y: 0 },
-        ]);
-        const fields = justified(
-          [
+              ? { big: departure, unit: null, under: null }
+              : { big: '0', unit, under: departure },
+          arrival:
+            distance === null
+              ? { big: arrival, unit: null, under: null }
+              : { big: distance.value, unit, under: arrival },
+          names: {
+            departure: translate('widgets.boardingPass.departure'),
+            arrival: translate('widgets.boardingPass.arrival'),
+          },
+          fields: [
             {
               name: translate('widgets.boardingPass.date'),
               value: formatActivityDate(activity.startLocal, textContext.locale, 'short'),
@@ -3225,62 +3379,9 @@ export function prepareActivityBlock(
               .filter((metric) => metric !== 'distance')
               .slice(0, 3)
               .map((metric) => ({ name: translate(`metrics.${metric}`), value: written(metric) })),
-          ].map((field) =>
-            column([label(field.name), strong(field.value, sizes.field)], 4, 'start'),
-          ),
-          inner,
-          sizes.gap,
-        );
-        // Its band names the city it started in, as a pass names its destination; while the
-        // place is unknown, it says what it is. A long name is cut short before the icon.
-        const city = data.place === null ? null : formatPlace(data.place, 'city');
-        const title = appText(
-          [
-            {
-              text: (city ?? translate('widgets.boardingPass.title')).toLocaleUpperCase(),
-              size: sizes.title,
-              bold: true,
-              spacing: 0.12,
-            },
           ],
-          colors.band,
-          { maxWidth: inner - sizes.icon - sizes.gap },
-        );
-        const width = inner + 2 * sizes.padX;
-        const body = sizes.band + sizes.gap * 1.2;
-        const cut = body + trip.height + sizes.gap * 1.4 + fields.height + sizes.gap * 1.4;
-        const height = cut + sizes.gap * 1.4 + sizes.barcode + sizes.gap * 1.4;
-        const inset = sizes.notch + sizes.gap * 0.4;
-        return {
-          width,
-          height,
-          place: (x, y) => [
-            { kind: 'paper', shape: 'pass', x, y, width, height, color: colors.paper, cut },
-            ...placed(width, height, [
-              // The band, its top corners rounded as the pass's, its bottom ones square.
-              { box: fillBox(width, sizes.band, sizes.radius, cover, {}), x: 0, y: 0 },
-              {
-                box: fillBox(width, sizes.band - sizes.radius, 0, cover, {}),
-                x: 0,
-                y: sizes.radius,
-              },
-              { box: title, x: sizes.padX, y: (sizes.band - title.height) / 2 },
-              {
-                box: iconBox(sportIcon(activity), sizes.icon, colors.band),
-                x: width - sizes.padX - sizes.icon,
-                y: (sizes.band - sizes.icon) / 2,
-              },
-              { box: trip, x: sizes.padX, y: body },
-              { box: fields, x: sizes.padX, y: body + trip.height + sizes.gap * 1.4 },
-              { box: dash(width - 2 * inset), x: inset, y: cut - sizes.dash.thick / 2 },
-              {
-                box: barcodeBox(inner, sizes.barcode, seedOf(activity.id), colors.ink),
-                x: sizes.padX,
-                y: cut + sizes.gap * 1.4,
-              },
-            ]).place(x, y),
-          ],
-        };
+          seed: activity.id,
+        });
       }
     }
   })();

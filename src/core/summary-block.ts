@@ -72,6 +72,8 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodNotes',
   'periodLaps',
   'periodGrandPrix',
+  'periodReceipt',
+  'periodBoardingPass',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -322,8 +324,9 @@ export function noteActivities(activities: readonly Activity[]): NoteActivity[] 
  * highlighted sentence; its playlist and its review, in dark and light mode and each brand
  * color; its note,
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
- * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race.
- * None for a period without activities. Time O(1).
+ * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race;
+ * its receipt; and its boarding pass in each brand color. None for a period without activities.
+ * Time O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -363,6 +366,8 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
       BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodLaps', layout, cover })),
     ),
     { design: 'periodGrandPrix' },
+    { design: 'periodReceipt' },
+    ...BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodBoardingPass', cover })),
   ];
 }
 
@@ -399,6 +404,8 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodNotes':
     case 'periodLaps':
     case 'periodGrandPrix':
+    case 'periodReceipt':
+    case 'periodBoardingPass':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

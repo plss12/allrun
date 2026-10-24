@@ -25,6 +25,7 @@ import {
   type SummaryBucket,
 } from '@/core/summary';
 import {
+  listsNoteActivities,
   noteActivities,
   type PeriodSentenceClause,
   type PeriodSentenceLead,
@@ -52,6 +53,7 @@ import {
   formatMetric,
   formatPeriodName,
   formatShortBucketName,
+  formatShortWeekday,
 } from '@/ui/format';
 
 /** A period summary to fill a template with. */
@@ -154,8 +156,8 @@ export type LabelKey =
   | `widgets.periodSentence.clauses.${PeriodSentenceClause}`
   | 'widgets.periodSentence.activityOne'
   | 'widgets.periodSentence.activities'
-  | `widgets.receipt.${'total' | 'thanks'}`
-  | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date'}`
+  | `widgets.receipt.${'total' | 'thanks' | 'items'}`
+  | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date' | 'activities' | 'time' | 'activeDays'}`
   | `widgets.cameraModes.${'video' | 'photo'}`
   | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`
   | `chartCaptions.${Extract<Layer, { kind: 'summaryChart' }>['value']}.${BucketSize}`;
@@ -1054,6 +1056,139 @@ export function periodNoteLines(
           : [],
     };
   });
+}
+
+/** A period's receipt's lines (see `periodReceipt`). */
+export interface PeriodReceipt {
+  /** The period's name and its first and last days. */
+  readonly header: readonly string[];
+  readonly items: readonly { readonly name: string; readonly value: string }[];
+  /** How many items (activities) and the total. */
+  readonly totals: readonly { readonly name: string; readonly value: string }[];
+}
+
+/**
+ * How far an activity or a part of a period went, with its unit ("10,81 km"), or how long without
+ * a distance ("54:17").
+ */
+function farOrLong(meters: number, seconds: number, context: TextContext): string {
+  return meters > 0
+    ? withUnit(
+        formatMetric(
+          toDisplayMetric('distance', meters, { unit: context.unit, sportFamily: 'run' }),
+          context.locale,
+        ),
+        context,
+      )
+    : formatDuration(seconds);
+}
+
+/**
+ * A period's receipt: its name and its first and last days at the top; a line per activity for a
+ * week ("MAR CARRERA ··· 7,94 km", its weekday and sport), or else per week or month with any (as
+ * its note, see `listsNoteActivities`), each with how far it went, or how long without a
+ * distance; then how many items (its activities) and the total, its distance (or time without
+ * any). Time O(b + n log n) for b days, weeks or months and n activities.
+ */
+export function periodReceipt(
+  data: SummaryData,
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): PeriodReceipt {
+  const { summary } = data;
+  const day = (date: string) => formatActivityDate(`${date}T00:00:00`, context.locale, 'numeric');
+  const size = tableBucket(summary.range);
+  const week = rangeLength(summary.range) <= 7;
+  const items = listsNoteActivities(summary)
+    ? noteActivities(data.activities).map(({ activity }) => ({
+        name: `${formatShortWeekday(activity.startLocal, context.locale)} ${translate(
+          `modalities.${activity.sportModality}`,
+        )}`,
+        value: farOrLong(activity.distanceMeters, activity.movingTimeSeconds, context),
+      }))
+    : bucketize(data.activities, summary.range, size)
+        .filter((bucket) => bucket.activityCount > 0)
+        .map((bucket) => ({
+          name: formatBucketName(bucket.range, size, week, context.locale),
+          value: farOrLong(bucket.distanceMeters, bucket.movingTimeSeconds, context),
+        }));
+  return {
+    header: [
+      periodTitle(data, context, translate),
+      `${day(summary.range.start)} – ${day(summary.range.end)}`,
+    ],
+    items,
+    totals: [
+      { name: translate('widgets.receipt.items'), value: String(summary.activityCount) },
+      {
+        name: translate('widgets.receipt.total'),
+        value: farOrLong(summary.totalDistanceMeters, summary.totalMovingTimeSeconds, context),
+      },
+    ],
+  };
+}
+
+/** A period's boarding pass's texts (see `periodBoardingPass`). */
+export interface PeriodBoardingPass {
+  readonly title: string;
+  /** Its distance, if any, from 0 to all of it, under its first and last activities' days. */
+  readonly distance: { readonly value: string; readonly unit: string | null } | null;
+  readonly firstDay: string;
+  readonly lastDay: string;
+  readonly fields: readonly { readonly name: string; readonly value: string }[];
+}
+
+/**
+ * A period's boarding pass: its name on the band; from its first activity's day, at no distance
+ * yet, to its last one's, at all of it (the days alone without any distance); and its number of
+ * activities, its time and its active days (those with any activity). Time O(n) for n activities.
+ */
+export function periodBoardingPass(
+  data: SummaryData,
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): PeriodBoardingPass {
+  const { summary } = data;
+  const dates = data.activities.map((activity) => activity.localDate).sort();
+  const day = (date: string | undefined) =>
+    date === undefined
+      ? MISSING_VALUE
+      : formatActivityDate(`${date}T00:00:00`, context.locale, 'short');
+  const distance = formatMetric(
+    toDisplayMetric('distance', summary.totalDistanceMeters, {
+      unit: context.unit,
+      sportFamily: 'run',
+    }),
+    context.locale,
+  );
+  return {
+    title: periodName(data, context, translate),
+    distance: summaryHasDistance(summary)
+      ? {
+          value: distance.value,
+          unit: distance.unit === null ? null : context.unitLabel(distance.unit),
+        }
+      : null,
+    firstDay: day(dates[0]),
+    lastDay: day(dates[dates.length - 1]),
+    fields: [
+      {
+        name: translate('widgets.boardingPass.activities'),
+        value: String(summary.activityCount),
+      },
+      {
+        name: translate('widgets.boardingPass.time'),
+        value: withUnit(
+          formatMetric(
+            toDisplaySummaryMetric('totalMovingTime', summary.totalMovingTimeSeconds, context.unit),
+            context.locale,
+          ),
+          context,
+        ),
+      },
+      { name: translate('widgets.boardingPass.activeDays'), value: String(new Set(dates).size) },
+    ],
+  };
 }
 
 /** A period's laps as its board or timing sheet writes them (see `periodLaps`). */
