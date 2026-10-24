@@ -6,6 +6,7 @@ import {
   listsNoteActivities,
   mainFamily,
   periodSentencePlan,
+  periodWrapped,
   playlistSongs,
 } from '@/core/summary-block';
 import { toDisplaySummaryMetric } from '@/core/summary-metrics';
@@ -22,6 +23,8 @@ import {
   COVER_ROUTE,
   fillBox,
   hairlineBox,
+  logoBox,
+  markBrandBox,
   MUSIC_COLORS,
   placed,
   routeBox,
@@ -39,7 +42,9 @@ import {
   type SentencePart,
   sentenceParts,
   symbolBox,
+  turned,
 } from './activity-blocks';
+import { markWidth } from './brand/brand-art';
 import { metricText, periodName, periodNoteLines, type SummaryData } from './editor-data';
 
 /**
@@ -367,5 +372,177 @@ export function periodPlaylistBox(
       y: 0,
     },
     { box: content, x: PLAYLIST.pad, y: PLAYLIST.pad },
+  ]);
+}
+
+/**
+ * The sizes of a period's review, as music apps sum up a year, in the playlist's see-through card:
+ * its width, corners and room inside; the period's name turned up its side, at most `max` big
+ * and `gap` from the cover; the cover's corners, its routes' lines and its icon without routes (a
+ * share of its side); the names over each list and figure, the lists' lines and the room between
+ * them, the columns and the sections; the minutes and the favorite sport, its icon as big; and
+ * AllRun's name and its monogram at the bottom.
+ */
+const WRAPPED = {
+  width: 840,
+  radius: 46,
+  pad: 44,
+  date: { max: 150, gap: 28 },
+  cover: { radius: 16, route: 5, icon: 0.4 },
+  label: 26,
+  item: 32,
+  columnGap: 40,
+  sectionGap: 44,
+  big: 72,
+  favorite: 56,
+  logo: 170,
+  mark: 52,
+} as const;
+
+/** The size a text is laid out at to measure it before writing it as long as something. */
+const WRAPPED_PROBE = 100;
+
+/**
+ * A period's review, as music apps sum up a year of songs (see `periodWrapped`), in the
+ * playlist's see-through card rather than their bright colors: the period's name turned up the
+ * side of its cover (its routes, or its favorite sport's icon without any); its top sports and its
+ * longest activities (by their sport's icon, time and day), numbered, side by side; its minutes in motion and its favorite family of
+ * sports with its icon; and AllRun's name and monogram at the bottom.
+ */
+export function periodWrappedBox(
+  block: Extract<SummaryBlock, { design: 'periodWrapped' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const colors = MUSIC_COLORS[block.layout];
+  const inner = WRAPPED.width - 2 * WRAPPED.pad;
+  const review = periodWrapped(data.activities);
+  const name = periodName(data, textContext, translate);
+  const dateAt = (size: number) =>
+    appTextBox(fonts, [{ text: name, size, bold: true }], colors.ink);
+  // The name as big as it goes, but no longer than the cover beside it is tall.
+  const coverBeside = (date: Box) => inner - date.height - WRAPPED.date.gap;
+  const largest = dateAt(WRAPPED.date.max);
+  const date =
+    largest.width <= coverBeside(largest)
+      ? largest
+      : dateAt((WRAPPED_PROBE * coverBeside(largest)) / dateAt(WRAPPED_PROBE).width);
+  const side = coverBeside(date);
+  const art = coverBox(
+    side,
+    WRAPPED.cover.radius,
+    block.cover,
+    routesBox(data.summary.routes, side * 0.8, side * 0.8, WRAPPED.cover.route, COVER_ROUTE) ??
+      iconBox(review.favorite, side * WRAPPED.cover.icon, COVER_ROUTE),
+  );
+  const half = (inner - WRAPPED.columnGap) / 2;
+  const label = (text: string) =>
+    appTextBox(fonts, [{ text, size: WRAPPED.label, bold: false }], colors.faded, {
+      maxWidth: half,
+    });
+  const titled = (title: string, content: Box) =>
+    column([label(title), content], WRAPPED.label * 0.4, 'start');
+  const line = (text: string) =>
+    appTextBox(fonts, [{ text, size: WRAPPED.item, bold: false }], colors.ink, {
+      maxWidth: half,
+    });
+  /** A numbered list under `title`, each item after its number. */
+  const list = (title: string, items: readonly Box[]) =>
+    titled(
+      title,
+      column(
+        items.map((item, i) => row([line(String(i + 1)), item], WRAPPED.item * 0.3, 'center')),
+        WRAPPED.item * 0.2,
+        'start',
+      ),
+    );
+  const pair = (left: Box, right: Box) =>
+    row([widened(left, half, 'start'), widened(right, half, 'start')], WRAPPED.columnGap, 'start');
+  const lists = pair(
+    list(
+      translate('widgets.wrapped.topSports'),
+      review.sports.map((sport) => line(translate(`modalities.${sport}`))),
+    ),
+    // An activity by its sport's icon, its time (which ranks it) and its day: names repeat
+    // ("Morning Ride") and run long.
+    list(
+      translate('widgets.wrapped.topActivities'),
+      review.activities.map((activity) =>
+        row(
+          [
+            iconBox(sportIcon(activity), WRAPPED.item, colors.ink),
+            line(
+              `${durationParts(activity.movingTimeSeconds, 'minutes')
+                .map(({ amount, unit }) => `${amount}${textContext.durationUnits[unit]}`)
+                .join(
+                  ' ',
+                )} · ${formatActivityDate(activity.startLocal, textContext.locale, 'short')}`,
+            ),
+          ],
+          WRAPPED.item * 0.3,
+          'center',
+        ),
+      ),
+    ),
+  );
+  // The favorite family's name as big as it goes beside its icon, smaller when long.
+  const sportName = translate(`families.${review.favorite}`);
+  const sportAt = (size: number) =>
+    appTextBox(fonts, [{ text: sportName, size, bold: true }], colors.ink);
+  const room = half - WRAPPED.favorite * 1.3;
+  const fullSize = sportAt(WRAPPED.favorite);
+  const favoriteName =
+    fullSize.width <= room
+      ? fullSize
+      : sportAt((WRAPPED_PROBE * room) / sportAt(WRAPPED_PROBE).width);
+  const favorite = row(
+    [iconBox(review.favorite, WRAPPED.favorite, colors.ink), favoriteName],
+    WRAPPED.favorite * 0.3,
+    'center',
+  );
+  const figures = pair(
+    titled(
+      translate('widgets.wrapped.minutes'),
+      appTextBox(
+        fonts,
+        [
+          {
+            text: new Intl.NumberFormat(textContext.locale).format(review.minutes),
+            size: WRAPPED.big,
+            bold: true,
+          },
+        ],
+        colors.ink,
+        { maxWidth: half },
+      ),
+    ),
+    titled(translate('widgets.wrapped.favorite'), favorite),
+  );
+  const content = column(
+    [
+      row([turned(date), art], WRAPPED.date.gap, 'start'),
+      lists,
+      figures,
+      // AllRun's name at the start and its monogram at the end, as the review's app signs it.
+      row(
+        [
+          widened(logoBox(WRAPPED.logo, colors.ink), inner - markWidth(WRAPPED.mark), 'start'),
+          markBrandBox(WRAPPED.mark, colors.ink),
+        ],
+        0,
+        'center',
+      ),
+    ],
+    WRAPPED.sectionGap,
+    'start',
+  );
+  const height = content.height + 2 * WRAPPED.pad;
+  return placed(WRAPPED.width, height, [
+    {
+      box: fillBox(WRAPPED.width, height, WRAPPED.radius, colors.card, { edge: colors.edge }),
+      x: 0,
+      y: 0,
+    },
+    { box: content, x: WRAPPED.pad, y: WRAPPED.pad },
   ]);
 }

@@ -150,6 +150,7 @@ export const es: Translations = {
       verse: 'Versículo',
       periodSentence: 'Subrayado',
       periodPlaylist: 'Lista de reproducción',
+      periodWrapped: 'Resumen',
       periodNotes: 'Notas',
     },
     blocks: {
@@ -443,6 +444,12 @@ export const es: Translations = {
         training: { one: '1 entreno', other: '{{count}} entrenos' },
         other: { one: '1 actividad', other: '{{count}} actividades' },
       },
+    },
+    wrapped: {
+      topSports: 'Top deportes',
+      topActivities: 'Top actividades',
+      minutes: 'Minutos en movimiento',
+      favorite: 'Actividad favorita',
     },
     receipt: { total: 'Total', thanks: '¡Gracias por moverte!' },
     boardingPass: {

@@ -2,7 +2,7 @@ import type { Activity } from './activity';
 import type { BlockLettering } from './activity-block';
 import { type DateRange, rangeLength } from './dates';
 import { bucketCount } from './periods';
-import type { SportFamily } from './sports';
+import type { SportFamily, SportModality } from './sports';
 import { type BucketSize, familyTotals, type PeriodSummary } from './summary';
 import { periodTotals, summaryHasDistance } from './summary-metrics';
 import {
@@ -67,6 +67,7 @@ export const MAX_NOTES_ACTIVITIES = 16;
 const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodSentence',
   'periodPlaylist',
+  'periodWrapped',
   'periodNotes',
 ]);
 
@@ -187,6 +188,58 @@ export function playlistSongs(
   return { songs, top: songs.length < activities.length };
 }
 
+/** Most sports and activities a period's review lists. */
+export const WRAPPED_TOP = 5;
+
+/** What a period's review shows, as music apps sum up a year of songs. */
+export interface PeriodWrapped {
+  /** Its sports, most time first, at most {@link WRAPPED_TOP}. */
+  readonly sports: readonly SportModality[];
+  /** Its longest activities in time, longest first, at most {@link WRAPPED_TOP}. */
+  readonly activities: readonly Activity[];
+  /** Its time in motion, in whole minutes. */
+  readonly minutes: number;
+  /**
+   * The family it spent most time on, as the summaries filter them (see `mainFamily`): a run and
+   * a trail run add up, so it isn't always the first of its top sports.
+   */
+  readonly favorite: SportFamily;
+}
+
+/**
+ * A period's review: its top sports and longest activities, in time (the period's own data, as
+ * always), its minutes in motion and its favorite family of sports. Time O(n log n) for n
+ * activities.
+ *
+ * @throws RangeError if `activities` is empty.
+ */
+export function periodWrapped(activities: readonly Activity[]): PeriodWrapped {
+  if (activities.length === 0) {
+    throw new RangeError('A review needs activities');
+  }
+  const time = new Map<SportModality, number>();
+  for (const activity of activities) {
+    time.set(
+      activity.sportModality,
+      (time.get(activity.sportModality) ?? 0) + activity.movingTimeSeconds,
+    );
+  }
+  const sports = [...time]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, WRAPPED_TOP)
+    .map(([sport]) => sport);
+  return {
+    sports,
+    activities: [...activities]
+      .sort((a, b) => b.movingTimeSeconds - a.movingTimeSeconds)
+      .slice(0, WRAPPED_TOP),
+    minutes: Math.round(
+      activities.reduce((sum, activity) => sum + activity.movingTimeSeconds, 0) / 60,
+    ),
+    favorite: mainFamily(activities),
+  };
+}
+
 /**
  * The sport a period was mostly about: the family it spent most time on (the first, on a tie).
  * Time O(n · f) for n activities and f families.
@@ -247,7 +300,8 @@ export function noteActivities(activities: readonly Activity[]): NoteActivity[] 
  * too many) and overlaid (its main sport's icon, without any route), after its card per sport, as
  * an activity's card comes before its widgets with the route. Then its creative ones, in the order
  * of an activity's: the first quote and verse (the others are chosen from their lists); its
- * highlighted sentence; its playlist, in dark and light mode and each brand color; its note,
+ * highlighted sentence; its playlist and its review, in dark and light mode and each brand
+ * color; its note,
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
  * days, weeks or months. None for a period without activities. Time O(1).
  */
@@ -275,8 +329,10 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     { design: 'quote', quote: QUOTES[0] },
     { design: 'verse', verse: VERSES[0] },
     { design: 'periodSentence' },
-    ...APP_MODES.flatMap((layout) =>
-      BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodPlaylist', layout, cover })),
+    ...(['periodPlaylist', 'periodWrapped'] as const).flatMap((design) =>
+      APP_MODES.flatMap((layout) =>
+        BRAND_COVERS.map((cover): SummaryBlock => ({ design, layout, cover })),
+      ),
     ),
     ...(['activities', 'buckets'] as const)
       .filter((rows) => rows === 'buckets' || listsNoteActivities(summary))
@@ -315,6 +371,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     // A replica writes in its app's font whatever the layer's.
     case 'periodSentence':
     case 'periodPlaylist':
+    case 'periodWrapped':
     case 'periodNotes':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }

@@ -42,6 +42,7 @@ import {
   periodNotesBox,
   periodPlaylistBox,
   periodSentenceBox,
+  periodWrappedBox,
   routesBox,
 } from './summary-creatives';
 
@@ -583,6 +584,8 @@ export function prepareSummaryBlock(
         return periodSentenceBox(data, { fonts, textContext, translate });
       case 'periodPlaylist':
         return periodPlaylistBox(block, data, { fonts, textContext: compact, translate });
+      case 'periodWrapped':
+        return periodWrappedBox(block, data, { fonts, textContext, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

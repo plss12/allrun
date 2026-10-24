@@ -43,7 +43,7 @@ import type { APP_MODES, FontId, Layer } from '@/core/template';
 import { durationParts } from '@/core/units';
 import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 
-import { PlainWordmark, wordmarkHeight } from './brand/brand-art';
+import { markWidth, PlainMark, PlainWordmark, wordmarkHeight } from './brand/brand-art';
 import {
   type ActivityData,
   type LabelKey,
@@ -237,7 +237,22 @@ type Piece =
       readonly color: string;
       readonly stroke?: number;
     }
-  | { readonly kind: 'logo'; readonly x: number; readonly y: number; readonly width: number }
+  | {
+      readonly kind: 'logo';
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      /** A replica's own color for it; the block's when absent. */
+      readonly color?: string;
+    }
+  | {
+      /** AllRun's monogram, in a replica's own color. */
+      readonly kind: 'mark';
+      readonly x: number;
+      readonly y: number;
+      readonly height: number;
+      readonly color: string;
+    }
   | {
       readonly kind: 'route';
       readonly points: readonly Point[];
@@ -295,7 +310,7 @@ export function column(boxes: readonly Box[], gap: number, align: Align): Box {
  * A box of texts turned a quarter counterclockwise, read upwards: what was its start is at its
  * bottom, and its first line at its left.
  */
-function turned(box: Box): Box {
+export function turned(box: Box): Box {
   return {
     width: box.height,
     height: box.width,
@@ -442,10 +457,18 @@ export const iconBox = (icon: SportIconId, size: number, color?: string): Box =>
   place: (x, y) => [{ kind: 'icon', icon, x, y, size, ...(color === undefined ? {} : { color }) }],
 });
 
-const logoBox = (width: number): Box => ({
+/** AllRun's monogram `height` tall, in a replica's own `color`. */
+export const markBrandBox = (height: number, color: string): Box => ({
+  width: markWidth(height),
+  height,
+  place: (x, y) => [{ kind: 'mark', x, y, height, color }],
+});
+
+/** AllRun's name `width` wide, in the block's color or a replica's own `color`. */
+export const logoBox = (width: number, color?: string): Box => ({
   width,
   height: wordmarkHeight(width),
-  place: (x, y) => [{ kind: 'logo', x, y, width }],
+  place: (x, y) => [{ kind: 'logo', x, y, width, ...(color === undefined ? {} : { color }) }],
 });
 
 /** Width of a block's route, before the layer's scale. */
@@ -3716,10 +3739,21 @@ function appMark(piece: Piece, i: number): ReactElement | null {
           strokeWidth={piece.width}
         />
       );
+    case 'logo':
+      return piece.color === undefined ? null : (
+        <Group key={i} transform={[{ translateX: piece.x }, { translateY: piece.y }]}>
+          <PlainWordmark color={piece.color} width={piece.width} />
+        </Group>
+      );
+    case 'mark':
+      return (
+        <Group key={i} transform={[{ translateX: piece.x }, { translateY: piece.y }]}>
+          <PlainMark color={piece.color} height={piece.height} />
+        </Group>
+      );
     case 'text':
     case 'messageTail':
     case 'paper':
-    case 'logo':
       return null;
   }
 }
@@ -3753,6 +3787,7 @@ function BlockArt({
       case 'ticks':
       case 'symbol':
       case 'disc':
+      case 'mark':
         return [];
       case 'icon':
         return piece.color !== undefined
@@ -3772,11 +3807,13 @@ function BlockArt({
               </Group>,
             ];
       case 'logo':
-        return [
-          <Group key={i} transform={[{ translateX: piece.x }, { translateY: piece.y }]}>
-            <PlainWordmark color={color} width={piece.width} />
-          </Group>,
-        ];
+        return piece.color !== undefined
+          ? []
+          : [
+              <Group key={i} transform={[{ translateX: piece.x }, { translateY: piece.y }]}>
+                <PlainWordmark color={color} width={piece.width} />
+              </Group>,
+            ];
       case 'route':
         return piece.color !== undefined
           ? []

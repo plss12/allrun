@@ -182,6 +182,23 @@ export function PlainWordmark({
   );
 }
 
+/** Width of the monogram drawn `height` tall. */
+export function markWidth(height: number): number {
+  return (BRAND_GEOMETRY.mark.width * height) / BRAND_GEOMETRY.mark.height;
+}
+
+/**
+ * The monogram in one `color`, `height` tall, with its top-left corner at (0, 0), the lines
+ * between its lanes cut out: a replica's mark, in its own color.
+ */
+export function PlainMark({ color, height }: { readonly color: string; readonly height: number }) {
+  return (
+    <Group transform={[{ scale: height / BRAND_GEOMETRY.mark.height }]}>
+      <MarkShape palette={{ stems: color, lanes: color, lines: null }} />
+    </Group>
+  );
+}
+
 /** The monogram as an interface element (e.g. a header), adapted to light and dark mode. */
 export function BrandMark({ height }: { readonly height: number }) {
   const scheme = useColorScheme();

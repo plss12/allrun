@@ -389,6 +389,7 @@ describe('summaryCatalog', () => {
       'summaryBlock-verse',
       'summaryBlock-periodSentence',
       'summaryBlock-periodPlaylist',
+      'summaryBlock-periodWrapped',
       'summaryBlock-periodNotes',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([

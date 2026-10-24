@@ -12,7 +12,9 @@ import {
   noteActivities,
   periodSentencePlan,
   PLAYLIST_TOP,
+  periodWrapped,
   playlistSongs,
+  WRAPPED_TOP,
   summaryBlocks,
   tableBucket,
 } from './summary-block';
@@ -60,6 +62,10 @@ describe('summaryBlocks', () => {
       { design: 'periodPlaylist', layout: 'dark', cover: 'ink' },
       { design: 'periodPlaylist', layout: 'light', cover: 'red' },
       { design: 'periodPlaylist', layout: 'light', cover: 'ink' },
+      { design: 'periodWrapped', layout: 'dark', cover: 'red' },
+      { design: 'periodWrapped', layout: 'dark', cover: 'ink' },
+      { design: 'periodWrapped', layout: 'light', cover: 'red' },
+      { design: 'periodWrapped', layout: 'light', cover: 'ink' },
       { design: 'periodNotes', layout: 'dark', rows: 'activities' },
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
@@ -102,6 +108,10 @@ describe('summaryBlocks', () => {
       { design: 'periodPlaylist', layout: 'dark', cover: 'ink' },
       { design: 'periodPlaylist', layout: 'light', cover: 'red' },
       { design: 'periodPlaylist', layout: 'light', cover: 'ink' },
+      { design: 'periodWrapped', layout: 'dark', cover: 'red' },
+      { design: 'periodWrapped', layout: 'dark', cover: 'ink' },
+      { design: 'periodWrapped', layout: 'light', cover: 'red' },
+      { design: 'periodWrapped', layout: 'light', cover: 'ink' },
       { design: 'periodNotes', layout: 'dark', rows: 'activities' },
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
@@ -130,6 +140,7 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodNotes')).toBe(true);
     expect(isSummaryReplica('periodSentence')).toBe(true);
     expect(isSummaryReplica('periodPlaylist')).toBe(true);
+    expect(isSummaryReplica('periodWrapped')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
@@ -195,6 +206,39 @@ describe('playlistSongs', () => {
     const all = playlistSongs(summarize(few, monthRange('2026-10-01')), few);
     expect(all.songs.map((song) => song.localDate)).toEqual(['2026-10-09', '2026-10-03']);
     expect(all.top).toBe(false);
+  });
+});
+
+describe('periodWrapped', () => {
+  const session = (sportType: string, minutes: number) =>
+    makeActivity({ sportType, movingTimeSeconds: minutes * 60 });
+
+  it('ranks the sports and the activities by time, and its families for the favorite', () => {
+    const ride = session('Ride', 120);
+    const runs = [session('Run', 70), session('Run', 60)];
+    const trail = session('TrailRun', 80);
+    const review = periodWrapped([...runs, ride, trail]);
+    // The runs add up to more than the ride, which is the longest activity.
+    expect(review.sports).toEqual(['roadRun', 'roadRide', 'trailRun']);
+    expect(review.favorite).toBe('run');
+    // A trail run is a run: with it, the runs outweigh a ride that tops the sports.
+    const long = session('Ride', 100);
+    const mixed = periodWrapped([long, session('Run', 60), session('TrailRun', 60)]);
+    expect(mixed.sports[0]).toBe('roadRide');
+    expect(mixed.favorite).toBe('run');
+    expect(review.activities).toEqual([ride, trail, runs[0], runs[1]]);
+    expect(review.minutes).toBe(330);
+  });
+
+  it(`lists ${WRAPPED_TOP} sports and activities at most`, () => {
+    const types = ['Run', 'TrailRun', 'Ride', 'Walk', 'Hike', 'Swim', 'Workout'];
+    const review = periodWrapped(types.map((type, i) => session(type, 10 + i)));
+    expect(review.sports).toHaveLength(WRAPPED_TOP);
+    expect(review.activities).toHaveLength(WRAPPED_TOP);
+  });
+
+  it('has nothing to review without activities', () => {
+    expect(() => periodWrapped([])).toThrow(RangeError);
   });
 });
 

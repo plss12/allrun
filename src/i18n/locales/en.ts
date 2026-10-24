@@ -155,6 +155,7 @@ export const en = {
       verse: 'Verse',
       periodSentence: 'Highlighted',
       periodPlaylist: 'Playlist',
+      periodWrapped: 'Recap',
       periodNotes: 'Notes',
     },
     blocks: {
@@ -463,6 +464,13 @@ export const en = {
         training: { one: '1 workout', other: '{{count}} workouts' },
         other: { one: '1 activity', other: '{{count}} activities' },
       },
+    },
+    /** A period's review, as music apps sum up a year: the names over its lists and figures. */
+    wrapped: {
+      topSports: 'Top Sports',
+      topActivities: 'Top Activities',
+      minutes: 'Minutes Moving',
+      favorite: 'Favorite Activity',
     },
     receipt: { total: 'Total', thanks: 'Thanks for moving!' },
     boardingPass: {
