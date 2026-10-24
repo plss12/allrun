@@ -649,22 +649,51 @@ describe('periodNoteLines', () => {
 
   it('ticks off each activity, oldest first, by its distance or its time without seconds, and its sport', () => {
     expect(periodNoteLines(data, 'activities', context, translate)).toEqual([
-      { text: '10,94 km de carrera', checked: true, highlighted: true },
+      { text: '10,94 km de carrera', checked: true, highlighted: true, sports: [] },
       {
         text: `54${TEST_DURATION_UNITS.minutes} de entrenamiento`,
         checked: true,
         highlighted: false,
+        sports: [],
       },
-      { text: '6,00 km de carrera', checked: true, highlighted: false },
+      { text: '6,00 km de carrera', checked: true, highlighted: false, sports: [] },
     ]);
   });
 
-  it('ticks off the days with activities, the longest highlighted, and leaves the rest', () => {
+  it('ticks off the days with activities and their sports, the longest highlighted, and leaves the rest', () => {
     const lines = periodNoteLines(data, 'buckets', context, translate);
     expect(lines).toHaveLength(7);
-    expect(lines[0]).toEqual({ text: 'Lunes', checked: false, highlighted: false });
-    expect(lines[1]).toEqual({ text: 'Martes · 10,94 km', checked: true, highlighted: true });
-    expect(lines[3]).toEqual({ text: 'Jueves · 6,00 km', checked: true, highlighted: false });
+    expect(lines[0]).toEqual({ text: 'Lunes', checked: false, highlighted: false, sports: [] });
+    expect(lines[1]).toEqual({
+      text: 'Martes · 10,94 km',
+      checked: true,
+      highlighted: true,
+      sports: ['run', 'training'],
+    });
+    expect(lines[3]).toEqual({
+      text: 'Jueves · 6,00 km',
+      checked: true,
+      highlighted: false,
+      sports: ['run'],
+    });
+  });
+
+  it("leaves a day's sports out of a summary of one sport, which the note names once", () => {
+    const runs: SummaryData = { ...data, families: ['run'] };
+    expect(periodNoteLines(runs, 'buckets', context, translate)[3].sports).toEqual([]);
+  });
+
+  it("leaves a week's or a month's sports out: the icons are a day's", () => {
+    const october = monthRange('2026-10-01');
+    const month: SummaryData = {
+      ...data,
+      kind: 'month',
+      summary: summarize(activities, october),
+      bucketSize: 'week',
+      current: false,
+    };
+    const lines = periodNoteLines(month, 'buckets', context, translate);
+    expect(lines.every((line) => line.sports.length === 0)).toBe(true);
   });
 
   it('writes a day without distance by its time, and highlights nothing alone', () => {
@@ -677,6 +706,7 @@ describe('periodNoteLines', () => {
       text: `Martes · 54${TEST_DURATION_UNITS.minutes}`,
       checked: true,
       highlighted: false,
+      sports: ['training'],
     });
     expect(periodNoteLines(alone, 'activities', context, translate)[0].highlighted).toBe(false);
   });

@@ -9,11 +9,13 @@ import {
   noteBox,
   NOTES_COLORS,
   NOTES_SIZES,
+  noteSportBox,
+  iconBox,
   overlay,
   row,
   symbolBox,
 } from './activity-blocks';
-import { periodNoteLines, periodTitle, type SummaryData } from './editor-data';
+import { periodName, periodNoteLines, type SummaryData } from './editor-data';
 
 /**
  * The creative widgets of a period summary (R2c): replicas of apps, as an activity's (see
@@ -22,17 +24,20 @@ import { periodNoteLines, periodTitle, type SummaryData } from './editor-data';
 
 /**
  * A checklist's box beside each line of a note: its diameter, a share of the line's size; an
- * empty one's ring, a share of its diameter; the room after it, a share of the line's size.
+ * empty one's ring, a share of its diameter; the room after it, a share of the line's size. A
+ * day's sports' icons after it, and the room before and between them, shares of its size too.
  */
-const NOTE_CHECK = { size: 0.95, ring: 0.08, gap: 0.45 } as const;
+const NOTE_CHECK = { size: 0.95, ring: 0.08, gap: 0.45, icon: 0.95, iconGap: 0.2 } as const;
 
 /** The ring of a box not ticked off yet, in the Notes' dark and light mode. */
 const NOTE_RING = { dark: '#5E5E62', light: '#C7C7CC' } as const;
 
 /**
  * A period's note of the iPhone's Notes, as a checklist of what it got done (see
- * `periodNoteLines`): its name as the title, and a line per activity, or per day, week or month,
- * each ticked off in the accent's round box or left empty, the longest in the accent. A period
+ * `periodNoteLines`): its name as the title (and its sport at the end of the bar, as an activity's
+ * note, when it is of one), and a line per activity, or per day, week or month, each ticked off in
+ * the accent's round box or left empty, the longest in the accent, a day with its sports' icons. A
+ * period
  * whose activities a note doesn't list (see `listsNoteActivities`) lists its days, weeks or months
  * instead (a design saved with a week's activities, used for a year).
  */
@@ -50,12 +55,28 @@ export function periodNotesBox(
     const check = line.checked
       ? overlay(discBox(diameter / 2, colors.accent), symbolBox('check', diameter, colors.page))
       : discBox(diameter / 2, NOTE_RING[block.layout], diameter * NOTE_CHECK.ring);
-    const text = appTextBox(
-      fonts,
-      [{ text: line.text, size, bold: false }],
-      line.highlighted ? colors.accent : colors.ink,
+    const ink = line.highlighted ? colors.accent : colors.ink;
+    const text = appTextBox(fonts, [{ text: line.text, size, bold: false }], ink);
+    const icons = line.sports.map((sport) => iconBox(sport, size * NOTE_CHECK.icon, ink));
+    return row(
+      [
+        check,
+        icons.length === 0
+          ? text
+          : row([text, row(icons, size * NOTE_CHECK.iconGap, 'center')], size * 0.3, 'center'),
+      ],
+      size * NOTE_CHECK.gap,
+      'center',
     );
-    return row([check, text], size * NOTE_CHECK.gap, 'center');
   });
-  return noteBox(fonts, block.layout, periodTitle(data, textContext, translate), lines);
+  const [sport] = data.families;
+  return noteBox(
+    fonts,
+    block.layout,
+    periodName(data, textContext, translate),
+    lines,
+    data.families.length === 1
+      ? noteSportBox(fonts, block.layout, translate(`families.${sport}`), sport)
+      : undefined,
+  );
 }

@@ -19,6 +19,7 @@ import type { SportFamily, SportModality } from '@/core/sports';
 import {
   type BucketSize,
   bucketize,
+  familiesOf,
   type FamilyTotals,
   type PeriodSummary,
   type SummaryBucket,
@@ -769,19 +770,30 @@ export interface TitledHeader {
 }
 
 /**
- * How a period's widgets name it: "Esta semana" for the week in progress, a month or a year by its
- * name, short and telling ("Octubre de 2026", "2026"), other weeks and ranges by their days; and a
- * summary of one sport names it after the period ("Esta semana · Carreras"). Time and space O(1).
+ * A period's name alone: "Esta semana" for the week in progress, a month or a year by its name,
+ * short and telling ("Octubre de 2026", "2026"), other weeks and ranges by their days. Time and
+ * space O(1).
+ */
+export function periodName(
+  data: SummaryData,
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): string {
+  return data.current && data.kind === 'week'
+    ? translate('thisWeek')
+    : formatPeriodName(data.kind, data.summary.range, context.locale);
+}
+
+/**
+ * How a period's widgets name it: by its name (see `periodName`), and a summary of one sport
+ * names it after the period ("Esta semana · Carreras"). Time and space O(1).
  */
 export function periodTitle(
   data: SummaryData,
   context: TextContext,
   translate: (key: LabelKey) => string,
 ): string {
-  const period =
-    data.current && data.kind === 'week'
-      ? translate('thisWeek')
-      : formatPeriodName(data.kind, data.summary.range, context.locale);
+  const period = periodName(data, context, translate);
   return data.families.length === 1
     ? `${period} · ${translate(`families.${data.families[0]}`)}`
     : period;
@@ -923,11 +935,15 @@ export function familyCard(
   };
 }
 
-/** A line of a period's note: its text, whether it is ticked off and whether in the accent. */
+/**
+ * A line of a period's note: its text, whether it is ticked off and whether in the accent, and the
+ * sports whose icons follow it.
+ */
 export interface NoteLine {
   readonly text: string;
   readonly checked: boolean;
   readonly highlighted: boolean;
+  readonly sports: readonly SportFamily[];
 }
 
 /** A time in its units ("54min 17s"), down to `smallest`. */
@@ -944,8 +960,10 @@ function durationInWords(seconds: number, smallest: DurationUnit, context: TextC
  * each sport done twice or more in the
  * accent (see `noteActivities`); or its days, weeks or months (`buckets`, see `tableBucket`), those
  * with activities ticked off with their distance, or time without one ("Lunes · 10,81 km"), the
- * rest left unticked by name, and the longest in the accent when two or more have some. Time
- * O(b + n log n) for b days, weeks or months and n activities.
+ * rest left unticked by name, and the longest in the accent when two or more have some. A day
+ * names its sports with their icons, since its total doesn't say them, unless the summary is of
+ * one sport (the note names it once). Time O(b · n) for b days, weeks or months and n
+ * activities.
  */
 export function periodNoteLines(
   data: SummaryData,
@@ -968,6 +986,7 @@ export function periodNoteLines(
         }),
         checked: true,
         highlighted,
+        sports: [],
       };
     });
   }
@@ -988,7 +1007,7 @@ export function periodNoteLines(
   return buckets.map((bucket) => {
     const name = formatBucketName(bucket.range, size, week, context.locale);
     if (bucket.activityCount === 0) {
-      return { text: name, checked: false, highlighted: false };
+      return { text: name, checked: false, highlighted: false, sports: [] };
     }
     const value =
       bucket.distanceMeters > 0
@@ -1004,6 +1023,16 @@ export function periodNoteLines(
       text: `${name} · ${value}`,
       checked: true,
       highlighted: active.length >= 2 && bucket === longest,
+      sports:
+        size === 'day' && data.families.length !== 1
+          ? familiesOf(
+              data.activities.filter(
+                (activity) =>
+                  activity.localDate >= bucket.range.start &&
+                  activity.localDate <= bucket.range.end,
+              ),
+            )
+          : [],
     };
   });
 }

@@ -1092,6 +1092,28 @@ const NOTES_MIN_WIDTH = 520;
 /** A note's texts: its bar's ("< AllRun") and icon, its title and its lines. */
 export const NOTES_SIZES = SIZES.notes;
 
+/** A sport at the end of a note's bar: its `name` in small letters and its icon, in the accent. */
+export function noteSportBox(
+  fonts: SkTypefaceFontProvider,
+  mode: (typeof APP_MODES)[number],
+  name: string,
+  icon: SportIconId,
+): Box {
+  const { accent } = NOTES_COLORS[mode];
+  return row(
+    [
+      appTextBox(
+        fonts,
+        [{ text: name.toLocaleLowerCase(), size: NOTES_SIZES.bar, bold: false }],
+        accent,
+      ),
+      iconBox(icon, NOTES_SIZES.icon, accent),
+    ],
+    NOTES_SIZES.bar * 0.3,
+    'center',
+  );
+}
+
 /**
  * A note of the iPhone's Notes in `mode`, in its font and colors: "< AllRun" at the start of its
  * bar and `side`, if any, at its end, over its `title` and its `lines` (`NOTES_SIZES.row` tall).
@@ -1494,7 +1516,6 @@ export function prepareActivityBlock(
   if (metrics.length === 0 && blockDataCount(block) > 0) {
     return null;
   }
-  const text = (runs: readonly Run[]): Box => styledTextBox(fonts, runs, style);
   /** A replica's text in `color` (see `appTextBox`). */
   const appText = (runs: readonly Run[], color: string, options: TextLook & AppLettering = {}) =>
     appTextBox(fonts, runs, color, options);
@@ -1936,22 +1957,11 @@ export function prepareActivityBlock(
           row([widened(line.name, nameWidth, 'start'), line.pace], sizes.row * 0.25, 'start'),
         );
         const distance = metricText(activity, 'distance', textContext);
-        const sport = row(
-          [
-            appText(
-              [
-                {
-                  text: translate(`modalities.${activity.sportModality}`).toLocaleLowerCase(),
-                  size: sizes.bar,
-                  bold: false,
-                },
-              ],
-              colors.accent,
-            ),
-            iconBox(sportIcon(activity), sizes.icon, colors.accent),
-          ],
-          sizes.bar * 0.3,
-          'center',
+        const sport = noteSportBox(
+          fonts,
+          block.layout,
+          translate(`modalities.${activity.sportModality}`),
+          sportIcon(activity),
         );
         return noteBox(
           fonts,
