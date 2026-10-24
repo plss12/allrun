@@ -10,7 +10,10 @@ import {
   type CatalogSectionId,
   catalogItemKey,
   catalogWidgetKey,
+  creativeTheme,
+  isCreativeWildcard,
   type NewLayer,
+  rowPartner,
   summaryCatalog,
 } from './layer-catalog';
 import { summarize } from './summary';
@@ -126,13 +129,14 @@ describe('activityCatalog', () => {
       'block-message',
       'block-chat',
       'block-sentence',
+      'block-equivalences',
       'block-verified',
       'block-music',
-      'block-camera',
       'block-alarm',
+      'block-camera',
       'block-receipt',
-      'block-boardingPass',
       'block-nutrition',
+      'block-boardingPass',
     ]);
     // The quote and the verse with their first phrase: the others are chosen from a list.
     expect(variantKeys(trail, 'block-quote')).toEqual(['block-quote-kipchoge']);
@@ -152,17 +156,18 @@ describe('activityCatalog', () => {
       'block-nutrition-table-light',
       'block-nutrition-table-dark',
     ]);
-    // The splits' tables come with the activity's splits: the note with the phone's apps, then
-    // the bars and the ladder together and the race on TV apart; the laps' two, with its laps.
+    // The splits' tables come with the activity's splits: the note with the phone's apps, after the
+    // camera; then the bars and the ladder together and the race on TV apart; the laps' two, with
+    // its laps.
     const withSplits = activityCatalog(makeActivity(), ['splits']);
     expect(tileKeys(withSplits, 'creative').slice(-7)).toEqual([
-      'block-alarm',
+      'block-camera',
       'block-notes',
-      'block-splits',
       'block-grandPrix',
+      'block-splits',
       'block-receipt',
-      'block-boardingPass',
       'block-nutrition',
+      'block-boardingPass',
     ]);
     expect(variantKeys(withSplits, 'block-splits')).toEqual([
       'block-splits-splitBars',
@@ -300,9 +305,9 @@ describe('activityCatalog', () => {
       'info-activityDate',
       'info-activityPlace',
     ]);
-    // And the location sticker, after the alarm.
+    // And the location sticker, after the verified badge.
     const creative = tileKeys(named, 'creative');
-    expect(creative[creative.indexOf('block-alarm') + 1]).toBe('block-location');
+    expect(creative[creative.indexOf('block-verified') + 1]).toBe('block-location');
     expect(tileKeys(activityCatalog(makeActivity()), 'creative')).not.toContain('block-location');
     expect(variantKeys(named, 'info-activityPlace')).toEqual([
       'info-activityPlace',
@@ -397,17 +402,18 @@ describe('summaryCatalog', () => {
       'summaryBlock-quote',
       'summaryBlock-verse',
       'summaryBlock-periodSentence',
+      'summaryBlock-periodEquivalences',
       'summaryBlock-periodPlaylist',
       'summaryBlock-periodWrapped',
       'summaryBlock-periodNotes',
+      'summaryBlock-periodWeather',
+      'summaryBlock-periodCalendar',
+      'summaryBlock-periodStreak',
       'summaryBlock-periodLaps',
       'summaryBlock-periodGrandPrix',
       'summaryBlock-periodReceipt',
-      'summaryBlock-periodBoardingPass',
       'summaryBlock-periodNutrition',
-      'summaryBlock-periodCalendar',
-      'summaryBlock-periodStreak',
-      'summaryBlock-periodWeather',
+      'summaryBlock-periodBoardingPass',
       'summaryBlock-periodMetro',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
@@ -537,5 +543,58 @@ describe('summaryCatalog', () => {
     const catalog = summaryCatalog(summarize(activities, week), 'day');
     const added = addEach(defaultSummaryTemplate(makeSummary(), 'square'), catalog);
     expect(added).toHaveLength(items(catalog).length);
+  });
+});
+
+describe('creativeTheme and rowPartner', () => {
+  // As many creative tiles as each mode offers: an activity with its place, splits and laps; a
+  // week (its activities listed, its calendar) and a year, of every sport and of one.
+  const run = makeActivity({ localDate: '2026-10-13' });
+  const catalogs = [
+    activityCatalog(makeActivity(), ['splits'], true, false, true),
+    summaryCatalog(summarize([run], weekRange('2026-10-14')), 'day'),
+    summaryCatalog(summarize([run], monthRange('2026-10-01')), 'week'),
+    summaryCatalog(
+      summarize(
+        [run, makeActivity({ sportType: 'Ride', localDate: '2026-10-14' })],
+        weekRange('2026-10-14'),
+      ),
+      'day',
+    ),
+  ];
+
+  it('places every creative tile in a theme, so the gallery lays it out among its own', () => {
+    for (const catalog of catalogs) {
+      for (const key of tileKeys(catalog, 'creative')) {
+        expect([key, creativeTheme(key)]).not.toEqual([key, null]);
+      }
+    }
+  });
+
+  it('orders the creative tiles by their themes, each pair one after the other', () => {
+    for (const catalog of catalogs) {
+      const keys = tileKeys(catalog, 'creative');
+      const themes = keys.map((key) => creativeTheme(key) ?? -1);
+      expect(themes).toEqual([...themes].sort((a, b) => a - b));
+      keys.forEach((key, i) => {
+        const partner = rowPartner(key);
+        if (partner !== null && keys.includes(partner)) {
+          expect(keys[i + 1]).toBe(partner);
+        }
+      });
+    }
+  });
+
+  it('pairs only the first of a pair, with the second', () => {
+    expect(rowPartner('block-camera')).toBe('block-notes');
+    expect(rowPartner('block-notes')).toBeNull();
+    expect(rowPartner('summaryBlock-periodBoardingPass')).toBe('summaryBlock-periodMetro');
+    expect(creativeTheme('block-camera')).toBe(creativeTheme('block-music'));
+    expect(creativeTheme('block-camera')).not.toBe(creativeTheme('block-receipt'));
+    expect(creativeTheme('block-unknown')).toBeNull();
+    // Only the trips go up beside a tile alone of another theme.
+    expect(isCreativeWildcard('block-boardingPass')).toBe(true);
+    expect(isCreativeWildcard('summaryBlock-periodMetro')).toBe(true);
+    expect(isCreativeWildcard('block-camera')).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import type { Activity } from './activity';
+import { activityEquivalences } from './equivalences';
 import { availableMetrics, cardMetrics, type MetricId } from './metrics';
 import type { SportFamily } from './sports';
 import {
@@ -99,6 +100,7 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'laps':
     case 'grandPrix':
     case 'nutrition':
+    case 'equivalences':
     case 'alarm':
     case 'location':
     case 'splitBars':
@@ -259,33 +261,38 @@ export function activityBlocks(
     ...APP_MODES.map((layout) => ({ design: 'message', layout }) as const),
     ...APP_MODES.map((layout) => ({ design: 'chat', layout, phrase: CHAT_PHRASES[0] }) as const),
     ...(sentencePlan(activity, withPlace) === null ? [] : [{ design: 'sentence' } as const]),
+    // Its data as things anyone pictures, beside the sentence that tells them.
+    ...(activityEquivalences(activity).length === 0
+      ? []
+      : APP_MODES.map((layout) => ({ design: 'equivalences', layout }) as const)),
+    // The badge beside the place, both stickers of the photo (see `rowPartner`).
     ...APP_MODES.map((layout) => ({ design: 'verified', layout }) as const),
-    // The phone's apps.
+    ...(withPlace ? APP_MODES.map((layout) => ({ design: 'location', layout }) as const) : []),
+    // The phone's apps: the music with the alarm, the camera with the note.
     ...APP_MODES.flatMap((layout) =>
       BRAND_COVERS.map((cover) => ({ design: 'music', layout, cover }) as const),
     ),
+    ...APP_MODES.map((layout) => ({ design: 'alarm', layout }) as const),
     // The camera's thumbnail is the route: without one, there is a single camera.
     ...(activity.routePolyline === null
       ? [{ design: 'camera', cover: BRAND_COVERS[0] } as const]
       : BRAND_COVERS.map((cover) => ({ design: 'camera', cover }) as const)),
-    ...APP_MODES.map((layout) => ({ design: 'alarm', layout }) as const),
-    ...(withPlace ? APP_MODES.map((layout) => ({ design: 'location', layout }) as const) : []),
     // The note lists the splits, but it is one of the phone's apps.
     ...(withSplits ? APP_MODES.map((layout) => ({ design: 'notes', layout }) as const) : []),
-    // The timing tables: the splits as AURA's bars and a typewriter's ladder; the laps as AURA's
-    // board and a karting's sheet; the splits as a race on TV.
+    // The races: the laps as AURA's board and a karting's sheet beside the splits as a race on TV;
+    // then the splits as AURA's bars and a typewriter's ladder.
+    ...(withLaps ? [...lapsOf('board'), ...lapsOf('sheet')] : []),
+    ...(withSplits ? [{ design: 'grandPrix' } as const] : []),
     ...(withSplits
       ? [
           { design: 'splitBars' } as const,
           ...BRAND_COVERS.map((cover) => ({ design: 'splitLadder', cover }) as const),
         ]
       : []),
-    ...(withLaps ? [...lapsOf('board'), ...lapsOf('sheet')] : []),
-    ...(withSplits ? [{ design: 'grandPrix' } as const] : []),
     // Things of paper.
     { design: 'receipt' } as const,
-    ...BRAND_COVERS.map((cover) => ({ design: 'boardingPass', cover }) as const),
     ...nutritionLabels().map((labels) => ({ design: 'nutrition', ...labels }) as const),
+    ...BRAND_COVERS.map((cover) => ({ design: 'boardingPass', cover }) as const),
   ];
 }
 
@@ -441,6 +448,7 @@ const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set([
   'receipt',
   'boardingPass',
   'nutrition',
+  'equivalences',
 ]);
 
 /**
@@ -560,6 +568,7 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
     case 'receipt':
     case 'boardingPass':
     case 'nutrition':
+    case 'equivalences':
       return lettering('inter', false);
   }
 }

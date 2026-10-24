@@ -2,6 +2,7 @@ import { Skia } from '@shopify/react-native-skia';
 
 import type { Activity } from '@/core/activity';
 import { bigMetrics, sportIcon, type SportIconId } from '@/core/activity-block';
+import { periodEquivalences } from '@/core/equivalences';
 import { familyTotals } from '@/core/summary';
 import { gridColumns, isSummaryReplica, mainFamily } from '@/core/summary-block';
 import { periodTotals, summaryMetricValue } from '@/core/summary-metrics';
@@ -19,6 +20,7 @@ import {
   hairlineBox,
   iconBox,
   justified,
+  equivalencesBox,
   nutritionLabelBox,
   overlay,
   placed,
@@ -31,6 +33,7 @@ import {
   familyCard,
   periodTable,
   periodName,
+  equivalenceLines,
   periodNutrition,
   periodTitle,
   plainMetricText,
@@ -621,6 +624,17 @@ export function prepareSummaryBlock(
           fonts,
           periodNutrition(data, textContext, translate),
           block,
+          translate,
+        );
+      case 'periodEquivalences':
+        return equivalencesBox(
+          fonts,
+          equivalenceLines(
+            periodEquivalences(data.summary, data.activities),
+            textContext,
+            translate,
+          ),
+          block.layout,
           translate,
         );
       case 'periodMetro':

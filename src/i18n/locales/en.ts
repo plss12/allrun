@@ -166,6 +166,7 @@ export const en = {
       periodWeather: 'Weather',
       periodNutrition: 'Nutrition facts',
       periodMetro: 'Metro line',
+      periodEquivalences: 'Equivalences',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -197,6 +198,7 @@ export const en = {
       receipt: 'Receipt',
       boardingPass: 'Boarding pass',
       nutrition: 'Nutrition facts',
+      equivalences: 'Equivalences',
     },
     /** The camera's modes, as the iPhone writes them: photo is the one chosen. */
     cameraModes: { video: 'VIDEO', photo: 'PHOTO' },
@@ -547,6 +549,48 @@ export const en = {
     },
     /** A period as a metro line: where it heads, its last station. */
     metro: { direction: 'To {{station}}' },
+    /**
+     * What the data are equal to: each thing in the singular and the plural, after how many times
+     * it fits ("2.2 marathons"), and what it is of.
+     */
+    equivalences: {
+      title: 'Equal to',
+      items: {
+        track: { one: 'lap of a running track', other: 'laps of a running track' },
+        gibraltar: { one: 'Strait of Gibraltar', other: 'Straits of Gibraltar' },
+        manhattan: { one: 'Manhattan end to end', other: 'times Manhattan end to end' },
+        channel: { one: 'English Channel', other: 'times the English Channel' },
+        marathon: { one: 'marathon', other: 'marathons' },
+        madridToledo: { one: 'Madrid to Toledo', other: 'times Madrid to Toledo' },
+        sevilleCadiz: { one: 'Seville to Cádiz', other: 'times Seville to Cádiz' },
+        parisLondon: { one: 'Paris to London', other: 'times Paris to London' },
+        madridBarcelona: { one: 'Madrid to Barcelona', other: 'times Madrid to Barcelona' },
+        camino: { one: 'Camino de Santiago', other: 'Caminos de Santiago' },
+        tourDeFrance: { one: 'Tour de France', other: 'Tours de France' },
+        earth: { one: 'trip around the world', other: 'trips around the world' },
+        floor: { one: 'floor', other: 'floors' },
+        eiffel: { one: 'Eiffel Tower', other: 'Eiffel Towers' },
+        burjKhalifa: { one: 'Burj Khalifa', other: 'Burj Khalifas' },
+        teide: { one: 'Mount Teide', other: 'times Mount Teide' },
+        everest: { one: 'Everest', other: 'times Everest' },
+        song: { one: 'song', other: 'songs' },
+        football: { one: 'football match', other: 'football matches' },
+        godfather: { one: 'The Godfather', other: 'times The Godfather' },
+        lordOfTheRings: {
+          one: 'Lord of the Rings trilogy',
+          other: 'Lord of the Rings trilogies',
+        },
+        beer: { one: 'beer', other: 'beers' },
+        burger: { one: 'burger', other: 'burgers' },
+        pizza: { one: 'pizza', other: 'pizzas' },
+      },
+      sources: {
+        distance: '{{value}} covered',
+        elevation: '{{value}} climbed',
+        time: '{{value}} moving',
+        calories: '{{value}} burned',
+      },
+    },
   },
   style: {
     color: 'Color',

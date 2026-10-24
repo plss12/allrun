@@ -92,6 +92,102 @@ export interface CatalogSection {
 }
 
 /**
+ * How the creative tiles are laid out in the gallery, of an activity and of a period: in themes,
+ * each its rows, a pair of tiles that always share one (the user's picks) or a tile alone. Words
+ * about the data; the phone's apps and stickers; races; things of paper and trips. The only place
+ * that orders them: a tile has to be here to be laid out among its own (see `creativeTheme`), and
+ * a tile only shares a row with one of its theme (see `gallerySections`).
+ */
+const CREATIVE_THEMES: Readonly<
+  Record<'activity' | 'summary', readonly (readonly (readonly string[])[])[]>
+> = {
+  activity: [
+    [
+      ['block-quote', 'block-verse'],
+      ['block-message', 'block-chat'],
+      ['block-sentence', 'block-equivalences'],
+    ],
+    [
+      ['block-verified', 'block-location'],
+      ['block-music', 'block-alarm'],
+      ['block-camera', 'block-notes'],
+    ],
+    [['block-laps', 'block-grandPrix'], ['block-splits']],
+    [['block-receipt', 'block-nutrition'], ['block-boardingPass']],
+  ],
+  summary: [
+    [
+      ['summaryBlock-quote', 'summaryBlock-verse'],
+      ['summaryBlock-periodSentence', 'summaryBlock-periodEquivalences'],
+    ],
+    [
+      ['summaryBlock-periodPlaylist', 'summaryBlock-periodWrapped'],
+      ['summaryBlock-periodNotes', 'summaryBlock-periodWeather'],
+      ['summaryBlock-periodCalendar', 'summaryBlock-periodStreak'],
+    ],
+    [['summaryBlock-periodLaps', 'summaryBlock-periodGrandPrix']],
+    [
+      ['summaryBlock-periodReceipt', 'summaryBlock-periodNutrition'],
+      ['summaryBlock-periodBoardingPass', 'summaryBlock-periodMetro'],
+    ],
+  ],
+};
+
+/**
+ * Creative tiles that may leave their theme when alone, to go beside another tile alone (the
+ * user's picks): the trips, a boarding pass and a metro line, which have no app or phrase to keep
+ * them company.
+ */
+const CREATIVE_WILDCARDS: ReadonlySet<string> = new Set([
+  'block-boardingPass',
+  'summaryBlock-periodBoardingPass',
+  'summaryBlock-periodMetro',
+]);
+
+/**
+ * Whether a creative tile left alone in its theme goes up beside another tile alone, instead of
+ * taking a whole row (see `CREATIVE_WILDCARDS`).
+ */
+export function isCreativeWildcard(key: string): boolean {
+  return CREATIVE_WILDCARDS.has(key);
+}
+
+/** Where a creative tile is laid out: its theme, its place in the table and its pair, if any. */
+interface CreativePlace {
+  readonly theme: number;
+  readonly rank: number;
+  readonly partner: string | null;
+}
+
+/** Each creative tile's place, by its key (see `CREATIVE_THEMES`). */
+const CREATIVE_PLACES: ReadonlyMap<string, CreativePlace> = new Map(
+  Object.values(CREATIVE_THEMES)
+    .flatMap((themes) =>
+      themes.flatMap((rows, theme) => rows.flat().map((key) => ({ key, theme, rows }))),
+    )
+    .map(({ key, theme, rows }, rank): [string, CreativePlace] => {
+      const row = rows.find((candidate) => candidate.includes(key)) ?? [];
+      return [key, { theme, rank, partner: row[0] === key && row.length === 2 ? row[1] : null }];
+    }),
+);
+
+/**
+ * The tile that shares a row with the tile of `key`, at its right, when both are offered; `null`
+ * for a tile without one (see `CREATIVE_THEMES`).
+ */
+export function rowPartner(key: string): string | null {
+  return CREATIVE_PLACES.get(key)?.partner ?? null;
+}
+
+/**
+ * The theme a creative tile is laid out in (see `CREATIVE_THEMES`), `null` for one that isn't
+ * placed, which goes last, alone.
+ */
+export function creativeTheme(key: string): number | null {
+  return CREATIVE_PLACES.get(key)?.theme ?? null;
+}
+
+/**
  * The widget an item is a variant of: the same for a time as a clock or in units, or for
  * every line of a route. The gallery draws the variants of a widget at one size, so they compare.
  */
@@ -378,10 +474,12 @@ const SECTION_ORDER: readonly CatalogSectionId[] = ['data', 'creative', 'charts'
 
 /**
  * Puts the items in their tiles and the tiles in their sections, in the gallery's order, leaving
- * out sections with nothing to offer. Tiles keep the order of their first item, and items their
- * order within a tile. Time O(n) for n items.
+ * out sections with nothing to offer. Tiles keep the order of their first item, but the creative
+ * ones, in their themes' (see `CREATIVE_THEMES`; any not placed there last); and items their
+ * order within a tile. Time O(n log n) for n items.
  */
 function sections(entries: readonly Entry[]): CatalogSection[] {
+  const rank = (key: string) => CREATIVE_PLACES.get(key)?.rank ?? Number.MAX_SAFE_INTEGER;
   return SECTION_ORDER.flatMap((id) => {
     const tiles = new Map<string, CatalogItem[]>();
     for (const [section, tile, item] of entries) {
@@ -390,6 +488,10 @@ function sections(entries: readonly Entry[]): CatalogSection[] {
       }
     }
     const widgets = [...tiles].map(([key, variants]) => ({ key, variants }));
+    if (id === 'creative') {
+      // Stable: those not placed keep their order among themselves.
+      widgets.sort((a, b) => rank(a.key) - rank(b.key));
+    }
     return widgets.length === 0 ? [] : [{ id, widgets }];
   });
 }

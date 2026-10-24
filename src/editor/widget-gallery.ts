@@ -7,7 +7,10 @@ import {
   type CatalogSection,
   type CatalogSectionId,
   type CatalogWidget,
+  creativeTheme,
+  isCreativeWildcard,
   type NewLayer,
+  rowPartner,
 } from '@/core/layer-catalog';
 import { CANVAS_FORMATS, type CanvasFormat, type FontId } from '@/core/template';
 
@@ -108,7 +111,12 @@ export interface GallerySection {
  * own page, as big as it fits (a data widget up to a cap, see `MAX_CANVAS_SPAN`), so none is left
  * small beside a bigger one; the other widgets' variants share one scale, the smallest any of them
  * needs, so they compare page to page. Free text, which has no content until typed, shows
- * `textSample`. Time O(n) for n items, each measured once.
+ * `textSample`. The creative tiles go by themes (see `creativeTheme`), each tile sharing a row
+ * only with one of its own: a pair (see `rowPartner`) always shares one, and when it would start
+ * it on the right, it goes first and the tile alone waits for the next of its theme; one left
+ * alone at the end of its theme takes the whole row, unless a wildcard alone (a boarding pass)
+ * goes up beside it (see `isCreativeWildcard`). Time O(n) for n items, each measured once
+ * (and a tile left alone twice).
  */
 export function gallerySections(
   catalog: readonly CatalogSection[],
@@ -136,7 +144,7 @@ export function gallerySections(
         context,
         textSample,
       );
-    const groups: { readonly width: number; readonly tiles: GalleryWidget[] }[] = [];
+    let groups: { readonly width: number; readonly tiles: GalleryWidget[] }[] = [];
     let open: GalleryWidget[] = [];
     const close = () => {
       if (open.length > 0) {
@@ -144,15 +152,32 @@ export function gallerySections(
         open = [];
       }
     };
-    for (const widget of section.widgets) {
+    const tiles = section.widgets.flatMap((widget) => {
       const wide = columns > 1 && spansRow(widget);
       const tile = measure(widget, wide ? full : width, grows ? tallest : height);
-      if (tile === null) {
-        continue;
+      return tile === null ? [] : [{ tile, wide }];
+    });
+    // The creative tiles go by themes: each theme starts a row, so a tile only shares one with
+    // another of its theme (but a wildcard's, see below).
+    const themed = section.id === 'creative' && columns > 1;
+    for (let i = 0; i < tiles.length; i++) {
+      const { tile, wide } = tiles[i];
+      const next = tiles[i + 1];
+      if (themed && i > 0 && creativeTheme(tile.key) !== creativeTheme(tiles[i - 1].tile.key)) {
+        close();
       }
       if (wide) {
         close();
         groups.push({ width: full, tiles: [tile] });
+      } else if (
+        columns > 1 &&
+        open.length === 1 &&
+        next !== undefined &&
+        rowPartner(tile.key) === next.tile.key
+      ) {
+        // A pair that would split goes first, together; the tile left alone waits for the next.
+        groups.push({ width, tiles: [tile, next.tile] });
+        i++;
       } else {
         open.push(tile);
         if (open.length === columns) {
@@ -161,6 +186,13 @@ export function gallerySections(
       }
     }
     close();
+    if (themed) {
+      groups = settleAlone(groups, width, (widget) => {
+        const source = section.widgets.find((candidate) => candidate.key === widget.key);
+        const wide = source === undefined ? null : measure(source, full, height);
+        return wide === null ? null : { width: full, tiles: [wide] };
+      });
+    }
     const rows = groups.map(({ width: rowWidth, tiles }): GalleryRow => {
       if (!grows) {
         return { width: rowWidth, height, widgets: tiles };
@@ -182,6 +214,44 @@ export function gallerySections(
     });
     return rows.length === 0 ? [] : [{ id: section.id, rows }];
   });
+}
+
+/** A row of tiles before it is measured to its height. */
+interface TileGroup {
+  readonly width: number;
+  readonly tiles: GalleryWidget[];
+}
+
+/**
+ * The creative rows of `groups` with their tiles left alone, each at the end of its theme,
+ * settled: a wildcard alone (see `isCreativeWildcard`) goes up beside the first other tile alone,
+ * one of a theme before a wildcard; a tile still alone takes the whole row (`wide`, or as it is
+ * when it can't be made wide). Rows are `width` wide when of tiles side by side. Time O(r²) for r
+ * rows, a few.
+ */
+function settleAlone(
+  groups: readonly TileGroup[],
+  width: number,
+  wide: (tile: GalleryWidget) => TileGroup | null,
+): TileGroup[] {
+  const settled = [...groups];
+  const alone = (group: TileGroup) => group.width === width && group.tiles.length === 1;
+  for (let i = 0; i < settled.length; i++) {
+    const group = settled[i];
+    if (!alone(group) || !isCreativeWildcard(group.tiles[0].key)) {
+      continue;
+    }
+    const others = settled
+      .map((other, j) => ({ other, j }))
+      .filter(({ other, j }) => j !== i && alone(other));
+    const slot = others.find(({ other }) => !isCreativeWildcard(other.tiles[0].key)) ?? others[0];
+    if (slot !== undefined) {
+      settled[slot.j] = { width, tiles: [slot.other.tiles[0], group.tiles[0]] };
+      settled.splice(i, 1);
+      i--;
+    }
+  }
+  return settled.map((group) => (alone(group) ? (wide(group.tiles[0]) ?? group) : group));
 }
 
 /**

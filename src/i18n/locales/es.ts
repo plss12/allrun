@@ -161,6 +161,7 @@ export const es: Translations = {
       periodWeather: 'Tiempo',
       periodNutrition: 'Información nutricional',
       periodMetro: 'Línea de metro',
+      periodEquivalences: 'Equivalencias',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',
@@ -192,6 +193,7 @@ export const es: Translations = {
       receipt: 'Ticket',
       boardingPass: 'Tarjeta de embarque',
       nutrition: 'Información nutricional',
+      equivalences: 'Equivalencias',
     },
     cameraModes: { video: 'VÍDEO', photo: 'FOTO' },
     cameraZoom: { wide: '0,5', main: 'x1', tele: '2' },
@@ -523,6 +525,54 @@ export const es: Translations = {
     },
     /** A period as a metro line: where it heads, its last station. */
     metro: { direction: 'Dirección {{station}}' },
+    /**
+     * What the data are equal to: each thing in the singular and the plural, after how many times
+     * it fits ("2,2 maratones"), and what it is of.
+     */
+    equivalences: {
+      title: 'Equivale a',
+      items: {
+        track: {
+          one: 'vuelta a una pista de atletismo',
+          other: 'vueltas a una pista de atletismo',
+        },
+        gibraltar: { one: 'vez el Estrecho de Gibraltar', other: 'veces el Estrecho de Gibraltar' },
+        manhattan: {
+          one: 'vez Manhattan de punta a punta',
+          other: 'veces Manhattan de punta a punta',
+        },
+        channel: { one: 'vez el Canal de la Mancha', other: 'veces el Canal de la Mancha' },
+        marathon: { one: 'maratón', other: 'maratones' },
+        madridToledo: { one: 'vez de Madrid a Toledo', other: 'veces de Madrid a Toledo' },
+        sevilleCadiz: { one: 'vez de Sevilla a Cádiz', other: 'veces de Sevilla a Cádiz' },
+        parisLondon: { one: 'vez de París a Londres', other: 'veces de París a Londres' },
+        madridBarcelona: { one: 'vez de Madrid a Barcelona', other: 'veces de Madrid a Barcelona' },
+        camino: { one: 'Camino de Santiago', other: 'Caminos de Santiago' },
+        tourDeFrance: { one: 'Tour de Francia', other: 'Tours de Francia' },
+        earth: { one: 'vuelta al mundo', other: 'vueltas al mundo' },
+        floor: { one: 'piso', other: 'pisos' },
+        eiffel: { one: 'Torre Eiffel', other: 'Torres Eiffel' },
+        burjKhalifa: { one: 'vez el Burj Khalifa', other: 'veces el Burj Khalifa' },
+        teide: { one: 'vez el Teide', other: 'veces el Teide' },
+        everest: { one: 'vez el Everest', other: 'veces el Everest' },
+        song: { one: 'canción', other: 'canciones' },
+        football: { one: 'partido de fútbol', other: 'partidos de fútbol' },
+        godfather: { one: 'vez El Padrino', other: 'veces El Padrino' },
+        lordOfTheRings: {
+          one: 'trilogía de El Señor de los Anillos',
+          other: 'trilogías de El Señor de los Anillos',
+        },
+        beer: { one: 'cerveza', other: 'cervezas' },
+        burger: { one: 'hamburguesa', other: 'hamburguesas' },
+        pizza: { one: 'pizza', other: 'pizzas' },
+      },
+      sources: {
+        distance: '{{value}} recorridos',
+        elevation: '{{value}} de desnivel',
+        time: '{{value}} en movimiento',
+        calories: '{{value}} quemadas',
+      },
+    },
   },
   style: {
     color: 'Color',

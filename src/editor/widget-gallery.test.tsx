@@ -7,7 +7,13 @@
 import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
 
 import { weekRange, yearRange } from '@/core/dates';
-import { activityCatalog, summaryCatalog } from '@/core/layer-catalog';
+import {
+  activityCatalog,
+  creativeTheme,
+  isCreativeWildcard,
+  rowPartner,
+  summaryCatalog,
+} from '@/core/layer-catalog';
 import { summarize } from '@/core/summary';
 import { generateStravaDetail } from '@/sources/fixtures/detail';
 import { parseStravaDetail } from '@/sources/strava/detail';
@@ -15,7 +21,7 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
-import type { EditorData } from './editor-data';
+import type { EditorData, SummaryData } from './editor-data';
 import type { LayerContext } from './template-scene';
 
 // Measure with CanvasKit instead of the native module (see `template-scene.test.tsx`).
@@ -68,7 +74,7 @@ const activityData: EditorData = {
   zones: null,
 };
 
-function summaryData(kind: 'week' | 'year'): EditorData {
+function summaryData(kind: 'week' | 'year'): SummaryData {
   const range = kind === 'week' ? weekRange('2026-10-14') : yearRange('2026-10-14');
   const activities = [makeActivity({ localDate: '2026-10-13' })];
   return {
@@ -98,7 +104,107 @@ const pagesOf = (sections: ReturnType<typeof activitySections>) =>
     section.rows.flatMap((row) => row.widgets.flatMap((widget) => widget.pages)),
   );
 
+/** The keys of each row of a section's tiles. */
+const rowKeys = (sections: ReturnType<typeof activitySections>, id: string) =>
+  sections
+    .find((section) => section.id === id)
+    ?.rows.map((row) => row.widgets.map((widget) => widget.key)) ?? [];
+
 describe('gallerySections', () => {
+  /** The rows of creative tiles of an activity, with its place, splits and laps or not. */
+  const activityRows = (withPlace: boolean, withDetail: boolean) => {
+    const detail = generateStravaDetail(activity, 1);
+    const parsed = parseStravaDetail(JSON.parse(JSON.stringify(detail.streams)), detail.detailed);
+    const data: EditorData = {
+      mode: 'activity',
+      activity,
+      detail: withDetail ? parsed : null,
+      place: withPlace ? { city: 'Madrid', region: 'Madrid', country: 'España' } : null,
+      zones: null,
+    };
+    return rowKeys(
+      gallery.gallerySections(
+        activityCatalog(
+          activity,
+          withDetail ? ['splits'] : [],
+          withPlace,
+          false,
+          withDetail && parsed.laps.length > 1,
+        ),
+        'story',
+        'inter',
+        contextFor(data),
+        SCREEN,
+        'Text',
+      ),
+      'creative',
+    );
+  };
+  const summaryRows = (kind: 'week' | 'year') =>
+    rowKeys(
+      gallery.gallerySections(
+        summaryCatalog(summaryData(kind).summary, kind === 'week' ? 'day' : 'month'),
+        'story',
+        'inter',
+        contextFor(summaryData(kind)),
+        SCREEN,
+        'Text',
+      ),
+      'creative',
+    );
+
+  it.each([
+    ['an activity without its place or splits', () => activityRows(false, false)],
+    ['an activity with its place', () => activityRows(true, false)],
+    ['an activity with its place, splits and laps', () => activityRows(true, true)],
+    ['a week', () => summaryRows('week')],
+    ['a year', () => summaryRows('year')],
+  ] as const)(
+    'lays the creative tiles of %s by themes, every pair in a row',
+    (_name, rowsOf) => {
+      const rows = rowsOf();
+      const keys = rows.flat();
+      // Every tile has its theme, and no row mixes two, but for a wildcard gone up.
+      for (const key of keys) {
+        expect(creativeTheme(key)).not.toBeNull();
+      }
+      for (const row of rows) {
+        const own = row.filter((key) => !isCreativeWildcard(key) || row.length === 1);
+        expect(new Set((own.length === 0 ? row : own).map(creativeTheme)).size).toBe(1);
+      }
+      // Themes come one after another, never back.
+      const themes = rows.map((row) => creativeTheme(row[0]) ?? -1);
+      expect(themes).toEqual([...themes].sort((a, b) => a - b));
+      // A pair offered whole always shares its row.
+      for (const key of keys) {
+        const partner = rowPartner(key);
+        if (partner !== null && keys.includes(partner)) {
+          expect(rows).toContainEqual([key, partner]);
+        }
+      }
+      // A tile is alone only at the end of its theme.
+      rows.forEach((row, i) => {
+        if (row.length === 1 && i + 1 < rows.length) {
+          expect(creativeTheme(rows[i + 1][0])).not.toBe(creativeTheme(row[0]));
+        }
+      });
+    },
+    60_000,
+  );
+
+  it('keeps the camera among the apps, and takes the boarding pass up beside a tile alone', () => {
+    // Without its place, the badge waits for the camera; the pass, with no one alone, alone.
+    const plain = activityRows(false, false);
+    expect(plain).toContainEqual(['block-verified', 'block-camera']);
+    expect(plain).toContainEqual(['block-boardingPass']);
+    // With it, the camera is left alone at the end of the apps: the pass goes up beside it.
+    expect(activityRows(true, false)).toContainEqual(['block-camera', 'block-boardingPass']);
+    // With its splits, the camera has its note, and the splits are left alone among the races.
+    const full = activityRows(true, true);
+    expect(full).toContainEqual(['block-camera', 'block-notes']);
+    expect(full).toContainEqual(['block-splits', 'block-boardingPass']);
+  }, 60_000);
+
   it('fits every variant in its tile, above its dots, and lays tiles out in rows that fit', () => {
     const sections = activitySections();
     expect(sections.length).toBeGreaterThan(0);
@@ -174,7 +280,7 @@ describe('gallerySections', () => {
     expect(scaleOf('info-activityDate-time')).toBeGreaterThan(scaleOf('info-activityDate'));
   });
 
-  it('lays every tile two per row but the charts, which take the whole width', () => {
+  it('lays every tile two per row but the charts and a creative tile alone in its theme, which take the whole width', () => {
     const sections = gallery.gallerySections(
       activityCatalog(activity, ['elevation']),
       'story',
@@ -187,7 +293,10 @@ describe('gallerySections', () => {
     const half = Math.floor((full - gallery.GALLERY_GAP) / 2);
     for (const section of sections) {
       for (const row of section.rows) {
-        const wide = section.id === 'charts' || row.widgets[0].key === 'logo-allrun-lockup';
+        const wide =
+          section.id === 'charts' ||
+          row.widgets[0].key === 'logo-allrun-lockup' ||
+          (section.id === 'creative' && row.widgets.length === 1);
         expect(row.width).toBe(wide ? full : half);
       }
     }

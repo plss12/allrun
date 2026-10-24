@@ -238,7 +238,10 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  *   brand color (`cover`) naming the city it started in (or saying what it is, while unknown);
  * - `nutrition`: the activity as a food's nutrition label (see `NUTRITION_LABELS`), its calories
  *   (or its time without them) as the energy and its data as the nutrients, white (`light`) or
- *   black (`dark`).
+ *   black (`dark`);
+ * - `equivalences` (replica): its distance, climb, time and calories as things anyone pictures
+ *   (marathons, Eiffel Towers, football matches, burgers), each with its icon, on a card in dark
+ *   or light mode.
  */
 export const ACTIVITY_BLOCK_DESIGNS = [
   'bigTrio',
@@ -270,6 +273,7 @@ export const ACTIVITY_BLOCK_DESIGNS = [
   'receipt',
   'boardingPass',
   'nutrition',
+  'equivalences',
 ] as const;
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
@@ -463,6 +467,7 @@ const activityBlockSchema = z.discriminatedUnion('design', [
     label: z.enum(NUTRITION_LABELS),
     layout: z.enum(APP_MODES),
   }),
+  z.object({ design: z.literal('equivalences'), layout: z.enum(APP_MODES) }),
 ]);
 
 export type ActivityBlock = z.infer<typeof activityBlockSchema>;
@@ -486,7 +491,8 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * figures or its months with their active days marked (`periodCalendar`); and its longest streak of
  * days in a row with activities, beside a flame (`periodStreak`); and as the iPhone's Weather, its
  * days, weeks or months as the forecast's (`periodWeather`: `light` by day, `dark` by night); as a
- * food's nutrition label, as an activity's (`periodNutrition`); and as a metro line, its days,
+ * food's nutrition label, as an activity's (`periodNutrition`); its totals as things anyone
+ * pictures, as an activity's (`periodEquivalences`); and as a metro line, its days,
  * weeks or months as its stations, in a brand color (`periodMetro`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
@@ -534,6 +540,7 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
     layout: z.enum(APP_MODES),
   }),
   z.object({ design: z.literal('periodMetro'), cover: z.enum(BRAND_COVERS) }),
+  z.object({ design: z.literal('periodEquivalences'), layout: z.enum(APP_MODES) }),
 ]);
 
 export type SummaryBlock = z.infer<typeof summaryBlockSchema>;

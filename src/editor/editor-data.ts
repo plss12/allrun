@@ -3,6 +3,7 @@ import { rangeLength } from '@/core/dates';
 import { bigMetrics, type SentenceClause, type SentenceLead } from '@/core/activity-block';
 import type { BarSeries, LineSeries, SplitRow } from '@/core/activity-charts';
 import type { ActivityDetail } from '@/core/activity-detail';
+import type { Equivalence, EquivalenceId, EquivalenceMeasure } from '@/core/equivalences';
 import { type HeartRateZones, timeInZones } from '@/core/heart-rate-zones';
 import {
   type DisplayMetric,
@@ -191,6 +192,9 @@ export type LabelKey =
   | `widgets.nutrition.servings.${'one' | 'other'}`
   | `widgets.nutrition.${NutritionText}`
   | 'widgets.metro.direction'
+  | 'widgets.equivalences.title'
+  | `widgets.equivalences.items.${EquivalenceId}.${'one' | 'other'}`
+  | `widgets.equivalences.sources.${EquivalenceMeasure}`
   | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date' | 'activities' | 'time' | 'activeDays'}`
   | `widgets.cameraModes.${'video' | 'photo'}`
   | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`
@@ -1449,6 +1453,69 @@ export function periodNutrition(
     rows,
     ingredients: ingredientTexts(data.activities, context, translate),
   };
+}
+
+/** A line of a widget of equivalences, as it writes it (see `equivalenceLines`). */
+export interface EquivalenceLine {
+  readonly reference: EquivalenceId;
+  /** How many times ("2,2"), big. */
+  readonly times: string;
+  /** What, after it, in the singular when it is once ("maratones"). */
+  readonly name: string;
+  /** What it is of, small ("94,23 km recorridos"). */
+  readonly source: string;
+}
+
+/**
+ * How many times an equivalence's thing fits, as its widget writes it: with a decimal under ten
+ * ("2,2", without a ",0": "2"), whole from ten up ("28"), grouped as the language groups.
+ */
+function timesText(times: number, context: TextContext): string {
+  return new Intl.NumberFormat(context.locale, {
+    maximumFractionDigits: times < 10 ? 1 : 0,
+  }).format(times);
+}
+
+/**
+ * The lines of a widget of equivalences (see `equivalences`): how many times each thing fits,
+ * its name (in the singular when it reads one), and what it is of, as the data write it: a
+ * distance and a climb with their units, a time down to its minutes, calories in kcal. Time and
+ * space O(e) for e equivalences.
+ */
+export function equivalenceLines(
+  list: readonly Equivalence[],
+  context: TextContext,
+  translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
+): EquivalenceLine[] {
+  return list.map(({ measure, reference, times, amount }) => {
+    const written = timesText(times, context);
+    const value =
+      measure === 'time'
+        ? durationInWords(amount, 'minutes', context)
+        : withUnit(
+            formatMetric(
+              toDisplayMetric(
+                measure === 'distance'
+                  ? 'distance'
+                  : measure === 'elevation'
+                    ? 'elevationGain'
+                    : 'calories',
+                amount,
+                { unit: context.unit, sportFamily: 'run' },
+              ),
+              context.locale,
+            ),
+            context,
+          );
+    return {
+      reference,
+      times: written,
+      name: translate(
+        `widgets.equivalences.items.${reference}.${written === timesText(1, context) ? 'one' : 'other'}`,
+      ),
+      source: translate(`widgets.equivalences.sources.${measure}`, { value }),
+    };
+  });
 }
 
 /** Most data an activity's nutrition label lists as its nutrients. */

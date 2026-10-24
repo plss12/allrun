@@ -2,7 +2,8 @@
 // and PNGs of them for the screens, which tint them with the system's colors, and for the native
 // menus, which take images only (assets/images/sports, and its menu folder). Also the paths of the
 // few icons the replicas of apps draw besides their own marks (a streak's flame, the weather's
-// location arrow and its moon for a day of rest), into images only.
+// location arrow and its moon for a day of rest, the things the equivalences compare with), into
+// images only.
 //
 // The icons are Material Symbols (Outlined, filled, weight 400) by Google, under the Apache
 // License 2.0 (https://github.com/google/material-design-icons/blob/master/LICENSE). SF Symbols
@@ -44,6 +45,22 @@ const APP_ICONS = {
   flame: 'local_fire_department',
   location: 'near_me',
   rest: 'bedtime',
+  // The things a widget of equivalences compares a distance, a climb, a time or calories with.
+  track: 'stadium',
+  boat: 'directions_boat',
+  city: 'location_city',
+  finish: 'sports_score',
+  route: 'route',
+  globe: 'public',
+  stairs: 'stairs',
+  building: 'apartment',
+  mountain: 'landscape',
+  song: 'music_note',
+  football: 'sports_soccer',
+  movie: 'movie',
+  beer: 'sports_bar',
+  burger: 'lunch_dining',
+  pizza: 'local_pizza',
 };
 
 /**

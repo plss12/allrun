@@ -10,6 +10,7 @@ import {
   toEpochDay,
   weekRange,
 } from './dates';
+import { periodEquivalences } from './equivalences';
 import { bucketCount } from './periods';
 import type { SportFamily, SportModality } from './sports';
 import { type BucketSize, bucketize, familyTotals, type PeriodSummary } from './summary';
@@ -88,6 +89,7 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodWeather',
   'periodNutrition',
   'periodMetro',
+  'periodEquivalences',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -585,15 +587,14 @@ export function streakStrip(range: DateRange): StreakStrip {
  * too many) and overlaid (its main sport's icon, without any route), after its card per sport, as
  * an activity's card comes before its widgets with the route. Then its creative ones, in the order
  * of an activity's: the first quote and verse (the others are chosen from their lists); its
- * highlighted sentence; its playlist and its review, in dark and light mode and each brand
- * color; its note,
- * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
- * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race;
- * its receipt; its boarding pass in each brand color; its nutrition label, as an activity's (see
- * `nutritionLabels`); and those without an activity's twin: its calendar and its streak, in dark
- * and light mode, the calendar up to a year (see `calendarView`); its weather, by day and by
- * night; and its metro line, in each brand color. None for a period without activities. Time
- * O(1).
+ * highlighted sentence and its equivalences, in dark and light mode (see `periodEquivalences`);
+ * its playlist and its review, in dark and light mode and each brand color; its note, in dark and
+ * light mode, of its activities (only a week's, see `listsNoteActivities`) and of its days, weeks
+ * or months, and its weather, by day and by night; its calendar (up to a year, see `calendarView`)
+ * and its streak, in dark and light mode; its laps, on a board and a timing sheet in each
+ * brand color, and its race; its receipt and its nutrition label, as an activity's (see
+ * `nutritionLabels`); and its boarding pass and its metro line, in each brand color. The gallery
+ * lays them out by themes (see `creativeTheme`). None for a period without activities. Time O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -623,31 +624,39 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     { design: 'quote', quote: QUOTES[0] },
     { design: 'verse', verse: VERSES[0] },
     { design: 'periodSentence' },
+    // Its totals as things anyone pictures, beside the sentence that tells them (offered by its
+    // totals: its calories only add a line).
+    ...(periodEquivalences(summary, []).length === 0
+      ? []
+      : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodEquivalences', layout }))),
     ...(['periodPlaylist', 'periodWrapped'] as const).flatMap((design) =>
       APP_MODES.flatMap((layout) =>
         BRAND_COVERS.map((cover): SummaryBlock => ({ design, layout, cover })),
       ),
     ),
+    // The phone's apps: the note beside the weather (see `rowPartner`).
     ...(['activities', 'buckets'] as const)
       .filter((rows) => rows === 'buckets' || listsNoteActivities(summary))
       .flatMap((rows) =>
         APP_MODES.map((layout): SummaryBlock => ({ design: 'periodNotes', layout, rows })),
       ),
-    ...LAPS_LAYOUTS.flatMap((layout) =>
-      BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodLaps', layout, cover })),
-    ),
-    { design: 'periodGrandPrix' },
-    { design: 'periodReceipt' },
-    ...BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodBoardingPass', cover })),
-    ...nutritionLabels().map((labels): SummaryBlock => ({ design: 'periodNutrition', ...labels })),
-    ...(calendarView(summary.range) === null
-      ? []
-      : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
-    ...APP_MODES.map((layout): SummaryBlock => ({ design: 'periodStreak', layout })),
     ...(['light', 'dark'] as const).map((layout): SummaryBlock => ({
       design: 'periodWeather',
       layout,
     })),
+    ...(calendarView(summary.range) === null
+      ? []
+      : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
+    ...APP_MODES.map((layout): SummaryBlock => ({ design: 'periodStreak', layout })),
+    // The races: the karting's laps beside the Grand Prix.
+    ...LAPS_LAYOUTS.flatMap((layout) =>
+      BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodLaps', layout, cover })),
+    ),
+    { design: 'periodGrandPrix' },
+    // Things of paper, and the trips: the boarding pass beside the metro.
+    { design: 'periodReceipt' },
+    ...nutritionLabels().map((labels): SummaryBlock => ({ design: 'periodNutrition', ...labels })),
+    ...BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodBoardingPass', cover })),
     ...BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodMetro', cover })),
   ];
 }
@@ -692,6 +701,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodWeather':
     case 'periodNutrition':
     case 'periodMetro':
+    case 'periodEquivalences':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

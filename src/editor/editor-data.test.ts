@@ -22,6 +22,7 @@ import {
   periodBoardingPass,
   periodLaps,
   periodNutrition,
+  equivalenceLines,
   activityNutrition,
   periodNoteLines,
   periodReceipt,
@@ -1155,6 +1156,37 @@ describe('activityNutrition and periodNutrition', () => {
     ).toEqual([
       ['widgets.nutrition.zone(1)', true, '25 %'],
       ['widgets.nutrition.zone(3)', true, '75 %'],
+    ]);
+  });
+});
+
+describe('equivalenceLines', () => {
+  const translate = (key: string, values?: Readonly<Record<string, string>>): string =>
+    values === undefined ? key : `${key}(${Object.values(values).join(',')})`;
+
+  it('writes how many times with a decimal under ten, whole from ten, and what it is of', () => {
+    const lines = equivalenceLines(
+      [
+        { measure: 'distance', reference: 'marathon', times: 94_230 / 42_195, amount: 94_230 },
+        { measure: 'distance', reference: 'track', times: 11_340 / 400, amount: 11_340 },
+        { measure: 'time', reference: 'football', times: 2, amount: 10_800 },
+        { measure: 'calories', reference: 'burger', times: 1.02, amount: 561 },
+      ],
+      context,
+      translate,
+    );
+    expect(lines.map((line) => [line.times, line.name])).toEqual([
+      ['2,2', 'widgets.equivalences.items.marathon.other'],
+      ['28', 'widgets.equivalences.items.track.other'],
+      ['2', 'widgets.equivalences.items.football.other'],
+      // It reads one: in the singular.
+      ['1', 'widgets.equivalences.items.burger.one'],
+    ]);
+    expect(lines.map((line) => line.source)).toEqual([
+      `widgets.equivalences.sources.distance(94,23 ${testUnitLabel('km')})`,
+      `widgets.equivalences.sources.distance(11,34 ${testUnitLabel('km')})`,
+      'widgets.equivalences.sources.time(3h)',
+      `widgets.equivalences.sources.calories(561 ${testUnitLabel('kcal')})`,
     ]);
   });
 });

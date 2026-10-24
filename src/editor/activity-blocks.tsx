@@ -31,6 +31,7 @@ import {
   tyreCompounds,
 } from '@/core/activity-block';
 import { splitRows } from '@/core/activity-charts';
+import { activityEquivalences, type EquivalenceId } from '@/core/equivalences';
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import { metricValue, type MetricId } from '@/core/metrics';
 import { formatPlace } from '@/core/place';
@@ -53,6 +54,8 @@ import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/fo
 import { markWidth, PlainMark, PlainWordmark, wordmarkHeight } from './brand/brand-art';
 import {
   activityNutrition,
+  type EquivalenceLine,
+  equivalenceLines,
   type ActivityData,
   type LabelKey,
   type NutritionLabel,
@@ -2562,6 +2565,144 @@ export function nutritionLabelBox(
   );
 }
 
+/** The icon of each thing a widget of equivalences compares with. */
+const EQUIVALENCE_ICONS: Readonly<Record<EquivalenceId, IconId>> = {
+  track: 'track',
+  gibraltar: 'boat',
+  manhattan: 'city',
+  channel: 'boat',
+  marathon: 'finish',
+  madridToledo: 'route',
+  sevilleCadiz: 'route',
+  parisLondon: 'route',
+  madridBarcelona: 'route',
+  camino: 'route',
+  tourDeFrance: 'ride',
+  earth: 'globe',
+  floor: 'stairs',
+  eiffel: 'building',
+  burjKhalifa: 'building',
+  teide: 'mountain',
+  everest: 'mountain',
+  song: 'song',
+  football: 'football',
+  godfather: 'movie',
+  lordOfTheRings: 'movie',
+  beer: 'beer',
+  burger: 'burger',
+  pizza: 'pizza',
+};
+
+/**
+ * A widget of equivalences' card, as a widget of the iPhone's home screen in dark and light mode:
+ * the card, its print and the fainter print, and the disc behind each icon.
+ */
+const EQUIVALENCES_COLORS = {
+  dark: { card: '#1C1C1E', ink: '#FFFFFF', faded: '#FFFFFF99', disc: '#FFFFFF1F' },
+  light: { card: '#FFFFFF', ink: '#000000', faded: '#3C3C4399', disc: '#0000000F' },
+} as const;
+
+/**
+ * The sizes of a widget of equivalences: its card's width, corners and room inside; its title;
+ * each line's disc and the icon in it (a share of it), its figure, its name and what it is of,
+ * the room between its parts and between lines, and the rule between them.
+ */
+const EQUIVALENCES_SIZES = {
+  width: 760,
+  radius: 44,
+  pad: 40,
+  title: 26,
+  titleGap: 26,
+  disc: 84,
+  icon: 0.56,
+  figure: 64,
+  name: 32,
+  source: 24,
+  gap: 22,
+  line: 26,
+  rule: 2,
+} as const;
+
+/**
+ * What an activity's or a period's data are equal to (see `equivalenceLines`), on a card in dark
+ * or light mode: "Equal to" over a line per thing, its icon in a disc, how many times it fits big
+ * and its name beside it (wrapped when long), with what it is of under it, faded; a rule between
+ * lines.
+ */
+export function equivalencesBox(
+  fonts: SkTypefaceFontProvider,
+  lines: readonly EquivalenceLine[],
+  layout: (typeof APP_MODES)[number],
+  translate: BlockContext['translate'],
+): Box {
+  const sizes = EQUIVALENCES_SIZES;
+  const colors = EQUIVALENCES_COLORS[layout];
+  const inner = sizes.width - 2 * sizes.pad;
+  const figures = lines.map((line) =>
+    appTextBox(fonts, [{ text: line.times, size: sizes.figure, bold: true }], colors.ink),
+  );
+  // The figures in a column as wide as the widest, so the names line up.
+  const figureWidth = Math.max(0, ...figures.map((figure) => figure.width));
+  const room = inner - sizes.disc - figureWidth - 2 * sizes.gap;
+  const rows = lines.map((line, i) =>
+    row(
+      [
+        overlay(
+          discBox(sizes.disc / 2, colors.disc),
+          iconBox(EQUIVALENCE_ICONS[line.reference], sizes.disc * sizes.icon, colors.ink),
+        ),
+        widened(figures[i], figureWidth, 'end'),
+        column(
+          [
+            appTextBox(fonts, [{ text: line.name, size: sizes.name, bold: true }], colors.ink, {
+              wrapWidth: room,
+              wrapStart: true,
+            }),
+            appTextBox(
+              fonts,
+              [{ text: line.source, size: sizes.source, bold: false }],
+              colors.faded,
+              {
+                maxWidth: room,
+              },
+            ),
+          ],
+          4,
+          'start',
+        ),
+      ],
+      sizes.gap,
+      'center',
+    ),
+  );
+  const content = column(
+    [
+      appTextBox(
+        fonts,
+        [
+          {
+            text: translate('widgets.equivalences.title').toLocaleUpperCase(),
+            size: sizes.title,
+            bold: true,
+            spacing: 0.06,
+          },
+        ],
+        colors.faded,
+      ),
+      column(
+        rows.flatMap((line, i) =>
+          i === 0 ? [line] : [fillBox(inner, sizes.rule, 0, colors.disc, {}), line],
+        ),
+        sizes.line,
+        'start',
+      ),
+    ],
+    sizes.titleGap,
+    'start',
+  );
+  return panel(widened(content, inner, 'start'), colors.card, sizes.pad, sizes.pad, sizes.radius);
+}
+
 /** Width of the AllRun name signing a block, and its room above. */
 const LOGO_WIDTH = 190;
 const LOGO_GAP = 40;
@@ -3773,6 +3914,14 @@ export function prepareActivityBlock(
           seed: activity.id,
         });
       }
+      case 'equivalences':
+        // Its data as things anyone pictures: marathons, Eiffel Towers, matches, burgers.
+        return equivalencesBox(
+          fonts,
+          equivalenceLines(activityEquivalences(activity), textContext, translate),
+          block.layout,
+          translate,
+        );
       case 'nutrition':
         // The activity as a food's nutrition label: its calories as energy, its data as nutrients.
         return nutritionLabelBox(

@@ -1,3 +1,4 @@
+import type { ParseKeys } from 'i18next';
 import { Canvas, Group, Paint } from '@shopify/react-native-skia';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -204,7 +205,7 @@ export function LayerSheet({
                     widget={widget}
                     width={row.width}
                     height={row.height}
-                    label={(page) => pageLabel(page, layerContext, t)}
+                    label={(page) => pageLabel(page, layerContext, (key) => t(key))}
                     hint={choiceOf(widget.pages[0].item) === null ? undefined : t('gallery.choose')}
                     onPress={(page) => {
                       const choice = choiceOf(page.item);
@@ -360,12 +361,14 @@ function OwnPhrase({ onAdd }: { readonly onAdd: (phrase: string) => void }) {
 
 /**
  * What a screen reader says for a page: the widget's name and, for a text, what it shows ("Date,
- * 14 Oct"); for the other widgets, their variant ("Route, Dashed", "Splits, Pace").
+ * 14 Oct"); for the other widgets, their variant ("Route, Dashed", "Splits, Pace"). It translates
+ * with a function of the keys alone: i18next's own `t`, inferring every key built here against
+ * all the app's texts, grows too deep for the compiler.
  */
 function pageLabel(
   { item, prepared }: GalleryPage,
   context: LayerContext,
-  t: ReturnType<typeof useTranslation>['t'],
+  t: (key: ParseKeys) => string,
 ): string {
   const shown = layerText(prepared.layer, context.data, context.textContext)?.value ?? '';
   const flag = (on: boolean | undefined, label: string) => (on === true ? label : '');

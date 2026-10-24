@@ -155,6 +155,8 @@ describe('activityBlocks', () => {
       { design: 'chat', layout: 'dark', phrase: 'zombieMode' },
       { design: 'chat', layout: 'light', phrase: 'zombieMode' },
       { design: 'sentence' },
+      { design: 'equivalences', layout: 'dark' },
+      { design: 'equivalences', layout: 'light' },
       { design: 'verified', layout: 'dark' },
       { design: 'verified', layout: 'light' },
       // The phone's apps.
@@ -162,18 +164,18 @@ describe('activityBlocks', () => {
       { design: 'music', layout: 'dark', cover: 'ink' },
       { design: 'music', layout: 'light', cover: 'red' },
       { design: 'music', layout: 'light', cover: 'ink' },
-      { design: 'camera', cover: 'red' },
-      { design: 'camera', cover: 'ink' },
       { design: 'alarm', layout: 'dark' },
       { design: 'alarm', layout: 'light' },
+      { design: 'camera', cover: 'red' },
+      { design: 'camera', cover: 'ink' },
       // Things of paper.
       { design: 'receipt' },
-      { design: 'boardingPass', cover: 'red' },
-      { design: 'boardingPass', cover: 'ink' },
       { design: 'nutrition', label: 'facts', layout: 'light' },
       { design: 'nutrition', label: 'facts', layout: 'dark' },
       { design: 'nutrition', label: 'table', layout: 'light' },
       { design: 'nutrition', label: 'table', layout: 'dark' },
+      { design: 'boardingPass', cover: 'red' },
+      { design: 'boardingPass', cover: 'ink' },
     ]);
   });
 
@@ -221,19 +223,20 @@ describe('activityBlocks', () => {
 
   it('offers the timing tables only for an activity with splits or laps, after the apps', () => {
     const designs = activityBlocks(makeActivity(), true, false, true).map((block) => block.design);
-    expect(designs.slice(designs.indexOf('alarm') + 2, designs.indexOf('receipt'))).toEqual([
-      // The note, with the phone's apps; then the splits as AURA's bars and a typewriter's
-      // ladder, the laps as AURA's board and a karting's sheet, and the splits as a race on TV.
+    expect(designs.slice(designs.lastIndexOf('camera') + 1, designs.indexOf('receipt'))).toEqual([
+      // The note, with the phone's apps, after the camera; then the races: the laps as AURA's
+      // board and a karting's sheet beside the splits as a race on TV, and the splits as AURA's
+      // bars and a typewriter's ladder.
       'notes',
       'notes',
-      'splitBars',
-      'splitLadder',
-      'splitLadder',
       'laps',
       'laps',
       'laps',
       'laps',
       'grandPrix',
+      'splitBars',
+      'splitLadder',
+      'splitLadder',
     ]);
     expect(activityBlocks(makeActivity()).map((block) => block.design)).not.toContain('notes');
     // The laps need laps, not splits.
@@ -251,12 +254,12 @@ describe('activityBlocks', () => {
     ]);
   });
 
-  it('offers the location sticker after the alarm, only when the place can be named', () => {
+  it('offers the location sticker after the verified badge, only when the place can be named', () => {
     const blocks = activityBlocks(makeActivity(), false, true);
-    const alarm = blocks.findIndex((block) => block.design === 'location') - 2;
-    expect(blocks.slice(alarm, alarm + 4)).toEqual([
-      { design: 'alarm', layout: 'dark' },
-      { design: 'alarm', layout: 'light' },
+    const badge = blocks.findIndex((block) => block.design === 'location') - 2;
+    expect(blocks.slice(badge, badge + 4)).toEqual([
+      { design: 'verified', layout: 'dark' },
+      { design: 'verified', layout: 'light' },
       { design: 'location', layout: 'dark' },
       { design: 'location', layout: 'light' },
     ]);
@@ -441,6 +444,7 @@ describe('isAppReplica and blockLettering', () => {
     expect(isAppReplica('receipt')).toBe(true);
     expect(isAppReplica('boardingPass')).toBe(true);
     expect(isAppReplica('nutrition')).toBe(true);
+    expect(isAppReplica('equivalences')).toBe(true);
     expect(isAppReplica('verse')).toBe(false);
     expect(isAppReplica('quote')).toBe(false);
     expect(isAppReplica('bigTrio')).toBe(false);
