@@ -2,11 +2,8 @@ import { Skia } from '@shopify/react-native-skia';
 
 import type { Activity } from '@/core/activity';
 import { bigMetrics, sportIcon, type SportIconId } from '@/core/activity-block';
-import { decodePolyline } from '@/core/polyline';
-import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
-import { projectRoutes } from '@/core/route-projection';
 import { familyTotals } from '@/core/summary';
-import { gridColumns, isSummaryReplica } from '@/core/summary-block';
+import { gridColumns, isSummaryReplica, mainFamily } from '@/core/summary-block';
 import { periodTotals, summaryMetricValue } from '@/core/summary-metrics';
 import type { Layer } from '@/core/template';
 import { formatActivityDate } from '@/ui/format';
@@ -41,7 +38,12 @@ import {
 } from './editor-data';
 import { CAP_HEIGHTS } from './fonts';
 import { softBackdrop } from './scene-text';
-import { periodNotesBox, periodSentenceBox } from './summary-creatives';
+import {
+  periodNotesBox,
+  periodPlaylistBox,
+  periodSentenceBox,
+  routesBox,
+} from './summary-creatives';
 
 /**
  * The data widgets of a period summary (R2c), laid out from measured texts as the activities'
@@ -436,7 +438,7 @@ export function prepareSummaryBlock(
           // Without any route (a month of gym sessions), its main sport's icon in their place.
           const art =
             routesBox(data.summary.routes, width, width * sizes.height, sizes.stroke) ??
-            iconBox(mainSport(data.activities), sizes.value * sizes.icon);
+            iconBox(mainFamily(data.activities), sizes.value * sizes.icon);
           return column([art, stack], sizes.value * sizes.gap, 'center');
         }
         // Each activity as the activities' route with a big datum, small: its route (its sport's
@@ -579,6 +581,8 @@ export function prepareSummaryBlock(
         );
       case 'periodSentence':
         return periodSentenceBox(data, { fonts, textContext, translate });
+      case 'periodPlaylist':
+        return periodPlaylistBox(block, data, { fonts, textContext: compact, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }
@@ -597,56 +601,4 @@ interface IconLine {
 /** A period's activities from the first to start to the last. */
 function sortedActivities(activities: readonly Activity[]): Activity[] {
   return [...activities].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
-}
-
-/**
- * Routes overlaid in a `width` × `height` box, on one shared scale so they keep their places and
- * sizes, without their privacy-trimmed ends, their lines `stroke` wide; `null` when none has two
- * points. Time O(p) for p points.
- */
-function routesBox(
-  polylines: readonly string[],
-  width: number,
-  height: number,
-  stroke: number,
-): Box | null {
-  const routes = projectRoutes(
-    polylines.map((polyline) =>
-      trimRouteEnds(decodePolyline(polyline), DEFAULT_PRIVACY_TRIM_METERS),
-    ),
-    width,
-    height,
-  ).filter((points) => points.length >= 2);
-  if (routes.length === 0) {
-    return null;
-  }
-  const all = routes.flat();
-  const minX = Math.min(...all.map((point) => point.x));
-  const minY = Math.min(...all.map((point) => point.y));
-  const spanX = Math.max(...all.map((point) => point.x)) - minX;
-  const spanY = Math.max(...all.map((point) => point.y)) - minY;
-  return {
-    width: spanX + stroke,
-    height: spanY + stroke,
-    place: (x, y) =>
-      routes.map((points) => ({
-        kind: 'route',
-        points: points.map((point) => ({
-          x: x + stroke / 2 + point.x - minX,
-          y: y + stroke / 2 + point.y - minY,
-        })),
-        width: stroke,
-      })),
-  };
-}
-
-/**
- * The sport a period was mostly about: the family it spent most time on (the first, on a tie).
- * Time O(n · f) for n activities and f families.
- */
-function mainSport(activities: readonly Activity[]): SportIconId {
-  const sports = familyTotals(activities);
-  return sports.reduce((best, sport) =>
-    sport.movingTimeSeconds > best.movingTimeSeconds ? sport : best,
-  ).family;
 }

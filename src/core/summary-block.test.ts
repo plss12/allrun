@@ -8,8 +8,11 @@ import {
   isSummaryReplica,
   listsNoteActivities,
   MAX_NOTES_ACTIVITIES,
+  mainFamily,
   noteActivities,
   periodSentencePlan,
+  PLAYLIST_TOP,
+  playlistSongs,
   summaryBlocks,
   tableBucket,
 } from './summary-block';
@@ -53,6 +56,10 @@ describe('summaryBlocks', () => {
       { design: 'quote', quote: QUOTES[0] },
       { design: 'verse', verse: VERSES[0] },
       { design: 'periodSentence' },
+      { design: 'periodPlaylist', layout: 'dark', cover: 'red' },
+      { design: 'periodPlaylist', layout: 'dark', cover: 'ink' },
+      { design: 'periodPlaylist', layout: 'light', cover: 'red' },
+      { design: 'periodPlaylist', layout: 'light', cover: 'ink' },
       { design: 'periodNotes', layout: 'dark', rows: 'activities' },
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
@@ -91,6 +98,10 @@ describe('summaryBlocks', () => {
       { design: 'quote', quote: QUOTES[0] },
       { design: 'verse', verse: VERSES[0] },
       { design: 'periodSentence' },
+      { design: 'periodPlaylist', layout: 'dark', cover: 'red' },
+      { design: 'periodPlaylist', layout: 'dark', cover: 'ink' },
+      { design: 'periodPlaylist', layout: 'light', cover: 'red' },
+      { design: 'periodPlaylist', layout: 'light', cover: 'ink' },
       { design: 'periodNotes', layout: 'dark', rows: 'activities' },
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
@@ -118,6 +129,7 @@ describe('summaryBlocks', () => {
     // Only a replica keeps its app's look.
     expect(isSummaryReplica('periodNotes')).toBe(true);
     expect(isSummaryReplica('periodSentence')).toBe(true);
+    expect(isSummaryReplica('periodPlaylist')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
@@ -153,6 +165,45 @@ describe('periodSentencePlan', () => {
       lead: 'training',
       clauses: ['count'],
     });
+  });
+});
+
+describe('playlistSongs', () => {
+  const run = (day: number, minutes: number) =>
+    makeActivity({
+      sportType: 'Run',
+      localDate: `2026-10-${String(day).padStart(2, '0')}`,
+      startLocal: `2026-10-${String(day).padStart(2, '0')}T08:00:00`,
+      movingTimeSeconds: minutes * 60,
+    });
+
+  it("lists a week's activities, oldest first", () => {
+    const week = [run(15, 30), run(13, 50), run(14, 40)];
+    const { songs, top } = playlistSongs(summarize(week, weekRange('2026-10-14')), week);
+    expect(songs.map((song) => song.localDate)).toEqual(['2026-10-13', '2026-10-14', '2026-10-15']);
+    expect(top).toBe(false);
+  });
+
+  it("lists a month's longest in time, longest first, and says so when it leaves some out", () => {
+    const month = Array.from({ length: PLAYLIST_TOP + 2 }, (_, i) => run(i + 1, 20 + i));
+    const { songs, top } = playlistSongs(summarize(month, monthRange('2026-10-01')), month);
+    expect(songs).toHaveLength(PLAYLIST_TOP);
+    expect(songs[0].movingTimeSeconds).toBe((20 + PLAYLIST_TOP + 1) * 60);
+    expect(top).toBe(true);
+    // A month of a few lists them all, still longest first, as all it has.
+    const few = [run(3, 30), run(9, 50)];
+    const all = playlistSongs(summarize(few, monthRange('2026-10-01')), few);
+    expect(all.songs.map((song) => song.localDate)).toEqual(['2026-10-09', '2026-10-03']);
+    expect(all.top).toBe(false);
+  });
+});
+
+describe('mainFamily', () => {
+  it('is the sport the period spent most time on', () => {
+    const ride = makeActivity({ sportType: 'Ride', movingTimeSeconds: 7_200 });
+    const runs = [1, 2].map(() => makeActivity({ sportType: 'Run', movingTimeSeconds: 3_000 }));
+    expect(mainFamily([ride, ...runs])).toBe('ride');
+    expect(mainFamily([...runs, ...runs, ride])).toBe('run');
   });
 });
 

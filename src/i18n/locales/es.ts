@@ -149,6 +149,7 @@ export const es: Translations = {
       quote: 'Cita',
       verse: 'Versículo',
       periodSentence: 'Subrayado',
+      periodPlaylist: 'Lista de reproducción',
       periodNotes: 'Notas',
     },
     blocks: {
@@ -429,6 +430,19 @@ export const es: Translations = {
       },
       activityOne: '1 actividad',
       activities: '{{number}} actividades',
+    },
+    playlist: {
+      info: '{{count}}, {{time}}',
+      top: 'Top {{count}} de {{total}}',
+      counts: {
+        all: { one: '1 actividad', other: '{{count}} actividades' },
+        run: { one: '1 carrera', other: '{{count}} carreras' },
+        ride: { one: '1 salida en bici', other: '{{count}} salidas en bici' },
+        walk: { one: '1 caminata', other: '{{count}} caminatas' },
+        swim: { one: '1 sesión de natación', other: '{{count}} sesiones de natación' },
+        training: { one: '1 entreno', other: '{{count}} entrenos' },
+        other: { one: '1 actividad', other: '{{count}} actividades' },
+      },
     },
     receipt: { total: 'Total', thanks: '¡Gracias por moverte!' },
     boardingPass: {

@@ -3,9 +3,16 @@ import type { BlockLettering } from './activity-block';
 import { type DateRange, rangeLength } from './dates';
 import { bucketCount } from './periods';
 import type { SportFamily } from './sports';
-import type { BucketSize, PeriodSummary } from './summary';
+import { type BucketSize, familyTotals, type PeriodSummary } from './summary';
 import { periodTotals, summaryHasDistance } from './summary-metrics';
-import { APP_MODES, QUOTES, type SummaryBlock, type SummaryBlockDesign, VERSES } from './template';
+import {
+  APP_MODES,
+  BRAND_COVERS,
+  QUOTES,
+  type SummaryBlock,
+  type SummaryBlockDesign,
+  VERSES,
+} from './template';
 
 /**
  * The widgets of a period summary (R2c): its data widgets (its name over its main totals, a table
@@ -59,6 +66,7 @@ export const MAX_NOTES_ACTIVITIES = 16;
 /** Designs that recreate an app: its colors, font and icons are the app's (see `isAppReplica`). */
 const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodSentence',
+  'periodPlaylist',
   'periodNotes',
 ]);
 
@@ -148,6 +156,49 @@ export function periodSentencePlan(summary: PeriodSummary): PeriodSentencePlan {
   };
 }
 
+/** Most songs of a playlist of a month or a year: its longest activities. */
+export const PLAYLIST_TOP = 10;
+
+/** The songs of a period's playlist, and whether they are only its longest activities. */
+export interface PlaylistSongs {
+  readonly songs: readonly Activity[];
+  readonly top: boolean;
+}
+
+/**
+ * The activities a period's playlist lists as its songs: a week's all, oldest first (as its note
+ * lists them, see `listsNoteActivities`); a longer period's longest {@link PLAYLIST_TOP} in time,
+ * which its songs show, longest first, as a chart of hits (`top` when it leaves some out). Time
+ * O(n log n) for n activities, space O(n).
+ */
+export function playlistSongs(
+  summary: PeriodSummary,
+  activities: readonly Activity[],
+): PlaylistSongs {
+  if (listsNoteActivities(summary)) {
+    return {
+      songs: [...activities].sort((a, b) => a.startLocal.localeCompare(b.startLocal)),
+      top: false,
+    };
+  }
+  const songs = [...activities]
+    .sort((a, b) => b.movingTimeSeconds - a.movingTimeSeconds)
+    .slice(0, PLAYLIST_TOP);
+  return { songs, top: songs.length < activities.length };
+}
+
+/**
+ * The sport a period was mostly about: the family it spent most time on (the first, on a tie).
+ * Time O(n · f) for n activities and f families.
+ *
+ * @throws TypeError if `activities` is empty.
+ */
+export function mainFamily(activities: readonly Activity[]): SportFamily {
+  return familyTotals(activities).reduce((best, sport) =>
+    sport.movingTimeSeconds > best.movingTimeSeconds ? sport : best,
+  ).family;
+}
+
 /** A line of a note listing a period's activities, and whether it stands out in the accent. */
 export interface NoteActivity {
   readonly activity: Activity;
@@ -196,7 +247,7 @@ export function noteActivities(activities: readonly Activity[]): NoteActivity[] 
  * too many) and overlaid (its main sport's icon, without any route), after its card per sport, as
  * an activity's card comes before its widgets with the route. Then its creative ones, in the order
  * of an activity's: the first quote and verse (the others are chosen from their lists); its
- * highlighted sentence; its note,
+ * highlighted sentence; its playlist, in dark and light mode and each brand color; its note,
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
  * days, weeks or months. None for a period without activities. Time O(1).
  */
@@ -224,6 +275,9 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     { design: 'quote', quote: QUOTES[0] },
     { design: 'verse', verse: VERSES[0] },
     { design: 'periodSentence' },
+    ...APP_MODES.flatMap((layout) =>
+      BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodPlaylist', layout, cover })),
+    ),
     ...(['activities', 'buckets'] as const)
       .filter((rows) => rows === 'buckets' || listsNoteActivities(summary))
       .flatMap((rows) =>
@@ -260,6 +314,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
       return { font: 'playfairDisplay', bold: false, italic: true, uppercase: false };
     // A replica writes in its app's font whatever the layer's.
     case 'periodSentence':
+    case 'periodPlaylist':
     case 'periodNotes':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }

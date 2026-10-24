@@ -461,7 +461,8 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * over its totals (`overlay`); and a card per sport. And its creative ones (see
  * `isSummaryDataWidget`), as an activity's: a quote and a Bible verse, in the user's lettering; and
  * replicas of apps and things (see `isSummaryReplica`): the period as a sentence typed on paper,
- * its totals highlighted (`periodSentence`); a checklist of the iPhone's Notes, its activities or
+ * its totals highlighted (`periodSentence`); its activities as the songs of a playlist of the
+ * iPhone's Music (`periodPlaylist`); a checklist of the iPhone's Notes, its activities or
  * its days, weeks or months ticked off (`periodNotes`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
@@ -477,6 +478,11 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('quote'), quote: z.enum(QUOTES) }),
   z.object({ design: z.literal('verse'), verse: z.enum(VERSES) }),
   z.object({ design: z.literal('periodSentence') }),
+  z.object({
+    design: z.literal('periodPlaylist'),
+    layout: z.enum(APP_MODES),
+    cover: z.enum(BRAND_COVERS),
+  }),
   z.object({
     design: z.literal('periodNotes'),
     layout: z.enum(APP_MODES),

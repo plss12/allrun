@@ -1176,7 +1176,7 @@ const MESSAGE_COLORS = {
  * glass card and its edge, its texts (the song's name, and the fainter artist and times), the
  * progress bar's track and what has played, and the dimmed "previous" button.
  */
-const MUSIC_COLORS = {
+export const MUSIC_COLORS = {
   dark: {
     card: '#2C2C2EA6',
     edge: '#FFFFFF2E',
@@ -1197,8 +1197,8 @@ const MUSIC_COLORS = {
   },
 } as const;
 /** The cover's colors in AllRun's red and night ink, the route in chalk on either. */
-const BRAND_COVER_COLORS = { red: '#C94A2E', ink: '#141B2D' } as const;
-const COVER_ROUTE = '#F6F1EA';
+export const BRAND_COVER_COLORS = { red: '#C94A2E', ink: '#141B2D' } as const;
+export const COVER_ROUTE = '#F6F1EA';
 
 /**
  * Where the lock screen's player puts each thing, measured on an iPhone and scaled to a card

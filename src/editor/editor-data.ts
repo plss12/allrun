@@ -141,6 +141,8 @@ export type LabelKey =
   | `widgets.sentence.clauses.${SentenceClause}`
   | 'widgets.sentence.end'
   | 'widgets.periodSentence.opening'
+  | `widgets.playlist.${'info' | 'top'}`
+  | `widgets.playlist.counts.${SportFamily | 'all'}.${'one' | 'other'}`
   | `widgets.periodSentence.leads.${PeriodSentenceLead}`
   | `widgets.periodSentence.clauses.${PeriodSentenceClause}`
   | 'widgets.periodSentence.activityOne'

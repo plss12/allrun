@@ -154,6 +154,7 @@ export const en = {
       quote: 'Quote',
       verse: 'Verse',
       periodSentence: 'Highlighted',
+      periodPlaylist: 'Playlist',
       periodNotes: 'Notes',
     },
     blocks: {
@@ -445,6 +446,23 @@ export const en = {
       },
       activityOne: '1 activity',
       activities: '{{number}} activities',
+    },
+    /**
+     * A period's playlist: how many activities (named by their sport when the summary is of one)
+     * and how long, or the top of how many.
+     */
+    playlist: {
+      info: '{{count}}, {{time}}',
+      top: 'Top {{count}} of {{total}}',
+      counts: {
+        all: { one: '1 activity', other: '{{count}} activities' },
+        run: { one: '1 run', other: '{{count}} runs' },
+        ride: { one: '1 ride', other: '{{count}} rides' },
+        walk: { one: '1 walk', other: '{{count}} walks' },
+        swim: { one: '1 swim', other: '{{count}} swims' },
+        training: { one: '1 workout', other: '{{count}} workouts' },
+        other: { one: '1 activity', other: '{{count}} activities' },
+      },
     },
     receipt: { total: 'Total', thanks: 'Thanks for moving!' },
     boardingPass: {

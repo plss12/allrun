@@ -194,6 +194,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           'value' in item.block ? item.block.value : undefined,
           'layout' in item.block ? item.block.layout : undefined,
           'rows' in item.block ? item.block.rows : undefined,
+          'cover' in item.block ? item.block.cover : undefined,
           'verse' in item.block ? item.block.verse : undefined,
           'quote' in item.block ? item.block.quote : undefined,
         ];

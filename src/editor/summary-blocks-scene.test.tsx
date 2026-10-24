@@ -1,26 +1,24 @@
 /**
  * Draws every data widget of a period summary off-screen with real fonts (CanvasKit), in its own
  * lettering and on a backdrop, and checks that nothing is drawn outside the size it measures: the
- * editor grabs, frames and snaps a widget by that size.
+ * editor grabs, frames and snaps a widget by that size. Its creative ones are drawn in
+ * `summary-creatives-scene.test.tsx`.
  *
  * @jest-environment node
  */
 import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
 
-import { monthRange, weekRange, yearRange } from '@/core/dates';
+import { weekRange } from '@/core/dates';
 import { newLayer } from '@/core/default-layout';
-import { bucketForPeriod, type PeriodKind } from '@/core/periods';
 import { summarize } from '@/core/summary';
-import { summaryBlockLettering, summaryBlocks } from '@/core/summary-block';
-import type { Layer } from '@/core/template';
-import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
+import { isSummaryDataWidget, summaryBlocks } from '@/core/summary-block';
 import { translate } from '@/test-utils/activity-blocks';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
+import { overflowingSummaryBlocks, periodData } from '@/test-utils/summary-blocks';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import type { SummaryData } from './editor-data';
-import type { LayerContext } from './template-scene';
 
 // Draw with CanvasKit instead of the native module (see `template-scene.test.tsx`).
 jest.mock('@shopify/react-native-skia/lib/commonjs/Platform', () => ({
@@ -46,71 +44,25 @@ beforeAll(async () => {
   scene = jest.requireActual<typeof import('./template-scene')>('./template-scene');
 });
 
-const source = new FixtureActivitySource({ endDate: '2026-10-21', days: 400, seed: 42 });
-
-/** A summary of the period of `kind` around 2026, of every sport, as the editor loads it. */
-async function periodData(kind: Exclude<PeriodKind, 'custom'>): Promise<SummaryData> {
-  const range =
-    kind === 'week'
-      ? weekRange('2026-10-14')
-      : kind === 'month'
-        ? monthRange('2026-09-01')
-        : yearRange('2025-06-01');
-  const activities = await source.listInRange(range);
-  return {
-    mode: 'summary',
-    kind,
-    summary: summarize(activities, range),
-    activities,
-    bucketSize: bucketForPeriod(kind, range),
-    families: [],
-    current: true,
-  };
-}
-
 describe('prepareSummaryBlock', () => {
   it.each(['week', 'month', 'year'] as const)(
-    'draws every widget of a %s within the size it measures, bare and on a backdrop',
+    'draws every data widget of a %s within the size it measures, bare and on a backdrop',
     async (kind) => {
       const data = await periodData(kind);
-      const blocks = summaryBlocks(data.summary);
+      const blocks = summaryBlocks(data.summary).filter((block) =>
+        isSummaryDataWidget(block.design),
+      );
       // A period of every sport offers them all.
       expect(blocks.map((block) => block.design)).toEqual(
         expect.arrayContaining(['periodData', 'periodTable', 'periodSports']),
       );
-      const layers = blocks.flatMap((block, i): Layer[] => {
-        const layer = newLayer({ kind: 'summaryBlock', block }, `block-${i}`, 'story');
-        if (layer.kind !== 'summaryBlock') {
-          throw new Error('Expected a summary widget');
-        }
-        const signed = { ...layer, logo: true };
-        return [
-          signed,
-          { ...signed, id: `${layer.id}-soft`, style: { ...layer.style, backdrop: 'soft' } },
-        ];
-      });
-      const prepared = scene.prepareLayers(
-        { version: 1, id: 'blocks', mode: 'summary', format: 'story', layers },
-        {
-          data,
-          fonts: loadTestFonts(blocks.map((block) => summaryBlockLettering(block).font)),
-          textContext: {
-            unit: 'km',
-            locale: 'es',
-            durationUnits: TEST_DURATION_UNITS,
-            unitLabel: testUnitLabel,
-          },
-          translate,
-        } satisfies LayerContext,
+      const { prepared, layers, overflowing } = await overflowingSummaryBlocks(
+        scene,
+        data,
+        blocks,
+        true,
       );
       expect(prepared).toHaveLength(layers.length);
-      const overflowing: { readonly id: string; readonly alpha: number }[] = [];
-      for (const block of prepared) {
-        const alpha = await alphaOutside(block);
-        if (alpha > DRAWN_ALPHA) {
-          overflowing.push({ id: block.layer.id, alpha });
-        }
-      }
       expect(overflowing).toEqual([]);
     },
     60_000,
