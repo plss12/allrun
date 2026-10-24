@@ -143,7 +143,9 @@ type Piece =
       readonly y: number;
       readonly width: number;
       readonly height: number;
-      readonly colors: readonly [string, string];
+      /** Its colors, evenly spread from its top to its bottom, or from its left to its right. */
+      readonly colors: readonly string[];
+      readonly across?: true;
       readonly card: {
         readonly x: number;
         readonly y: number;
@@ -3957,7 +3959,11 @@ function appMark(piece: Piece, i: number): ReactElement | null {
           <Rect x={piece.x} y={piece.y} width={piece.width} height={piece.height}>
             <LinearGradient
               start={{ x: piece.x, y: piece.y }}
-              end={{ x: piece.x, y: piece.y + piece.height }}
+              end={
+                piece.across === true
+                  ? { x: piece.x + piece.width, y: piece.y }
+                  : { x: piece.x, y: piece.y + piece.height }
+              }
               colors={[...piece.colors]}
             />
           </Rect>

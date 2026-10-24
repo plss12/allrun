@@ -85,6 +85,7 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodBoardingPass',
   'periodCalendar',
   'periodStreak',
+  'periodWeather',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -454,6 +455,25 @@ export function periodStreak(
   return { longest, activeDays: active.size, days, active };
 }
 
+/** How a period's weather reads, by its share of days with activities (see `weatherCondition`). */
+export type WeatherCondition = 'sunny' | 'partlyCloudy' | 'mostlyCloudy' | 'cloudy';
+
+/**
+ * A period's conditions, as the weather's of a day: sunny when it had activities on three days
+ * of four or more, partly cloudy on half or more, mostly cloudy on a quarter or more, and cloudy
+ * on fewer. Time and space O(1).
+ */
+export function weatherCondition(activeDays: number, days: number): WeatherCondition {
+  const share = days <= 0 ? 0 : activeDays / days;
+  if (share >= 0.75) {
+    return 'sunny';
+  }
+  if (share >= 0.5) {
+    return 'partlyCloudy';
+  }
+  return share >= 0.25 ? 'mostlyCloudy' : 'cloudy';
+}
+
 /**
  * How a period's streak draws its days under its figure: `days`, one by one with their initials
  * (a week or shorter); `weeks`, a dot per day in a row per week, as a calendar (up to
@@ -487,7 +507,7 @@ export function streakStrip(range: DateRange): StreakStrip {
  * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race;
  * its receipt; its boarding pass in each brand color; and those without an activity's twin: its
  * calendar and its streak, in dark and light mode, the calendar up to a year (see
- * `calendarView`). None for a period without activities. Time O(1).
+ * `calendarView`); and its weather, by day and by night. None for a period without activities. Time O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -537,6 +557,10 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
       ? []
       : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
     ...APP_MODES.map((layout): SummaryBlock => ({ design: 'periodStreak', layout })),
+    ...(['light', 'dark'] as const).map((layout): SummaryBlock => ({
+      design: 'periodWeather',
+      layout,
+    })),
   ];
 }
 
@@ -577,6 +601,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodBoardingPass':
     case 'periodCalendar':
     case 'periodStreak':
+    case 'periodWeather':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

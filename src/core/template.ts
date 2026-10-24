@@ -469,7 +469,8 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * timing tower (`periodGrandPrix`); as a shop's receipt (`periodReceipt`); as a flight from
  * its first activity to its last (`periodBoardingPass`); and as a calendar, its days with their
  * figures or its months with their active days marked (`periodCalendar`); and its longest streak of
- * days in a row with activities, under a flame (`periodStreak`).
+ * days in a row with activities, beside a flame (`periodStreak`); and as the iPhone's Weather, its
+ * days, weeks or months as the forecast's (`periodWeather`: `light` by day, `dark` by night).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -509,6 +510,7 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('periodBoardingPass'), cover: z.enum(BRAND_COVERS) }),
   z.object({ design: z.literal('periodCalendar'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('periodStreak'), layout: z.enum(APP_MODES) }),
+  z.object({ design: z.literal('periodWeather'), layout: z.enum(APP_MODES) }),
 ]);
 
 export type SummaryBlock = z.infer<typeof summaryBlockSchema>;

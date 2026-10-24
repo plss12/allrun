@@ -30,6 +30,7 @@ import {
   type PeriodSentenceClause,
   type PeriodSentenceLead,
   tableBucket,
+  type WeatherCondition,
 } from '@/core/summary-block';
 import {
   periodTotals,
@@ -158,6 +159,9 @@ export type LabelKey =
   | 'widgets.periodSentence.activities'
   | `widgets.receipt.${'total' | 'thanks' | 'items'}`
   | `widgets.streak.${'one' | 'other' | 'activeDays'}`
+  | `widgets.weather.conditions.${WeatherCondition}`
+  | `widgets.weather.title.${BucketSize}`
+  | `widgets.weather.${'range' | 'hours'}`
   | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date' | 'activities' | 'time' | 'activeDays'}`
   | `widgets.cameraModes.${'video' | 'photo'}`
   | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`

@@ -163,6 +163,7 @@ export const en = {
       periodBoardingPass: 'Boarding pass',
       periodCalendar: 'Calendar',
       periodStreak: 'Streak',
+      periodWeather: 'Weather',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -498,6 +499,21 @@ export const en = {
       one: 'day streak',
       other: 'day streak',
       activeDays: '{{active}} of {{days}} days active',
+    },
+    /**
+     * A period as the Weather: its conditions by its share of active days, its highest and lowest
+     * day, week or month, and what its rows measure.
+     */
+    weather: {
+      conditions: {
+        sunny: 'Sunny',
+        partlyCloudy: 'Partly Cloudy',
+        mostlyCloudy: 'Mostly Cloudy',
+        cloudy: 'Cloudy',
+      },
+      range: 'H:{{max}}  L:{{min}}',
+      title: { day: '{{unit}} per day', week: '{{unit}} per week', month: '{{unit}} per month' },
+      hours: 'Hours',
     },
   },
   style: {

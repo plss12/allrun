@@ -11,6 +11,8 @@ import {
   grandPrixActivities,
   periodStreak,
   streakStrip,
+  tableBucket,
+  weatherCondition,
   listsNoteActivities,
   mainFamily,
   periodSentencePlan,
@@ -19,7 +21,7 @@ import {
 } from '@/core/summary-block';
 import { summaryHasDistance, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import { durationParts, formatDuration } from '@/core/units';
-import { bucketize } from '@/core/summary';
+import { bucketize, type SummaryBucket } from '@/core/summary';
 import {
   formatActivityDate,
   formatBucketLabels,
@@ -74,6 +76,7 @@ import { markWidth } from './brand/brand-art';
 import { CAP_HEIGHTS } from './fonts';
 import {
   metricText,
+  MISSING_VALUE,
   periodBoardingPass,
   periodLaps,
   periodName,
@@ -1246,4 +1249,312 @@ export function periodStreakBox(
     STREAK.pad,
     STREAK.radius,
   );
+}
+
+/**
+ * The iPhone's Weather by day and by night: its sky from top to bottom, its translucent cards and
+ * the hairlines between their rows, its texts (the fainter for lows and names), and its bars: the
+ * track, and the scale's colors from cold to warm, along which each bar shows its stretch.
+ */
+const WEATHER_COLORS = {
+  light: {
+    sky: ['#3D6CB9', '#6F94CF'],
+    card: '#1F4C9466',
+    rule: '#FFFFFF2E',
+    ink: '#FFFFFF',
+    faded: '#FFFFFFA6',
+    track: '#16397059',
+    scale: ['#7ED3C8', '#E8D35B', '#F0A13A'],
+  },
+  dark: {
+    sky: ['#0A1430', '#2A3B66'],
+    card: '#FFFFFF1A',
+    rule: '#FFFFFF24',
+    ink: '#FFFFFF',
+    faded: '#FFFFFF99',
+    track: '#FFFFFF1F',
+    scale: ['#7ED3C8', '#E8D35B', '#F0A13A'],
+  },
+} as const;
+
+/**
+ * The sizes of a period's weather: its sky's width, corners and room inside; at the top, what it
+ * is of beside the location arrow (a share of its size), the period's name, its total as the
+ * temperature (smaller when it doesn't fit), its conditions and its highest and lowest, and the
+ * room between them; then its card of rows: the room and corners inside it, its title, and each
+ * row's texts, height, icon, bar's thickness and the room between its columns.
+ */
+const WEATHER = {
+  width: 840,
+  radius: 56,
+  pad: 48,
+  place: 28,
+  arrow: 0.85,
+  name: 60,
+  figure: 170,
+  line: 40,
+  headGap: 4,
+  cardGap: 48,
+  card: { pad: 32, radius: 32, title: 24, titleGap: 18 },
+  row: { text: 40, height: 86, icon: 46, bar: 10, gap: 24, rule: 2 },
+} as const;
+
+/**
+ * A stretch of a bar of the weather's rows: the colors of the whole `width` long scale, cold to
+ * warm, shown from `from` to `to` of it, rounded at its ends, as the app shows a day's low to high.
+ */
+function weatherBarBox(
+  width: number,
+  thick: number,
+  from: number,
+  to: number,
+  colors: (typeof WEATHER_COLORS)[keyof typeof WEATHER_COLORS],
+): Box {
+  const start = from * width;
+  // Never shorter than round: a short day still shows a dot.
+  const length = Math.max(thick, (to - from) * width);
+  return placed(width, thick, [
+    { box: fillBox(width, thick, thick / 2, colors.track, {}), x: 0, y: 0 },
+    {
+      box: {
+        width,
+        height: thick,
+        place: (x, y) => [
+          {
+            kind: 'shade',
+            x,
+            y,
+            width,
+            height: thick,
+            colors: colors.scale,
+            across: true,
+            card: { x: x + start, y, width: length, height: thick, radius: thick / 2 },
+          },
+        ],
+      },
+      x: 0,
+      y: 0,
+    },
+  ]);
+}
+
+/**
+ * A period as the iPhone's Weather (see `weatherCondition`), by day (light) or by night (dark):
+ * what it is of (its sport, or AllRun) beside the location arrow, its name as the city's, its
+ * total as the temperature ("94 km", or its time without any distance), its conditions by its
+ * share of active days ("Nubes y claros") and its longest and shortest day, week or month with
+ * activities as the day's high and low; then a row per day, week or month (see `tableBucket`) as
+ * the forecast's, its main sport's icon (a moon without activities), its time as the low (its
+ * activities without any distance), its distance (or time) as the high, and a bar from nothing to
+ * it along the scale of the longest.
+ */
+export function periodWeatherBox(
+  block: Extract<SummaryBlock, { design: 'periodWeather' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const colors = WEATHER_COLORS[block.layout];
+  const { summary } = data;
+  const inner = WEATHER.width - 2 * WEATHER.pad;
+  const measure = summaryHasDistance(summary) ? 'distance' : 'movingTime';
+  const text = (
+    value: string,
+    size: number,
+    color: string,
+    look: { readonly bold?: boolean; readonly light?: boolean } = {},
+  ) =>
+    appTextBox(
+      fonts,
+      [{ text: value, size, bold: look.bold === true, light: look.light === true }],
+      color,
+    );
+  const size = tableBucket(summary.range);
+  const buckets = bucketize(data.activities, summary.range, size);
+  const amount = (bucket: SummaryBucket) =>
+    measure === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds;
+  const active = buckets.filter((bucket) => bucket.activityCount > 0 && amount(bucket) > 0);
+  const highest = Math.max(0, ...active.map(amount));
+  const lowest = Math.min(...active.map(amount));
+  const written = (value: number, unit: boolean) =>
+    roundedChartValue(measure, value, textContext, unit);
+  const streak = periodStreak(summary, data.activities);
+
+  const [family] = data.families;
+  const place = row(
+    [
+      iconBox('location', WEATHER.place * WEATHER.arrow, colors.ink),
+      text(
+        (data.families.length === 1 ? translate(`families.${family}`) : 'AllRun').toLocaleUpperCase(
+          textContext.locale,
+        ),
+        WEATHER.place,
+        colors.ink,
+        { bold: true },
+      ),
+    ],
+    WEATHER.place * 0.25,
+    'center',
+  );
+  const total =
+    measure === 'distance'
+      ? written(summary.totalDistanceMeters, true)
+      : plainSummaryText('totalMovingTime', summary.totalMovingTimeSeconds, textContext);
+  const figureAt = (figure: number) => text(total, figure, colors.ink, { light: true });
+  const full = figureAt(WEATHER.figure);
+  const figure = full.width <= inner ? full : figureAt((WEATHER.figure * inner) / full.width);
+  const head = column(
+    [
+      place,
+      text(periodName(data, textContext, translate), WEATHER.name, colors.ink),
+      figure,
+      text(
+        translate(`widgets.weather.conditions.${weatherCondition(streak.activeDays, streak.days)}`),
+        WEATHER.line,
+        colors.ink,
+      ),
+      ...(active.length === 0
+        ? []
+        : [
+            text(
+              translate('widgets.weather.range', {
+                max: written(highest, true),
+                min: written(lowest, true),
+              }),
+              WEATHER.line,
+              colors.ink,
+            ),
+          ]),
+    ],
+    WEATHER.headGap,
+    'center',
+  );
+
+  const sizes = WEATHER.row;
+  const cardInner = inner - 2 * WEATHER.card.pad;
+  const rows = buckets.map((bucket) => {
+    const activities = data.activities.filter((activity) =>
+      isInRange(activity.localDate, bucket.range),
+    );
+    const name = formatShortBucketName(bucket.range, size, textContext.locale);
+    return {
+      name: text(
+        name.charAt(0).toLocaleUpperCase(textContext.locale) + name.slice(1),
+        sizes.text,
+        colors.ink,
+      ),
+      icon:
+        activities.length === 0
+          ? iconBox('rest', sizes.icon, colors.faded)
+          : iconBox(mainFamily(activities), sizes.icon, colors.ink),
+      low: text(
+        activities.length === 0
+          ? MISSING_VALUE
+          : measure === 'distance'
+            ? roundedChartValue('movingTime', bucket.movingTimeSeconds, textContext, false)
+            : translate('widgets.activities', { number: String(bucket.activityCount) }),
+        sizes.text,
+        colors.faded,
+      ),
+      high: text(
+        activities.length === 0 ? MISSING_VALUE : written(amount(bucket), false),
+        sizes.text,
+        colors.ink,
+      ),
+      share: highest <= 0 ? 0 : amount(bucket) / highest,
+    };
+  });
+  const widest = (boxes: readonly Box[]) => Math.max(...boxes.map((box) => box.width));
+  const nameWidth = widest(rows.map((line) => line.name));
+  const lowWidth = widest(rows.map((line) => line.low));
+  const highWidth = widest(rows.map((line) => line.high));
+  const barWidth = cardInner - nameWidth - sizes.icon - lowWidth - highWidth - 4 * sizes.gap;
+  const lines = rows.map((line) => {
+    const cells: { box: Box; width: number; align: 'start' | 'center' | 'end' }[] = [
+      { box: line.name, width: nameWidth, align: 'start' },
+      { box: line.icon, width: sizes.icon, align: 'center' },
+      { box: line.low, width: lowWidth, align: 'end' },
+      {
+        box:
+          line.share <= 0
+            ? fillBox(barWidth, sizes.bar, sizes.bar / 2, colors.track, {})
+            : weatherBarBox(barWidth, sizes.bar, 0, line.share, colors),
+        width: barWidth,
+        align: 'start',
+      },
+      { box: line.high, width: highWidth, align: 'end' },
+    ];
+    let left = 0;
+    return placed(
+      cardInner,
+      sizes.height,
+      cells.map((cell) => {
+        const x =
+          left +
+          (cell.align === 'start'
+            ? 0
+            : cell.align === 'end'
+              ? cell.width - cell.box.width
+              : (cell.width - cell.box.width) / 2);
+        left += cell.width + sizes.gap;
+        return { box: cell.box, x, y: (sizes.height - cell.box.height) / 2 };
+      }),
+    );
+  });
+  const title = text(
+    translate(`widgets.weather.title.${size}`, {
+      unit:
+        measure === 'distance'
+          ? textContext.unitLabel(textContext.unit)
+          : translate('widgets.weather.hours'),
+    }).toLocaleUpperCase(textContext.locale),
+    WEATHER.card.title,
+    colors.faded,
+    { bold: true },
+  );
+  const list = column(
+    [
+      title,
+      column(
+        lines.flatMap((line, i) =>
+          i === 0 ? [line] : [hairlineBox(cardInner, 0, sizes.rule, colors.rule), line],
+        ),
+        0,
+        'start',
+      ),
+    ],
+    WEATHER.card.titleGap,
+    'start',
+  );
+  // Flat, so it is drawn over the sky, in its turn among the app's marks.
+  const cardWidth = list.width + 2 * WEATHER.card.pad;
+  const cardHeight = list.height + 2 * WEATHER.card.pad;
+  const card = placed(cardWidth, cardHeight, [
+    { box: fillBox(cardWidth, cardHeight, WEATHER.card.radius, colors.card, {}), x: 0, y: 0 },
+    { box: list, x: WEATHER.card.pad, y: WEATHER.card.pad },
+  ]);
+  const content = column([widened(head, inner, 'center'), card], WEATHER.cardGap, 'center');
+  const width = WEATHER.width;
+  const height = content.height + 2 * WEATHER.pad;
+  return placed(width, height, [
+    {
+      box: {
+        width,
+        height,
+        place: (x, y) => [
+          {
+            kind: 'shade',
+            x,
+            y,
+            width,
+            height,
+            colors: colors.sky,
+            card: { x, y, width, height, radius: WEATHER.radius },
+          },
+        ],
+      },
+      x: 0,
+      y: 0,
+    },
+    { box: content, x: WEATHER.pad, y: WEATHER.pad },
+  ]);
 }

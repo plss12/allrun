@@ -19,6 +19,7 @@ import {
   periodSentencePlan,
   periodStreak,
   streakStrip,
+  weatherCondition,
   PLAYLIST_TOP,
   periodWrapped,
   playlistSongs,
@@ -91,6 +92,8 @@ describe('summaryBlocks', () => {
       { design: 'periodCalendar', layout: 'light' },
       { design: 'periodStreak', layout: 'dark' },
       { design: 'periodStreak', layout: 'light' },
+      { design: 'periodWeather', layout: 'light' },
+      { design: 'periodWeather', layout: 'dark' },
     ]);
   });
 
@@ -161,6 +164,8 @@ describe('summaryBlocks', () => {
       { design: 'periodCalendar', layout: 'light' },
       { design: 'periodStreak', layout: 'dark' },
       { design: 'periodStreak', layout: 'light' },
+      { design: 'periodWeather', layout: 'light' },
+      { design: 'periodWeather', layout: 'dark' },
     ]);
   });
 
@@ -192,6 +197,7 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodBoardingPass')).toBe(true);
     expect(isSummaryReplica('periodCalendar')).toBe(true);
     expect(isSummaryReplica('periodStreak')).toBe(true);
+    expect(isSummaryReplica('periodWeather')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
@@ -496,5 +502,16 @@ describe('streakStrip', () => {
     expect(streakStrip(monthRange('2026-10-01'))).toBe('weeks');
     expect(streakStrip(yearRange('2026-01-01'))).toBe('months');
     expect(streakStrip(customRange('2025-10-15', '2026-10-14'))).toBe('months');
+  });
+});
+
+describe('weatherCondition', () => {
+  it('reads sunnier the more of its days had activities', () => {
+    expect(weatherCondition(7, 7)).toBe('sunny');
+    expect(weatherCondition(6, 8)).toBe('sunny');
+    expect(weatherCondition(4, 7)).toBe('partlyCloudy');
+    expect(weatherCondition(2, 7)).toBe('mostlyCloudy');
+    expect(weatherCondition(1, 7)).toBe('cloudy');
+    expect(weatherCondition(78, 365)).toBe('cloudy');
   });
 });

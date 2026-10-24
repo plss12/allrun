@@ -1,7 +1,8 @@
 // Builds the sport icons: the paths drawn into images (src/editor/icons/sport-icons.generated.ts),
 // and PNGs of them for the screens, which tint them with the system's colors, and for the native
 // menus, which take images only (assets/images/sports, and its menu folder). Also the paths of the
-// few icons the replicas of apps draw besides their own marks (a streak's flame), into images only.
+// few icons the replicas of apps draw besides their own marks (a streak's flame, the weather's
+// location arrow and its moon for a day of rest), into images only.
 //
 // The icons are Material Symbols (Outlined, filled, weight 400) by Google, under the Apache
 // License 2.0 (https://github.com/google/material-design-icons/blob/master/LICENSE). SF Symbols
@@ -41,6 +42,8 @@ const ICONS = {
 /** Icons the replicas of apps draw into images, by their name in `APP_ICON_PATHS`. */
 const APP_ICONS = {
   flame: 'local_fire_department',
+  location: 'near_me',
+  rest: 'bedtime',
 };
 
 /**

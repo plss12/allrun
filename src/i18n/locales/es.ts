@@ -158,6 +158,7 @@ export const es: Translations = {
       periodBoardingPass: 'Tarjeta de embarque',
       periodCalendar: 'Calendario',
       periodStreak: 'Racha',
+      periodWeather: 'Tiempo',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',
@@ -474,6 +475,21 @@ export const es: Translations = {
       one: 'día de racha',
       other: 'días de racha',
       activeDays: '{{active}} de {{days}} días activos',
+    },
+    /**
+     * A period as the Weather: its conditions by its share of active days, its highest and lowest
+     * day, week or month, and what its rows measure.
+     */
+    weather: {
+      conditions: {
+        sunny: 'Soleado',
+        partlyCloudy: 'Nubes y claros',
+        mostlyCloudy: 'Mayormente nublado',
+        cloudy: 'Nublado',
+      },
+      range: 'Máx. {{max}}  Mín. {{min}}',
+      title: { day: '{{unit}} por día', week: '{{unit}} por semana', month: '{{unit}} por mes' },
+      hours: 'Horas',
     },
   },
   style: {
