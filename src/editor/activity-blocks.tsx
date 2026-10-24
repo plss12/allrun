@@ -56,7 +56,7 @@ import {
   type TextContext,
 } from './editor-data';
 import { CAP_HEIGHTS, drawsBold, fontFamiliesOf, lettersExtent } from './fonts';
-import { SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
+import { APP_ICON_PATHS, SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
 import {
   addLeanRoom,
   DropShadow,
@@ -214,7 +214,7 @@ type Piece =
     }
   | {
       readonly kind: 'icon';
-      readonly icon: SportIconId;
+      readonly icon: IconId;
       readonly x: number;
       readonly y: number;
       readonly size: number;
@@ -482,7 +482,13 @@ function tableRow(
   );
 }
 
-export const iconBox = (icon: SportIconId, size: number, color?: string): Box => ({
+/** A sport's icon, or one a replica of an app draws (a streak's flame). */
+export type IconId = SportIconId | keyof typeof APP_ICON_PATHS;
+
+/** Every icon's path, the sports' and the replicas'. */
+const ICON_PATHS: Readonly<Record<IconId, string>> = { ...SPORT_ICON_PATHS, ...APP_ICON_PATHS };
+
+export const iconBox = (icon: IconId, size: number, color?: string): Box => ({
   width: size,
   height: size,
   place: (x, y) => [{ kind: 'icon', icon, x, y, size, ...(color === undefined ? {} : { color }) }],
@@ -3624,15 +3630,15 @@ function routePath(points: readonly Point[]): SkPath {
   return builder.detach();
 }
 
-/** The sport icons, parsed once. */
-const iconPaths = new Map<SportIconId, SkPath>();
+/** The icons, parsed once. */
+const iconPaths = new Map<IconId, SkPath>();
 
-function iconPath(icon: SportIconId): SkPath {
+function iconPath(icon: IconId): SkPath {
   const cached = iconPaths.get(icon);
   if (cached !== undefined) {
     return cached;
   }
-  const path = Skia.Path.MakeFromSVGString(SPORT_ICON_PATHS[icon]);
+  const path = Skia.Path.MakeFromSVGString(ICON_PATHS[icon]);
   if (path === null) {
     throw new Error(`Invalid sport icon path: ${icon}`);
   }

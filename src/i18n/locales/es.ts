@@ -157,6 +157,7 @@ export const es: Translations = {
       periodReceipt: 'Ticket',
       periodBoardingPass: 'Tarjeta de embarque',
       periodCalendar: 'Calendario',
+      periodStreak: 'Racha',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',
@@ -467,6 +468,12 @@ export const es: Translations = {
       activities: 'Actividades',
       time: 'Tiempo',
       activeDays: 'Días activos',
+    },
+    /** A period's longest streak of days in a row, and how many of its days were active. */
+    streak: {
+      one: 'día de racha',
+      other: 'días de racha',
+      activeDays: '{{active}} de {{days}} días activos',
     },
   },
   style: {

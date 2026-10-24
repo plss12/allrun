@@ -396,6 +396,7 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodReceipt',
       'summaryBlock-periodBoardingPass',
       'summaryBlock-periodCalendar',
+      'summaryBlock-periodStreak',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',

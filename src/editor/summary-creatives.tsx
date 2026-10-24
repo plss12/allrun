@@ -2,13 +2,15 @@ import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { projectRoutes } from '@/core/route-projection';
 import { sportIcon, tyreCompounds } from '@/core/activity-block';
-import { isInRange } from '@/core/dates';
+import { addDays, isInRange } from '@/core/dates';
 import {
   calendarFigures,
   calendarMonths,
   calendarView,
   calendarWeeks,
   grandPrixActivities,
+  periodStreak,
+  streakStrip,
   listsNoteActivities,
   mainFamily,
   periodSentencePlan,
@@ -17,7 +19,13 @@ import {
 } from '@/core/summary-block';
 import { summaryHasDistance, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import { durationParts, formatDuration } from '@/core/units';
-import { formatActivityDate, formatMetric, formatShortBucketName } from '@/ui/format';
+import { bucketize } from '@/core/summary';
+import {
+  formatActivityDate,
+  formatBucketLabels,
+  formatMetric,
+  formatShortBucketName,
+} from '@/ui/format';
 import type { BRAND_COVERS, SummaryBlock } from '@/core/template';
 
 import {
@@ -71,6 +79,7 @@ import {
   periodName,
   periodNoteLines,
   periodReceipt,
+  periodTitle,
   plainSummaryText,
   roundedChartValue,
   type SummaryData,
@@ -1002,4 +1011,239 @@ function calendarMonthsBox(
     row(grids.slice(i * perRow, (i + 1) * perRow), sizes.gap, 'start'),
   );
   return column(rows, sizes.rowGap, 'start');
+}
+
+/**
+ * A streak's card, in dark and light mode as the calendar's widget: its card and texts, fainter
+ * for what is secondary; the days without activities fainter still; and its flame and its active
+ * days in AllRun's red, a flame on them in white.
+ */
+const STREAK_COLORS = {
+  dark: {
+    card: CALENDAR_COLORS.dark.card,
+    ink: CALENDAR_COLORS.dark.ink,
+    faded: CALENDAR_COLORS.dark.faded,
+    empty: CALENDAR_COLORS.dark.outside,
+    accent: BRAND_COVER_COLORS.red,
+    onAccent: '#FFFFFF',
+  },
+  light: {
+    card: CALENDAR_COLORS.light.card,
+    ink: CALENDAR_COLORS.light.ink,
+    faded: CALENDAR_COLORS.light.faded,
+    empty: CALENDAR_COLORS.light.outside,
+    accent: BRAND_COVER_COLORS.red,
+    onAccent: '#FFFFFF',
+  },
+} as const;
+
+/**
+ * The sizes of a period's streak: its card's width, corners and room inside; the period's name
+ * over its flame beside its figure (cut to its digits) and what it counts under them, and the room
+ * between them; the active days under its strip. Its strip: day by day, each its initial over a disc with a flame (a share of
+ * the disc) or a ring `ring` wide; by weeks, a dot per day `gap` apart; by months, a bar per month
+ * `tall`, its initial under it.
+ */
+const STREAK = {
+  width: 760,
+  radius: 46,
+  pad: 60,
+  period: 34,
+  flame: 140,
+  figure: 150,
+  label: 44,
+  gap: 24,
+  stripGap: 48,
+  foot: 34,
+  days: { initial: 28, disc: 64, flame: 0.6, ring: 4, gap: 14 },
+  weeks: { dot: 40, gap: 16, ring: 3 },
+  months: { tall: 140, gap: 12, radius: 8, initial: 24 },
+} as const;
+
+/**
+ * A day without activities on a streak's strip: a ring `stroke` wide, as big over all as an
+ * active day's `diameter` disc, so they line up.
+ */
+const ringBox = (diameter: number, stroke: number, color: string): Box =>
+  overlay(placed(diameter, diameter, []), discBox(diameter / 2 - stroke / 2, color, stroke));
+
+/**
+ * A period's longest streak of days in a row with activities (see `periodStreak`), as the apps
+ * that count one show it, in dark and light mode: the period's name, a flame in AllRun's red
+ * beside the streak and "días de racha" under them; its days under it (see `streakStrip`): a week's one by one, its
+ * active days in red with a flame; a month's as dots in rows of weeks; a year's as a bar per month
+ * filled by its share of active days; and how many of its days had activities.
+ */
+export function periodStreakBox(
+  block: Extract<SummaryBlock, { design: 'periodStreak' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const { summary } = data;
+  const colors = STREAK_COLORS[block.layout];
+  const inner = STREAK.width - 2 * STREAK.pad;
+  const streak = periodStreak(summary, data.activities);
+  const text = (value: string, size: number, color: string, bold: boolean) =>
+    appTextBox(fonts, [{ text: value, size, bold }], color, { maxWidth: inner });
+  const strip = (() => {
+    switch (streakStrip(summary.range)) {
+      case 'days': {
+        const sizes = STREAK.days;
+        const buckets = bucketize(data.activities, summary.range, 'day');
+        const initials = formatBucketLabels(buckets, 'day', textContext.locale);
+        return row(
+          buckets.map((bucket, i) =>
+            column(
+              [
+                text(initials[i], sizes.initial, colors.faded, true),
+                streak.active.has(bucket.range.start)
+                  ? overlay(
+                      discBox(sizes.disc / 2, colors.accent),
+                      iconBox('flame', sizes.disc * sizes.flame, colors.onAccent),
+                    )
+                  : ringBox(sizes.disc, sizes.ring, colors.empty),
+              ],
+              sizes.gap,
+              'center',
+            ),
+          ),
+          (inner - buckets.length * sizes.disc) / Math.max(1, buckets.length - 1),
+          'end',
+        );
+      }
+      case 'weeks': {
+        const sizes = STREAK.weeks;
+        const r = sizes.dot / 2;
+        return column(
+          calendarWeeks(summary.range).map((week) =>
+            row(
+              week.map((day) =>
+                !isInRange(day, summary.range)
+                  ? placed(sizes.dot, sizes.dot, [])
+                  : streak.active.has(day)
+                    ? discBox(r, colors.accent)
+                    : ringBox(sizes.dot, sizes.ring, colors.empty),
+              ),
+              sizes.gap,
+              'center',
+            ),
+          ),
+          sizes.gap,
+          'center',
+        );
+      }
+      case 'months': {
+        const sizes = STREAK.months;
+        const months = calendarMonths(summary.range);
+        const width = (inner - (months.length - 1) * sizes.gap) / months.length;
+        const initials = formatBucketLabels(
+          months.map((range) => ({
+            range,
+            activityCount: 0,
+            distanceMeters: 0,
+            movingTimeSeconds: 0,
+          })),
+          'month',
+          textContext.locale,
+        );
+        return row(
+          months.map((month, i) => {
+            let days = 0;
+            let active = 0;
+            for (let day = month.start; day <= month.end; day = addDays(day, 1)) {
+              if (isInRange(day, summary.range)) {
+                days += 1;
+                active += streak.active.has(day) ? 1 : 0;
+              }
+            }
+            const filled = days === 0 ? 0 : (sizes.tall * active) / days;
+            return column(
+              [
+                placed(width, sizes.tall, [
+                  {
+                    box: fillBox(width, sizes.tall, sizes.radius, colors.empty, {}),
+                    x: 0,
+                    y: 0,
+                  },
+                  ...(filled <= 0
+                    ? []
+                    : [
+                        {
+                          box: fillBox(
+                            width,
+                            Math.max(filled, 2 * sizes.radius),
+                            sizes.radius,
+                            colors.accent,
+                            {},
+                          ),
+                          x: 0,
+                          y: sizes.tall - Math.max(filled, 2 * sizes.radius),
+                        },
+                      ]),
+                ]),
+                text(initials[i], sizes.initial, colors.faded, true),
+              ],
+              sizes.gap,
+              'center',
+            );
+          }),
+          sizes.gap,
+          'end',
+        );
+      }
+    }
+  })();
+  const content = column(
+    [
+      text(periodTitle(data, textContext, translate), STREAK.period, colors.faded, true),
+      column(
+        [
+          // The flame beside the figure cut to its digits, so they line up on their middles.
+          row(
+            [
+              iconBox('flame', STREAK.flame, colors.accent),
+              capitalsBox(
+                fonts,
+                [{ text: String(streak.longest), size: STREAK.figure, bold: true }],
+                STREAK.figure,
+                0,
+                1,
+                { font: 'inter', color: colors.ink, bold: false, uppercase: false, italic: false },
+                { shadow: false },
+              ),
+            ],
+            STREAK.gap,
+            'center',
+          ),
+          text(
+            translate(streak.longest === 1 ? 'widgets.streak.one' : 'widgets.streak.other'),
+            STREAK.label,
+            colors.ink,
+            true,
+          ),
+        ],
+        STREAK.gap,
+        'center',
+      ),
+      strip,
+      text(
+        translate('widgets.streak.activeDays', {
+          active: String(streak.activeDays),
+          days: String(streak.days),
+        }),
+        STREAK.foot,
+        colors.faded,
+        false,
+      ),
+    ],
+    STREAK.stripGap,
+    'center',
+  );
+  return panel(
+    widened(content, inner, 'center'),
+    colors.card,
+    STREAK.pad,
+    STREAK.pad,
+    STREAK.radius,
+  );
 }

@@ -42,6 +42,7 @@ import { softBackdrop } from './scene-text';
 import {
   periodBoardingPassBox,
   periodCalendarBox,
+  periodStreakBox,
   periodGrandPrixBox,
   periodLapsBox,
   periodNotesBox,
@@ -365,7 +366,7 @@ export function prepareSummaryBlock(
                       },
                     ];
               });
-        if (lines.length === 0 || (block.layout === 'sports' && lines.length < 2)) {
+        if (lines.length === 0) {
           return null;
         }
         // The totals, and the days' names, each cut as one.
@@ -382,7 +383,13 @@ export function prepareSummaryBlock(
             size * sizes.iconGap,
             'center',
           );
-        const name = line(title, size * sizes.title, size * sizes.titleGap);
+        // By sports, the period by its name alone: each sport's icon names it ("Octubre de 2026"
+        // over the runs' icon, not "Octubre de 2026 · Carreras" too).
+        const name = line(
+          block.layout === 'sports' ? periodName(data, textContext, translate) : title,
+          size * sizes.title,
+          size * sizes.titleGap,
+        );
         if (block.layout === 'sports') {
           return column([name, ...lines.map(item)], size * sizes.lineGap, 'start');
         }
@@ -601,6 +608,8 @@ export function prepareSummaryBlock(
         return periodBoardingPassBox(block, data, { fonts, textContext, translate });
       case 'periodCalendar':
         return periodCalendarBox(block, data, { fonts, textContext: compact, translate });
+      case 'periodStreak':
+        return periodStreakBox(block, data, { fonts, textContext, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

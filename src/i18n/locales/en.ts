@@ -162,6 +162,7 @@ export const en = {
       periodReceipt: 'Receipt',
       periodBoardingPass: 'Boarding pass',
       periodCalendar: 'Calendar',
+      periodStreak: 'Streak',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -491,6 +492,12 @@ export const en = {
       activities: 'Activities',
       time: 'Time',
       activeDays: 'Active days',
+    },
+    /** A period's longest streak of days in a row, and how many of its days were active. */
+    streak: {
+      one: 'day streak',
+      other: 'day streak',
+      activeDays: '{{active}} of {{days}} days active',
     },
   },
   style: {

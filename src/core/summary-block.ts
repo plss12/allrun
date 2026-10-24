@@ -84,6 +84,7 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodReceipt',
   'periodBoardingPass',
   'periodCalendar',
+  'periodStreak',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -422,12 +423,60 @@ export function calendarFigures(
   return figures;
 }
 
+/** A period's streak: its days with activities, and the most of them in a row. */
+export interface PeriodStreak {
+  /** Most days in a row with activities. */
+  readonly longest: number;
+  /** Its days with activities, and how many days it has. */
+  readonly activeDays: number;
+  readonly days: number;
+  readonly active: ReadonlySet<LocalDate>;
+}
+
+/**
+ * A period's streak (see {@link PeriodStreak}), within its range only: a streak that started
+ * before it counts from its first day. Time O(d + n) for d days and n activities.
+ */
+export function periodStreak(
+  summary: PeriodSummary,
+  activities: readonly Activity[],
+): PeriodStreak {
+  const active = new Set(
+    activities.map((activity) => activity.localDate).filter((day) => isInRange(day, summary.range)),
+  );
+  const days = rangeLength(summary.range);
+  let longest = 0;
+  let current = 0;
+  for (let i = 0; i < days; i++) {
+    current = active.has(addDays(summary.range.start, i)) ? current + 1 : 0;
+    longest = Math.max(longest, current);
+  }
+  return { longest, activeDays: active.size, days, active };
+}
+
+/**
+ * How a period's streak draws its days under its figure: `days`, one by one with their initials
+ * (a week or shorter); `weeks`, a dot per day in a row per week, as a calendar (up to
+ * `MAX_CALENDAR_WEEKS`, see `calendarView`); `months`, a bar per month filled by its share of
+ * active days.
+ */
+export type StreakStrip = 'days' | 'weeks' | 'months';
+
+/** How a period's streak draws its days (see {@link StreakStrip}). Time and space O(1). */
+export function streakStrip(range: DateRange): StreakStrip {
+  if (rangeLength(range) <= MAX_DAYS_LISTED) {
+    return 'days';
+  }
+  return calendarView(range) === 'days' ? 'weeks' : 'months';
+}
+
 /**
  * The data widgets a period fills, in the gallery's order: its name over one, two and three of its
  * main totals (as many as it has, see `periodTotals`); its table of distance (only when it has
  * some) and of time; its total per sport, written (also for one sport, so a summary of runs has
- * it too, the sport named under the period's name) and with icons only when it mixes two sports or
- * more (with one, it would repeat the first); its days with their activities' icons, only for a
+ * it too, the sport named under the period's name) and with icons when it mixes two sports or
+ * more, or of any period longer than a week, which has no page of days (so the gallery always has
+ * the widget); its days with their activities' icons, only for a
  * week or shorter; its activities with their routes, one by one only up to a month (a year has
  * too many) and overlaid (its main sport's icon, without any route), after its card per sport, as
  * an activity's card comes before its widgets with the route. Then its creative ones, in the order
@@ -437,8 +486,8 @@ export function calendarFigures(
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
  * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race;
  * its receipt; its boarding pass in each brand color; and those without an activity's twin: its
- * calendar, in dark and light mode, up to a year (see `calendarView`). None for a period without
- * activities. Time O(1).
+ * calendar and its streak, in dark and light mode, the calendar up to a year (see
+ * `calendarView`). None for a period without activities. Time O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -456,7 +505,11 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
       .map((count): SummaryBlock => ({ design: 'periodData', count })),
     ...values.map((value): SummaryBlock => ({ design: 'periodTable', value })),
     { design: 'periodSports' },
-    ...(mixed ? [{ design: 'periodIcons', layout: 'sports' } as const] : []),
+    // By sports when it mixes them, or when it has no page of days (longer than a week), so a
+    // summary of one sport has its widget with icons too.
+    ...(mixed || days > MAX_DAYS_LISTED
+      ? [{ design: 'periodIcons', layout: 'sports' } as const]
+      : []),
     ...(days <= MAX_DAYS_LISTED ? [{ design: 'periodIcons', layout: 'days' } as const] : []),
     { design: 'periodCards' },
     ...(days <= MAX_ROUTES_DAYS ? [{ design: 'periodRoutes', layout: 'grid' } as const] : []),
@@ -483,6 +536,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     ...(calendarView(summary.range) === null
       ? []
       : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
+    ...APP_MODES.map((layout): SummaryBlock => ({ design: 'periodStreak', layout })),
   ];
 }
 
@@ -522,6 +576,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodReceipt':
     case 'periodBoardingPass':
     case 'periodCalendar':
+    case 'periodStreak':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

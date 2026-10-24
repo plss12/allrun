@@ -468,7 +468,8 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * karting's board or timing sheet (`periodLaps`); its activities as a race's classification on a
  * timing tower (`periodGrandPrix`); as a shop's receipt (`periodReceipt`); as a flight from
  * its first activity to its last (`periodBoardingPass`); and as a calendar, its days with their
- * figures or its months with their active days marked (`periodCalendar`).
+ * figures or its months with their active days marked (`periodCalendar`); and its longest streak of
+ * days in a row with activities, under a flame (`periodStreak`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -507,6 +508,7 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('periodReceipt') }),
   z.object({ design: z.literal('periodBoardingPass'), cover: z.enum(BRAND_COVERS) }),
   z.object({ design: z.literal('periodCalendar'), layout: z.enum(APP_MODES) }),
+  z.object({ design: z.literal('periodStreak'), layout: z.enum(APP_MODES) }),
 ]);
 
 export type SummaryBlock = z.infer<typeof summaryBlockSchema>;

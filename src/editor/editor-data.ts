@@ -157,6 +157,7 @@ export type LabelKey =
   | 'widgets.periodSentence.activityOne'
   | 'widgets.periodSentence.activities'
   | `widgets.receipt.${'total' | 'thanks' | 'items'}`
+  | `widgets.streak.${'one' | 'other' | 'activeDays'}`
   | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date' | 'activities' | 'time' | 'activeDays'}`
   | `widgets.cameraModes.${'video' | 'photo'}`
   | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`

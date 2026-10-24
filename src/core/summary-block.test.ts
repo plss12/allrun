@@ -17,6 +17,8 @@ import {
   mainFamily,
   noteActivities,
   periodSentencePlan,
+  periodStreak,
+  streakStrip,
   PLAYLIST_TOP,
   periodWrapped,
   playlistSongs,
@@ -87,6 +89,8 @@ describe('summaryBlocks', () => {
       { design: 'periodBoardingPass', cover: 'ink' },
       { design: 'periodCalendar', layout: 'dark' },
       { design: 'periodCalendar', layout: 'light' },
+      { design: 'periodStreak', layout: 'dark' },
+      { design: 'periodStreak', layout: 'light' },
     ]);
   });
 
@@ -94,6 +98,16 @@ describe('summaryBlocks', () => {
     const blocks = summaryBlocks(summarize([run, ride], week));
     expect(blocks).toContainEqual({ design: 'periodSports' });
     expect(blocks).toContainEqual({ design: 'periodIcons', layout: 'sports' });
+  });
+
+  it('offers the total per sport with icons for one sport too, without a page of days', () => {
+    const october = summaryBlocks(summarize([run], monthRange('2026-10-01')));
+    expect(october).toContainEqual({ design: 'periodIcons', layout: 'sports' });
+    // A week of one sport has its days with icons instead.
+    expect(summaryBlocks(summarize([run], week))).not.toContainEqual({
+      design: 'periodIcons',
+      layout: 'sports',
+    });
   });
 
   it("lists the days only in a week, and the activities' routes only up to a month", () => {
@@ -145,6 +159,8 @@ describe('summaryBlocks', () => {
       { design: 'periodBoardingPass', cover: 'ink' },
       { design: 'periodCalendar', layout: 'dark' },
       { design: 'periodCalendar', layout: 'light' },
+      { design: 'periodStreak', layout: 'dark' },
+      { design: 'periodStreak', layout: 'light' },
     ]);
   });
 
@@ -175,6 +191,7 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodReceipt')).toBe(true);
     expect(isSummaryReplica('periodBoardingPass')).toBe(true);
     expect(isSummaryReplica('periodCalendar')).toBe(true);
+    expect(isSummaryReplica('periodStreak')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
@@ -443,5 +460,41 @@ describe('calendarFigures', () => {
     const figures = calendarFigures(summarize(activities, week), activities);
     expect(figures.get('2026-10-14')).toEqual({ kind: 'amount', amount: 75 * 60 });
     expect(figures.get('2026-10-15')).toEqual({ kind: 'amount', amount: 0 });
+  });
+});
+
+describe('periodStreak', () => {
+  const on = (localDate: string) => makeActivity({ sportType: 'Run', localDate });
+
+  it('counts the most days in a row with activities, twice on a day counting once', () => {
+    const activities = [
+      on('2026-10-12'),
+      on('2026-10-14'),
+      on('2026-10-15'),
+      on('2026-10-15'),
+      on('2026-10-16'),
+      on('2026-10-18'),
+    ];
+    const streak = periodStreak(summarize(activities, week), activities);
+    expect(streak.longest).toBe(3);
+    expect(streak.activeDays).toBe(5);
+    expect(streak.days).toBe(7);
+    expect(streak.active.has('2026-10-13')).toBe(false);
+  });
+
+  it('counts only the days within the period', () => {
+    const activities = [on('2026-10-11'), on('2026-10-12'), on('2026-10-13')];
+    const streak = periodStreak(summarize(activities, week), activities);
+    expect(streak.longest).toBe(2);
+    expect(streak.activeDays).toBe(2);
+  });
+});
+
+describe('streakStrip', () => {
+  it("draws a week's days, a month's weeks and a year's months", () => {
+    expect(streakStrip(week)).toBe('days');
+    expect(streakStrip(monthRange('2026-10-01'))).toBe('weeks');
+    expect(streakStrip(yearRange('2026-01-01'))).toBe('months');
+    expect(streakStrip(customRange('2025-10-15', '2026-10-14'))).toBe('months');
   });
 });
