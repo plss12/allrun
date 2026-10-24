@@ -375,15 +375,32 @@ describe('activityCatalog', () => {
 describe('summaryCatalog', () => {
   const activities = [makeActivity({ localDate: '2026-10-13' })];
 
-  it('offers its data widgets, every total as written each way, the texts, the routes, the charts and the logo', () => {
+  it('offers its data and creative widgets, every total as written each way, the texts, the routes, the charts and the logo', () => {
     const catalog = summaryCatalog(summarize(activities, week), 'day');
-    expect(catalog.map((section) => section.id)).toEqual(['data', 'charts', 'basic', 'brand']);
+    expect(catalog.map((section) => section.id)).toEqual([
+      'data',
+      'creative',
+      'charts',
+      'basic',
+      'brand',
+    ]);
+    expect(tileKeys(catalog, 'creative')).toEqual([
+      'summaryBlock-quote',
+      'summaryBlock-verse',
+      'summaryBlock-periodNotes',
+    ]);
+    expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
+      'summaryBlock-periodNotes-dark-activities',
+      'summaryBlock-periodNotes-light-activities',
+      'summaryBlock-periodNotes-dark-buckets',
+      'summaryBlock-periodNotes-light-buckets',
+    ]);
     expect(tileKeys(catalog, 'data')).toEqual([
       'summaryBlock-periodData',
       'summaryBlock-periodTable',
       'summaryBlock-periodIcons',
-      'summaryBlock-periodRoutes',
       'summaryBlock-periodCards',
+      'summaryBlock-periodRoutes',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodData')).toEqual([
       'summaryBlock-periodData-1',

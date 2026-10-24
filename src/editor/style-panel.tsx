@@ -29,6 +29,7 @@ import {
   type Template,
 } from '@/core/template';
 import { isAppReplica, isDataWidget } from '@/core/activity-block';
+import { isSummaryDataWidget, isSummaryReplica } from '@/core/summary-block';
 import { colors } from '@/theme/colors';
 
 import { hasUnit } from './editor-data';
@@ -74,8 +75,11 @@ function tabsFor(layer: Layer): readonly Tab[] {
       return ['color', 'width', 'opacity'];
     case 'summaryChart':
     case 'activityChart':
-    case 'summaryBlock':
       return ['color', 'font', 'format', 'opacity'];
+    case 'summaryBlock':
+      return isSummaryReplica(layer.block.design)
+        ? ['opacity']
+        : ['color', 'font', 'format', 'opacity'];
     case 'activityBlock':
       // A replica of an app keeps the app's look: only how see-through it is can change.
       return isAppReplica(layer.block.design)
@@ -261,7 +265,7 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
 } {
   if (layer.kind === 'activityBlock' || layer.kind === 'summaryBlock') {
     // A block lays out its own texts: no alignment. A data widget can go on a backdrop and open
-    // its letters up, as a text widget; a summary's are all data widgets.
+    // its letters up, as a text widget; a summary's too, but not its phrases (as an activity's).
     const { font, bold, italic, uppercase, backdrop, letterSpacing } = layer.style;
     return {
       format: {
@@ -270,8 +274,10 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
         italic: italic ?? false,
         uppercase,
         // A card is a backdrop already.
-        ...(layer.kind === 'summaryBlock' ||
-        (isDataWidget(layer.block.design) && layer.block.design !== 'card')
+        ...((layer.kind === 'summaryBlock' && isSummaryDataWidget(layer.block.design)) ||
+        (layer.kind === 'activityBlock' &&
+          isDataWidget(layer.block.design) &&
+          layer.block.design !== 'card')
           ? { backdrop: backdrop ?? 'none', letterSpacing: letterSpacing ?? 'normal' }
           : {}),
       },

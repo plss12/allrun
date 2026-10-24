@@ -1,8 +1,18 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
-import { customRange, monthRange, weekRange, yearRange } from './dates';
+import { customRange, type DateRange, monthRange, weekRange, yearRange } from './dates';
 import { summarize } from './summary';
-import { gridColumns, summaryBlocks, tableBucket } from './summary-block';
+import {
+  gridColumns,
+  isSummaryDataWidget,
+  isSummaryReplica,
+  listsNoteActivities,
+  MAX_NOTES_ACTIVITIES,
+  noteActivities,
+  summaryBlocks,
+  tableBucket,
+} from './summary-block';
+import { QUOTES, VERSES } from './template';
 
 const week = weekRange('2026-10-14');
 
@@ -36,9 +46,15 @@ describe('summaryBlocks', () => {
       { design: 'periodTable', value: 'distance' },
       { design: 'periodTable', value: 'movingTime' },
       { design: 'periodIcons', layout: 'days' },
+      { design: 'periodCards' },
       { design: 'periodRoutes', layout: 'grid' },
       { design: 'periodRoutes', layout: 'overlay' },
-      { design: 'periodCards' },
+      { design: 'quote', quote: QUOTES[0] },
+      { design: 'verse', verse: VERSES[0] },
+      { design: 'periodNotes', layout: 'dark', rows: 'activities' },
+      { design: 'periodNotes', layout: 'light', rows: 'activities' },
+      { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
+      { design: 'periodNotes', layout: 'light', rows: 'buckets' },
     ]);
   });
 
@@ -66,15 +82,77 @@ describe('summaryBlocks', () => {
       { design: 'periodData', count: 2 },
       { design: 'periodTable', value: 'movingTime' },
       { design: 'periodIcons', layout: 'days' },
+      { design: 'periodCards' },
       { design: 'periodRoutes', layout: 'grid' },
       // Without any route, its sport's icon in their place: the page isn't lost.
       { design: 'periodRoutes', layout: 'overlay' },
-      { design: 'periodCards' },
+      { design: 'quote', quote: QUOTES[0] },
+      { design: 'verse', verse: VERSES[0] },
+      { design: 'periodNotes', layout: 'dark', rows: 'activities' },
+      { design: 'periodNotes', layout: 'light', rows: 'activities' },
+      { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
+      { design: 'periodNotes', layout: 'light', rows: 'buckets' },
     ]);
+  });
+
+  it("lists a week's activities in a note, and a longer period's weeks or months, however few", () => {
+    const notes = (range: DateRange) =>
+      summaryBlocks(summarize([run], range)).filter((block) => block.design === 'periodNotes');
+    expect(notes(monthRange('2026-10-01'))).toEqual([
+      { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
+      { design: 'periodNotes', layout: 'light', rows: 'buckets' },
+    ]);
+    expect(notes(yearRange('2026-01-01'))).toHaveLength(2);
+    const crowded = Array.from({ length: MAX_NOTES_ACTIVITIES + 1 }, () => run);
+    expect(listsNoteActivities(summarize(crowded, week))).toBe(false);
+    expect(listsNoteActivities(summarize([run], week))).toBe(true);
+  });
+
+  it('shows the phrases and the replicas with the creative widgets, apart from the data ones', () => {
+    expect(isSummaryDataWidget('periodCards')).toBe(true);
+    expect(isSummaryDataWidget('quote')).toBe(false);
+    expect(isSummaryDataWidget('periodNotes')).toBe(false);
+    // Only a replica keeps its app's look.
+    expect(isSummaryReplica('periodNotes')).toBe(true);
+    expect(isSummaryReplica('verse')).toBe(false);
   });
 
   it('offers nothing for a period without activities', () => {
     expect(summaryBlocks(summarize([], week))).toEqual([]);
+  });
+});
+
+describe('noteActivities', () => {
+  const run = (day: string, km: number) =>
+    makeActivity({
+      sportType: 'Run',
+      localDate: `2026-10-${day}`,
+      startLocal: `2026-10-${day}T08:00:00`,
+      distanceMeters: km * 1000,
+    });
+  const gym = (day: string, minutes: number) =>
+    makeActivity({
+      sportType: 'WeightTraining',
+      localDate: `2026-10-${day}`,
+      startLocal: `2026-10-${day}T19:00:00`,
+      distanceMeters: 0,
+      movingTimeSeconds: minutes * 60,
+    });
+
+  it('lists the activities oldest first, the longest of each sport done twice highlighted', () => {
+    const lines = noteActivities([run('15', 6), gym('14', 50), run('13', 11), gym('12', 30)]);
+    expect(lines.map((line) => [line.activity.localDate, line.highlighted])).toEqual([
+      ['2026-10-12', false],
+      ['2026-10-13', true],
+      ['2026-10-14', true],
+      ['2026-10-15', false],
+    ]);
+  });
+
+  it('highlights nothing of a sport done once', () => {
+    expect(noteActivities([run('13', 11), gym('14', 50)]).some((line) => line.highlighted)).toBe(
+      false,
+    );
   });
 });
 

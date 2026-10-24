@@ -458,7 +458,10 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * their distance or time, and the total; the period's name over each sport's total, written or
  * with the sport's icon (`sports`), or over each day's activities with their icons (`days`); its
  * activities in a grid, each with its route over its data (`grid`), or all its routes overlaid
- * over its totals (`overlay`); and a card per sport.
+ * over its totals (`overlay`); and a card per sport. And its creative ones (see
+ * `isSummaryDataWidget`), as an activity's: a quote and a Bible verse, in the user's lettering; and
+ * replicas of apps (see `isSummaryReplica`): a checklist of the iPhone's Notes, its activities or
+ * its days, weeks or months ticked off (`periodNotes`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -470,6 +473,13 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('periodIcons'), layout: z.enum(['sports', 'days']) }),
   z.object({ design: z.literal('periodRoutes'), layout: z.enum(['grid', 'overlay']) }),
   z.object({ design: z.literal('periodCards') }),
+  z.object({ design: z.literal('quote'), quote: z.enum(QUOTES) }),
+  z.object({ design: z.literal('verse'), verse: z.enum(VERSES) }),
+  z.object({
+    design: z.literal('periodNotes'),
+    layout: z.enum(APP_MODES),
+    rows: z.enum(['activities', 'buckets']),
+  }),
 ]);
 
 export type SummaryBlock = z.infer<typeof summaryBlockSchema>;

@@ -19,6 +19,7 @@ import {
   layerText,
   periodChartHeader,
   familyCard,
+  periodNoteLines,
   periodTable,
   periodTotalsHeader,
   MISSING_VALUE,
@@ -606,6 +607,78 @@ describe('periodTable', () => {
     expect(table.measure).toBe('Horas');
     expect(table.rows.map((row) => row.value)).toEqual(['1:05', '0:58']);
     expect(table.total).toBe('2:03');
+  });
+});
+
+describe('periodNoteLines', () => {
+  const translate = (key: string, values?: Readonly<Record<string, string>>): string =>
+    key === 'noteLine'
+      ? `${values?.value ?? ''} de ${values?.sport ?? ''}`
+      : (({ 'modalities.roadRun': 'Carrera', 'modalities.workout': 'Entrenamiento' } as const)[
+          key as 'modalities.roadRun'
+        ] ?? key);
+  const range = weekRange('2026-10-14');
+  const run = (localDate: string, distanceMeters: number) =>
+    makeActivity({
+      sportType: 'Run',
+      localDate,
+      startLocal: `${localDate}T08:00:00`,
+      distanceMeters,
+      movingTimeSeconds: 3_000,
+    });
+  const gym = makeActivity({
+    sportType: 'Workout',
+    localDate: '2026-10-13',
+    startLocal: '2026-10-13T19:00:00',
+    distanceMeters: 0,
+    elevationGainMeters: 0,
+    routePolyline: null,
+    movingTimeSeconds: 3_257,
+  });
+  // Newest first, as a source may list them.
+  const activities = [run('2026-10-15', 6_000), gym, run('2026-10-13', 10_940)];
+  const data: SummaryData = {
+    mode: 'summary',
+    kind: 'week',
+    summary: summarize(activities, range),
+    activities,
+    bucketSize: 'day',
+    families: [],
+    current: true,
+  };
+
+  it('ticks off each activity, oldest first, by its distance or its time without seconds, and its sport', () => {
+    expect(periodNoteLines(data, 'activities', context, translate)).toEqual([
+      { text: '10,94 km de carrera', checked: true, highlighted: true },
+      {
+        text: `54${TEST_DURATION_UNITS.minutes} de entrenamiento`,
+        checked: true,
+        highlighted: false,
+      },
+      { text: '6,00 km de carrera', checked: true, highlighted: false },
+    ]);
+  });
+
+  it('ticks off the days with activities, the longest highlighted, and leaves the rest', () => {
+    const lines = periodNoteLines(data, 'buckets', context, translate);
+    expect(lines).toHaveLength(7);
+    expect(lines[0]).toEqual({ text: 'Lunes', checked: false, highlighted: false });
+    expect(lines[1]).toEqual({ text: 'Martes · 10,94 km', checked: true, highlighted: true });
+    expect(lines[3]).toEqual({ text: 'Jueves · 6,00 km', checked: true, highlighted: false });
+  });
+
+  it('writes a day without distance by its time, and highlights nothing alone', () => {
+    const alone: SummaryData = {
+      ...data,
+      summary: summarize([gym], range),
+      activities: [gym],
+    };
+    expect(periodNoteLines(alone, 'buckets', context, translate)[1]).toEqual({
+      text: `Martes · 54${TEST_DURATION_UNITS.minutes}`,
+      checked: true,
+      highlighted: false,
+    });
+    expect(periodNoteLines(alone, 'activities', context, translate)[0].highlighted).toBe(false);
   });
 });
 

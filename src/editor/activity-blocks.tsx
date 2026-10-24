@@ -39,7 +39,7 @@ import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy
 import { type Point, projectRoutes } from '@/core/route-projection';
 import type { HitHole } from '@/core/layer-transform';
 import type { Size } from '@/core/photo-framing';
-import type { FontId, Layer } from '@/core/template';
+import type { APP_MODES, FontId, Layer } from '@/core/template';
 import { durationParts } from '@/core/units';
 import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 
@@ -329,7 +329,7 @@ export function row(boxes: readonly Box[], gap: number, align: Align): Box {
 }
 
 /** A box widened to `width`, its content aligned within it. */
-function widened(box: Box, width: number, align: Align): Box {
+export function widened(box: Box, width: number, align: Align): Box {
   const span = Math.max(width, box.width);
   return {
     width: span,
@@ -339,7 +339,7 @@ function widened(box: Box, width: number, align: Align): Box {
 }
 
 /** `left` at the start and `right` at the end of a `width` wide line, bottoms lined up. */
-function spread(left: Box, right: Box, width: number): Box {
+export function spread(left: Box, right: Box, width: number): Box {
   const span = Math.max(width, left.width + right.width);
   const height = Math.max(left.height, right.height);
   return {
@@ -492,14 +492,14 @@ export function routeBox(
 }
 
 /** A filled glyph of an app's control, `size` square. */
-const symbolBox = (symbol: AppSymbol, size: number, color: string): Box => ({
+export const symbolBox = (symbol: AppSymbol, size: number, color: string): Box => ({
   width: size,
   height: size,
   place: (x, y) => [{ kind: 'symbol', symbol, x, y, size, color }],
 });
 
 /** A round button `r` in radius: filled, or a ring `stroke` wide. */
-const discBox = (r: number, color: string, stroke?: number): Box => ({
+export const discBox = (r: number, color: string, stroke?: number): Box => ({
   width: 2 * r,
   height: 2 * r,
   place: (x, y) => [
@@ -629,8 +629,67 @@ const wrappedBox = (laidOut: SkParagraph, fontSize: number, italic: boolean | un
   return italic === true ? { ...box, width: box.width + leanRoom(fontSize) } : box;
 };
 
+/** Runs on one line in the block's lettering, drawn taller in a stretched font. */
+function styledTextBox(
+  fonts: SkTypefaceFontProvider,
+  runs: readonly Run[],
+  style: BlockStyle,
+): Box {
+  const laidOut = paragraph(runs, fonts, style);
+  const box = textBox(laidOut);
+  const stretch = STRETCHED_FONTS[style.font] ?? 1;
+  return stretch === 1
+    ? box
+    : {
+        width: box.width,
+        height: box.height * stretch,
+        place: (x, y) => [{ kind: 'text', paragraph: laidOut, x, y, stretch }],
+      };
+}
+
+/**
+ * Words in quotation marks in the block's lettering, wrapped in even lines (at most
+ * `SIZES.quotation.lines`, shrunk until they fit), and who said them or where, under them: a
+ * quote's or a verse's, of an activity or a period alike. Time O(s log w) layouts for the s sizes
+ * tried, each balanced in O(log w).
+ */
+export function quotationBox(
+  fonts: SkTypefaceFontProvider,
+  style: BlockStyle,
+  translate: BlockContext['translate'],
+  words: string,
+  source: string,
+): Box {
+  const sizes = SIZES.quotation;
+  const laidOut = (size: number) =>
+    paragraph(
+      [{ text: translate('widgets.quoted', { text: words }), size, bold: style.bold }],
+      fonts,
+      style,
+      { wrapWidth: sizes.width },
+    );
+  let size: number = sizes.text;
+  let fitted = laidOut(size);
+  while (fitted.getLineMetrics().length > sizes.lines && size > sizes.minText) {
+    size = Math.max(sizes.minText, size * 0.92);
+    fitted = laidOut(size);
+  }
+  return column(
+    [
+      wrappedBox(fitted, size, style.italic),
+      styledTextBox(
+        fonts,
+        [{ text: source, size: sizes.source, bold: false, faded: true, spacing: LABEL_SPACING }],
+        style,
+      ),
+    ],
+    sizes.source * 0.6,
+    'center',
+  );
+}
+
 /** `box` on a replica's card of `color`, `padX` and `padY` inside its edges. */
-const panel = (box: Box, color: string, padX: number, padY: number, radius: number): Box => {
+export const panel = (box: Box, color: string, padX: number, padY: number, radius: number): Box => {
   const width = box.width + 2 * padX;
   const height = box.height + 2 * padY;
   return {
@@ -663,7 +722,7 @@ const messageBubble = (box: Box, color: string): Box => {
 };
 
 /** A mark drawn with lines, `size` tall (the ticks are wider). */
-const markBox = (kind: 'chevron' | 'ticks', size: number, color: string): Box => ({
+export const markBox = (kind: 'chevron' | 'ticks', size: number, color: string): Box => ({
   width: kind === 'ticks' ? size * 1.4 : size * 0.6,
   height: size,
   place: (x, y) => [{ kind, x, y, size, color }],
@@ -688,7 +747,7 @@ export const FADED_ALPHA = 0.72;
 const NO_WRAP_WIDTH = 1_000_000;
 
 /** A replica's own font and slant, when not the apps' upright system-like one. */
-interface AppLettering {
+export interface AppLettering {
   readonly font?: FontId;
   readonly italic?: boolean;
 }
@@ -707,6 +766,30 @@ export interface TextLook {
   readonly wrapStart?: boolean;
   /** To be drawn turned (see `turned`): its shadow falls down the canvas, not down its lines. */
   readonly turned?: boolean;
+}
+
+/**
+ * A replica's text in `color`: in the system-like font of the apps unless its `font` is another
+ * (a timing sheet's typewriter), upright unless `italic`, and without a shadow unless `look` asks
+ * for one (see `TextLook`).
+ */
+export function appTextBox(
+  fonts: SkTypefaceFontProvider,
+  runs: readonly Run[],
+  color: string,
+  { font = 'inter', italic = false, ...look }: TextLook & AppLettering = {},
+): Box {
+  return textBox(
+    paragraph(
+      runs,
+      fonts,
+      { font, color, bold: false, uppercase: false, italic },
+      {
+        shadow: false,
+        ...look,
+      },
+    ),
+  );
 }
 
 /**
@@ -1006,8 +1089,53 @@ const NOTES_PAD = 40;
 const NOTES_RADIUS = 34;
 const NOTES_MIN_WIDTH = 520;
 
+/** A note's texts: its bar's ("< AllRun") and icon, its title and its lines. */
+export const NOTES_SIZES = SIZES.notes;
+
+/**
+ * A note of the iPhone's Notes in `mode`, in its font and colors: "< AllRun" at the start of its
+ * bar and `side`, if any, at its end, over its `title` and its `lines` (`NOTES_SIZES.row` tall).
+ */
+export function noteBox(
+  fonts: SkTypefaceFontProvider,
+  mode: (typeof APP_MODES)[number],
+  title: string,
+  lines: readonly Box[],
+  side?: Box,
+): Box {
+  const colors = NOTES_COLORS[mode];
+  const sizes = NOTES_SIZES;
+  const heading = appTextBox(fonts, [{ text: title, size: sizes.title, bold: true }], colors.ink);
+  const back = row(
+    [
+      markBox('chevron', sizes.bar, colors.accent),
+      appTextBox(fonts, [{ text: 'AllRun', size: sizes.bar, bold: false }], colors.accent),
+    ],
+    sizes.bar * 0.3,
+    'center',
+  );
+  const note = column(
+    [heading, column(lines, sizes.row * 0.15, 'start')],
+    sizes.row * 0.3,
+    'start',
+  );
+  const width = Math.max(
+    NOTES_MIN_WIDTH,
+    note.width,
+    back.width + (side?.width ?? 0) + sizes.bar * 2,
+  );
+  const bar = side === undefined ? widened(back, width, 'start') : spread(back, side, width);
+  return panel(
+    column([bar, note], sizes.bar * 0.7, 'start'),
+    colors.page,
+    NOTES_PAD,
+    NOTES_PAD * 0.8,
+    NOTES_RADIUS,
+  );
+}
+
 /** The iPhone's Notes in dark and light mode: the page, the text and the yellow of its accents. */
-const NOTES_COLORS = {
+export const NOTES_COLORS = {
   dark: { page: '#000000', ink: '#FFFFFF', accent: '#E8B43A' },
   light: { page: '#FFFFFF', ink: '#000000', accent: '#D49B12' },
 } as const;
@@ -1366,39 +1494,10 @@ export function prepareActivityBlock(
   if (metrics.length === 0 && blockDataCount(block) > 0) {
     return null;
   }
-  const text = (runs: readonly Run[]): Box => {
-    const laidOut = paragraph(runs, fonts, style);
-    const box = textBox(laidOut);
-    const stretch = STRETCHED_FONTS[style.font] ?? 1;
-    return stretch === 1
-      ? box
-      : {
-          width: box.width,
-          height: box.height * stretch,
-          place: (x, y) => [{ kind: 'text', paragraph: laidOut, x, y, stretch }],
-        };
-  };
-  /**
-   * A replica's text in `color`: in the system-like font of the apps unless its `font` is another
-   * (a timing sheet's typewriter), upright unless `italic`, and without a shadow unless `look` asks
-   * for one (see `TextLook`).
-   */
-  const appText = (
-    runs: readonly Run[],
-    color: string,
-    { font = 'inter', italic = false, ...look }: TextLook & AppLettering = {},
-  ) =>
-    textBox(
-      paragraph(
-        runs,
-        fonts,
-        { font, color, bold: false, uppercase: false, italic },
-        {
-          shadow: false,
-          ...look,
-        },
-      ),
-    );
+  const text = (runs: readonly Run[]): Box => styledTextBox(fonts, runs, style);
+  /** A replica's text in `color` (see `appTextBox`). */
+  const appText = (runs: readonly Run[], color: string, options: TextLook & AppLettering = {}) =>
+    appTextBox(fonts, runs, color, options);
   /** `runs` cut to their letters (see `capitalsBox`), in the block's lettering by default. */
   const capitals = (
     runs: readonly Run[],
@@ -1489,37 +1588,8 @@ export function prepareActivityBlock(
       : textContext.unit === 'mi'
         ? data.detail.splits.imperial
         : data.detail.splits.metric;
-  /**
-   * Words in quotation marks, wrapped in even lines (at most `SIZES.quotation.lines`, shrunk until
-   * they fit), and who said them or where, under them. Time O(s log w) layouts for the s sizes
-   * tried, each balanced in O(log w).
-   */
-  const quotation = (words: string, source: string): Box => {
-    const sizes = SIZES.quotation;
-    const laidOut = (size: number) =>
-      paragraph(
-        [{ text: translate('widgets.quoted', { text: words }), size, bold: style.bold }],
-        fonts,
-        style,
-        { wrapWidth: sizes.width },
-      );
-    let size: number = sizes.text;
-    let fitted = laidOut(size);
-    while (fitted.getLineMetrics().length > sizes.lines && size > sizes.minText) {
-      size = Math.max(sizes.minText, size * 0.92);
-      fitted = laidOut(size);
-    }
-    return column(
-      [
-        wrappedBox(fitted, size, style.italic),
-        text([
-          { text: source, size: sizes.source, bold: false, faded: true, spacing: LABEL_SPACING },
-        ]),
-      ],
-      sizes.source * 0.6,
-      'center',
-    );
-  };
+  const quotation = (words: string, source: string): Box =>
+    quotationBox(fonts, style, translate, words, source);
 
   let hole: HitHole | undefined;
   const body = ((): Box | null => {
@@ -1866,27 +1936,6 @@ export function prepareActivityBlock(
           row([widened(line.name, nameWidth, 'start'), line.pace], sizes.row * 0.25, 'start'),
         );
         const distance = metricText(activity, 'distance', textContext);
-        const title = appText(
-          [
-            {
-              text:
-                distance.unit === null
-                  ? distance.value
-                  : `${distance.value} ${textContext.unitLabel(distance.unit)}`,
-              size: sizes.title,
-              bold: true,
-            },
-          ],
-          colors.ink,
-        );
-        const back = row(
-          [
-            markBox('chevron', sizes.bar, colors.accent),
-            appText([{ text: 'AllRun', size: sizes.bar, bold: false }], colors.accent),
-          ],
-          sizes.bar * 0.3,
-          'center',
-        );
         const sport = row(
           [
             appText(
@@ -1904,22 +1953,14 @@ export function prepareActivityBlock(
           sizes.bar * 0.3,
           'center',
         );
-        const note = column(
-          [title, column(lines, sizes.row * 0.15, 'start')],
-          sizes.row * 0.3,
-          'start',
-        );
-        const width = Math.max(
-          NOTES_MIN_WIDTH,
-          note.width,
-          back.width + sport.width + sizes.bar * 2,
-        );
-        return panel(
-          column([spread(back, sport, width), note], sizes.bar * 0.7, 'start'),
-          colors.page,
-          NOTES_PAD,
-          NOTES_PAD * 0.8,
-          NOTES_RADIUS,
+        return noteBox(
+          fonts,
+          block.layout,
+          distance.unit === null
+            ? distance.value
+            : `${distance.value} ${textContext.unitLabel(distance.unit)}`,
+          lines,
+          sport,
         );
       }
       case 'music': {

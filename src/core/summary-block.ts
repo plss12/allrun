@@ -1,15 +1,17 @@
+import type { Activity } from './activity';
 import type { BlockLettering } from './activity-block';
 import { type DateRange, rangeLength } from './dates';
 import { bucketCount } from './periods';
 import type { BucketSize, PeriodSummary } from './summary';
 import { periodTotals, summaryHasDistance } from './summary-metrics';
-import type { SummaryBlock } from './template';
+import { APP_MODES, QUOTES, type SummaryBlock, type SummaryBlockDesign, VERSES } from './template';
 
 /**
- * The data widgets of a period summary (R2c): its name over its main totals, a table of its days,
- * weeks or months, its total per sport (written, with icons or on cards), its days' activities and
- * its activities with their routes. They write the period's own data only, as its charts do, for
- * a week, a month, a year or a custom range alike, but those listing activities one by one.
+ * The widgets of a period summary (R2c): its data widgets (its name over its main totals, a table
+ * of its days, weeks or months, its total per sport (written, with icons or on cards), its days'
+ * activities and its activities with their routes) and its creative ones (phrases and replicas of
+ * apps), in the order of an activity's. They write the period's own data only, as its charts do,
+ * for a week, a month, a year or a custom range alike, but those listing activities one by one.
  */
 
 /** Longest period whose activities are drawn one by one with their routes: a month. */
@@ -50,13 +52,99 @@ export function tableBucket(range: DateRange): BucketSize {
   );
 }
 
+/** Most activities a note lists one by one: a week's or a month's, rarely a year's. */
+export const MAX_NOTES_ACTIVITIES = 16;
+
+/** Designs that recreate an app: its colors, font and icons are the app's (see `isAppReplica`). */
+const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set(['periodNotes']);
+
+/** A summary's data widgets: its data in a lettering the user can change. */
+const SUMMARY_DATA_WIDGETS: ReadonlySet<SummaryBlockDesign> = new Set([
+  'periodData',
+  'periodTable',
+  'periodSports',
+  'periodIcons',
+  'periodCards',
+  'periodRoutes',
+]);
+
+/**
+ * Whether a summary's design is a data widget, as an activity's (see `isDataWidget`), as opposed
+ * to the creative ones (phrases and replicas of apps), which the gallery shows apart.
+ */
+export function isSummaryDataWidget(design: SummaryBlockDesign): boolean {
+  return SUMMARY_DATA_WIDGETS.has(design);
+}
+
+/**
+ * Whether a period's note lists its activities one by one: only a week's (or a shorter range's),
+ * and only up to {@link MAX_NOTES_ACTIVITIES}; a month lists its weeks and a year its months,
+ * whatever its sport and however few its activities. Time O(1).
+ */
+export function listsNoteActivities(summary: PeriodSummary): boolean {
+  return (
+    rangeLength(summary.range) <= MAX_DAYS_LISTED && summary.activityCount <= MAX_NOTES_ACTIVITIES
+  );
+}
+
+/**
+ * Whether a summary's design recreates another app, as an activity's replicas do: only its
+ * opacity can change, and the gallery shows it with the creative widgets.
+ */
+export function isSummaryReplica(design: SummaryBlockDesign): boolean {
+  return SUMMARY_REPLICAS.has(design);
+}
+
+/** A line of a note listing a period's activities, and whether it stands out in the accent. */
+export interface NoteActivity {
+  readonly activity: Activity;
+  readonly highlighted: boolean;
+}
+
+/**
+ * Whether `a` went further than `b`, or longer when neither went any distance (a gym session), so
+ * a sport's longest activity is found as the summary finds the period's.
+ */
+function longer(a: Activity, b: Activity): boolean {
+  return a.distanceMeters !== b.distanceMeters
+    ? a.distanceMeters > b.distanceMeters
+    : a.movingTimeSeconds > b.movingTimeSeconds;
+}
+
+/**
+ * A period's activities as its note lists them, oldest first, with the longest of each sport that
+ * has two or more highlighted, as the example the note copies (its longest run and workout): a
+ * sport done once has nothing to beat. Time O(n log n) for n activities, space O(n).
+ */
+export function noteActivities(activities: readonly Activity[]): NoteActivity[] {
+  const ordered = [...activities].sort((a, b) => a.startLocal.localeCompare(b.startLocal));
+  const longest = new Map<string, Activity>();
+  const count = new Map<string, number>();
+  for (const activity of ordered) {
+    const best = longest.get(activity.sportFamily);
+    if (best === undefined || longer(activity, best)) {
+      longest.set(activity.sportFamily, activity);
+    }
+    count.set(activity.sportFamily, (count.get(activity.sportFamily) ?? 0) + 1);
+  }
+  return ordered.map((activity) => ({
+    activity,
+    highlighted:
+      (count.get(activity.sportFamily) ?? 0) >= 2 && longest.get(activity.sportFamily) === activity,
+  }));
+}
+
 /**
  * The data widgets a period fills, in the gallery's order: its name over one, two and three of its
  * main totals (as many as it has, see `periodTotals`); its table of distance (only when it has
  * some) and of time; its total per sport, written and with icons, only when it mixes two sports or
  * more (with one, it would repeat the first); its days with their activities' icons, only for a
  * week or shorter; its activities with their routes, one by one only up to a month (a year has
- * too many) and overlaid (its main sport's icon, without any route); and a card per sport. None for a period without activities. Time O(1).
+ * too many) and overlaid (its main sport's icon, without any route), after its card per sport, as
+ * an activity's card comes before its widgets with the route. Then its creative ones, in the order
+ * of an activity's: the first quote and verse (the others are chosen from their lists); its note,
+ * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
+ * days, weeks or months. None for a period without activities. Time O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -76,9 +164,16 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     ...(mixed ? [{ design: 'periodSports' } as const] : []),
     ...(mixed ? [{ design: 'periodIcons', layout: 'sports' } as const] : []),
     ...(days <= MAX_DAYS_LISTED ? [{ design: 'periodIcons', layout: 'days' } as const] : []),
+    { design: 'periodCards' },
     ...(days <= MAX_ROUTES_DAYS ? [{ design: 'periodRoutes', layout: 'grid' } as const] : []),
     { design: 'periodRoutes', layout: 'overlay' },
-    { design: 'periodCards' },
+    { design: 'quote', quote: QUOTES[0] },
+    { design: 'verse', verse: VERSES[0] },
+    ...(['activities', 'buckets'] as const)
+      .filter((rows) => rows === 'buckets' || listsNoteActivities(summary))
+      .flatMap((rows) =>
+        APP_MODES.map((layout): SummaryBlock => ({ design: 'periodNotes', layout, rows })),
+      ),
   ];
 }
 
@@ -104,5 +199,12 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
       return { font: 'unbounded', bold: true, italic: false, uppercase: true };
     case 'periodCards':
       return { font: 'unbounded', bold: false, italic: false, uppercase: false };
+    case 'quote':
+    case 'verse':
+      // A quotation, in a serif italic, as an activity's.
+      return { font: 'playfairDisplay', bold: false, italic: true, uppercase: false };
+    // A replica writes in its app's font whatever the layer's.
+    case 'periodNotes':
+      return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

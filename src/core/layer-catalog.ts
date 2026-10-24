@@ -4,7 +4,7 @@ import { availableMetrics, type MetricId } from './metrics';
 import { bucketCount, chartBucketOptions } from './periods';
 import { PLACE_FORMATS } from './place';
 import type { BucketSize, PeriodSummary } from './summary';
-import { summaryBlocks } from './summary-block';
+import { isSummaryDataWidget, summaryBlocks } from './summary-block';
 import { availableSummaryMetrics, periodTotals, summaryHasDistance } from './summary-metrics';
 import {
   type ActivityChartSeries,
@@ -193,6 +193,9 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           'count' in item.block ? item.block.count : undefined,
           'value' in item.block ? item.block.value : undefined,
           'layout' in item.block ? item.block.layout : undefined,
+          'rows' in item.block ? item.block.rows : undefined,
+          'verse' in item.block ? item.block.verse : undefined,
+          'quote' in item.block ? item.block.quote : undefined,
         ];
       case 'text':
         return [];
@@ -439,7 +442,8 @@ export function activityCatalog(
 }
 
 /**
- * Widgets for a period summary: its data widgets (see `summaryBlocks`), the charts (`autoBucket`
+ * Widgets for a period summary: its data and creative widgets (see `summaryBlocks` and
+ * `isSummaryDataWidget`), the charts (`autoBucket`
  * is the period's own bar size, see `bucketForPeriod`), its basics (every total in one tile, the
  * overlaid routes when any activity has GPS, free text, the period name in each format), and the
  * logo. Formats of the name that write a period the same (all of them, for a year) are one widget
@@ -448,7 +452,7 @@ export function activityCatalog(
 export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): CatalogSection[] {
   return sections([
     ...summaryBlocks(summary).map((block): Entry => [
-      'data',
+      isSummaryDataWidget(block.design) ? 'data' : 'creative',
       `summaryBlock-${block.design}`,
       { kind: 'summaryBlock', block },
     ]),

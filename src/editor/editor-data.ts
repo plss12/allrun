@@ -23,7 +23,7 @@ import {
   type PeriodSummary,
   type SummaryBucket,
 } from '@/core/summary';
-import { tableBucket } from '@/core/summary-block';
+import { noteActivities, tableBucket } from '@/core/summary-block';
 import { periodTotals, summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type {
   ActivityChartSeries,
@@ -108,6 +108,7 @@ export type LabelKey =
   | 'thisWeek'
   | `tableMeasures.${DistanceUnit | 'hours'}`
   | 'tableTotal'
+  | 'noteLine'
   | `families.${SportFamily}`
   | `chartCaptions.activity.${ActivityChartSeries}`
   | 'widgets.chatLine'
@@ -920,6 +921,91 @@ export function familyCard(
     total: time,
     detail: calories === null ? sessions : `${sessions} · ${calories}`,
   };
+}
+
+/** A line of a period's note: its text, whether it is ticked off and whether in the accent. */
+export interface NoteLine {
+  readonly text: string;
+  readonly checked: boolean;
+  readonly highlighted: boolean;
+}
+
+/** A time in its units ("54min 17s"), down to `smallest`. */
+function durationInWords(seconds: number, smallest: DurationUnit, context: TextContext): string {
+  return durationParts(seconds, smallest)
+    .map(({ amount, unit }) => `${amount}${context.durationUnits[unit]}`)
+    .join(' ');
+}
+
+/**
+ * The lines of a period's note, as a checklist of things done: its `activities`, oldest first,
+ * each ticked off with how far it went, or how long without a distance, and its sport ("10,81 km
+ * de carrera", "54min de entrenamiento": seconds make a line long and add little), the longest of
+ * each sport done twice or more in the
+ * accent (see `noteActivities`); or its days, weeks or months (`buckets`, see `tableBucket`), those
+ * with activities ticked off with their distance, or time without one ("Lunes · 10,81 km"), the
+ * rest left unticked by name, and the longest in the accent when two or more have some. Time
+ * O(b + n log n) for b days, weeks or months and n activities.
+ */
+export function periodNoteLines(
+  data: SummaryData,
+  rows: 'activities' | 'buckets',
+  context: TextContext,
+  translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
+): NoteLine[] {
+  if (rows === 'activities') {
+    return noteActivities(data.activities).map(({ activity, highlighted }) => {
+      const distance = metricText(activity, 'distance', context);
+      return {
+        text: translate('noteLine', {
+          value:
+            activity.distanceMeters > 0
+              ? withUnit(distance, context)
+              : durationInWords(activity.movingTimeSeconds, 'minutes', context),
+          sport: translate(`modalities.${activity.sportModality}`).toLocaleLowerCase(
+            context.locale,
+          ),
+        }),
+        checked: true,
+        highlighted,
+      };
+    });
+  }
+  const size = tableBucket(data.summary.range);
+  const week = rangeLength(data.summary.range) <= 7;
+  const buckets = bucketize(data.activities, data.summary.range, size);
+  const active = buckets.filter((bucket) => bucket.activityCount > 0);
+  const longest = active.reduce<SummaryBucket | null>(
+    (best, bucket) =>
+      best === null ||
+      bucket.distanceMeters > best.distanceMeters ||
+      (bucket.distanceMeters === best.distanceMeters &&
+        bucket.movingTimeSeconds > best.movingTimeSeconds)
+        ? bucket
+        : best,
+    null,
+  );
+  return buckets.map((bucket) => {
+    const name = formatBucketName(bucket.range, size, week, context.locale);
+    if (bucket.activityCount === 0) {
+      return { text: name, checked: false, highlighted: false };
+    }
+    const value =
+      bucket.distanceMeters > 0
+        ? withUnit(
+            formatMetric(
+              toDisplaySummaryMetric('totalDistance', bucket.distanceMeters, context.unit),
+              context.locale,
+            ),
+            context,
+          )
+        : durationInWords(bucket.movingTimeSeconds, 'minutes', context);
+    return {
+      text: `${name} · ${value}`,
+      checked: true,
+      highlighted: active.length >= 2 && bucket === longest,
+    };
+  });
 }
 
 /** A period's table as its widget writes it (see `periodTable`). */

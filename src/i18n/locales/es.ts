@@ -146,6 +146,9 @@ export const es: Translations = {
       periodIcons: 'Con iconos',
       periodRoutes: 'Actividades con ruta',
       periodCards: 'Tarjetas por deporte',
+      quote: 'Cita',
+      verse: 'Versículo',
+      periodNotes: 'Notas',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',
@@ -564,6 +567,7 @@ export const es: Translations = {
       board: 'Tablero',
       sheet: 'Hoja de tiempos',
     },
+    noteRows: { activities: 'Por actividad', buckets: 'Por días, semanas o meses' },
     timeOnTop: 'Tiempo arriba',
     choose: 'Toca para elegir',
     chooseVerse: 'Elige un versículo',
@@ -686,6 +690,7 @@ export const es: Translations = {
     hours: 'Horas',
   },
   tableTotal: 'Total',
+  noteLine: '{{value}} de {{sport}}',
   chartHeaders: {
     averagePace: 'Ritmo medio',
     fastestPace: 'Ritmo más rápido',

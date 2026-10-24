@@ -151,6 +151,9 @@ export const en = {
       periodIcons: 'With icons',
       periodRoutes: 'Activities with routes',
       periodCards: 'Cards by sport',
+      quote: 'Quote',
+      verse: 'Verse',
+      periodNotes: 'Notes',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -576,6 +579,8 @@ export const en = {
       board: 'Board',
       sheet: 'Timing sheet',
     },
+    /** What a period's note lists: its activities, or its days, weeks or months. */
+    noteRows: { activities: 'By activity', buckets: 'By day, week or month' },
     /** A widget chosen from a list: the hint on its tile, and the list's titles. */
     timeOnTop: 'Time on top',
     choose: 'Tap to choose',
@@ -705,6 +710,8 @@ export const en = {
     hours: 'Hours',
   },
   tableTotal: 'Total',
+  /** A line of a period's note: an activity done, how far or long and its sport. */
+  noteLine: '{{value}} {{sport}}',
   /** The two data over a chart (see `activityChartHeader` and `periodChartHeader`). */
   chartHeaders: {
     averagePace: 'Avg pace',

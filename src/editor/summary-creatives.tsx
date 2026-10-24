@@ -1,0 +1,61 @@
+import { listsNoteActivities } from '@/core/summary-block';
+import type { SummaryBlock } from '@/core/template';
+
+import {
+  appTextBox,
+  type BlockContext,
+  type Box,
+  discBox,
+  noteBox,
+  NOTES_COLORS,
+  NOTES_SIZES,
+  overlay,
+  row,
+  symbolBox,
+} from './activity-blocks';
+import { periodNoteLines, periodTitle, type SummaryData } from './editor-data';
+
+/**
+ * The creative widgets of a period summary (R2c): replicas of apps, as an activity's (see
+ * `activity-blocks.tsx`), in the apps' own fonts and colors, with the period's data.
+ */
+
+/**
+ * A checklist's box beside each line of a note: its diameter, a share of the line's size; an
+ * empty one's ring, a share of its diameter; the room after it, a share of the line's size.
+ */
+const NOTE_CHECK = { size: 0.95, ring: 0.08, gap: 0.45 } as const;
+
+/** The ring of a box not ticked off yet, in the Notes' dark and light mode. */
+const NOTE_RING = { dark: '#5E5E62', light: '#C7C7CC' } as const;
+
+/**
+ * A period's note of the iPhone's Notes, as a checklist of what it got done (see
+ * `periodNoteLines`): its name as the title, and a line per activity, or per day, week or month,
+ * each ticked off in the accent's round box or left empty, the longest in the accent. A period
+ * whose activities a note doesn't list (see `listsNoteActivities`) lists its days, weeks or months
+ * instead (a design saved with a week's activities, used for a year).
+ */
+export function periodNotesBox(
+  block: Extract<SummaryBlock, { design: 'periodNotes' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const colors = NOTES_COLORS[block.layout];
+  const size = NOTES_SIZES.row;
+  const diameter = size * NOTE_CHECK.size;
+  const rows =
+    block.rows === 'activities' && listsNoteActivities(data.summary) ? 'activities' : 'buckets';
+  const lines = periodNoteLines(data, rows, textContext, translate).map((line) => {
+    const check = line.checked
+      ? overlay(discBox(diameter / 2, colors.accent), symbolBox('check', diameter, colors.page))
+      : discBox(diameter / 2, NOTE_RING[block.layout], diameter * NOTE_CHECK.ring);
+    const text = appTextBox(
+      fonts,
+      [{ text: line.text, size, bold: false }],
+      line.highlighted ? colors.accent : colors.ink,
+    );
+    return row([check, text], size * NOTE_CHECK.gap, 'center');
+  });
+  return noteBox(fonts, block.layout, periodTitle(data, textContext, translate), lines);
+}

@@ -6,7 +6,7 @@ import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { projectRoutes } from '@/core/route-projection';
 import { familyTotals } from '@/core/summary';
-import { gridColumns } from '@/core/summary-block';
+import { gridColumns, isSummaryReplica } from '@/core/summary-block';
 import { periodTotals, summaryMetricValue } from '@/core/summary-metrics';
 import type { Layer } from '@/core/template';
 import { formatActivityDate } from '@/ui/format';
@@ -25,6 +25,7 @@ import {
   overlay,
   placed,
   type PreparedBlock,
+  quotationBox,
   routeBox,
   row,
 } from './activity-blocks';
@@ -40,6 +41,7 @@ import {
 } from './editor-data';
 import { CAP_HEIGHTS } from './fonts';
 import { softBackdrop } from './scene-text';
+import { periodNotesBox } from './summary-creatives';
 
 /**
  * The data widgets of a period summary (R2c), laid out from measured texts as the activities'
@@ -559,9 +561,28 @@ export function prepareSummaryBlock(
           'start',
         );
       }
+      case 'quote':
+        return quotationBox(
+          fonts,
+          style,
+          translate,
+          translate(`widgets.quotes.${block.quote}.text`),
+          translate(`widgets.quotes.${block.quote}.author`),
+        );
+      case 'verse':
+        return quotationBox(
+          fonts,
+          style,
+          translate,
+          translate(`widgets.verses.${block.verse}.text`),
+          translate(`widgets.verses.${block.verse}.source`),
+        );
+      case 'periodNotes':
+        return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }
   })();
-  return body === null ? null : finishBlock(body, layer, true);
+  // A replica is the app's own view: no signature.
+  return body === null ? null : finishBlock(body, layer, !isSummaryReplica(block.design));
 }
 
 /** A line of the widget with icons: an icon beside a total, under a day's name when it has one. */

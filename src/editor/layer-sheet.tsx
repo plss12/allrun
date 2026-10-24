@@ -52,19 +52,50 @@ interface LayerSheetProps {
 }
 
 type Block = Extract<NewLayer, { kind: 'activityBlock' }>['block'];
+type SummaryBlock = Extract<NewLayer, { kind: 'summaryBlock' }>['block'];
 
 /**
  * Widgets whose words are chosen from a list: a Bible verse, a quote, or a chat message's phrase
- * (or one of the user's), as the version tapped (a dark or a light message).
+ * (or one of the user's), as the version tapped (a dark or a light message), of an activity or of
+ * a period.
  */
-type Choice = Extract<Block, { design: 'verse' | 'quote' | 'chat' }>;
+type Choice =
+  | {
+      readonly kind: 'activityBlock';
+      readonly block: Extract<Block, { design: 'verse' | 'quote' | 'chat' }>;
+    }
+  | {
+      readonly kind: 'summaryBlock';
+      readonly block: Extract<SummaryBlock, { design: 'verse' | 'quote' }>;
+    };
+type ChoiceBlock = Choice['block'];
 
 /** The list a gallery item is chosen from, if it is. */
-const choiceOf = (item: CatalogItem): Choice | null =>
-  item.kind === 'activityBlock' &&
-  (item.block.design === 'verse' || item.block.design === 'quote' || item.block.design === 'chat')
-    ? item.block
-    : null;
+function choiceOf(item: CatalogItem): Choice | null {
+  if (
+    item.kind === 'activityBlock' &&
+    (item.block.design === 'verse' || item.block.design === 'quote' || item.block.design === 'chat')
+  ) {
+    return { kind: item.kind, block: item.block };
+  }
+  if (
+    item.kind === 'summaryBlock' &&
+    (item.block.design === 'verse' || item.block.design === 'quote')
+  ) {
+    return { kind: item.kind, block: item.block };
+  }
+  return null;
+}
+
+/** The widget a choice from the list adds: of the same kind as the one tapped. */
+function chosenLayer(
+  kind: Choice['kind'],
+  block: ChoiceBlock,
+): Exclude<NewLayer, { kind: 'text' }> {
+  return kind === 'summaryBlock' && block.design !== 'chat'
+    ? { kind, block }
+    : { kind: 'activityBlock', block };
+}
 
 /** The title of each list to choose from. */
 const CHOICE_TITLES = {
@@ -131,7 +162,7 @@ export function LayerSheet({
     >
       {choosing !== null ? (
         <SheetFrame
-          title={t(CHOICE_TITLES[choosing.design])}
+          title={t(CHOICE_TITLES[choosing.block.design])}
           closeLabel={t('editor.back')}
           onClose={() => setChoosing(null)}
         >
@@ -139,7 +170,7 @@ export function LayerSheet({
             choice={choosing}
             onChoose={(block) => {
               setChoosing(null);
-              onAdd({ kind: 'activityBlock', block });
+              onAdd(chosenLayer(choosing.kind, block));
             }}
           />
         </SheetFrame>
@@ -201,7 +232,7 @@ interface ChoiceEntry {
   readonly key: string;
   readonly words: string;
   readonly source: string | null;
-  readonly block: Block;
+  readonly block: ChoiceBlock;
 }
 
 /**
@@ -214,11 +245,12 @@ function ChoiceList({
   onChoose,
 }: {
   readonly choice: Choice;
-  readonly onChoose: (block: Block) => void;
+  readonly onChoose: (block: ChoiceBlock) => void;
 }) {
   const { t } = useTranslation();
+  const { block } = choice;
   const entries = ((): ChoiceEntry[] => {
-    switch (choice.design) {
+    switch (block.design) {
       case 'verse':
         return VERSES.map((verse) => ({
           key: verse,
@@ -238,7 +270,7 @@ function ChoiceList({
           key: phrase,
           words: t(`widgets.phrases.${phrase}`),
           source: null,
-          block: { ...choice, phrase },
+          block: { ...block, phrase },
         }));
     }
   })();
@@ -247,8 +279,8 @@ function ChoiceList({
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: GALLERY_PADDING, gap: GALLERY_GAP, paddingBottom: 32 }}
     >
-      {choice.design === 'chat' ? (
-        <OwnPhrase onAdd={(own) => onChoose({ ...choice, phrase: { own } })} />
+      {block.design === 'chat' ? (
+        <OwnPhrase onAdd={(own) => onChoose({ ...block, phrase: { own } })} />
       ) : null}
       {entries.map((entry) => (
         <Pressable
@@ -413,8 +445,22 @@ function pageLabel(
       }
       case 'summaryBlock': {
         const { block } = item;
+        const name: string = t(`widgets.summaryBlocks.${block.design}`);
+        if (block.design === 'verse') {
+          return [name, t(`widgets.verses.${block.verse}.source`)];
+        }
+        if (block.design === 'quote') {
+          return [name, t(`widgets.quotes.${block.quote}.author`)];
+        }
+        if (block.design === 'periodNotes') {
+          return [
+            name,
+            t(`gallery.blockLayouts.${block.layout}`),
+            t(`gallery.noteRows.${block.rows}`),
+          ];
+        }
         return [
-          t(`widgets.summaryBlocks.${block.design}`),
+          name,
           block.design === 'periodData'
             ? t(`gallery.dataCounts.${(['one', 'two', 'three'] as const)[block.count - 1]}`)
             : block.design === 'periodTable'

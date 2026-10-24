@@ -1,4 +1,5 @@
 import { isDataWidget } from '@/core/activity-block';
+import { isSummaryDataWidget } from '@/core/summary-block';
 import { newLayer } from '@/core/default-layout';
 import {
   type CatalogItem,
@@ -236,7 +237,8 @@ function measureWidget(
     // column), each as big as the cap allows.
     scale:
       FILLS_PAGE.has(item.kind) ||
-      (item.kind === 'activityBlock' && !isDataWidget(item.block.design))
+      (item.kind === 'activityBlock' && !isDataWidget(item.block.design)) ||
+      (item.kind === 'summaryBlock' && !isSummaryDataWidget(item.block.design))
         ? fill(prepared)
         : item.kind === 'activityBlock' || item.kind === 'summaryBlock'
           ? capped(prepared)
