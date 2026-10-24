@@ -192,6 +192,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         return [
           'count' in item.block ? item.block.count : undefined,
           'value' in item.block ? item.block.value : undefined,
+          'layout' in item.block ? item.block.layout : undefined,
         ];
       case 'text':
         return [];

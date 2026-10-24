@@ -120,7 +120,10 @@ comes later.
   range: the period's name small and centered over one, two or three of its main totals in a
   line; a table of its days with activity (its weeks in a month, its months in a year), each name
   small at the start and its value big at the end, rules between them and the total last; and
-  the period's name over each sport's total, only when it mixes sports. A layer of their own
+  the period's name over each sport's total, only when it mixes sports, written or beside the
+  sport's icon; a week's days over their activities' icons and data; the activities of up to a
+  month in a grid, each with its route over its data as the activities' route with a big datum;
+  and a see-through card per sport (its total, time and own pace). A layer of their own
   (`summaryBlock`), laid out with the activities' measured boxes and in a lettering each.
 - **A period's charts (R2c):** only the period's own data, never a trend over earlier periods
   (unlike the apps they draw from). Two widgets, each of distance and of time, under three totals

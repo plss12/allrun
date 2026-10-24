@@ -35,8 +35,11 @@ export interface PeriodSummary {
 /** What a period's activities of one sport family add up to. */
 export interface FamilyTotals {
   readonly family: SportFamily;
+  readonly activityCount: number;
   readonly distanceMeters: number;
   readonly movingTimeSeconds: number;
+  /** Their calories, `null` when none of them has any. */
+  readonly calories: number | null;
 }
 
 /** Totals of one bar in the per-day, per-week or per-month chart. */
@@ -136,10 +139,13 @@ export function summarize(
 export function familyTotals(activities: readonly Activity[]): FamilyTotals[] {
   return familiesOf(activities).map((family) => {
     const ofFamily = activities.filter((activity) => activity.sportFamily === family);
+    const burned = ofFamily.filter((activity) => activity.calories !== null);
     return {
       family,
+      activityCount: ofFamily.length,
       distanceMeters: sum(ofFamily, (activity) => activity.distanceMeters),
       movingTimeSeconds: sum(ofFamily, (activity) => activity.movingTimeSeconds),
+      calories: burned.length === 0 ? null : sum(burned, (activity) => activity.calories ?? 0),
     };
   });
 }

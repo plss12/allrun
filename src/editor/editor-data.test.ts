@@ -18,6 +18,7 @@ import {
   isTimeLayer,
   layerText,
   periodChartHeader,
+  familyCard,
   periodTable,
   periodTotalsHeader,
   MISSING_VALUE,
@@ -25,6 +26,7 @@ import {
   plainMetricText,
   plainSummaryText,
   roundedChartValue,
+  summaryTotalText,
   speedMeasure,
   splitGapText,
   splitRowTexts,
@@ -505,6 +507,64 @@ describe('plainSummaryText', () => {
       `7${TEST_DURATION_UNITS.hours} 18${TEST_DURATION_UNITS.minutes}`,
     );
     expect(plainSummaryText('activityCount', 6, context)).toBe('6');
+  });
+});
+
+describe('summaryTotalText', () => {
+  const translate = (key: string, values?: Readonly<Record<string, string>>): string =>
+    ({
+      'widgets.activities': `${values?.number ?? ''} act.`,
+    })[key] ?? key;
+
+  it('says what the number of activities counts, and writes the rest as data widgets do', () => {
+    expect(summaryTotalText('activityCount', 6, context, translate)).toBe('6 act.');
+    expect(summaryTotalText('activityCount', 1, context, translate)).toBe('1 act.');
+    expect(summaryTotalText('totalDistance', 94_231, context, translate)).toBe('94.23 km');
+  });
+});
+
+describe('familyCard', () => {
+  const translate = (key: string, values?: Readonly<Record<string, string>>): string =>
+    ({
+      'families.run': 'Carreras',
+      'families.training': 'Entrenos',
+      'widgets.sessionOne': '1 sesión',
+      'widgets.sessions': `${values?.number ?? ''} sesiones`,
+    })[key] ?? key;
+
+  it('writes a sport with distance by its distance, its time and its own pace', () => {
+    const card = familyCard(
+      {
+        family: 'run',
+        activityCount: 3,
+        distanceMeters: 34_350,
+        movingTimeSeconds: 12_300,
+        calories: 2000,
+      },
+      context,
+      translate,
+    );
+    expect(card).toEqual({
+      name: 'Carreras',
+      total: '34.35 km',
+      detail: `3${TEST_DURATION_UNITS.hours} 25${TEST_DURATION_UNITS.minutes} · 5:58/km`,
+    });
+  });
+
+  it('writes a sport without distance by its time, its sessions and its calories', () => {
+    const gym = {
+      family: 'training',
+      activityCount: 2,
+      distanceMeters: 0,
+      movingTimeSeconds: 7_620,
+      calories: 686,
+    } as const;
+    expect(familyCard(gym, context, translate).detail).toBe(
+      `2 sesiones · 686 ${testUnitLabel('kcal')}`,
+    );
+    expect(
+      familyCard({ ...gym, activityCount: 1, calories: null }, context, translate).detail,
+    ).toBe('1 sesión');
   });
 });
 

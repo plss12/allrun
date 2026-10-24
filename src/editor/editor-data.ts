@@ -16,7 +16,13 @@ import {
 import type { PeriodKind } from '@/core/periods';
 import { formatPlace, type Place } from '@/core/place';
 import type { SportFamily, SportModality } from '@/core/sports';
-import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
+import {
+  type BucketSize,
+  bucketize,
+  type FamilyTotals,
+  type PeriodSummary,
+  type SummaryBucket,
+} from '@/core/summary';
 import { tableBucket } from '@/core/summary-block';
 import { periodTotals, summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type {
@@ -112,6 +118,9 @@ export type LabelKey =
   | `widgets.tower.sports.${SportModality}`
   | `compactDurationUnits.${DurationUnit}`
   | 'widgets.quoted'
+  | 'widgets.sessionOne'
+  | 'widgets.activities'
+  | 'widgets.sessions'
   | `widgets.verses.${Verse}.${'text' | 'source'}`
   | `widgets.quotes.${Quote}.${'text' | 'author'}`
   | `widgets.laps.${'title' | 'lap' | 'distance' | 'time' | 'pace' | 'speed'}`
@@ -202,6 +211,15 @@ export function plainMetricText(
       .map(({ amount, unit }) => `${amount}${context.durationUnits[unit]}`)
       .join(' ');
   }
+  return plainDisplayText(display, notation, context);
+}
+
+/** A datum ready to display, written as `plainMetricText` writes it in `notation`. */
+function plainDisplayText(
+  display: DisplayMetric,
+  notation: PlainNotation,
+  context: TextContext,
+): string {
   const { amount, unit } = plainParts(display, notation);
   if (unit === null) {
     return amount;
@@ -830,6 +848,78 @@ export function plainSummaryText(
   const digits = Math.min(display.fractionDigits, fractionDigits ?? display.fractionDigits);
   const amount = display.amount.toFixed(digits);
   return display.unit === null ? amount : `${amount} ${context.unitLabel(display.unit)}`;
+}
+
+/**
+ * A period's total as its widgets write it beside others, without a name over it: as
+ * `plainSummaryText` does, but the number of activities says what it counts, short ("6 act."),
+ * since a bare "6" says nothing. Time and space O(1).
+ */
+export function summaryTotalText(
+  metric: SummaryMetricId,
+  value: number,
+  context: TextContext,
+  translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
+): string {
+  return metric === 'activityCount'
+    ? translate('widgets.activities', { number: String(value) })
+    : plainSummaryText(metric, value, context);
+}
+
+/** A sport's card in a period's widget of cards (see `familyCard`). */
+export interface FamilyCard {
+  readonly name: string;
+  /** Its distance, or its time when it has none ("34.35 km", "1h 50min"). */
+  readonly total: string;
+  /** Under it, small: its time and its pace or speed, or its sessions and calories. */
+  readonly detail: string;
+}
+
+/**
+ * A sport's card: its name, its total and, under it, its time and its average pace or speed as
+ * the sport writes it ("3h 25min · 5:58/km", an average over one sport means something), or,
+ * without distance, its sessions and the calories when any ("4 sesiones · 1250 kcal"). Times in
+ * the context's units. Time and space O(1).
+ */
+export function familyCard(
+  totals: FamilyTotals,
+  context: TextContext,
+  translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
+): FamilyCard {
+  const time = plainSummaryText('totalMovingTime', totals.movingTimeSeconds, context);
+  const name = translate(`families.${totals.family}`);
+  if (totals.distanceMeters > 0 && totals.movingTimeSeconds > 0) {
+    const measure = speedMeasure(totals.family);
+    const speed = toDisplayMetric(measure, totals.distanceMeters / totals.movingTimeSeconds, {
+      unit: context.unit,
+      sportFamily: totals.family,
+    });
+    return {
+      name,
+      total: plainSummaryText('totalDistance', totals.distanceMeters, context),
+      detail: `${time} · ${plainDisplayText(speed, 'tight', context)}`,
+    };
+  }
+  const sessions =
+    totals.activityCount === 1
+      ? translate('widgets.sessionOne')
+      : translate('widgets.sessions', { number: String(totals.activityCount) });
+  const calories =
+    totals.calories === null
+      ? null
+      : plainDisplayText(
+          toDisplayMetric('calories', totals.calories, {
+            unit: context.unit,
+            sportFamily: totals.family,
+          }),
+          'short',
+          context,
+        );
+  return {
+    name,
+    total: time,
+    detail: calories === null ? sessions : `${sessions} · ${calories}`,
+  };
 }
 
 /** A period's table as its widget writes it (see `periodTable`). */

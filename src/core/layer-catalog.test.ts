@@ -381,6 +381,9 @@ describe('summaryCatalog', () => {
     expect(tileKeys(catalog, 'data')).toEqual([
       'summaryBlock-periodData',
       'summaryBlock-periodTable',
+      'summaryBlock-periodIcons',
+      'summaryBlock-periodRoutes',
+      'summaryBlock-periodCards',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodData')).toEqual([
       'summaryBlock-periodData-1',

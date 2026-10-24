@@ -484,9 +484,10 @@ const lettering = (font: FontId, bold: boolean): BlockLettering => ({
 
 /**
  * The lettering that suits each version of a mixed widget, as AURA gives each its own: wide and
- * heavy, or heavy and stretched upwards, for a big datum, and a different one for each date
- * widget, so the gallery reads varied (a clean one under a small weekday, a techy one around the
- * route, tall and narrow beside the short weekday, varsity or poster letters under a wide one,
+ * heavy (also under its route), or heavy and stretched upwards, for a big datum, and a different
+ * one for each date widget, so the gallery reads varied (a clean one under a small weekday, a
+ * hand-written one around the route, tall and narrow beside the short weekday, varsity or poster
+ * letters under a wide one,
  * a clean sans in columns, a sporty condensed one stacked); a serif italic in small letters for a
  * quotation. Replicas write in the system-like font of the apps they recreate.
  */
@@ -500,7 +501,7 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
         : block.layout === 'smallDay'
           ? lettering('inter', true)
           : block.layout === 'route'
-            ? lettering('orbitron', true)
+            ? lettering('unbounded', true)
             : lettering('unbounded', true);
     case 'dayRoute':
       // As if written by hand around a route drawn by hand.

@@ -462,12 +462,12 @@ describe('isAppReplica and blockLettering', () => {
       bold: true,
       ...capitals,
     });
-    // Under the weekday, wide and heavy too; under the route, techy, as the weekday over it.
+    // Under the weekday and under the route, wide and heavy too (the user's pick for the route).
     expect(blockLettering({ design: 'bigPair', layout: 'day', top: 'main' }).font).toBe(
       'unbounded',
     );
     expect(blockLettering({ design: 'bigTrio', layout: 'route', top: 'main' }).font).toBe(
-      'orbitron',
+      'unbounded',
     );
     // Each date widget in a lettering of its own, for a varied gallery.
     const fontOf = (block: Parameters<typeof blockLettering>[0]) => blockLettering(block).font;

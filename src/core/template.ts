@@ -455,7 +455,10 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
 /**
  * The data widgets of a period summary (R2c), written in the user's lettering: the period's name
  * over one, two or three of its main totals in a line; a table of its days, weeks or months with
- * their distance or time, and the total; and the period's name over each sport's total.
+ * their distance or time, and the total; the period's name over each sport's total, written or
+ * with the sport's icon (`sports`), or over each day's activities with their icons (`days`); its
+ * activities in a grid, each with its route over its data (`grid`), or all its routes overlaid
+ * over its totals (`overlay`); and a card per sport.
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -464,6 +467,9 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   }),
   z.object({ design: z.literal('periodTable'), value: z.enum(['distance', 'movingTime']) }),
   z.object({ design: z.literal('periodSports') }),
+  z.object({ design: z.literal('periodIcons'), layout: z.enum(['sports', 'days']) }),
+  z.object({ design: z.literal('periodRoutes'), layout: z.enum(['grid', 'overlay']) }),
+  z.object({ design: z.literal('periodCards') }),
 ]);
 
 export type SummaryBlock = z.infer<typeof summaryBlockSchema>;

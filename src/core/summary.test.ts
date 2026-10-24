@@ -207,9 +207,21 @@ describe('familyTotals', () => {
       makeActivity({ sportType: 'Run', distanceMeters: 10_000, movingTimeSeconds: 3000 }),
       makeActivity({ sportType: 'TrailRun', distanceMeters: 12_000, movingTimeSeconds: 4500 }),
     ]);
-    expect(totals).toEqual([
-      { family: 'run', distanceMeters: 22_000, movingTimeSeconds: 7500 },
-      { family: 'training', distanceMeters: 0, movingTimeSeconds: 3600 },
+    expect(totals).toMatchObject([
+      { family: 'run', activityCount: 2, distanceMeters: 22_000, movingTimeSeconds: 7500 },
+      { family: 'training', activityCount: 1, distanceMeters: 0, movingTimeSeconds: 3600 },
     ]);
+  });
+
+  it('adds up the calories of those that have them, and has none when no one does', () => {
+    const [run] = familyTotals([
+      makeActivity({ sportType: 'Run', calories: 700 }),
+      makeActivity({ sportType: 'Run', calories: null }),
+      makeActivity({ sportType: 'Run', calories: 500 }),
+    ]);
+    expect(run.calories).toBe(1200);
+    expect(familyTotals([makeActivity({ sportType: 'Run', calories: null })])[0].calories).toBe(
+      null,
+    );
   });
 });

@@ -148,6 +148,9 @@ export const en = {
       periodData: 'Period and data',
       periodTable: 'Table',
       periodSports: 'By sport',
+      periodIcons: 'With icons',
+      periodRoutes: 'Activities with routes',
+      periodCards: 'Cards by sport',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -187,6 +190,11 @@ export const en = {
     chatLine: '{{sport}} {{time}}',
     /** A quotation, in the language's quotation marks. */
     quoted: '“{{text}}”',
+    /** How many sessions of a sport without distance a period had, on its card. */
+    sessionOne: '1 session',
+    sessions: '{{number}} sessions',
+    /** How many activities a period had, written among its totals, short ("6 act."). */
+    activities: '{{number}} act.',
     /** Bible verses from the World English Bible (public domain), with their references. */
     verses: {
       philippians4v13: {
@@ -544,6 +552,10 @@ export const en = {
       lockup: 'Both',
     },
     blockLayouts: {
+      sports: 'By sport',
+      days: 'By day',
+      grid: 'One by one',
+      overlay: 'Overlaid',
       smallDay: 'Small day',
       four: 'Four data',
       three: 'Three data',

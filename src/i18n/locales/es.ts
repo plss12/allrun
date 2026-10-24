@@ -143,6 +143,9 @@ export const es: Translations = {
       periodData: 'Periodo y datos',
       periodTable: 'Tabla',
       periodSports: 'Por deporte',
+      periodIcons: 'Con iconos',
+      periodRoutes: 'Actividades con ruta',
+      periodCards: 'Tarjetas por deporte',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',
@@ -178,6 +181,9 @@ export const es: Translations = {
     cameraZoom: { wide: '0,5', main: 'x1', tele: '2' },
     chatLine: '{{sport}} {{time}}',
     quoted: '«{{text}}»',
+    sessionOne: '1 sesión',
+    sessions: '{{number}} sesiones',
+    activities: '{{number}} act.',
     /** Versículos de la Reina-Valera 1909 (dominio público). */
     verses: {
       philippians4v13: {
@@ -534,6 +540,10 @@ export const es: Translations = {
       lockup: 'Ambos',
     },
     blockLayouts: {
+      sports: 'Por deporte',
+      days: 'Por día',
+      grid: 'Una a una',
+      overlay: 'Superpuestas',
       smallDay: 'Día pequeño',
       four: 'Cuatro datos',
       three: 'Tres datos',

@@ -2,7 +2,7 @@ import { makeActivity } from '@/test-utils/make-activity';
 
 import { customRange, monthRange, weekRange, yearRange } from './dates';
 import { summarize } from './summary';
-import { summaryBlocks, tableBucket } from './summary-block';
+import { gridColumns, summaryBlocks, tableBucket } from './summary-block';
 
 const week = weekRange('2026-10-14');
 
@@ -24,6 +24,7 @@ describe('summaryBlocks', () => {
     sportType: 'WeightTraining',
     distanceMeters: 0,
     elevationGainMeters: 0,
+    routePolyline: null,
     localDate: '2026-10-15',
   });
 
@@ -34,13 +35,29 @@ describe('summaryBlocks', () => {
       { design: 'periodData', count: 3 },
       { design: 'periodTable', value: 'distance' },
       { design: 'periodTable', value: 'movingTime' },
+      { design: 'periodIcons', layout: 'days' },
+      { design: 'periodRoutes', layout: 'grid' },
+      { design: 'periodRoutes', layout: 'overlay' },
+      { design: 'periodCards' },
     ]);
   });
 
-  it('offers the total per sport when the period mixes sports', () => {
-    expect(summaryBlocks(summarize([run, ride], week))).toContainEqual({
-      design: 'periodSports',
-    });
+  it('offers the total per sport, written and with icons, when the period mixes sports', () => {
+    const blocks = summaryBlocks(summarize([run, ride], week));
+    expect(blocks).toContainEqual({ design: 'periodSports' });
+    expect(blocks).toContainEqual({ design: 'periodIcons', layout: 'sports' });
+  });
+
+  it("lists the days only in a week, and the activities' routes only up to a month", () => {
+    const october = summaryBlocks(summarize([run], monthRange('2026-10-01')));
+    expect(october).not.toContainEqual({ design: 'periodIcons', layout: 'days' });
+    expect(october).toContainEqual({ design: 'periodRoutes', layout: 'grid' });
+    const year = summaryBlocks(summarize([run], yearRange('2026-01-01')));
+    expect(year).not.toContainEqual({ design: 'periodRoutes', layout: 'grid' });
+    // A year's routes, overlaid.
+    expect(year).toContainEqual({ design: 'periodRoutes', layout: 'overlay' });
+    // The cards suit any period.
+    expect(year).toContainEqual({ design: 'periodCards' });
   });
 
   it('offers as many data as the period has, and only its table of time without distance', () => {
@@ -48,10 +65,28 @@ describe('summaryBlocks', () => {
       { design: 'periodData', count: 1 },
       { design: 'periodData', count: 2 },
       { design: 'periodTable', value: 'movingTime' },
+      { design: 'periodIcons', layout: 'days' },
+      { design: 'periodRoutes', layout: 'grid' },
+      // Without any route, its sport's icon in their place: the page isn't lost.
+      { design: 'periodRoutes', layout: 'overlay' },
+      { design: 'periodCards' },
     ]);
   });
 
   it('offers nothing for a period without activities', () => {
     expect(summaryBlocks(summarize([], week))).toEqual([]);
+  });
+});
+
+describe('gridColumns', () => {
+  it('puts a few activities in two columns, and more in more, six at most', () => {
+    expect(gridColumns(1)).toBe(1);
+    expect(gridColumns(2)).toBe(2);
+    expect(gridColumns(6)).toBe(2);
+    expect(gridColumns(7)).toBe(3);
+    expect(gridColumns(10)).toBe(4);
+    expect(gridColumns(13)).toBe(5);
+    expect(gridColumns(16)).toBe(6);
+    expect(gridColumns(30)).toBe(6);
   });
 });

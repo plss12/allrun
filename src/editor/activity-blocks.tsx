@@ -356,7 +356,7 @@ function spread(left: Box, right: Box, width: number): Box {
  * Boxes along a `width` long line, bottoms lined up: the first at its start, the last at its end
  * and the rest evenly between them, at least `minGap` apart (one alone is centered).
  */
-function justified(boxes: readonly Box[], width: number, minGap: number): Box {
+export function justified(boxes: readonly Box[], width: number, minGap: number): Box {
   if (boxes.length === 1) {
     return widened(boxes[0], width, 'center');
   }
@@ -395,7 +395,7 @@ export function placed(
 }
 
 /** `front` centered over `back`, as big as the bigger of them. */
-function overlay(back: Box, front: Box): Box {
+export function overlay(back: Box, front: Box): Box {
   const width = Math.max(back.width, front.width);
   const height = Math.max(back.height, front.height);
   return {
@@ -436,7 +436,7 @@ function tableRow(
   );
 }
 
-const iconBox = (icon: SportIconId, size: number, color?: string): Box => ({
+export const iconBox = (icon: SportIconId, size: number, color?: string): Box => ({
   width: size,
   height: size,
   place: (x, y) => [{ kind: 'icon', icon, x, y, size, ...(color === undefined ? {} : { color }) }],
@@ -456,11 +456,11 @@ const ROUTE_STROKE = 8;
  * shrunk to its own extent plus the stroke, or `null` when nothing is left to draw. A replica
  * draws it in a `look` of its own: a color and a line width.
  */
-function routeBox(
+export function routeBox(
   polyline: string,
   width: number,
   height: number,
-  look?: { readonly color: string; readonly width: number },
+  look?: { readonly color?: string; readonly width: number },
 ): Box | null {
   const stroke = look?.width ?? ROUTE_STROKE;
   const [points] = projectRoutes(
@@ -516,7 +516,7 @@ interface Glass {
  * A replica's rounded rectangle of `color`, with nothing in it; part of a see-through view when
  * it is of `glass`.
  */
-const fillBox = (
+export const fillBox = (
   width: number,
   height: number,
   radius: number,
@@ -3701,7 +3701,7 @@ function BlockArt({
                 key={i}
                 path={routePath(piece.points)}
                 style="stroke"
-                strokeWidth={ROUTE_STROKE}
+                strokeWidth={piece.width ?? ROUTE_STROKE}
                 strokeCap="round"
                 strokeJoin="round"
                 color={color}

@@ -419,7 +419,9 @@ function pageLabel(
             ? t(`gallery.dataCounts.${(['one', 'two', 'three'] as const)[block.count - 1]}`)
             : block.design === 'periodTable'
               ? t(`widgets.${block.value === 'distance' ? 'distanceChart' : 'timeChart'}`)
-              : '',
+              : block.design === 'periodIcons' || block.design === 'periodRoutes'
+                ? t(`gallery.blockLayouts.${block.layout}`)
+                : '',
         ];
       }
     }

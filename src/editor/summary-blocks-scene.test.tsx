@@ -116,6 +116,37 @@ describe('prepareSummaryBlock', () => {
     60_000,
   );
 
+  it("draws a period without routes with its sport's icon over its totals", async () => {
+    const week = await periodData('week');
+    const gym = week.activities.map((activity) => ({ ...activity, routePolyline: null }));
+    const data: SummaryData = {
+      ...week,
+      summary: summarize(gym, week.summary.range),
+      activities: gym,
+    };
+    const layer = newLayer(
+      { kind: 'summaryBlock', block: { design: 'periodRoutes', layout: 'overlay' } },
+      'block',
+      'story',
+    );
+    const [prepared] = scene.prepareLayers(
+      { version: 1, id: 'blocks', mode: 'summary', format: 'story', layers: [layer] },
+      {
+        data,
+        fonts: loadTestFonts(['unbounded']),
+        textContext: {
+          unit: 'km',
+          locale: 'es',
+          durationUnits: TEST_DURATION_UNITS,
+          unitLabel: testUnitLabel,
+        },
+        translate,
+      },
+    );
+    expect(prepared).toBeDefined();
+    expect(await alphaOutside(prepared)).toBeLessThanOrEqual(DRAWN_ALPHA);
+  }, 60_000);
+
   it('draws nothing for a period without activities', async () => {
     const range = weekRange('2020-01-08');
     const data: SummaryData = {
