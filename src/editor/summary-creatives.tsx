@@ -2,7 +2,12 @@ import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { projectRoutes } from '@/core/route-projection';
 import { sportIcon, tyreCompounds } from '@/core/activity-block';
+import { isInRange } from '@/core/dates';
 import {
+  calendarFigures,
+  calendarMonths,
+  calendarView,
+  calendarWeeks,
   grandPrixActivities,
   listsNoteActivities,
   mainFamily,
@@ -10,14 +15,15 @@ import {
   periodWrapped,
   playlistSongs,
 } from '@/core/summary-block';
-import { toDisplaySummaryMetric } from '@/core/summary-metrics';
+import { summaryHasDistance, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import { durationParts, formatDuration } from '@/core/units';
-import { formatActivityDate, formatMetric } from '@/ui/format';
+import { formatActivityDate, formatMetric, formatShortBucketName } from '@/ui/format';
 import type { BRAND_COVERS, SummaryBlock } from '@/core/template';
 
 import {
   appTextBox,
   type BlockContext,
+  capitalsBox,
   boardingPassBox,
   type Box,
   BRAND_COVER_COLORS,
@@ -32,6 +38,7 @@ import {
   placed,
   receiptBox,
   routeBox,
+  scaledBox,
   widened,
   discBox,
   highlightedSentenceBox,
@@ -42,15 +49,21 @@ import {
   noteSportBox,
   iconBox,
   overlay,
+  panel,
+  paragraph,
   row,
   type SentencePart,
   sentenceParts,
+  type SportMark,
   sportMarkBox,
+  spread,
   symbolBox,
+  textBox,
   timingTowerBox,
   turned,
 } from './activity-blocks';
 import { markWidth } from './brand/brand-art';
+import { CAP_HEIGHTS } from './fonts';
 import {
   metricText,
   periodBoardingPass,
@@ -58,6 +71,8 @@ import {
   periodName,
   periodNoteLines,
   periodReceipt,
+  plainSummaryText,
+  roundedChartValue,
   type SummaryData,
 } from './editor-data';
 
@@ -677,4 +692,314 @@ export function periodBoardingPassBox(
     fields: pass.fields,
     seed: `${data.summary.range.start}${data.summary.range.end}`,
   });
+}
+
+/**
+ * A widget of the iPhone's home screen in dark and light mode: its card, its texts, the fainter
+ * day numbers, a day outside the period, and the Calendar's red marking a day with the number on
+ * it.
+ */
+const CALENDAR_COLORS = {
+  dark: {
+    card: '#1C1C1E',
+    ink: '#FFFFFF',
+    faded: '#8E8E93',
+    outside: '#48484A',
+    accent: '#FF453A',
+    marked: '#FFFFFF',
+  },
+  light: {
+    card: '#FFFFFF',
+    ink: '#000000',
+    faded: '#8E8E93',
+    outside: '#D1D1D6',
+    accent: '#FF3B30',
+    marked: '#FFFFFF',
+  },
+} as const;
+
+type CalendarColors = (typeof CALENDAR_COLORS)[keyof typeof CALENDAR_COLORS];
+
+/**
+ * The sizes of a period's calendar: its card's width, corners and room inside; its name and total
+ * at the top (smaller when they don't fit), the total's sport icon (its size and the room after
+ * it, shares of theirs), and the room under them. Day by day, each day's number over its figure (at most
+ * `value` big, smaller when the widest doesn't fit `room` of its column), the icon of a day's
+ * sport (a share of the figure's size), the room between them and between weeks. By months,
+ * three a row, the room between them; each month's name and total over its days, always six weeks
+ * tall so the months line up, the room under its name, each day's number and its mark (a share of
+ * its column).
+ */
+const CALENDAR = {
+  width: 840,
+  radius: 46,
+  pad: 56,
+  title: 32,
+  icon: { size: 1.1, gap: 0.3 },
+  headGap: 60,
+  days: { number: 20, value: 46, icon: 0.9, gap: 4, rowGap: 30, room: 0.72 },
+  months: {
+    perRow: 3,
+    gap: 28,
+    rowGap: 36,
+    name: 26,
+    total: 18,
+    nameGap: 14,
+    day: 14,
+    mark: 0.9,
+    weeks: 6,
+  },
+} as const;
+
+/** How a calendar writes a text: its value, size, color, weight and longest width. */
+type CalendarText = (
+  value: string,
+  size: number,
+  color: string,
+  bold: boolean,
+  maxWidth?: number,
+) => Box;
+
+/**
+ * A period as a calendar, a widget of the iPhone's home screen (see `calendarView`), in a wide,
+ * geometric font as the widget it copies: its name and its distance in words ("143 kilómetros"),
+ * or its time without any, after its sport's icon (AllRun's monogram for every sport), over its
+ * weeks, Monday first, each day's number over its figure (see
+ * `calendarFigures`: its distance or time, rounded and bare, or its sport's icon on a day without
+ * any distance); or, longer, its months as the iPhone's Calendar shows a year, each with its
+ * total, its active days marked in the Calendar's red.
+ */
+export function periodCalendarBox(
+  block: Extract<SummaryBlock, { design: 'periodCalendar' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box | null {
+  const view = calendarView(data.summary.range);
+  if (view === null) {
+    return null;
+  }
+  const colors = CALENDAR_COLORS[block.layout];
+  const inner = CALENDAR.width - 2 * CALENDAR.pad;
+  const { summary } = data;
+  const measure = summaryHasDistance(summary) ? 'distance' : 'movingTime';
+  const text: CalendarText = (value, size, color, bold, maxWidth) =>
+    appTextBox(fonts, [{ text: value, size, bold }], color, {
+      font: 'unbounded',
+      ...(maxWidth === undefined ? {} : { maxWidth }),
+    });
+  const total =
+    measure === 'distance'
+      ? translate(`widgets.verified.${textContext.unit}`, {
+          value: roundedChartValue('distance', summary.totalDistanceMeters, textContext, false),
+        })
+      : plainSummaryText('totalMovingTime', summary.totalMovingTimeSeconds, textContext);
+  const name = periodName(data, textContext, translate);
+  // Its sport when of one; AllRun's monogram for every sport.
+  const mark: SportMark = data.families.length === 1 ? data.families[0] : 'allrun';
+  const totalAt = (size: number) =>
+    markedTotalBox(fonts, mark, total, size, colors.ink, CALENDAR.icon);
+  // Both as big as fits, but never cut: smaller when a long name doesn't leave room for the total.
+  const used =
+    text(name, CALENDAR.title, colors.ink, true).width +
+    totalAt(CALENDAR.title).width +
+    CALENDAR.title;
+  const title = Math.min(CALENDAR.title, (CALENDAR.title * inner) / used);
+  const head = spread(text(name, title, colors.ink, true), totalAt(title), inner);
+  // A day's number cut to its digits, so a mark around it is centered on them, and laid out
+  // large so that it stays there on the phone, as small as it is.
+  const digits: CalendarText = (value, size, color, bold) =>
+    scaledBox((scale) =>
+      capitalsBox(
+        fonts,
+        [{ text: value, size: size * scale, bold }],
+        size * scale,
+        0,
+        1,
+        { font: 'unbounded', color, bold: false, uppercase: false, italic: false },
+        { shadow: false },
+      ),
+    );
+  const body =
+    view === 'days'
+      ? calendarDaysBox(data, measure, inner, colors, text, textContext)
+      : calendarMonthsBox(data, measure, inner, colors, text, digits, textContext);
+  return panel(
+    column([head, body], CALENDAR.headGap, 'start'),
+    colors.card,
+    CALENDAR.pad,
+    CALENDAR.pad,
+    CALENDAR.radius,
+  );
+}
+
+/**
+ * A total after its sport's icon, or AllRun's monogram (see `SportMark`), `size` big, the mark
+ * centered on its capitals as a letter's middle is, not on its line's box, `look` its size and
+ * the room after it (shares of the total's size).
+ */
+function markedTotalBox(
+  fonts: Omit<BlockContext, 'canvas'>['fonts'],
+  mark: SportMark,
+  total: string,
+  size: number,
+  color: string,
+  look: { readonly size: number; readonly gap: number },
+): Box {
+  const laidOut = paragraph(
+    [{ text: total, size, bold: true }],
+    fonts,
+    { font: 'unbounded', color, bold: false, uppercase: false, italic: false },
+    { shadow: false },
+  );
+  const written = textBox(laidOut);
+  const icon = sportMarkBox(mark, size * look.size, color);
+  const baseline = laidOut.getLineMetrics()[0]?.baseline ?? laidOut.getHeight();
+  const middle = baseline - (CAP_HEIGHTS.unbounded * size) / 2;
+  const gap = size * look.gap;
+  return placed(icon.width + gap + written.width, written.height, [
+    { box: icon, x: 0, y: middle - icon.height / 2 },
+    { box: written, x: icon.width + gap, y: 0 },
+  ]);
+}
+
+/**
+ * A calendar's weeks one under another, `inner` wide: each day of the period its number over its
+ * figure, the days around it empty. The figures all as big as the widest lets them be.
+ */
+function calendarDaysBox(
+  data: SummaryData,
+  measure: 'distance' | 'movingTime',
+  inner: number,
+  colors: CalendarColors,
+  text: CalendarText,
+  textContext: BlockContext['textContext'],
+): Box {
+  const sizes = CALENDAR.days;
+  const cell = inner / 7;
+  const figures = calendarFigures(data.summary, data.activities);
+  const written = new Map(
+    [...figures].flatMap(([day, figure]) =>
+      figure.kind === 'amount'
+        ? [[day, roundedChartValue(measure, figure.amount, textContext, false)] as const]
+        : [],
+    ),
+  );
+  const widest = Math.max(
+    1,
+    ...[...written.values()].map((value) => text(value, sizes.value, colors.ink, true).width),
+  );
+  const size = Math.min(sizes.value, (sizes.value * cell * sizes.room) / widest);
+  const valueHeight = text('0', size, colors.ink, true).height;
+  const weeks = calendarWeeks(data.summary.range).map((week) =>
+    row(
+      week.map((day) => {
+        const figure = figures.get(day);
+        if (figure === undefined) {
+          return placed(cell, 0, []);
+        }
+        const value =
+          figure.kind === 'amount'
+            ? text(written.get(day) ?? '', size, colors.ink, true)
+            : overlay(
+                placed(0, valueHeight, []),
+                iconBox(sportIcon(figure.activity), size * sizes.icon, colors.ink),
+              );
+        return widened(
+          column(
+            [text(day.slice(8, 10), sizes.number, colors.faded, false), value],
+            sizes.gap,
+            'center',
+          ),
+          cell,
+          'center',
+        );
+      }),
+      0,
+      'end',
+    ),
+  );
+  return column(weeks, sizes.rowGap, 'start');
+}
+
+/**
+ * A calendar's months side by side, `inner` wide, as the iPhone's Calendar shows a year: each its
+ * name and total over its days, those with activities marked in its red, those outside the period
+ * fainter.
+ */
+function calendarMonthsBox(
+  data: SummaryData,
+  measure: 'distance' | 'movingTime',
+  inner: number,
+  colors: CalendarColors,
+  text: CalendarText,
+  digits: CalendarText,
+  textContext: BlockContext['textContext'],
+): Box {
+  const sizes = CALENDAR.months;
+  const { range } = data.summary;
+  const months = calendarMonths(range);
+  const perRow = Math.min(sizes.perRow, months.length);
+  const width = (inner - (perRow - 1) * sizes.gap) / perRow;
+  const cell = width / 7;
+  const inPeriod = data.activities.filter((activity) => isInRange(activity.localDate, range));
+  const active = new Set(inPeriod.map((activity) => activity.localDate));
+  // Square days, so marks on days a week apart don't touch either.
+  const dayHeight = cell;
+  const grids = months.map((month) => {
+    const amount = inPeriod
+      .filter((activity) => isInRange(activity.localDate, month))
+      .reduce(
+        (sum, activity) =>
+          sum + (measure === 'distance' ? activity.distanceMeters : activity.movingTimeSeconds),
+        0,
+      );
+    const totalBox = text(
+      roundedChartValue(measure, amount, textContext, true),
+      sizes.total,
+      colors.faded,
+      false,
+    );
+    const name = text(
+      formatShortBucketName(month, 'month', textContext.locale),
+      sizes.name,
+      colors.ink,
+      true,
+      width - totalBox.width - sizes.total,
+    );
+    const weeks = calendarWeeks(month).map((week) =>
+      row(
+        week.map((day) => {
+          const space = placed(cell, dayHeight, []);
+          if (!isInRange(day, month)) {
+            return space;
+          }
+          const marked = active.has(day);
+          const label = digits(
+            String(Number(day.slice(8, 10))),
+            sizes.day,
+            marked ? colors.marked : isInRange(day, range) ? colors.ink : colors.outside,
+            marked,
+          );
+          return overlay(
+            space,
+            marked ? overlay(discBox((cell * sizes.mark) / 2, colors.accent), label) : label,
+          );
+        }),
+        0,
+        'center',
+      ),
+    );
+    return column(
+      [
+        spread(name, totalBox, width),
+        placed(width, sizes.weeks * dayHeight, [{ box: column(weeks, 0, 'start'), x: 0, y: 0 }]),
+      ],
+      sizes.nameGap,
+      'start',
+    );
+  });
+  const rows = Array.from({ length: Math.ceil(grids.length / perRow) }, (_, i) =>
+    row(grids.slice(i * perRow, (i + 1) * perRow), sizes.gap, 'start'),
+  );
+  return column(rows, sizes.rowGap, 'start');
 }

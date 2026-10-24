@@ -161,6 +161,7 @@ export const en = {
       periodGrandPrix: 'Grand Prix',
       periodReceipt: 'Receipt',
       periodBoardingPass: 'Boarding pass',
+      periodCalendar: 'Calendar',
     },
     blocks: {
       bigTrio: 'Big datum and three',

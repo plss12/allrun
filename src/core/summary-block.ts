@@ -1,6 +1,15 @@
 import type { Activity } from './activity';
 import type { BlockLettering } from './activity-block';
-import { type DateRange, rangeLength } from './dates';
+import {
+  addDays,
+  type DateRange,
+  isInRange,
+  type LocalDate,
+  monthRange,
+  rangeLength,
+  toEpochDay,
+  weekRange,
+} from './dates';
 import { bucketCount } from './periods';
 import type { SportFamily, SportModality } from './sports';
 import { type BucketSize, familyTotals, type PeriodSummary } from './summary';
@@ -74,6 +83,7 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodGrandPrix',
   'periodReceipt',
   'periodBoardingPass',
+  'periodCalendar',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -312,10 +322,111 @@ export function noteActivities(activities: readonly Activity[]): NoteActivity[] 
   }));
 }
 
+/** Most weeks a period's calendar draws day by day, each day with its figure: a month's. */
+export const MAX_CALENDAR_WEEKS = 6;
+
+/** Most months a period's calendar draws side by side: a year's. */
+export const MAX_CALENDAR_MONTHS = 12;
+
+/**
+ * How a period's calendar draws it: `days`, its weeks one under another, each day with its figure
+ * (a week, a month or a range of up to {@link MAX_CALENDAR_WEEKS} weeks); `months`, the months it
+ * touches side by side, its active days marked, as the iPhone's Calendar shows a year (up to
+ * {@link MAX_CALENDAR_MONTHS}).
+ */
+export type CalendarView = 'days' | 'months';
+
+/**
+ * The Monday-to-Sunday weeks a calendar draws `range` in, from the one its first day falls in to
+ * the one its last day does, each its seven dates; those outside `range` are drawn empty. Time
+ * and space O(d) for d days.
+ */
+export function calendarWeeks(range: DateRange): LocalDate[][] {
+  const first = weekRange(range.start).start;
+  const count = (toEpochDay(weekRange(range.end).end) - toEpochDay(first) + 1) / 7;
+  return Array.from({ length: count }, (_, week) =>
+    Array.from({ length: 7 }, (_, day) => addDays(first, week * 7 + day)),
+  );
+}
+
+/** The calendar months `range` touches, first to last, whole. Time and space O(m) for m months. */
+export function calendarMonths(range: DateRange): DateRange[] {
+  const months = [monthRange(range.start)];
+  while (months[months.length - 1].end < range.end) {
+    months.push(monthRange(addDays(months[months.length - 1].end, 1)));
+  }
+  return months;
+}
+
+/**
+ * How a period's calendar draws it (see {@link CalendarView}): day by day up to
+ * {@link MAX_CALENDAR_WEEKS} weeks, by months up to {@link MAX_CALENDAR_MONTHS}; `null` for a
+ * longer range, which it doesn't draw. Time and space O(1).
+ */
+export function calendarView(range: DateRange): CalendarView | null {
+  const weeks =
+    (toEpochDay(weekRange(range.end).end) - toEpochDay(weekRange(range.start).start) + 1) / 7;
+  if (weeks <= MAX_CALENDAR_WEEKS) {
+    return 'days';
+  }
+  return bucketCount(range, 'month') <= MAX_CALENDAR_MONTHS ? 'months' : null;
+}
+
+/**
+ * What a day of a period's calendar shows under its number: how far it went, or how long in a
+ * period without any distance (`amount`, in meters or seconds; 0 on a day without activities);
+ * or, on a day with activities but no distance in a period with some (a gym day, whose "0" would
+ * read as a rest day), its longest activity, whose sport's icon stands for it.
+ */
+export type CalendarFigure =
+  | { readonly kind: 'amount'; readonly amount: number }
+  | { readonly kind: 'sport'; readonly activity: Activity };
+
+/**
+ * The figure of each day of `summary`'s range (see {@link CalendarFigure}), by date: its distance
+ * when the period has any, else its time. Time O(d + n) for d days and n activities.
+ */
+export function calendarFigures(
+  summary: PeriodSummary,
+  activities: readonly Activity[],
+): Map<LocalDate, CalendarFigure> {
+  const distance = summaryHasDistance(summary);
+  const amounts = new Map<LocalDate, number>();
+  const longest = new Map<LocalDate, Activity>();
+  for (const activity of activities) {
+    if (!isInRange(activity.localDate, summary.range)) {
+      continue;
+    }
+    const day = activity.localDate;
+    amounts.set(
+      day,
+      (amounts.get(day) ?? 0) + (distance ? activity.distanceMeters : activity.movingTimeSeconds),
+    );
+    const best = longest.get(day);
+    if (best === undefined || longer(activity, best)) {
+      longest.set(day, activity);
+    }
+  }
+  const figures = new Map<LocalDate, CalendarFigure>();
+  for (let i = 0; i < rangeLength(summary.range); i++) {
+    const day = addDays(summary.range.start, i);
+    const amount = amounts.get(day) ?? 0;
+    const activity = longest.get(day);
+    figures.set(
+      day,
+      amount === 0 && activity !== undefined
+        ? { kind: 'sport', activity }
+        : { kind: 'amount', amount },
+    );
+  }
+  return figures;
+}
+
 /**
  * The data widgets a period fills, in the gallery's order: its name over one, two and three of its
  * main totals (as many as it has, see `periodTotals`); its table of distance (only when it has
- * some) and of time; its total per sport, written and with icons, only when it mixes two sports or
+ * some) and of time; its total per sport, written (also for one sport, so a summary of runs has
+ * it too, the sport named under the period's name) and with icons only when it mixes two sports or
  * more (with one, it would repeat the first); its days with their activities' icons, only for a
  * week or shorter; its activities with their routes, one by one only up to a month (a year has
  * too many) and overlaid (its main sport's icon, without any route), after its card per sport, as
@@ -325,8 +436,9 @@ export function noteActivities(activities: readonly Activity[]): NoteActivity[] 
  * color; its note,
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
  * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race;
- * its receipt; and its boarding pass in each brand color. None for a period without activities.
- * Time O(1).
+ * its receipt; its boarding pass in each brand color; and those without an activity's twin: its
+ * calendar, in dark and light mode, up to a year (see `calendarView`). None for a period without
+ * activities. Time O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -343,7 +455,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
       .filter((count) => count <= totals)
       .map((count): SummaryBlock => ({ design: 'periodData', count })),
     ...values.map((value): SummaryBlock => ({ design: 'periodTable', value })),
-    ...(mixed ? [{ design: 'periodSports' } as const] : []),
+    { design: 'periodSports' },
     ...(mixed ? [{ design: 'periodIcons', layout: 'sports' } as const] : []),
     ...(days <= MAX_DAYS_LISTED ? [{ design: 'periodIcons', layout: 'days' } as const] : []),
     { design: 'periodCards' },
@@ -368,6 +480,9 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     { design: 'periodGrandPrix' },
     { design: 'periodReceipt' },
     ...BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodBoardingPass', cover })),
+    ...(calendarView(summary.range) === null
+      ? []
+      : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
   ];
 }
 
@@ -406,6 +521,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodGrandPrix':
     case 'periodReceipt':
     case 'periodBoardingPass':
+    case 'periodCalendar':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

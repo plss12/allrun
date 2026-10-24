@@ -156,6 +156,7 @@ export const es: Translations = {
       periodGrandPrix: 'Gran Premio',
       periodReceipt: 'Ticket',
       periodBoardingPass: 'Tarjeta de embarque',
+      periodCalendar: 'Calendario',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',

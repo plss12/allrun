@@ -3,6 +3,10 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { customRange, type DateRange, monthRange, weekRange, yearRange } from './dates';
 import { summarize } from './summary';
 import {
+  calendarFigures,
+  calendarMonths,
+  calendarView,
+  calendarWeeks,
   GRAND_PRIX_TOP,
   grandPrixActivities,
   gridColumns,
@@ -46,13 +50,14 @@ describe('summaryBlocks', () => {
     localDate: '2026-10-15',
   });
 
-  it('offers the period with one, two and three data, its tables and nothing per sport alone', () => {
+  it('offers the period with one, two and three data, its tables and its one sport written', () => {
     expect(summaryBlocks(summarize([run], week))).toEqual([
       { design: 'periodData', count: 1 },
       { design: 'periodData', count: 2 },
       { design: 'periodData', count: 3 },
       { design: 'periodTable', value: 'distance' },
       { design: 'periodTable', value: 'movingTime' },
+      { design: 'periodSports' },
       { design: 'periodIcons', layout: 'days' },
       { design: 'periodCards' },
       { design: 'periodRoutes', layout: 'grid' },
@@ -80,6 +85,8 @@ describe('summaryBlocks', () => {
       { design: 'periodReceipt' },
       { design: 'periodBoardingPass', cover: 'red' },
       { design: 'periodBoardingPass', cover: 'ink' },
+      { design: 'periodCalendar', layout: 'dark' },
+      { design: 'periodCalendar', layout: 'light' },
     ]);
   });
 
@@ -106,6 +113,7 @@ describe('summaryBlocks', () => {
       { design: 'periodData', count: 1 },
       { design: 'periodData', count: 2 },
       { design: 'periodTable', value: 'movingTime' },
+      { design: 'periodSports' },
       { design: 'periodIcons', layout: 'days' },
       { design: 'periodCards' },
       { design: 'periodRoutes', layout: 'grid' },
@@ -135,6 +143,8 @@ describe('summaryBlocks', () => {
       { design: 'periodReceipt' },
       { design: 'periodBoardingPass', cover: 'red' },
       { design: 'periodBoardingPass', cover: 'ink' },
+      { design: 'periodCalendar', layout: 'dark' },
+      { design: 'periodCalendar', layout: 'light' },
     ]);
   });
 
@@ -164,6 +174,7 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodGrandPrix')).toBe(true);
     expect(isSummaryReplica('periodReceipt')).toBe(true);
     expect(isSummaryReplica('periodBoardingPass')).toBe(true);
+    expect(isSummaryReplica('periodCalendar')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
@@ -343,5 +354,94 @@ describe('gridColumns', () => {
     expect(gridColumns(13)).toBe(5);
     expect(gridColumns(16)).toBe(6);
     expect(gridColumns(30)).toBe(6);
+  });
+});
+
+describe('calendarView', () => {
+  it("draws a week's, a month's and a short range's days, and a year's months", () => {
+    expect(calendarView(week)).toBe('days');
+    // October 2026 starts on a Thursday and ends on a Saturday: 5 weeks; August 2026, 6.
+    expect(calendarView(monthRange('2026-10-01'))).toBe('days');
+    expect(calendarView(monthRange('2026-08-01'))).toBe('days');
+    expect(calendarView(customRange('2026-09-01', '2026-10-11'))).toBe('days');
+    expect(calendarView(customRange('2026-09-01', '2026-10-12'))).toBe('months');
+    expect(calendarView(yearRange('2026-01-01'))).toBe('months');
+  });
+
+  it('draws nothing of a range touching more than 12 months', () => {
+    expect(calendarView(customRange('2025-10-15', '2026-10-14'))).toBeNull();
+    expect(
+      summaryBlocks(
+        summarize(
+          [makeActivity({ sportType: 'Run', localDate: '2026-10-13' })],
+          customRange('2025-10-15', '2026-10-14'),
+        ),
+      ).some((block) => block.design === 'periodCalendar'),
+    ).toBe(false);
+  });
+});
+
+describe('calendarWeeks', () => {
+  it('draws whole weeks from Monday to Sunday around the period', () => {
+    const weeks = calendarWeeks(monthRange('2026-10-01'));
+    expect(weeks).toHaveLength(5);
+    expect(weeks[0][0]).toBe('2026-09-28');
+    expect(weeks[0][3]).toBe('2026-10-01');
+    expect(weeks[4][6]).toBe('2026-11-01');
+    expect(calendarWeeks(week)).toEqual([
+      [
+        '2026-10-12',
+        '2026-10-13',
+        '2026-10-14',
+        '2026-10-15',
+        '2026-10-16',
+        '2026-10-17',
+        '2026-10-18',
+      ],
+    ]);
+  });
+});
+
+describe('calendarMonths', () => {
+  it('lists the whole months a period touches', () => {
+    expect(calendarMonths(yearRange('2026-01-01'))).toHaveLength(12);
+    expect(calendarMonths(customRange('2026-08-20', '2026-10-05'))).toEqual([
+      { start: '2026-08-01', end: '2026-08-31' },
+      { start: '2026-09-01', end: '2026-09-30' },
+      { start: '2026-10-01', end: '2026-10-31' },
+    ]);
+  });
+});
+
+describe('calendarFigures', () => {
+  const run = (localDate: string, km: number) =>
+    makeActivity({ sportType: 'Run', localDate, distanceMeters: km * 1000 });
+  const gym = (localDate: string, minutes: number) =>
+    makeActivity({
+      sportType: 'WeightTraining',
+      localDate,
+      distanceMeters: 0,
+      elevationGainMeters: 0,
+      routePolyline: null,
+      movingTimeSeconds: minutes * 60,
+    });
+
+  it("adds up each day's distance, a rest day's 0 and a gym day's sport", () => {
+    const short = gym('2026-10-14', 30);
+    const long = gym('2026-10-14', 60);
+    const activities = [run('2026-10-12', 10), run('2026-10-12', 5), short, long];
+    const figures = calendarFigures(summarize(activities, week), activities);
+    expect(figures.size).toBe(7);
+    expect(figures.get('2026-10-12')).toEqual({ kind: 'amount', amount: 15_000 });
+    expect(figures.get('2026-10-13')).toEqual({ kind: 'amount', amount: 0 });
+    // A gym day by its longest session, not as a rest day.
+    expect(figures.get('2026-10-14')).toEqual({ kind: 'sport', activity: long });
+  });
+
+  it("adds up each day's time in a period without any distance", () => {
+    const activities = [gym('2026-10-14', 30), gym('2026-10-14', 45)];
+    const figures = calendarFigures(summarize(activities, week), activities);
+    expect(figures.get('2026-10-14')).toEqual({ kind: 'amount', amount: 75 * 60 });
+    expect(figures.get('2026-10-15')).toEqual({ kind: 'amount', amount: 0 });
   });
 });

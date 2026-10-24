@@ -107,6 +107,8 @@ type Piece =
       readonly y: number;
       /** Drawn this many times taller than it is laid out (see `STRETCHED_FONTS`). */
       readonly stretch?: number;
+      /** Drawn this many times its laid-out size: a small text laid out large (see `scaledBox`). */
+      readonly scale?: number;
       /** Casts the shadow of shapes once stretched, laid out without its own (see `capitals`). */
       readonly shadow?: true;
       /**
@@ -320,6 +322,35 @@ export function turned(box: Box): Box {
           throw new Error(`Only texts turn, not a ${piece.kind}`);
         }
         return { ...piece, turn: { x, y, length: box.width } };
+      }),
+  };
+}
+
+/** How many times larger than drawn a small text is laid out (see `scaledBox`). */
+const LAYOUT_SCALE = 4;
+
+/**
+ * A box of texts laid out {@link LAYOUT_SCALE} times larger than drawn, `build` laying it out
+ * that many times its size: the phone rounds small type's metrics and advances to whole units,
+ * which moves a text a few units big off where it is measured (a day's number off the center of
+ * its mark); laid out large, the rounding is too small to see.
+ */
+export function scaledBox(build: (scale: number) => Box): Box {
+  const box = build(LAYOUT_SCALE);
+  return {
+    width: box.width / LAYOUT_SCALE,
+    height: box.height / LAYOUT_SCALE,
+    place: (x, y) =>
+      box.place(0, 0).map((piece) => {
+        if (piece.kind !== 'text') {
+          throw new Error(`Only texts scale, not a ${piece.kind}`);
+        }
+        return {
+          ...piece,
+          x: x + piece.x / LAYOUT_SCALE,
+          y: y + piece.y / LAYOUT_SCALE,
+          scale: (piece.scale ?? 1) / LAYOUT_SCALE,
+        };
       }),
   };
 }
@@ -4078,7 +4109,7 @@ function BlockArt({
         }
         const width = Math.ceil(piece.paragraph.getLongestLine()) + 1;
         const text =
-          piece.stretch !== undefined ? (
+          piece.stretch !== undefined || piece.scale !== undefined ? (
             // The shadow's layer is outside the stretch, so the shadow is cast once stretched.
             <Group
               key={i}
@@ -4094,7 +4125,8 @@ function BlockArt({
                 transform={[
                   { translateX: piece.x },
                   { translateY: piece.y },
-                  { scaleY: piece.stretch },
+                  { scale: piece.scale ?? 1 },
+                  { scaleY: piece.stretch ?? 1 },
                 ]}
               >
                 <Paragraph paragraph={piece.paragraph} x={0} y={0} width={width} />

@@ -395,6 +395,7 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodGrandPrix',
       'summaryBlock-periodReceipt',
       'summaryBlock-periodBoardingPass',
+      'summaryBlock-periodCalendar',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',
@@ -405,6 +406,7 @@ describe('summaryCatalog', () => {
     expect(tileKeys(catalog, 'data')).toEqual([
       'summaryBlock-periodData',
       'summaryBlock-periodTable',
+      'summaryBlock-periodSports',
       'summaryBlock-periodIcons',
       'summaryBlock-periodCards',
       'summaryBlock-periodRoutes',

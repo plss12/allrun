@@ -29,6 +29,7 @@ import {
 import {
   familyCard,
   periodTable,
+  periodName,
   periodTitle,
   plainMetricText,
   plainSummaryText,
@@ -40,6 +41,7 @@ import { CAP_HEIGHTS } from './fonts';
 import { softBackdrop } from './scene-text';
 import {
   periodBoardingPassBox,
+  periodCalendarBox,
   periodGrandPrixBox,
   periodLapsBox,
   periodNotesBox,
@@ -302,12 +304,11 @@ export function prepareSummaryBlock(
       }
       case 'periodSports': {
         // The period's name, then each sport's name over its total: its distance, or its time
-        // when it has none.
+        // when it has none. The period by its name alone: a summary of one sport names it under
+        // it, not after it too ("Esta semana · Carreras" over "Carreras").
         const sizes = SIZES.periodSports;
         const sports = familyTotals(data.activities);
-        if (sports.length < 2) {
-          return null;
-        }
+        const period = periodName(data, textContext, translate);
         const names = sports.map((sport) => translate(`families.${sport.family}`));
         const totals = sports.map((sport) =>
           sport.distanceMeters > 0
@@ -315,12 +316,12 @@ export function prepareSummaryBlock(
             : plainSummaryText('totalMovingTime', sport.movingTimeSeconds, compact),
         );
         // The names, and the totals, cut as one: an accent ("NATACIÓN") opens no wider gap.
-        const shared = [title, ...names].join(' ');
+        const shared = [period, ...names].join(' ');
         const text = (value: string, below: number, all: string) =>
           line(value, sizes.text, below, all);
         return column(
           [
-            text(title, sizes.text * BELOW, shared),
+            text(period, sizes.text * BELOW, shared),
             ...sports.map((_, i) =>
               column(
                 [
@@ -598,6 +599,8 @@ export function prepareSummaryBlock(
         return periodReceiptBox(data, { fonts, textContext, translate });
       case 'periodBoardingPass':
         return periodBoardingPassBox(block, data, { fonts, textContext, translate });
+      case 'periodCalendar':
+        return periodCalendarBox(block, data, { fonts, textContext: compact, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

@@ -466,8 +466,9 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * (`periodWrapped`); a checklist of the iPhone's Notes, its activities or
  * its days, weeks or months ticked off (`periodNotes`); its days, weeks or months as the laps of a
  * karting's board or timing sheet (`periodLaps`); its activities as a race's classification on a
- * timing tower (`periodGrandPrix`); as a shop's receipt (`periodReceipt`); and as a flight from
- * its first activity to its last (`periodBoardingPass`).
+ * timing tower (`periodGrandPrix`); as a shop's receipt (`periodReceipt`); as a flight from
+ * its first activity to its last (`periodBoardingPass`); and as a calendar, its days with their
+ * figures or its months with their active days marked (`periodCalendar`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -505,6 +506,7 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('periodGrandPrix') }),
   z.object({ design: z.literal('periodReceipt') }),
   z.object({ design: z.literal('periodBoardingPass'), cover: z.enum(BRAND_COVERS) }),
+  z.object({ design: z.literal('periodCalendar'), layout: z.enum(APP_MODES) }),
 ]);
 
 export type SummaryBlock = z.infer<typeof summaryBlockSchema>;
