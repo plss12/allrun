@@ -6,6 +6,7 @@ import {
   formatTimeAfter,
   formatBucketLabels,
   formatBucketName,
+  formatShortBucketName,
   formatChartValue,
   formatMetric,
   formatPeriodName,
@@ -129,6 +130,19 @@ describe('formatBucketName', () => {
       '5–11 oct',
     );
     expect(formatBucketName(monthRange('2026-10-01'), 'month', false, 'es')).toBe('Octubre');
+  });
+});
+
+describe('formatShortBucketName', () => {
+  it('names a day by its short weekday, a week by its days and a month short', () => {
+    const wednesday = { start: '2026-10-14', end: '2026-10-14' };
+    expect(formatShortBucketName(wednesday, 'day', 'es')).toBe('Mié');
+    expect(formatShortBucketName(wednesday, 'day', 'en')).toBe('Wed');
+    expect(formatShortBucketName(customRange('2026-10-05', '2026-10-11'), 'week', 'es')).toBe(
+      '5–11 oct',
+    );
+    expect(formatShortBucketName(monthRange('2026-09-01'), 'month', 'es')).toBe('Sept');
+    expect(formatShortBucketName(monthRange('2026-10-01'), 'month', 'en')).toBe('Oct');
   });
 });
 

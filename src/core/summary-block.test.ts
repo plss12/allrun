@@ -70,6 +70,10 @@ describe('summaryBlocks', () => {
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
       { design: 'periodNotes', layout: 'light', rows: 'buckets' },
+      { design: 'periodLaps', layout: 'board', cover: 'red' },
+      { design: 'periodLaps', layout: 'board', cover: 'ink' },
+      { design: 'periodLaps', layout: 'sheet', cover: 'red' },
+      { design: 'periodLaps', layout: 'sheet', cover: 'ink' },
     ]);
   });
 
@@ -116,6 +120,11 @@ describe('summaryBlocks', () => {
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
       { design: 'periodNotes', layout: 'light', rows: 'buckets' },
+      // Its laps by their calories.
+      { design: 'periodLaps', layout: 'board', cover: 'red' },
+      { design: 'periodLaps', layout: 'board', cover: 'ink' },
+      { design: 'periodLaps', layout: 'sheet', cover: 'red' },
+      { design: 'periodLaps', layout: 'sheet', cover: 'ink' },
     ]);
   });
 
@@ -141,6 +150,7 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodSentence')).toBe(true);
     expect(isSummaryReplica('periodPlaylist')).toBe(true);
     expect(isSummaryReplica('periodWrapped')).toBe(true);
+    expect(isSummaryReplica('periodLaps')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 

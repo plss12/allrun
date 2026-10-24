@@ -30,7 +30,12 @@ import {
   type PeriodSentenceLead,
   tableBucket,
 } from '@/core/summary-block';
-import { periodTotals, summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
+import {
+  periodTotals,
+  summaryHasDistance,
+  summaryMetricValue,
+  toDisplaySummaryMetric,
+} from '@/core/summary-metrics';
 import type {
   ActivityChartSeries,
   ChatPhrase,
@@ -46,6 +51,7 @@ import {
   type FormattedMetric,
   formatMetric,
   formatPeriodName,
+  formatShortBucketName,
 } from '@/ui/format';
 
 /** A period summary to fill a template with. */
@@ -130,7 +136,7 @@ export type LabelKey =
   | 'widgets.sessions'
   | `widgets.verses.${Verse}.${'text' | 'source'}`
   | `widgets.quotes.${Quote}.${'text' | 'author'}`
-  | `widgets.laps.${'title' | 'lap' | 'distance' | 'time' | 'pace' | 'speed'}`
+  | `widgets.laps.${'title' | 'lap' | 'distance' | 'calories' | 'time' | 'pace' | 'speed' | 'activities'}`
   | 'widgets.grandPrix.leader'
   | `widgets.splitBars.${DistanceUnit}`
   | 'widgets.splitLadder.title'
@@ -1048,6 +1054,136 @@ export function periodNoteLines(
           : [],
     };
   });
+}
+
+/** A period's laps as its board or timing sheet writes them (see `periodLaps`). */
+export interface PeriodLaps {
+  readonly names: readonly [string, string, string, string];
+  readonly rows: readonly {
+    readonly number: string;
+    /** Its distance, or its calories without one, and their unit. */
+    readonly distance: string;
+    readonly unit: string;
+    readonly time: string;
+    readonly value: string;
+  }[];
+  /** The longest lap, in the brand color. */
+  readonly fastest: number;
+  /** The distance's unit, or the calories' without any distance. */
+  readonly unit: string;
+  /** What follows a value on the board ("/km"). */
+  readonly after: string;
+  /** What the last column is: a pace, a speed or how many activities. */
+  readonly value: 'pace' | 'speed' | 'count';
+  readonly title: string;
+}
+
+/**
+ * A period's laps: its days, weeks or months with activities (see `tableBucket`), each named short
+ * ("MIÉ", "6–12 OCT", "OCT"), with its distance, or its calories when it went none (a gym day's
+ * "0 km" says nothing; a dash without them), its time and, for a period of one sport with a
+ * distance, its pace or speed as the sport writes it, or else its number of activities (an average
+ * over different sports means little); the longest lap in the brand color (in time, without any
+ * distance), the period's name as the sheet's title. A period without any distance names the
+ * column after the calories. Time O(b · n) for b days, weeks or months and n activities.
+ */
+export function periodLaps(
+  data: SummaryData,
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): PeriodLaps {
+  const size = tableBucket(data.summary.range);
+  const laps = bucketize(data.activities, data.summary.range, size).filter(
+    (bucket) => bucket.activityCount > 0,
+  );
+  const withDistance = summaryHasDistance(data.summary);
+  const [family] = data.summary.families;
+  const measure = data.summary.families.length === 1 && withDistance ? speedMeasure(family) : null;
+  const unit = context.unitLabel(context.unit);
+  const kcal = context.unitLabel('kcal');
+  const imperial = context.unit === 'mi';
+  const length = (lap: SummaryBucket) =>
+    withDistance ? lap.distanceMeters : lap.movingTimeSeconds;
+  const fastest = laps.reduce(
+    (best, lap, i) => (best === -1 || length(lap) > length(laps[best]) ? i : best),
+    -1,
+  );
+  /** A lap's calories, a dash when none of its activities has them. */
+  const calories = (lap: SummaryBucket): string => {
+    const burned = data.activities
+      .filter(
+        (activity) =>
+          activity.localDate >= lap.range.start &&
+          activity.localDate <= lap.range.end &&
+          activity.calories !== null,
+      )
+      .map((activity) => activity.calories ?? 0);
+    return burned.length === 0
+      ? MISSING_VALUE
+      : formatMetric(
+          toDisplayMetric(
+            'calories',
+            burned.reduce((sum, value) => sum + value, 0),
+            { unit: context.unit, sportFamily: 'training' },
+          ),
+          context.locale,
+        ).value;
+  };
+  return {
+    names: [
+      translate('widgets.laps.lap'),
+      translate(withDistance ? 'widgets.laps.distance' : 'widgets.laps.calories'),
+      translate('widgets.laps.time'),
+      translate(
+        measure === null
+          ? 'widgets.laps.activities'
+          : measure === 'speed'
+            ? 'widgets.laps.speed'
+            : 'widgets.laps.pace',
+      ),
+    ],
+    rows: laps.map((lap) => {
+      const burned = lap.distanceMeters <= 0;
+      return {
+        number: formatShortBucketName(lap.range, size, context.locale).toLocaleUpperCase(
+          context.locale,
+        ),
+        distance: burned
+          ? calories(lap)
+          : formatMetric(
+              toDisplayMetric('distance', lap.distanceMeters, {
+                unit: context.unit,
+                sportFamily: 'run',
+              }),
+              context.locale,
+            ).value,
+        unit: burned ? kcal : unit,
+        time: formatDuration(lap.movingTimeSeconds),
+        value:
+          measure === null
+            ? String(lap.activityCount)
+            : burned || lap.movingTimeSeconds <= 0
+              ? MISSING_VALUE
+              : formatMetric(
+                  toDisplayMetric(measure, lap.distanceMeters / lap.movingTimeSeconds, {
+                    unit: context.unit,
+                    sportFamily: family,
+                  }),
+                  context.locale,
+                ).value,
+      };
+    }),
+    fastest,
+    unit: withDistance ? unit : kcal,
+    after:
+      measure === null
+        ? ''
+        : measure === 'pace'
+          ? `/${unit}`
+          : ` ${context.unitLabel(measure === 'speed' ? (imperial ? 'mph' : 'km/h') : imperial ? 'min/100yd' : 'min/100m')}`,
+    value: measure === null ? 'count' : measure === 'speed' ? 'speed' : 'pace',
+    title: periodTitle(data, context, translate),
+  };
 }
 
 /** A period's table as its widget writes it (see `periodTable`). */

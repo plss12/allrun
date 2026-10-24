@@ -19,6 +19,7 @@ import {
   layerText,
   periodChartHeader,
   familyCard,
+  periodLaps,
   periodNoteLines,
   periodTable,
   periodTotalsHeader,
@@ -709,6 +710,94 @@ describe('periodNoteLines', () => {
       sports: ['training'],
     });
     expect(periodNoteLines(alone, 'activities', context, translate)[0].highlighted).toBe(false);
+  });
+});
+
+describe('periodLaps', () => {
+  const translate = (key: string): string =>
+    ({
+      'widgets.laps.lap': 'Vuelta',
+      'widgets.laps.distance': 'Dist.',
+      'widgets.laps.calories': 'Kcal',
+      'widgets.laps.time': 'Tiempo',
+      'widgets.laps.pace': 'Ritmo',
+      'widgets.laps.speed': 'Vel.',
+      'widgets.laps.activities': 'Act.',
+      thisWeek: 'Esta semana',
+    })[key] ?? key;
+  const range = weekRange('2026-10-14');
+  const run = (localDate: string, distanceMeters: number, movingTimeSeconds: number) =>
+    makeActivity({ sportType: 'Run', localDate, distanceMeters, movingTimeSeconds });
+  const runs = [run('2026-10-13', 10_000, 3_000), run('2026-10-15', 21_100, 6_330)];
+  const week = (activities: readonly ReturnType<typeof run>[]): SummaryData => ({
+    mode: 'summary',
+    kind: 'week',
+    summary: summarize(activities, range),
+    activities,
+    bucketSize: 'day',
+    families: [],
+    current: true,
+  });
+
+  it("writes a lap per day with activities, a sport's pace, and the longest as the fastest", () => {
+    const laps = periodLaps(week(runs), context, translate);
+    expect(laps.names).toEqual(['Vuelta', 'Dist.', 'Tiempo', 'Ritmo']);
+    const km = testUnitLabel('km');
+    expect(laps.rows).toEqual([
+      { number: 'MAR', distance: '10,00', unit: km, time: '50:00', value: '5:00' },
+      { number: 'JUE', distance: '21,10', unit: km, time: '1:45:30', value: '5:00' },
+    ]);
+    expect(laps.fastest).toBe(1);
+    expect(laps.after).toBe(`/${km}`);
+    expect(laps.value).toBe('pace');
+    expect(laps.title).toBe('Esta semana');
+  });
+
+  it('counts the activities of a lap instead of an average over different sports', () => {
+    const ride = makeActivity({
+      sportType: 'Ride',
+      localDate: '2026-10-13',
+      distanceMeters: 40_000,
+      movingTimeSeconds: 5_400,
+    });
+    const laps = periodLaps(week([...runs, ride]), context, translate);
+    expect(laps.names[3]).toBe('Act.');
+    expect(laps.rows.map((row) => row.value)).toEqual(['2', '1']);
+    expect(laps.after).toBe('');
+    expect(laps.value).toBe('count');
+  });
+
+  it("writes a day without distance by its calories, and a gym's laps after them", () => {
+    const gym = (localDate: string, calories: number | null) =>
+      makeActivity({
+        sportType: 'WeightTraining',
+        localDate,
+        distanceMeters: 0,
+        elevationGainMeters: 0,
+        routePolyline: null,
+        movingTimeSeconds: 3_600,
+        calories,
+      });
+    const kcal = testUnitLabel('kcal');
+    // A gym day among runs: its calories instead of "0 km".
+    const mixed = periodLaps(week([...runs, gym('2026-10-14', 512)]), context, translate);
+    expect(mixed.names[1]).toBe('Dist.');
+    expect(mixed.rows[1]).toEqual({
+      number: 'MIÉ',
+      distance: '512',
+      unit: kcal,
+      time: '1:00:00',
+      value: '1',
+    });
+    // Only gym sessions: the column is the calories', a dash where none were recorded.
+    const sessions = periodLaps(
+      week([gym('2026-10-13', 400), gym('2026-10-16', null)]),
+      context,
+      translate,
+    );
+    expect(sessions.names[1]).toBe('Kcal');
+    expect(sessions.rows.map((row) => row.distance)).toEqual(['400', MISSING_VALUE]);
+    expect(sessions.value).toBe('count');
   });
 });
 

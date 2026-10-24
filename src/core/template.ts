@@ -464,7 +464,8 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * its totals highlighted (`periodSentence`); its activities as the songs of a playlist of the
  * iPhone's Music (`periodPlaylist`); its year in review, as music apps sum one up
  * (`periodWrapped`); a checklist of the iPhone's Notes, its activities or
- * its days, weeks or months ticked off (`periodNotes`).
+ * its days, weeks or months ticked off (`periodNotes`); its days, weeks or months as the laps of a
+ * karting's board or timing sheet (`periodLaps`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -493,6 +494,11 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
     design: z.literal('periodNotes'),
     layout: z.enum(APP_MODES),
     rows: z.enum(['activities', 'buckets']),
+  }),
+  z.object({
+    design: z.literal('periodLaps'),
+    layout: z.enum(LAPS_LAYOUTS),
+    cover: z.enum(BRAND_COVERS),
   }),
 ]);
 

@@ -157,6 +157,7 @@ export const en = {
       periodPlaylist: 'Playlist',
       periodWrapped: 'Recap',
       periodNotes: 'Notes',
+      periodLaps: 'Laps',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -357,9 +358,12 @@ export const en = {
       title: 'Laps',
       lap: 'Lap',
       distance: 'Dist',
+      calories: 'Kcal',
       time: 'Time',
       pace: 'Pace',
       speed: 'Speed',
+      /** A period's laps of different sports: how many activities, instead of an average. */
+      activities: 'Acts',
     },
     /** A race's timing tower: the leader's gap. */
     grandPrix: { leader: 'Leader' },

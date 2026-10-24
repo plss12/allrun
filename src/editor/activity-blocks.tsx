@@ -39,7 +39,7 @@ import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy
 import { type Point, projectRoutes } from '@/core/route-projection';
 import type { HitHole } from '@/core/layer-transform';
 import type { Size } from '@/core/photo-framing';
-import type { APP_MODES, FontId, Layer } from '@/core/template';
+import type { APP_MODES, BRAND_COVERS, FontId, LAPS_LAYOUTS, Layer } from '@/core/template';
 import { durationParts } from '@/core/units';
 import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 
@@ -1286,7 +1286,178 @@ const CAMERA = {
  * most splits a timing tower lists, a grid's 20; more are grouped, as in the note.
  */
 const LAPS_ROWS = 24;
+/** A board's sport icon, a share of its column names' size. */
+const LAPS_ICON = 1.3;
 const GRAND_PRIX_ROWS = 20;
+
+/** A table of laps as `lapsTableBox` draws it: its rows' texts and how to write them. */
+export interface LapsTable {
+  /** The columns' names: the lap, its distance, its time and its pace, speed or count. */
+  readonly names: readonly [string, string, string, string];
+  readonly rows: readonly {
+    readonly number: string;
+    readonly distance: string;
+    /** The distance's unit when not the table's (a gym day's calories). */
+    readonly unit?: string;
+    readonly time: string;
+    readonly value: string;
+  }[];
+  /** The row in the brand color, -1 for none. */
+  readonly fastest: number;
+  /** The distance's unit, after each distance. */
+  readonly unit: string;
+  /** What follows a value on the board ("/km"). */
+  readonly after: string;
+  /** A value as the timing sheet writes it (a pace with its marks). */
+  readonly sheetValue: (value: string) => string;
+  /** The sheet's title. */
+  readonly title: string;
+  /**
+   * The sport the laps are all of, its icon before the board's first column name (a summary of
+   * one sport: the sheet says it in its title).
+   */
+  readonly icon?: SportIconId;
+}
+
+/**
+ * Laps as a table, of an activity or a period alike (see `LAPS`): a board of them (`board`), its
+ * numbers in a dot matrix on a see-through panel, or a karting's timing sheet (`sheet`) under its
+ * title; the fastest row in AllRun's `cover` color.
+ */
+export function lapsTableBox(
+  fonts: SkTypefaceFontProvider,
+  layout: (typeof LAPS_LAYOUTS)[number],
+  coverColor: (typeof BRAND_COVERS)[number],
+  table: LapsTable,
+): Box {
+  const { fastest } = table;
+  const cover = BRAND_COVER_COLORS[coverColor];
+  if (layout === 'board') {
+    // A board's dot matrix for its numbers.
+    const board = LAPS.board;
+    const { colors } = board;
+    const value = (amount: string, unitText: string) =>
+      appTextBox(
+        fonts,
+        [
+          { text: amount, size: board.value, bold: false },
+          { text: unitText, size: board.value * board.unit, bold: false },
+        ],
+        colors.ink,
+        { font: 'doto' },
+      );
+    const names = table.names.map((name, i) => {
+      const written = appTextBox(
+        fonts,
+        [{ text: name.toLocaleUpperCase(), size: board.header, bold: true }],
+        colors.ink,
+        {
+          shadow: true,
+        },
+      );
+      return i === 0 && table.icon !== undefined
+        ? row(
+            [iconBox(table.icon, board.header * LAPS_ICON, colors.ink), written],
+            board.header * 0.35,
+            'center',
+          )
+        : written;
+    });
+    const cells = table.rows.map((written) => [
+      appTextBox(fonts, [{ text: written.number, size: board.number, bold: false }], colors.faded, {
+        font: 'doto',
+      }),
+      value(written.distance, written.unit ?? table.unit),
+      value(written.time, ''),
+      value(written.value, table.after),
+    ]);
+    const widths = columnWidths([names, ...cells]);
+    const width = tableWidth(widths, board.gap, board.padX);
+    const body = placed(
+      width,
+      board.rowHeight * table.rows.length,
+      cells.flatMap((boxes, i) => [
+        ...(i === fastest || i % 2 === 1
+          ? [
+              {
+                box: fillBox(width, board.rowHeight, 0, i === fastest ? cover : colors.stripe, {}),
+                x: 0,
+                y: board.rowHeight * i,
+              },
+            ]
+          : []),
+        {
+          box: tableRow(boxes, widths, board.gap, board.padX, board.rowHeight),
+          x: 0,
+          y: board.rowHeight * i,
+        },
+      ]),
+    );
+    return column(
+      [
+        tableRow(names, widths, board.gap, board.padX, board.header * 1.4),
+        overlay(fillBox(width, body.height, 0, colors.panel, {}), body),
+      ],
+      board.headerGap,
+      'start',
+    );
+  }
+  const sheet = LAPS.sheet;
+  const { colors } = sheet;
+  const cells = table.rows.map((written, i) => {
+    const ink = i === fastest ? colors.chosen : colors.ink;
+    const mono = (text: string) =>
+      appTextBox(fonts, [{ text, size: sheet.text, bold: false }], ink, { font: 'spaceMono' });
+    return [
+      mono(written.number),
+      mono(`${written.distance}${written.unit ?? table.unit}`),
+      mono(written.time),
+      mono(table.sheetValue(written.value)),
+    ];
+  });
+  const widths = columnWidths(cells);
+  const width = tableWidth(widths, sheet.gap, sheet.padX);
+  const paper = placed(
+    width,
+    sheet.rowHeight * table.rows.length,
+    cells.flatMap((boxes, i) => [
+      ...(i === fastest
+        ? [
+            {
+              box: fillBox(width, sheet.rowHeight, 0, cover, {}),
+              x: 0,
+              y: sheet.rowHeight * i,
+            },
+          ]
+        : []),
+      ...(i === 0
+        ? []
+        : [
+            {
+              box: hairlineBox(width, 0, sheet.rule, colors.rule),
+              x: 0,
+              y: sheet.rowHeight * i,
+            },
+          ]),
+      {
+        box: tableRow(boxes, widths, sheet.gap, sheet.padX, sheet.rowHeight),
+        x: 0,
+        y: sheet.rowHeight * i,
+      },
+    ]),
+  );
+  const title = appTextBox(
+    fonts,
+    [{ text: table.title, size: sheet.title, bold: false }],
+    colors.title,
+    { shadow: true },
+  );
+  return column(
+    [title, overlay(fillBox(width, paper.height, 0, colors.paper), paper)],
+    sheet.titleGap,
+    'start',
+  );
+}
 
 /**
  * A board of laps (`board`), as AURA's: the names of the columns over a grey see-through panel,
@@ -2360,145 +2531,30 @@ export function prepareActivityBlock(
         }
         const speed = speedMeasure(activity.sportFamily);
         const unit = textContext.unitLabel(textContext.unit);
-        const fastest = fastestIndex(rows.map((split) => split.speed));
-        const cover = BRAND_COVER_COLORS[block.cover];
-        const texts = rows.map((split) => splitRowTexts(split, speed, textContext));
-        const columnNames = [
-          translate('widgets.laps.lap'),
-          translate('widgets.laps.distance'),
-          translate('widgets.laps.time'),
-          translate(speed === 'speed' ? 'widgets.laps.speed' : 'widgets.laps.pace'),
-        ];
-        if (block.layout === 'board') {
-          // A board's dot matrix for its numbers.
-          const board = LAPS.board;
-          const { colors } = board;
-          // "6:07/km", as AURA writes a pace; a swimmer's pace and a speed with their unit.
-          const imperial = textContext.unit === 'mi';
-          const after =
-            speed === 'pace'
-              ? `/${unit}`
-              : ` ${textContext.unitLabel(speed === 'speed' ? (imperial ? 'mph' : 'km/h') : imperial ? 'min/100yd' : 'min/100m')}`;
-          const value = (amount: string, unitText: string) =>
-            appText(
-              [
-                { text: amount, size: board.value, bold: false },
-                { text: unitText, size: board.value * board.unit, bold: false },
-              ],
-              colors.ink,
-              { font: 'doto' },
-            );
-          const names = columnNames.map((name) =>
-            appText(
-              [{ text: name.toLocaleUpperCase(), size: board.header, bold: true }],
-              colors.ink,
-              {
-                shadow: true,
-              },
-            ),
-          );
-          const cells = texts.map((written) => [
-            appText(
-              [{ text: written.number.padStart(2, '0'), size: board.number, bold: false }],
-              colors.faded,
-              { font: 'doto' },
-            ),
-            value(written.distance, unit),
-            value(written.time, ''),
-            value(written.value, after),
-          ]);
-          const widths = columnWidths([names, ...cells]);
-          const width = tableWidth(widths, board.gap, board.padX);
-          const body = placed(
-            width,
-            board.rowHeight * rows.length,
-            cells.flatMap((boxes, i) => [
-              ...(i === fastest || i % 2 === 1
-                ? [
-                    {
-                      box: fillBox(
-                        width,
-                        board.rowHeight,
-                        0,
-                        i === fastest ? cover : colors.stripe,
-                        {},
-                      ),
-                      x: 0,
-                      y: board.rowHeight * i,
-                    },
-                  ]
-                : []),
-              {
-                box: tableRow(boxes, widths, board.gap, board.padX, board.rowHeight),
-                x: 0,
-                y: board.rowHeight * i,
-              },
-            ]),
-          );
-          return column(
-            [
-              tableRow(names, widths, board.gap, board.padX, board.header * 1.4),
-              overlay(fillBox(width, body.height, 0, colors.panel, {}), body),
-            ],
-            board.headerGap,
-            'start',
-          );
-        }
-        const sheet = LAPS.sheet;
-        const { colors } = sheet;
-        const cells = texts.map((written, i) => {
-          const ink = i === fastest ? colors.chosen : colors.ink;
-          const mono = (text: string) =>
-            appText([{ text, size: sheet.text, bold: false }], ink, { font: 'spaceMono' });
-          return [
-            mono(written.number),
-            mono(`${written.distance}${unit}`),
-            mono(written.time),
-            // A pace as a timing sheet writes it: 5'42".
-            mono(speed === 'speed' ? written.value : `${written.value.replace(':', "'")}"`),
-          ];
+        // "6:07/km", as AURA writes a pace; a swimmer's pace and a speed with their unit.
+        const imperial = textContext.unit === 'mi';
+        const after =
+          speed === 'pace'
+            ? `/${unit}`
+            : ` ${textContext.unitLabel(speed === 'speed' ? (imperial ? 'mph' : 'km/h') : imperial ? 'min/100yd' : 'min/100m')}`;
+        return lapsTableBox(fonts, block.layout, block.cover, {
+          names: [
+            translate('widgets.laps.lap'),
+            translate('widgets.laps.distance'),
+            translate('widgets.laps.time'),
+            translate(speed === 'speed' ? 'widgets.laps.speed' : 'widgets.laps.pace'),
+          ],
+          rows: rows.map((split) => {
+            const texts = splitRowTexts(split, speed, textContext);
+            return { ...texts, number: texts.number.padStart(2, '0') };
+          }),
+          fastest: fastestIndex(rows.map((split) => split.speed)),
+          unit,
+          after,
+          // A pace as a timing sheet writes it: 5'42".
+          sheetValue: (value) => (speed === 'speed' ? value : `${value.replace(':', "'")}"`),
+          title: translate('widgets.laps.title'),
         });
-        const widths = columnWidths(cells);
-        const width = tableWidth(widths, sheet.gap, sheet.padX);
-        const paper = placed(
-          width,
-          sheet.rowHeight * rows.length,
-          cells.flatMap((boxes, i) => [
-            ...(i === fastest
-              ? [
-                  {
-                    box: fillBox(width, sheet.rowHeight, 0, cover, {}),
-                    x: 0,
-                    y: sheet.rowHeight * i,
-                  },
-                ]
-              : []),
-            ...(i === 0
-              ? []
-              : [
-                  {
-                    box: hairlineBox(width, 0, sheet.rule, colors.rule),
-                    x: 0,
-                    y: sheet.rowHeight * i,
-                  },
-                ]),
-            {
-              box: tableRow(boxes, widths, sheet.gap, sheet.padX, sheet.rowHeight),
-              x: 0,
-              y: sheet.rowHeight * i,
-            },
-          ]),
-        );
-        const title = appText(
-          [{ text: translate('widgets.laps.title'), size: sheet.title, bold: false }],
-          colors.title,
-          { shadow: true },
-        );
-        return column(
-          [title, overlay(fillBox(width, paper.height, 0, colors.paper), paper)],
-          sheet.titleGap,
-          'start',
-        );
       }
       case 'grandPrix': {
         // The splits as a race's timing tower, in lap order: each with its pace and its gap to

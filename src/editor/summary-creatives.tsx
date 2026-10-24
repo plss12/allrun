@@ -23,6 +23,7 @@ import {
   COVER_ROUTE,
   fillBox,
   hairlineBox,
+  lapsTableBox,
   logoBox,
   markBrandBox,
   MUSIC_COLORS,
@@ -45,7 +46,13 @@ import {
   turned,
 } from './activity-blocks';
 import { markWidth } from './brand/brand-art';
-import { metricText, periodName, periodNoteLines, type SummaryData } from './editor-data';
+import {
+  metricText,
+  periodLaps,
+  periodName,
+  periodNoteLines,
+  type SummaryData,
+} from './editor-data';
 
 /**
  * The creative widgets of a period summary (R2c): replicas of apps, as an activity's (see
@@ -545,4 +552,33 @@ export function periodWrappedBox(
     },
     { box: content, x: WRAPPED.pad, y: WRAPPED.pad },
   ]);
+}
+
+/**
+ * A period's days, weeks or months as laps (see `periodLaps`), on the activities' board or timing
+ * sheet (see `lapsTableBox`), its longest lap in AllRun's red or night ink; a summary of one sport
+ * with its icon on the board (the sheet's title names it).
+ */
+export function periodLapsBox(
+  block: Extract<SummaryBlock, { design: 'periodLaps' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box | null {
+  const laps = periodLaps(data, textContext, translate);
+  if (laps.rows.length === 0) {
+    return null;
+  }
+  const [sport] = data.families;
+  return lapsTableBox(fonts, block.layout, block.cover, {
+    ...laps,
+    ...(data.families.length === 1 ? { icon: sport } : {}),
+    // A pace as a timing sheet writes it, 5'42"; a count says what it counts, "2 act." (the
+    // board's names it in its header, the sheet has none).
+    sheetValue: (value) =>
+      laps.value === 'pace'
+        ? `${value.replace(':', "'")}"`
+        : laps.value === 'count'
+          ? translate('widgets.activities', { number: value })
+          : value,
+  });
 }

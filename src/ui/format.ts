@@ -78,6 +78,25 @@ export function formatShortWeekday(startLocal: string, locale: string): string {
   return capitalize(weekday.replace(/\.$/, ''));
 }
 
+/**
+ * The short name of a day, week or month of a period, for a narrow column: a weekday ("Mié"), a
+ * week's days ("6–12 oct") or a month ("Oct"), without abbreviations' dots.
+ */
+export function formatShortBucketName(range: DateRange, size: BucketSize, locale: string): string {
+  switch (size) {
+    case 'day':
+      return formatShortWeekday(`${range.start}T00:00:00`, locale);
+    case 'week':
+      return formatDayRange(range, locale, 'short');
+    case 'month':
+      return capitalize(
+        new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' })
+          .format(asUtc(`${range.start}T00:00:00`))
+          .replace(/\.$/, ''),
+      );
+  }
+}
+
 /** Short date for lists, e.g. "Oct 15". */
 export function formatShortDate(date: LocalDate, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
