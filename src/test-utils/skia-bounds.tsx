@@ -22,16 +22,6 @@ export async function alphaOutside(prepared: PreparedLayer): Promise<number> {
   const margin = SHADOW_ROOM + 16;
   const width = Math.ceil(prepared.width) + 2 * margin;
   const height = Math.ceil(prepared.height) + 2 * margin;
-  const image = await drawOffscreen(
-    makeOffscreenSurface(width, height),
-    <Group transform={[{ translateX: width / 2 }, { translateY: height / 2 }]}>
-      {prepared.content}
-    </Group>,
-  );
-  const pixels = image.readPixels(0, 0, image.getImageInfo());
-  if (pixels === null) {
-    throw new Error('Could not read the pixels');
-  }
   // The first pixel column and row inside the room, and the first after it.
   const left = Math.ceil((width - prepared.width) / 2 - SHADOW_ROOM);
   const top = Math.ceil((height - prepared.height) / 2 - SHADOW_ROOM);
@@ -41,6 +31,20 @@ export async function alphaOutside(prepared: PreparedLayer): Promise<number> {
   const bottom = Math.ceil(
     (height - prepared.height) / 2 - SHADOW_ROOM + prepared.height + 2 * SHADOW_ROOM,
   );
+  // Drawn only outside the room, the only part read: what it fills inside (cards, shadows,
+  // blurs) costs nothing, and what reaches the bands is drawn as it is.
+  const image = await drawOffscreen(
+    makeOffscreenSurface(width, height),
+    <Group clip={{ x: left, y: top, width: right - left, height: bottom - top }} invertClip>
+      <Group transform={[{ translateX: width / 2 }, { translateY: height / 2 }]}>
+        {prepared.content}
+      </Group>
+    </Group>,
+  );
+  const pixels = image.readPixels(0, 0, image.getImageInfo());
+  if (pixels === null) {
+    throw new Error('Could not read the pixels');
+  }
   let max = 0;
   const scan = (y: number, from: number, to: number) => {
     for (let x = Math.max(0, from); x < Math.min(width, to); x++) {

@@ -1,23 +1,22 @@
 /**
  * Draws every mixed widget off-screen with real fonts (CanvasKit), each in its own, and checks that
  * nothing is drawn outside the size it measures: the editor grabs, frames and snaps a widget by
- * that size. In the user's lettering, and the camera, in `activity-blocks-restyled-scene.test.tsx`
- * (apart, so Jest draws both at once).
+ * that size. A marathon's data widgets and a gym session here; its creative widgets, and the
+ * blocks in the user's lettering, in other files, so Jest draws them at once.
  *
  * @jest-environment node
  */
-import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
-
 import { newLayer } from '@/core/default-layout';
 import {
   BLOCK_FONTS,
   blocksOf,
   GYM,
-  prepareBlocks,
+  testBlocksInTheirFonts,
   RUN,
   translate,
 } from '@/test-utils/activity-blocks';
 import { makeActivity } from '@/test-utils/make-activity';
+import { loadSceneBeforeAll } from '@/test-utils/scene';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
@@ -35,44 +34,16 @@ jest.mock('@shopify/react-native-skia', () => {
   return { ...headless, Skia };
 });
 
-const util = jest.requireActual<{ TextDecoder: typeof TextDecoder }>('util');
-
-let scene: typeof import('./template-scene');
-
-beforeAll(async () => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
-  globalThis.TextDecoder = util.TextDecoder;
-  (globalThis as { CanvasKit?: unknown }).CanvasKit = await CanvasKitInit({});
-  scene = jest.requireActual<typeof import('./template-scene')>('./template-scene');
-});
+const scene = loadSceneBeforeAll();
 
 describe('prepareActivityBlock', () => {
-  // In the user's lettering, see `activity-blocks-restyled-scene.test.tsx`.
-  it.each([
-    ['a marathon', RUN],
-    ['a gym session', GYM],
-  ] as const)(
-    'draws every block of %s in its own font within the size it measures',
-    async (_name, activity) => {
-      const blocks = prepareBlocks(scene, activity, null);
-      // The run is an interval session: its tables of laps are among the blocks.
-      if (activity === RUN) {
-        expect(blocksOf(activity).some((block) => block.design === 'laps')).toBe(true);
-      }
-      expect(blocks).toHaveLength(blocksOf(activity).length);
-      const overflowing: { readonly id: string; readonly alpha: number }[] = [];
-      for (const block of blocks) {
-        expect(block.width).toBeGreaterThan(0);
-        expect(block.height).toBeGreaterThan(0);
-        const alpha = await alphaOutside(block);
-        if (alpha > DRAWN_ALPHA) {
-          overflowing.push({ id: block.layer.id, alpha });
-        }
-      }
-      expect(overflowing).toEqual([]);
-    },
-    60_000,
-  );
+  // A marathon's creative widgets in `activity-blocks-creative-scene.test.tsx`, and in the
+  // user's lettering in `activity-blocks-restyled-scene.test.tsx`: Jest draws the files at once.
+  it('offers the laps of an interval session among its blocks', () => {
+    expect(blocksOf(RUN).some((block) => block.design === 'laps')).toBe(true);
+  });
+  testBlocksInTheirFonts(scene, 'a marathon', RUN, 'data');
+  testBlocksInTheirFonts(scene, 'a gym session', GYM, 'all');
 
   it('draws nothing for an activity without data', () => {
     const empty = makeActivity({
@@ -91,7 +62,7 @@ describe('prepareActivityBlock', () => {
       'story',
     );
     expect(
-      scene.prepareLayers(
+      scene().prepareLayers(
         { version: 1, id: 'blocks', mode: 'activity', format: 'story', layers: [layer] },
         {
           data: { mode: 'activity', activity: empty, detail: null, place: null, zones: null },
@@ -119,7 +90,7 @@ describe('a data widget in small letters', () => {
         if (layer.kind !== 'activityBlock') {
           throw new Error('Expected a mixed widget');
         }
-        const [widget] = scene.prepareLayers(
+        const [widget] = scene().prepareLayers(
           {
             version: 1,
             id: design,
@@ -160,7 +131,7 @@ describe('a wrapped text', () => {
         'chat',
         'story',
       );
-      const [prepared] = scene.prepareLayers(
+      const [prepared] = scene().prepareLayers(
         { version: 1, id: 'chat', mode: 'activity', format: 'story', layers: [layer] },
         {
           data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },

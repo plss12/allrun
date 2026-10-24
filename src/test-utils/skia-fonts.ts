@@ -56,10 +56,29 @@ const FILES: Partial<Record<FontId, readonly string[]>> = {
 };
 
 /**
+ * Providers already loaded in this test file, by their fonts in order: reading and parsing the
+ * files is slow, and a provider is never changed once loaded.
+ */
+const loaded = new Map<string, ReturnType<typeof loadFonts>>();
+
+/**
  * A Skia font provider with the given fonts, in every weight they ship, for tests that draw or
- * measure with CanvasKit (load it first; see `editor/template-scene.test.tsx`).
+ * measure with CanvasKit (load it first; see `editor/template-scene.test.tsx`); the same one for
+ * the same fonts.
  */
 export function loadTestFonts(fonts: readonly FontId[]) {
+  const key = fonts.join(',');
+  const cached = loaded.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const provider = loadFonts(fonts);
+  loaded.set(key, provider);
+  return provider;
+}
+
+/** A new provider with `fonts` (see `loadTestFonts`). */
+function loadFonts(fonts: readonly FontId[]) {
   const { Skia } = getSkiaExports();
   const provider = Skia.TypefaceFontProvider.Make();
   for (const font of fonts) {

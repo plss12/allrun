@@ -5,12 +5,10 @@
  *
  * @jest-environment node
  */
-import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
-
-import { isAppReplica } from '@/core/activity-block';
 import { newLayer } from '@/core/default-layout';
 import { CANVAS_FORMATS, type CanvasFormat } from '@/core/template';
-import { prepareBlocks, RUN, translate } from '@/test-utils/activity-blocks';
+import { RUN, testBlocksRestyled, translate } from '@/test-utils/activity-blocks';
+import { loadSceneBeforeAll } from '@/test-utils/scene';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
@@ -28,45 +26,11 @@ jest.mock('@shopify/react-native-skia', () => {
   return { ...headless, Skia };
 });
 
-const util = jest.requireActual<{ TextDecoder: typeof TextDecoder }>('util');
-
-let scene: typeof import('./template-scene');
-
-beforeAll(async () => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
-  globalThis.TextDecoder = util.TextDecoder;
-  (globalThis as { CanvasKit?: unknown }).CanvasKit = await CanvasKitInit({});
-  scene = jest.requireActual<typeof import('./template-scene')>('./template-scene');
-});
+const scene = loadSceneBeforeAll();
 
 describe("prepareActivityBlock in the user's lettering", () => {
-  it.each([
-    ['a wide font', 'unbounded', false],
-    ['its own fonts slanted', null, true],
-    ['a font without an italic, leaned', 'anton', true],
-  ] as const)(
-    'draws every block of a marathon in %s within the size it measures',
-    async (_fontName, font, italic) => {
-      const own = prepareBlocks(scene, RUN, null);
-      const blocks = prepareBlocks(scene, RUN, font, italic);
-      expect(blocks).toHaveLength(own.length);
-      const overflowing: { readonly id: string; readonly alpha: number }[] = [];
-      for (const [i, block] of blocks.entries()) {
-        // A replica keeps its app's look whatever the lettering: the same as in its own, which
-        // the other test draws.
-        if (block.layer.kind === 'activityBlock' && isAppReplica(block.layer.block.design)) {
-          expect([block.width, block.height]).toEqual([own[i].width, own[i].height]);
-          continue;
-        }
-        const alpha = await alphaOutside(block);
-        if (alpha > DRAWN_ALPHA) {
-          overflowing.push({ id: block.layer.id, alpha });
-        }
-      }
-      expect(overflowing).toEqual([]);
-    },
-    60_000,
-  );
+  // Slanted, in `activity-blocks-slanted-scene.test.tsx`: Jest draws both files at once.
+  testBlocksRestyled(scene, 'a wide font', 'unbounded', false);
 });
 
 describe('the camera', () => {
@@ -78,7 +42,7 @@ describe('the camera', () => {
         'camera',
         format,
       );
-      const [camera] = scene.prepareLayers(
+      const [camera] = scene().prepareLayers(
         { version: 1, id: 'camera', mode: 'activity', format, layers: [layer] },
         {
           data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },

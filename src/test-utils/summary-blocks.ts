@@ -2,7 +2,7 @@ import { monthRange, weekRange, yearRange } from '@/core/dates';
 import { newLayer } from '@/core/default-layout';
 import { bucketForPeriod, type PeriodKind } from '@/core/periods';
 import { summarize } from '@/core/summary';
-import { summaryBlockLettering } from '@/core/summary-block';
+import { isSummaryDataWidget, summaryBlockLettering, summaryBlocks } from '@/core/summary-block';
 import type { Layer, SummaryBlock } from '@/core/template';
 import type { SummaryData } from '@/editor/editor-data';
 import type { LayerContext, PreparedLayer } from '@/editor/template-scene';
@@ -10,6 +10,7 @@ import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 
 import { translate } from './activity-blocks';
 import { alphaOutside, DRAWN_ALPHA } from './skia-bounds';
+import type { Scene } from './scene';
 import { loadTestFonts } from './skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from './text-context';
 
@@ -17,9 +18,6 @@ import { TEST_DURATION_UNITS, testUnitLabel } from './text-context';
  * What the scene tests of a period summary's widgets share: their periods, and the widgets laid
  * out and checked as the gallery offers them.
  */
-
-/** The scene module, loaded by each test once CanvasKit is (see `template-scene.test.tsx`). */
-type Scene = typeof import('@/editor/template-scene');
 
 const source = new FixtureActivitySource({ endDate: '2026-10-21', days: 400, seed: 42 });
 
@@ -93,4 +91,39 @@ export async function overflowingSummaryBlocks(
     }
   }
   return { prepared, layers, overflowing };
+}
+
+/**
+ * Registers the test that draws every data widget (bare and on a backdrop) or every creative
+ * widget of a `kind` period off-screen with real fonts, and checks that nothing is drawn outside
+ * the size it measures. One period a file: Jest draws the files at once.
+ */
+export function testSummaryWidgets(
+  scene: () => Scene,
+  kind: Exclude<PeriodKind, 'custom'>,
+  widgets: 'data' | 'creative',
+): void {
+  const data = widgets === 'data';
+  it(`draws every ${widgets} widget of a ${kind} within the size it measures${data ? ', bare and on a backdrop' : ''}`, async () => {
+    const period = await periodData(kind);
+    const blocks = summaryBlocks(period.summary).filter(
+      (block) => isSummaryDataWidget(block.design) === data,
+    );
+    if (data) {
+      // A period of every sport offers them all.
+      expect(blocks.map((block) => block.design)).toEqual(
+        expect.arrayContaining(['periodData', 'periodTable', 'periodSports']),
+      );
+    } else {
+      expect(blocks.length).toBeGreaterThan(0);
+    }
+    const { prepared, layers, overflowing } = await overflowingSummaryBlocks(
+      scene(),
+      period,
+      blocks,
+      data,
+    );
+    expect(prepared).toHaveLength(layers.length);
+    expect(overflowing).toEqual([]);
+  }, 60_000);
 }

@@ -1,4 +1,4 @@
-import { activityBlocks } from '@/core/activity-block';
+import { activityBlocks, isAppReplica, isDataWidget } from '@/core/activity-block';
 import type { Activity } from '@/core/activity';
 import type { ActivityDetail } from '@/core/activity-detail';
 import { newLayer } from '@/core/default-layout';
@@ -9,6 +9,8 @@ import { generateStravaDetail } from '@/sources/fixtures/detail';
 import { parseStravaDetail } from '@/sources/strava/detail';
 
 import { makeActivity } from './make-activity';
+import type { Scene } from './scene';
+import { alphaOutside, DRAWN_ALPHA } from './skia-bounds';
 import { loadTestFonts } from './skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from './text-context';
 
@@ -16,9 +18,6 @@ import { TEST_DURATION_UNITS, testUnitLabel } from './text-context';
  * What the scene tests of the mixed widgets share: their activities, fonts and labels, and the
  * widgets laid out as the gallery offers them.
  */
-
-/** The scene module, loaded by each test once CanvasKit is (see `template-scene.test.tsx`). */
-type Scene = typeof import('@/editor/template-scene');
 
 /** Spanish labels, the longest of the app's languages. */
 export function translate(key: string): string {
@@ -115,4 +114,73 @@ export function prepareBlocks(
     { version: 1, id: 'blocks', mode: 'activity', format: 'story', layers },
     context,
   );
+}
+
+/** The blocks of `prepared` drawn outside the size they measure, with how much. */
+async function overflowing(
+  prepared: readonly PreparedLayer[],
+): Promise<{ readonly id: string; readonly alpha: number }[]> {
+  const found: { readonly id: string; readonly alpha: number }[] = [];
+  for (const block of prepared) {
+    expect(block.width).toBeGreaterThan(0);
+    expect(block.height).toBeGreaterThan(0);
+    const alpha = await alphaOutside(block);
+    if (alpha > DRAWN_ALPHA) {
+      found.push({ id: block.layer.id, alpha });
+    }
+  }
+  return found;
+}
+
+/**
+ * Registers the test that draws the blocks of `activity` in their own fonts, its data widgets or
+ * its creative ones (`which`) or all of them, and checks that nothing is drawn outside the size
+ * they measure. Split so that Jest draws them at once.
+ */
+export function testBlocksInTheirFonts(
+  scene: () => Scene,
+  name: string,
+  activity: Activity,
+  which: 'data' | 'creative' | 'all',
+): void {
+  const what = which === 'all' ? 'block' : `${which} block`;
+  it(`draws every ${what} of ${name} in its own font within the size it measures`, async () => {
+    const blocks = prepareBlocks(scene(), activity, null);
+    expect(blocks).toHaveLength(blocksOf(activity).length);
+    const drawn = blocks.filter(
+      (block) =>
+        which === 'all' ||
+        (block.layer.kind === 'activityBlock' &&
+          isDataWidget(block.layer.block.design) === (which === 'data')),
+    );
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(await overflowing(drawn)).toEqual([]);
+  }, 60_000);
+}
+
+/**
+ * Registers the test that draws a marathon's blocks in the user's lettering (all in `font`, or
+ * each in its own when `null`; slanted when `italic`) and checks that nothing is drawn outside the
+ * size they measure; a replica keeps its app's look whatever the lettering, the same size as in
+ * its own.
+ */
+export function testBlocksRestyled(
+  scene: () => Scene,
+  name: string,
+  font: FontId | null,
+  italic: boolean,
+): void {
+  it(`draws every block of a marathon in ${name} within the size it measures`, async () => {
+    const own = prepareBlocks(scene(), RUN, null);
+    const blocks = prepareBlocks(scene(), RUN, font, italic);
+    expect(blocks).toHaveLength(own.length);
+    const restyled = blocks.filter((block, i) => {
+      if (block.layer.kind === 'activityBlock' && isAppReplica(block.layer.block.design)) {
+        expect([block.width, block.height]).toEqual([own[i].width, own[i].height]);
+        return false;
+      }
+      return true;
+    });
+    expect(await overflowing(restyled)).toEqual([]);
+  }, 60_000);
 }

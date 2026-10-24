@@ -1,21 +1,20 @@
 /**
- * Draws every data widget of a period summary off-screen with real fonts (CanvasKit), in its own
+ * Draws every data widget of a week summary off-screen with real fonts (CanvasKit), in its own
  * lettering and on a backdrop, and checks that nothing is drawn outside the size it measures: the
- * editor grabs, frames and snaps a widget by that size. Its creative ones are drawn in
+ * editor grabs, frames and snaps a widget by that size (see `testSummaryWidgets`). A month's and a
+ * year's in their own files, so Jest draws them at once; the creative widgets in
  * `summary-creatives-scene.test.tsx`.
  *
  * @jest-environment node
  */
-import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
-
 import { weekRange } from '@/core/dates';
 import { newLayer } from '@/core/default-layout';
 import { summarize } from '@/core/summary';
-import { isSummaryDataWidget, summaryBlocks } from '@/core/summary-block';
 import { translate } from '@/test-utils/activity-blocks';
+import { loadSceneBeforeAll } from '@/test-utils/scene';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
-import { overflowingSummaryBlocks, periodData } from '@/test-utils/summary-blocks';
+import { periodData, testSummaryWidgets } from '@/test-utils/summary-blocks';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import type { SummaryData } from './editor-data';
@@ -33,40 +32,10 @@ jest.mock('@shopify/react-native-skia', () => {
   return { ...headless, Skia };
 });
 
-const util = jest.requireActual<{ TextDecoder: typeof TextDecoder }>('util');
-
-let scene: typeof import('./template-scene');
-
-beforeAll(async () => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
-  globalThis.TextDecoder = util.TextDecoder;
-  (globalThis as { CanvasKit?: unknown }).CanvasKit = await CanvasKitInit({});
-  scene = jest.requireActual<typeof import('./template-scene')>('./template-scene');
-});
+const scene = loadSceneBeforeAll();
 
 describe('prepareSummaryBlock', () => {
-  it.each(['week', 'month', 'year'] as const)(
-    'draws every data widget of a %s within the size it measures, bare and on a backdrop',
-    async (kind) => {
-      const data = await periodData(kind);
-      const blocks = summaryBlocks(data.summary).filter((block) =>
-        isSummaryDataWidget(block.design),
-      );
-      // A period of every sport offers them all.
-      expect(blocks.map((block) => block.design)).toEqual(
-        expect.arrayContaining(['periodData', 'periodTable', 'periodSports']),
-      );
-      const { prepared, layers, overflowing } = await overflowingSummaryBlocks(
-        scene,
-        data,
-        blocks,
-        true,
-      );
-      expect(prepared).toHaveLength(layers.length);
-      expect(overflowing).toEqual([]);
-    },
-    60_000,
-  );
+  testSummaryWidgets(scene, 'week', 'data');
 
   it("draws a period without routes with its sport's icon over its totals", async () => {
     const week = await periodData('week');
@@ -81,7 +50,7 @@ describe('prepareSummaryBlock', () => {
       'block',
       'story',
     );
-    const [prepared] = scene.prepareLayers(
+    const [prepared] = scene().prepareLayers(
       { version: 1, id: 'blocks', mode: 'summary', format: 'story', layers: [layer] },
       {
         data,
@@ -115,7 +84,7 @@ describe('prepareSummaryBlock', () => {
       'block',
       'story',
     );
-    const prepared = scene.prepareLayers(
+    const prepared = scene().prepareLayers(
       { version: 1, id: 'blocks', mode: 'summary', format: 'story', layers: [layer] },
       {
         data,
