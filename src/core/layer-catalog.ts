@@ -169,6 +169,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         // design of a single version has nothing to add; a cover adds its color, and a verse, a
         // quote or a chat message's phrase its name (a phrase of the user's, nothing).
         return [
+          'label' in item.block ? item.block.label : undefined,
           'layout' in item.block ? item.block.layout : undefined,
           // In a tile of several designs, each version names its own; a big datum says how many
           // data it has under it.
@@ -192,6 +193,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         return [
           'count' in item.block ? item.block.count : undefined,
           'value' in item.block ? item.block.value : undefined,
+          'label' in item.block ? item.block.label : undefined,
           'layout' in item.block ? item.block.layout : undefined,
           'rows' in item.block ? item.block.rows : undefined,
           'cover' in item.block ? item.block.cover : undefined,

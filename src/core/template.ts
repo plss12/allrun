@@ -235,7 +235,10 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  *   a marker;
  * - `receipt`: the data as a shop's receipt, on thermal paper, with its total and barcode;
  * - `boardingPass`: the activity as a boarding pass, from its start to its finish, its band in a
- *   brand color (`cover`) naming the city it started in (or saying what it is, while unknown).
+ *   brand color (`cover`) naming the city it started in (or saying what it is, while unknown);
+ * - `nutrition`: the activity as a food's nutrition label (see `NUTRITION_LABELS`), its calories
+ *   (or its time without them) as the energy and its data as the nutrients, white (`light`) or
+ *   black (`dark`).
  */
 export const ACTIVITY_BLOCK_DESIGNS = [
   'bigTrio',
@@ -266,6 +269,7 @@ export const ACTIVITY_BLOCK_DESIGNS = [
   'sentence',
   'receipt',
   'boardingPass',
+  'nutrition',
 ] as const;
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
@@ -299,6 +303,12 @@ export const BIG_TOPS = ['main', 'time'] as const;
  */
 export const BRAND_COVERS = ['red', 'ink'] as const;
 export const LAPS_LAYOUTS = ['board', 'sheet'] as const;
+/**
+ * The nutrition labels a nutrition widget copies: the American one (`facts`: its title big, thick
+ * rules and the share of each part in a column) or the European table (`table`: two columns of
+ * average values, without shares).
+ */
+export const NUTRITION_LABELS = ['facts', 'table'] as const;
 /**
  * Bible verses of the verse widget, from translations in the public domain: the World English
  * Bible in English, the Reina-Valera 1909 in Spanish. Their texts are in the locales. The first
@@ -448,6 +458,11 @@ const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('sentence') }),
   z.object({ design: z.literal('receipt') }),
   z.object({ design: z.literal('boardingPass'), cover: z.enum(BRAND_COVERS) }),
+  z.object({
+    design: z.literal('nutrition'),
+    label: z.enum(NUTRITION_LABELS),
+    layout: z.enum(APP_MODES),
+  }),
 ]);
 
 export type ActivityBlock = z.infer<typeof activityBlockSchema>;
@@ -470,7 +485,9 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * its first activity to its last (`periodBoardingPass`); and as a calendar, its days with their
  * figures or its months with their active days marked (`periodCalendar`); and its longest streak of
  * days in a row with activities, beside a flame (`periodStreak`); and as the iPhone's Weather, its
- * days, weeks or months as the forecast's (`periodWeather`: `light` by day, `dark` by night).
+ * days, weeks or months as the forecast's (`periodWeather`: `light` by day, `dark` by night); as a
+ * food's nutrition label, as an activity's (`periodNutrition`); and as a metro line, its days,
+ * weeks or months as its stations, in a brand color (`periodMetro`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -511,6 +528,12 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('periodCalendar'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('periodStreak'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('periodWeather'), layout: z.enum(APP_MODES) }),
+  z.object({
+    design: z.literal('periodNutrition'),
+    label: z.enum(NUTRITION_LABELS),
+    layout: z.enum(APP_MODES),
+  }),
+  z.object({ design: z.literal('periodMetro'), cover: z.enum(BRAND_COVERS) }),
 ]);
 
 export type SummaryBlock = z.infer<typeof summaryBlockSchema>;

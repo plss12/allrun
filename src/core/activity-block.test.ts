@@ -170,6 +170,10 @@ describe('activityBlocks', () => {
       { design: 'receipt' },
       { design: 'boardingPass', cover: 'red' },
       { design: 'boardingPass', cover: 'ink' },
+      { design: 'nutrition', label: 'facts', layout: 'light' },
+      { design: 'nutrition', label: 'facts', layout: 'dark' },
+      { design: 'nutrition', label: 'table', layout: 'light' },
+      { design: 'nutrition', label: 'table', layout: 'dark' },
     ]);
   });
 
@@ -436,6 +440,7 @@ describe('isAppReplica and blockLettering', () => {
     expect(isAppReplica('sentence')).toBe(true);
     expect(isAppReplica('receipt')).toBe(true);
     expect(isAppReplica('boardingPass')).toBe(true);
+    expect(isAppReplica('nutrition')).toBe(true);
     expect(isAppReplica('verse')).toBe(false);
     expect(isAppReplica('quote')).toBe(false);
     expect(isAppReplica('bigTrio')).toBe(false);

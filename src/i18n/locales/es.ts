@@ -159,6 +159,8 @@ export const es: Translations = {
       periodCalendar: 'Calendario',
       periodStreak: 'Racha',
       periodWeather: 'Tiempo',
+      periodNutrition: 'Información nutricional',
+      periodMetro: 'Línea de metro',
     },
     blocks: {
       bigTrio: 'Dato grande y tres',
@@ -189,6 +191,7 @@ export const es: Translations = {
       sentence: 'Subrayado',
       receipt: 'Ticket',
       boardingPass: 'Tarjeta de embarque',
+      nutrition: 'Información nutricional',
     },
     cameraModes: { video: 'VÍDEO', photo: 'FOTO' },
     cameraZoom: { wide: '0,5', main: 'x1', tele: '2' },
@@ -491,6 +494,35 @@ export const es: Translations = {
       title: { day: '{{unit}} por día', week: '{{unit}} por semana', month: '{{unit}} por mes' },
       hours: 'Horas',
     },
+    /**
+     * An activity or a period as a food's nutrition label: its activities as servings, its
+     * calories as energy, its data as nutrients and its sports as ingredients.
+     */
+    nutrition: {
+      title: 'Información nutricional',
+      servings: { one: '1 actividad por envase', other: '{{count}} actividades por envase' },
+      servingSize: 'Tamaño de la ración',
+      amountPer: 'Cantidad por ración',
+      calories: 'Calorías',
+      energy: 'Valor energético',
+      dailyValue: '% Valor diario*',
+      footnote: '* El % del valor diario dice cuánto aporta cada parte al total.',
+      average: 'Valores medios',
+      per: 'Por ración',
+      partOf: 'del cual: {{name}}',
+      distance: 'Distancia',
+      time: 'Tiempo',
+      elevation: 'Desnivel',
+      activities: 'Actividades',
+      activeDays: 'Días activos',
+      activeDaysValue: '{{active}} de {{days}}',
+      zone: 'Zona {{number}}',
+      ingredients: 'Ingredientes:',
+      extras: 'sudor, constancia',
+      traces: 'Puede contener trazas de madrugones.',
+    },
+    /** A period as a metro line: where it heads, its last station. */
+    metro: { direction: 'Dirección {{station}}' },
   },
   style: {
     color: 'Color',

@@ -15,6 +15,9 @@ import {
   weatherCondition,
   listsNoteActivities,
   mainFamily,
+  metroLayout,
+  type MetroStation,
+  metroStations,
   periodSentencePlan,
   periodWrapped,
   playlistSongs,
@@ -1557,4 +1560,256 @@ export function periodWeatherBox(
     },
     { box: content, x: WEATHER.pad, y: WEATHER.pad },
   ]);
+}
+
+/**
+ * A metro line's colors besides its line's (a brand color): its sign's enamel and print, the
+ * fainter print of its rest days, and the white of its stations.
+ */
+const METRO_COLORS = {
+  sign: '#FFFFFF',
+  ink: '#141B2D',
+  faded: '#141B2D8C',
+  station: '#FFFFFF',
+} as const;
+
+/**
+ * The sizes of a period's metro line: its sign's corners and room inside, its badge (and the
+ * icon in it, a share of it), its title, direction and total, and the room under them; the line's
+ * thickness; a stop with activities (its radius and ring), a rest day's and a terminal's outer
+ * ring (its room and width); its stations' names and figures, and the room between them and the
+ * line; across, the least room for each station; down, each station's height and the room between
+ * the line and its texts.
+ */
+const METRO = {
+  radius: 28,
+  pad: 44,
+  badge: 76,
+  badgeRadius: 18,
+  badgeIcon: 0.62,
+  title: 44,
+  direction: 26,
+  total: 44,
+  headGap: 40,
+  line: 18,
+  stop: { r: 21, ring: 7 },
+  rest: 8,
+  terminal: { gap: 5, ring: 5 },
+  name: 26,
+  figure: 30,
+  labelGap: 16,
+  across: { pitch: 118, gap: 16 },
+  down: { row: 74, width: 640, gap: 28 },
+} as const;
+
+/** Outer radius of a terminal's ring: the farthest a station reaches from its center. */
+const METRO_REACH = METRO.stop.r + METRO.terminal.gap + METRO.terminal.ring;
+
+/**
+ * A station of a metro line, drawn centered on its box: a stop with activities, white with an
+ * inked ring; a rest day, a small white dot on the line; a terminal (its first and last), within
+ * a ring of the line's color, as metro maps mark the ends of a line.
+ */
+function metroStationBox(active: boolean, terminal: boolean, line: string): Box {
+  const ringed = (r: number) =>
+    overlay(discBox(r, METRO_COLORS.station), discBox(r, METRO_COLORS.ink, METRO.stop.ring));
+  if (!terminal) {
+    return active ? ringed(METRO.stop.r) : discBox(METRO.rest, METRO_COLORS.station);
+  }
+  return overlay(
+    overlay(
+      discBox(METRO_REACH, line, METRO.terminal.ring),
+      discBox(METRO_REACH - METRO.terminal.ring, METRO_COLORS.station),
+    ),
+    ringed(active ? METRO.stop.r : METRO.rest + METRO.stop.ring),
+  );
+}
+
+/**
+ * A period as a metro line on a station's sign, in a brand color (see `metroStations`): its
+ * sport's icon on the line's badge (AllRun's monogram for every sport), its name, where it heads
+ * (its last station) and its total; then its days, weeks or months as its stations, named short
+ * ("LUN", "6–12 OCT", "OCT"), those with activities big with how far they went (or how long,
+ * without any distance; a gym day in a period with some, by its sport's icon), the rest days
+ * small and faded, its ends ringed as terminals. Across up to a week's seven stations, down
+ * beyond (see `metroLayout`).
+ */
+export function periodMetroBox(
+  block: Extract<SummaryBlock, { design: 'periodMetro' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const line = BRAND_COVER_COLORS[block.cover];
+  const { summary } = data;
+  const measure = summaryHasDistance(summary) ? 'distance' : 'movingTime';
+  const text = (value: string, size: number, color: string, maxWidth?: number) =>
+    appTextBox(fonts, [{ text: value, size, bold: true }], color, {
+      ...(maxWidth === undefined ? {} : { maxWidth }),
+    });
+  const size = tableBucket(summary.range);
+  const shortName = (station: MetroStation) =>
+    formatShortBucketName(station.range, size, textContext.locale).toLocaleUpperCase(
+      textContext.locale,
+    );
+  const all = metroStations(summary, data.activities);
+  const stations = all.map((station, i) => {
+    const active = station.activityCount > 0;
+    return {
+      active,
+      terminal: i === 0 || i === all.length - 1,
+      name: text(shortName(station), METRO.name, active ? METRO_COLORS.ink : METRO_COLORS.faded),
+      figure: !active
+        ? null
+        : station.amount <= 0 && station.sport !== null
+          ? iconBox(station.sport, METRO.figure * 1.2, METRO_COLORS.ink)
+          : text(
+              measure === 'distance'
+                ? roundedChartValue('distance', station.amount, textContext, true)
+                : plainSummaryText('totalMovingTime', station.amount, textContext),
+              METRO.figure,
+              METRO_COLORS.ink,
+            ),
+    };
+  });
+  const last = all[all.length - 1];
+
+  const [family] = data.families;
+  const badge = overlay(
+    fillBox(METRO.badge, METRO.badge, METRO.badgeRadius, line, {}),
+    sportMarkBox(
+      data.families.length === 1 ? family : 'allrun',
+      METRO.badge * METRO.badgeIcon,
+      METRO_COLORS.station,
+    ),
+  );
+  const total = text(
+    measure === 'distance'
+      ? roundedChartValue('distance', summary.totalDistanceMeters, textContext, true)
+      : plainSummaryText('totalMovingTime', summary.totalMovingTimeSeconds, textContext),
+    METRO.total,
+    METRO_COLORS.ink,
+  );
+  /** The badge, the period's name and where it heads, and its total at the end, `width` wide. */
+  const heading = (width: number) => {
+    const room = width - METRO.badge - total.width - 2 * METRO.labelGap;
+    const names = column(
+      [
+        text(periodName(data, textContext, translate), METRO.title, METRO_COLORS.ink, room),
+        ...(last === undefined
+          ? []
+          : [
+              appTextBox(
+                fonts,
+                [
+                  {
+                    text: translate('widgets.metro.direction', { station: shortName(last) }),
+                    size: METRO.direction,
+                    bold: false,
+                  },
+                ],
+                METRO_COLORS.faded,
+                { maxWidth: room },
+              ),
+            ]),
+      ],
+      4,
+      'start',
+    );
+    const left = row([badge, names], METRO.labelGap, 'center');
+    const height = Math.max(left.height, total.height);
+    return placed(width, height, [
+      { box: left, x: 0, y: (height - left.height) / 2 },
+      { box: total, x: width - total.width, y: (height - total.height) / 2 },
+    ]);
+  };
+
+  const map = (() => {
+    if (metroLayout(stations.length) === 'across') {
+      const pitch = Math.max(
+        METRO.across.pitch,
+        ...stations.map(
+          (station) => Math.max(station.name.width, station.figure?.width ?? 0) + METRO.across.gap,
+        ),
+      );
+      const width = pitch * stations.length;
+      const nameHeight = Math.max(...stations.map((station) => station.name.height));
+      const figureHeight = Math.max(0, ...stations.map((station) => station.figure?.height ?? 0));
+      const lineY = nameHeight + METRO.labelGap + METRO_REACH;
+      const height = lineY + METRO_REACH + METRO.labelGap + figureHeight;
+      const centerOf = (i: number) => pitch * i + pitch / 2;
+      return placed(width, height, [
+        // The line from its first terminal to its last.
+        {
+          box: fillBox(
+            centerOf(stations.length - 1) - centerOf(0),
+            METRO.line,
+            METRO.line / 2,
+            line,
+            {},
+          ),
+          x: centerOf(0),
+          y: lineY - METRO.line / 2,
+        },
+        ...stations.flatMap((station, i) => {
+          const dot = metroStationBox(station.active, station.terminal, line);
+          return [
+            { box: dot, x: centerOf(i) - dot.width / 2, y: lineY - dot.height / 2 },
+            {
+              box: station.name,
+              x: centerOf(i) - station.name.width / 2,
+              y: nameHeight - station.name.height,
+            },
+            ...(station.figure === null
+              ? []
+              : [
+                  {
+                    box: station.figure,
+                    x: centerOf(i) - station.figure.width / 2,
+                    y: lineY + METRO_REACH + METRO.labelGap,
+                  },
+                ]),
+          ];
+        }),
+      ]);
+    }
+    const sizes = METRO.down;
+    const textX = 2 * METRO_REACH + sizes.gap;
+    const figureWidth = Math.max(0, ...stations.map((station) => station.figure?.width ?? 0));
+    const width = Math.max(
+      sizes.width,
+      textX + Math.max(...stations.map((station) => station.name.width)) + sizes.gap + figureWidth,
+    );
+    const middleOf = (i: number) => sizes.row * i + sizes.row / 2;
+    return placed(width, sizes.row * stations.length, [
+      {
+        box: fillBox(
+          METRO.line,
+          middleOf(stations.length - 1) - middleOf(0),
+          METRO.line / 2,
+          line,
+          {},
+        ),
+        x: METRO_REACH - METRO.line / 2,
+        y: middleOf(0),
+      },
+      ...stations.flatMap((station, i) => {
+        const dot = metroStationBox(station.active, station.terminal, line);
+        return [
+          { box: dot, x: METRO_REACH - dot.width / 2, y: middleOf(i) - dot.height / 2 },
+          { box: station.name, x: textX, y: middleOf(i) - station.name.height / 2 },
+          ...(station.figure === null
+            ? []
+            : [
+                {
+                  box: station.figure,
+                  x: width - station.figure.width,
+                  y: middleOf(i) - station.figure.height / 2,
+                },
+              ]),
+        ];
+      }),
+    ]);
+  })();
+  const content = column([heading(map.width), map], METRO.headGap, 'start');
+  return panel(content, METRO_COLORS.sign, METRO.pad, METRO.pad, METRO.radius);
 }

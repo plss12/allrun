@@ -10,6 +10,11 @@ import {
   GRAND_PRIX_TOP,
   grandPrixActivities,
   gridColumns,
+  ingredientShares,
+  MAX_INGREDIENTS,
+  MAX_METRO_ACROSS,
+  metroLayout,
+  metroStations,
   isSummaryDataWidget,
   isSummaryReplica,
   listsNoteActivities,
@@ -88,12 +93,18 @@ describe('summaryBlocks', () => {
       { design: 'periodReceipt' },
       { design: 'periodBoardingPass', cover: 'red' },
       { design: 'periodBoardingPass', cover: 'ink' },
+      { design: 'periodNutrition', label: 'facts', layout: 'light' },
+      { design: 'periodNutrition', label: 'facts', layout: 'dark' },
+      { design: 'periodNutrition', label: 'table', layout: 'light' },
+      { design: 'periodNutrition', label: 'table', layout: 'dark' },
       { design: 'periodCalendar', layout: 'dark' },
       { design: 'periodCalendar', layout: 'light' },
       { design: 'periodStreak', layout: 'dark' },
       { design: 'periodStreak', layout: 'light' },
       { design: 'periodWeather', layout: 'light' },
       { design: 'periodWeather', layout: 'dark' },
+      { design: 'periodMetro', cover: 'red' },
+      { design: 'periodMetro', cover: 'ink' },
     ]);
   });
 
@@ -160,12 +171,18 @@ describe('summaryBlocks', () => {
       { design: 'periodReceipt' },
       { design: 'periodBoardingPass', cover: 'red' },
       { design: 'periodBoardingPass', cover: 'ink' },
+      { design: 'periodNutrition', label: 'facts', layout: 'light' },
+      { design: 'periodNutrition', label: 'facts', layout: 'dark' },
+      { design: 'periodNutrition', label: 'table', layout: 'light' },
+      { design: 'periodNutrition', label: 'table', layout: 'dark' },
       { design: 'periodCalendar', layout: 'dark' },
       { design: 'periodCalendar', layout: 'light' },
       { design: 'periodStreak', layout: 'dark' },
       { design: 'periodStreak', layout: 'light' },
       { design: 'periodWeather', layout: 'light' },
       { design: 'periodWeather', layout: 'dark' },
+      { design: 'periodMetro', cover: 'red' },
+      { design: 'periodMetro', cover: 'ink' },
     ]);
   });
 
@@ -198,6 +215,8 @@ describe('summaryBlocks', () => {
     expect(isSummaryReplica('periodCalendar')).toBe(true);
     expect(isSummaryReplica('periodStreak')).toBe(true);
     expect(isSummaryReplica('periodWeather')).toBe(true);
+    expect(isSummaryReplica('periodNutrition')).toBe(true);
+    expect(isSummaryReplica('periodMetro')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
@@ -513,5 +532,82 @@ describe('weatherCondition', () => {
     expect(weatherCondition(2, 7)).toBe('mostlyCloudy');
     expect(weatherCondition(1, 7)).toBe('cloudy');
     expect(weatherCondition(78, 365)).toBe('cloudy');
+  });
+});
+
+describe('ingredientShares', () => {
+  it('lists its sports by their share of the time, most first', () => {
+    const shares = ingredientShares([
+      makeActivity({ sportType: 'Run', movingTimeSeconds: 3000 }),
+      makeActivity({ sportType: 'Ride', movingTimeSeconds: 6000 }),
+      makeActivity({ sportType: 'Run', movingTimeSeconds: 1000 }),
+    ]);
+    expect(shares).toEqual([
+      { sport: 'roadRide', share: 0.6 },
+      { sport: 'roadRun', share: 0.4 },
+    ]);
+  });
+
+  it(`keeps its ${MAX_INGREDIENTS} main sports, and none without any time`, () => {
+    const sports = ['Run', 'Ride', 'Swim', 'Walk', 'Hike', 'Yoga', 'Rowing'] as const;
+    const shares = ingredientShares(
+      sports.map((sportType, i) => makeActivity({ sportType, movingTimeSeconds: 1000 * (i + 1) })),
+    );
+    expect(shares).toHaveLength(MAX_INGREDIENTS);
+    expect(shares[0].share).toBeGreaterThan(shares[MAX_INGREDIENTS - 1].share);
+    expect(ingredientShares([makeActivity({ movingTimeSeconds: 0 })])).toEqual([]);
+    expect(ingredientShares([])).toEqual([]);
+  });
+});
+
+describe('metroLayout', () => {
+  it(`runs across up to ${MAX_METRO_ACROSS} stations, and down beyond`, () => {
+    expect(metroLayout(1)).toBe('across');
+    expect(metroLayout(MAX_METRO_ACROSS)).toBe('across');
+    expect(metroLayout(MAX_METRO_ACROSS + 1)).toBe('down');
+    expect(metroLayout(12)).toBe('down');
+  });
+});
+
+describe('metroStations', () => {
+  const run = makeActivity({
+    sportType: 'Run',
+    localDate: '2026-10-13',
+    distanceMeters: 10_000,
+    movingTimeSeconds: 3000,
+  });
+  const gym = makeActivity({
+    sportType: 'WeightTraining',
+    localDate: '2026-10-15',
+    distanceMeters: 0,
+    movingTimeSeconds: 2700,
+  });
+
+  it("makes a station of each of a week's days, by how far it went and its main sport", () => {
+    const activities = [run, gym];
+    const stations = metroStations(summarize(activities, week), activities);
+    expect(stations.map((station) => station.range.start)).toEqual([
+      '2026-10-12',
+      '2026-10-13',
+      '2026-10-14',
+      '2026-10-15',
+      '2026-10-16',
+      '2026-10-17',
+      '2026-10-18',
+    ]);
+    expect(stations[0]).toMatchObject({ activityCount: 0, amount: 0, sport: null });
+    expect(stations[1]).toMatchObject({ activityCount: 1, amount: 10_000, sport: 'run' });
+    // A gym day in a period with a distance goes none: its sport stands for it.
+    expect(stations[3]).toMatchObject({ activityCount: 1, amount: 0, sport: 'training' });
+  });
+
+  it('measures by time a period without any distance', () => {
+    const stations = metroStations(summarize([gym], week), [gym]);
+    expect(stations[3].amount).toBe(2700);
+  });
+
+  it("makes a station of each of a year's months", () => {
+    const year = yearRange('2026-01-01');
+    expect(metroStations(summarize([run], year), [run])).toHaveLength(12);
   });
 });

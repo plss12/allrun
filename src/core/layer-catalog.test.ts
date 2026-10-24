@@ -132,6 +132,7 @@ describe('activityCatalog', () => {
       'block-alarm',
       'block-receipt',
       'block-boardingPass',
+      'block-nutrition',
     ]);
     // The quote and the verse with their first phrase: the others are chosen from a list.
     expect(variantKeys(trail, 'block-quote')).toEqual(['block-quote-kipchoge']);
@@ -144,16 +145,24 @@ describe('activityCatalog', () => {
     ]);
     // A design of a single version is its tile's only page.
     expect(variantKeys(trail, 'block-receipt')).toEqual(['block-receipt']);
+    // The nutrition label, American and European, white and then black.
+    expect(variantKeys(trail, 'block-nutrition')).toEqual([
+      'block-nutrition-facts-light',
+      'block-nutrition-facts-dark',
+      'block-nutrition-table-light',
+      'block-nutrition-table-dark',
+    ]);
     // The splits' tables come with the activity's splits: the note with the phone's apps, then
     // the bars and the ladder together and the race on TV apart; the laps' two, with its laps.
     const withSplits = activityCatalog(makeActivity(), ['splits']);
-    expect(tileKeys(withSplits, 'creative').slice(-6)).toEqual([
+    expect(tileKeys(withSplits, 'creative').slice(-7)).toEqual([
       'block-alarm',
       'block-notes',
       'block-splits',
       'block-grandPrix',
       'block-receipt',
       'block-boardingPass',
+      'block-nutrition',
     ]);
     expect(variantKeys(withSplits, 'block-splits')).toEqual([
       'block-splits-splitBars',
@@ -395,9 +404,11 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodGrandPrix',
       'summaryBlock-periodReceipt',
       'summaryBlock-periodBoardingPass',
+      'summaryBlock-periodNutrition',
       'summaryBlock-periodCalendar',
       'summaryBlock-periodStreak',
       'summaryBlock-periodWeather',
+      'summaryBlock-periodMetro',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',

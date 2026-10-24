@@ -39,14 +39,24 @@ import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy
 import { type Point, projectRoutes } from '@/core/route-projection';
 import type { HitHole } from '@/core/layer-transform';
 import type { Size } from '@/core/photo-framing';
-import type { APP_MODES, BRAND_COVERS, FontId, LAPS_LAYOUTS, Layer } from '@/core/template';
+import type {
+  APP_MODES,
+  BRAND_COVERS,
+  FontId,
+  LAPS_LAYOUTS,
+  Layer,
+  NUTRITION_LABELS,
+} from '@/core/template';
 import { durationParts } from '@/core/units';
 import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 
 import { markWidth, PlainMark, PlainWordmark, wordmarkHeight } from './brand/brand-art';
 import {
+  activityNutrition,
   type ActivityData,
   type LabelKey,
+  type NutritionLabel,
+  type NutritionRow,
   metricText,
   plainMetricParts,
   plainMetricText,
@@ -2211,6 +2221,347 @@ export function boardingPassBox(
   };
 }
 
+/** A nutrition label's paper and ink: white with black print, or black with white print. */
+const NUTRITION_COLORS = {
+  light: { paper: '#FFFFFF', ink: '#000000' },
+  dark: { paper: '#000000', ink: '#FFFFFF' },
+} as const;
+
+/**
+ * The sizes of the American label: its width, its corners, the room around its frame and the
+ * frame's width, the room inside it; its title (smaller when it doesn't fit), its servings, its
+ * serving size, the line over the calories, the calories' name and amount, the "% Daily Value"
+ * heading and each nutrient's text, row and indent; its thick, medium and thin rules; and its
+ * footnote and ingredients.
+ */
+const NUTRITION_FACTS = {
+  width: 760,
+  radius: 8,
+  margin: 14,
+  frame: 4,
+  pad: 22,
+  title: 92,
+  servings: 30,
+  serving: 36,
+  amountPer: 24,
+  caloriesName: 62,
+  caloriesValue: 80,
+  dailyValue: 24,
+  text: 30,
+  row: 50,
+  indent: 34,
+  rules: { thick: 20, medium: 9, thin: 2 },
+  foot: 22,
+  ingredients: 26,
+  gap: 6,
+} as const;
+
+/**
+ * The sizes of the European label: its width, corners and room inside; its title; the table's
+ * frame, the room inside its cells, its texts, row height and indent; and its ingredients.
+ */
+const NUTRITION_TABLE = {
+  width: 760,
+  radius: 8,
+  pad: 30,
+  title: 44,
+  frame: 3,
+  cell: 18,
+  text: 30,
+  row: 58,
+  indent: 28,
+  ingredients: 26,
+  gap: 22,
+} as const;
+
+/**
+ * An activity or a period as a food's nutrition label (see `activityNutrition`): the American one
+ * (`facts`: its title big, servings, the calories big between thick rules, each nutrient bold with
+ * its amount, its parts indented with their shares in the "% Daily Value" column, the footnote
+ * and the ingredients), or the European table (`table`: average values per serving in two
+ * columns, the energy first, the parts "of which"); white with black print (`light`) or black
+ * with white print (`dark`). Without calories, the American one writes the time big in their
+ * place, and the European one leaves its energy out.
+ */
+export function nutritionLabelBox(
+  fonts: SkTypefaceFontProvider,
+  label: NutritionLabel,
+  look: {
+    readonly label: (typeof NUTRITION_LABELS)[number];
+    readonly layout: (typeof APP_MODES)[number];
+  },
+  translate: BlockContext['translate'],
+): Box {
+  const colors = NUTRITION_COLORS[look.layout];
+  const text = (content: string, size: number, bold: boolean, maxWidth?: number) =>
+    appTextBox(fonts, [{ text: content, size, bold }], colors.ink, {
+      ...(maxWidth === undefined ? {} : { maxWidth }),
+    });
+  /** A paragraph wrapped to `width`, its lines at their start: the ingredients, the footnote. */
+  const wrapped = (runs: readonly Run[], width: number) =>
+    appTextBox(fonts, runs, colors.ink, { wrapWidth: width, wrapStart: true });
+  const ingredients = (size: number, width: number) =>
+    column(
+      [
+        wrapped(
+          [
+            { text: `${translate('widgets.nutrition.ingredients')} `, size, bold: true },
+            {
+              text: [...label.ingredients, translate('widgets.nutrition.extras')].join(', ') + '.',
+              size,
+              bold: false,
+            },
+          ],
+          width,
+        ),
+        wrapped([{ text: translate('widgets.nutrition.traces'), size, bold: true }], width),
+      ],
+      size * 0.3,
+      'start',
+    );
+  const rule = (width: number, thick: number) => fillBox(width, thick, 0, colors.ink, {});
+  /** `box` on the label's paper, `pad` inside its edges, lifting off the photo with a shadow. */
+  const onPaper = (
+    box: Box,
+    pad: number,
+    radius: number,
+    frame?: { margin: number; width: number },
+  ) => {
+    const width = box.width + 2 * pad;
+    const height = box.height + 2 * pad;
+    return placed(width, height, [
+      { box: fillBox(width, height, radius, colors.paper), x: 0, y: 0 },
+      ...(frame === undefined
+        ? []
+        : [
+            {
+              box: fillBox(width - 2 * frame.margin, height - 2 * frame.margin, 0, colors.ink, {}),
+              x: frame.margin,
+              y: frame.margin,
+            },
+            {
+              box: fillBox(
+                width - 2 * (frame.margin + frame.width),
+                height - 2 * (frame.margin + frame.width),
+                0,
+                colors.paper,
+                {},
+              ),
+              x: frame.margin + frame.width,
+              y: frame.margin + frame.width,
+            },
+          ]),
+      { box, x: pad, y: pad },
+    ]);
+  };
+
+  if (look.label === 'table') {
+    const sizes = NUTRITION_TABLE;
+    const inner = sizes.width - 2 * sizes.pad;
+    const rows: { name: string; value: string; part: boolean; bold: boolean }[] = [
+      {
+        name: translate('widgets.nutrition.average'),
+        value: label.serving,
+        part: false,
+        bold: true,
+      },
+      ...(label.calories === null
+        ? []
+        : [
+            {
+              name: translate('widgets.nutrition.energy'),
+              value: `${label.calories} kcal`,
+              part: false,
+              bold: false,
+            },
+          ]),
+      ...label.rows.map((row) => ({
+        name: row.part
+          ? translate('widgets.nutrition.partOf', {
+              name: row.name.toLocaleLowerCase(),
+            })
+          : row.name,
+        value: row.value,
+        part: row.part,
+        bold: false,
+      })),
+    ];
+    const values = rows.map((row) => text(row.value, sizes.text, row.bold));
+    const valueWidth = Math.max(...values.map((box) => box.width)) + 2 * sizes.cell;
+    const nameWidth = inner - valueWidth - sizes.frame;
+    const lines = rows.map((row, i) => {
+      const indent = row.part ? sizes.indent : 0;
+      const name = text(row.name, sizes.text, row.bold, nameWidth - 2 * sizes.cell - indent);
+      return placed(inner, sizes.row, [
+        { box: name, x: sizes.cell + indent, y: (sizes.row - name.height) / 2 },
+        {
+          box: values[i],
+          x: inner - sizes.cell - values[i].width,
+          y: (sizes.row - values[i].height) / 2,
+        },
+      ]);
+    });
+    const height = rows.length * sizes.row + (rows.length + 1) * sizes.frame;
+    // The table's frame, its rules between rows and the one between its columns, then its rows.
+    const table = placed(inner, height, [
+      { box: rule(inner, height), x: 0, y: 0 },
+      ...lines.flatMap((line, i) => {
+        const y = sizes.frame + i * (sizes.row + sizes.frame);
+        return [
+          {
+            box: fillBox(nameWidth - sizes.frame, sizes.row, 0, colors.paper, {}),
+            x: sizes.frame,
+            y,
+          },
+          {
+            box: fillBox(valueWidth - sizes.frame, sizes.row, 0, colors.paper, {}),
+            x: nameWidth + sizes.frame,
+            y,
+          },
+          { box: line, x: 0, y },
+        ];
+      }),
+    ]);
+    return onPaper(
+      column(
+        [
+          text(translate('widgets.nutrition.title'), sizes.title, true, inner),
+          table,
+          ingredients(sizes.ingredients, inner),
+        ],
+        sizes.gap,
+        'start',
+      ),
+      sizes.pad,
+      sizes.radius,
+    );
+  }
+
+  const sizes = NUTRITION_FACTS;
+  const inner = sizes.width - 2 * (sizes.margin + sizes.frame + sizes.pad);
+  const titleAt = (size: number) => text(translate('widgets.nutrition.title'), size, true);
+  const fullTitle = titleAt(sizes.title);
+  const title =
+    fullTitle.width <= inner ? fullTitle : titleAt((sizes.title * inner) / fullTitle.width);
+  // Without calories, the time takes their big line, down to its minutes.
+  const timeRow =
+    label.calories === null ? label.rows.find((row) => row.time !== undefined) : undefined;
+  const energy =
+    label.calories === null
+      ? { name: timeRow?.name ?? '', value: timeRow?.time ?? '' }
+      : { name: translate('widgets.nutrition.calories'), value: label.calories };
+  // Its parts (its sports or heart rate zones) go first, right under it.
+  const timeAt = timeRow === undefined ? -1 : label.rows.indexOf(timeRow);
+  let partsEnd = timeAt + 1;
+  while (timeAt >= 0 && partsEnd < label.rows.length && label.rows[partsEnd].part) {
+    partsEnd++;
+  }
+  const nutrients =
+    timeAt < 0
+      ? label.rows
+      : [
+          ...label.rows.slice(timeAt + 1, partsEnd),
+          ...label.rows.slice(0, timeAt),
+          ...label.rows.slice(partsEnd),
+        ];
+  const shares = nutrients.some((row) => row.share !== null);
+  const nutrient = (row: NutritionRow) => {
+    const share = row.share === null ? null : text(row.share, sizes.text, true);
+    const indent = row.part ? sizes.indent : 0;
+    const room = inner - indent - (share === null ? 0 : share.width + sizes.text);
+    const written = appTextBox(
+      fonts,
+      [
+        { text: `${row.name} `, size: sizes.text, bold: !row.part },
+        { text: row.value, size: sizes.text, bold: false },
+      ],
+      colors.ink,
+      { maxWidth: room },
+    );
+    return placed(inner, sizes.row, [
+      { box: written, x: indent, y: (sizes.row - written.height) / 2 },
+      ...(share === null
+        ? []
+        : [{ box: share, x: inner - share.width, y: (sizes.row - share.height) / 2 }]),
+    ]);
+  };
+  // Its amount smaller when it leaves its name no room.
+  const energyName = text(energy.name, sizes.caloriesName, true);
+  const fullValue = text(energy.value, sizes.caloriesValue, true);
+  const valueRoom = inner - energyName.width - sizes.text;
+  const energyValue =
+    fullValue.width <= valueRoom
+      ? fullValue
+      : text(energy.value, (sizes.caloriesValue * valueRoom) / fullValue.width, true);
+  const energyLine = spread(energyName, energyValue, inner);
+  // The serving size and its value on one line, smaller together when a long one leaves no room.
+  const servingAt = (size: number) => [
+    text(translate('widgets.nutrition.servingSize'), size, true),
+    text(label.serving, size, true),
+  ];
+  const fullServing = servingAt(sizes.serving);
+  const servingWidth = fullServing[0].width + fullServing[1].width + sizes.text;
+  const [servingName, servingValue] =
+    servingWidth <= inner
+      ? fullServing
+      : servingAt((sizes.serving * (inner - sizes.text)) / (servingWidth - sizes.text));
+  const content = column(
+    [
+      title,
+      column(
+        [
+          text(label.servings, sizes.servings, false, inner),
+          spread(servingName, servingValue, inner),
+        ],
+        sizes.gap,
+        'start',
+      ),
+      rule(inner, sizes.rules.thick),
+      text(translate('widgets.nutrition.amountPer'), sizes.amountPer, true),
+      energyLine,
+      rule(inner, sizes.rules.medium),
+      ...(shares
+        ? [
+            widened(
+              text(translate('widgets.nutrition.dailyValue'), sizes.dailyValue, true),
+              inner,
+              'end',
+            ),
+          ]
+        : []),
+      column(
+        nutrients.flatMap((row, i) => [
+          ...(i === 0 && !shares ? [] : [rule(inner, sizes.rules.thin)]),
+          nutrient(row),
+        ]),
+        0,
+        'start',
+      ),
+      rule(inner, sizes.rules.thick),
+      ...(shares
+        ? [
+            wrapped(
+              [{ text: translate('widgets.nutrition.footnote'), size: sizes.foot, bold: false }],
+              inner,
+            ),
+          ]
+        : []),
+      ingredients(sizes.ingredients, inner),
+    ],
+    sizes.gap,
+    'start',
+  );
+  return onPaper(
+    widened(content, inner, 'start'),
+    sizes.margin + sizes.frame + sizes.pad,
+    sizes.radius,
+    {
+      margin: sizes.margin,
+      width: sizes.frame,
+    },
+  );
+}
+
 /** Width of the AllRun name signing a block, and its room above. */
 const LOGO_WIDTH = 190;
 const LOGO_GAP = 40;
@@ -3422,6 +3773,14 @@ export function prepareActivityBlock(
           seed: activity.id,
         });
       }
+      case 'nutrition':
+        // The activity as a food's nutrition label: its calories as energy, its data as nutrients.
+        return nutritionLabelBox(
+          fonts,
+          activityNutrition(data, textContext, translate),
+          block,
+          translate,
+        );
     }
   })();
   if (body === null) {

@@ -164,6 +164,8 @@ export const en = {
       periodCalendar: 'Calendar',
       periodStreak: 'Streak',
       periodWeather: 'Weather',
+      periodNutrition: 'Nutrition facts',
+      periodMetro: 'Metro line',
     },
     blocks: {
       bigTrio: 'Big datum and three',
@@ -194,6 +196,7 @@ export const en = {
       sentence: 'Highlighted',
       receipt: 'Receipt',
       boardingPass: 'Boarding pass',
+      nutrition: 'Nutrition facts',
     },
     /** The camera's modes, as the iPhone writes them: photo is the one chosen. */
     cameraModes: { video: 'VIDEO', photo: 'PHOTO' },
@@ -515,6 +518,35 @@ export const en = {
       title: { day: '{{unit}} per day', week: '{{unit}} per week', month: '{{unit}} per month' },
       hours: 'Hours',
     },
+    /**
+     * An activity or a period as a food's nutrition label: its activities as servings, its
+     * calories as energy, its data as nutrients and its sports as ingredients.
+     */
+    nutrition: {
+      title: 'Nutrition Facts',
+      servings: { one: '1 activity per container', other: '{{count}} activities per container' },
+      servingSize: 'Serving size',
+      amountPer: 'Amount per serving',
+      calories: 'Calories',
+      energy: 'Energy',
+      dailyValue: '% Daily Value*',
+      footnote: '* The % Daily Value tells you how much each part adds to the total.',
+      average: 'Typical values',
+      per: 'Per serving',
+      partOf: 'of which {{name}}',
+      distance: 'Distance',
+      time: 'Time',
+      elevation: 'Elevation gain',
+      activities: 'Activities',
+      activeDays: 'Active days',
+      activeDaysValue: '{{active}} of {{days}}',
+      zone: 'Zone {{number}}',
+      ingredients: 'Ingredients:',
+      extras: 'sweat, consistency',
+      traces: 'May contain traces of early mornings.',
+    },
+    /** A period as a metro line: where it heads, its last station. */
+    metro: { direction: 'To {{station}}' },
   },
   style: {
     color: 'Color',

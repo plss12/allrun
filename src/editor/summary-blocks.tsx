@@ -19,6 +19,7 @@ import {
   hairlineBox,
   iconBox,
   justified,
+  nutritionLabelBox,
   overlay,
   placed,
   type PreparedBlock,
@@ -30,6 +31,7 @@ import {
   familyCard,
   periodTable,
   periodName,
+  periodNutrition,
   periodTitle,
   plainMetricText,
   plainSummaryText,
@@ -44,6 +46,7 @@ import {
   periodCalendarBox,
   periodStreakBox,
   periodWeatherBox,
+  periodMetroBox,
   periodGrandPrixBox,
   periodLapsBox,
   periodNotesBox,
@@ -613,6 +616,15 @@ export function prepareSummaryBlock(
         return periodStreakBox(block, data, { fonts, textContext, translate });
       case 'periodWeather':
         return periodWeatherBox(block, data, { fonts, textContext, translate });
+      case 'periodNutrition':
+        return nutritionLabelBox(
+          fonts,
+          periodNutrition(data, textContext, translate),
+          block,
+          translate,
+        );
+      case 'periodMetro':
+        return periodMetroBox(block, data, { fonts, textContext, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

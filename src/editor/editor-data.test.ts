@@ -21,6 +21,8 @@ import {
   familyCard,
   periodBoardingPass,
   periodLaps,
+  periodNutrition,
+  activityNutrition,
   periodNoteLines,
   periodReceipt,
   periodTable,
@@ -1041,5 +1043,118 @@ describe('isPaceLayer', () => {
     expect(isPaceLayer(total)).toBe(false);
     expect(isPaceLayer({ ...total, metric: 'averagePace' })).toBe(true);
     expect(isPaceLayer({ ...total, metric: 'totalMovingTime' })).toBe(false);
+  });
+});
+
+describe('activityNutrition and periodNutrition', () => {
+  /** The key, with its values after it: what each text says is checked, not its wording. */
+  const translate = (key: string, values?: Readonly<Record<string, string>>): string =>
+    values === undefined ? key : `${key}(${Object.values(values).join(',')})`;
+  /** A percentage with its no-break space as a plain one. */
+  const plain = (text: string | null) => text?.replace(/\s/gu, ' ') ?? null;
+  const range = weekRange('2026-10-14');
+  const run = makeActivity({
+    sportType: 'Run',
+    localDate: '2026-10-13',
+    startLocal: '2026-10-13T08:00:00',
+    distanceMeters: 10_000,
+    movingTimeSeconds: 3_000,
+    calories: 700,
+  });
+  const ride = makeActivity({
+    sportType: 'Ride',
+    localDate: '2026-10-15',
+    startLocal: '2026-10-15T08:00:00',
+    distanceMeters: 30_000,
+    movingTimeSeconds: 6_000,
+    calories: null,
+  });
+  const summaryOf = (activities: readonly (typeof run)[]): SummaryData => ({
+    mode: 'summary',
+    kind: 'week',
+    summary: summarize(activities, range),
+    activities,
+    bucketSize: 'day',
+    families: [],
+    current: true,
+  });
+
+  it("writes a period's calories, totals and sports, each sport's share of the time under it", () => {
+    const label = periodNutrition(summaryOf([run, ride]), context, translate);
+    expect(label.servings).toBe('widgets.nutrition.servings.other(2)');
+    expect(label.serving).toBe('thisWeek');
+    // Only the run has calories: they are the period's.
+    expect(label.calories).toBe('700');
+    expect(label.rows.map((row) => [row.name, row.part, plain(row.share)])).toEqual([
+      ['widgets.nutrition.distance', false, null],
+      ['widgets.nutrition.time', false, null],
+      ['families.ride', true, '67 %'],
+      ['families.run', true, '33 %'],
+      ['widgets.nutrition.elevation', false, null],
+      ['widgets.nutrition.activities', false, null],
+      ['widgets.nutrition.activeDays', false, '29 %'],
+    ]);
+    expect(label.rows[1]).toMatchObject({ value: '2h 30min', time: '2h 30min' });
+    expect(label.ingredients.map(plain)).toEqual([
+      'modalities.roadride (67 %)',
+      'modalities.roadrun (33 %)',
+    ]);
+  });
+
+  it('has no calories when none of its activities has any, and one sport without its share', () => {
+    const label = periodNutrition(summaryOf([ride]), context, translate);
+    expect(label.calories).toBeNull();
+    expect(label.rows.some((row) => row.part)).toBe(false);
+    expect(label.ingredients).toEqual(['modalities.roadride']);
+  });
+
+  it("writes an activity's data in its sport's order, without its calories, which are its energy", () => {
+    const label = activityNutrition(
+      { mode: 'activity', activity: run, detail: null, place: null, zones: null },
+      context,
+      translate,
+    );
+    expect(label.servings).toBe('widgets.nutrition.servings.one');
+    expect(label.serving).toBe('13 oct');
+    expect(label.calories).toBe('700');
+    expect(label.rows.map((row) => row.name)).not.toContain('metrics.calories');
+    expect(label.rows[0].name).toBe('metrics.distance');
+    const time = label.rows.find((row) => row.time !== undefined);
+    expect(time).toMatchObject({ name: 'metrics.movingTime', value: '50min', time: '50min' });
+    expect(label.rows.every((row) => !row.part)).toBe(true);
+    expect(label.ingredients).toEqual(['modalities.roadrun']);
+  });
+
+  it('writes under its time the time in each heart rate zone it reached, and its share', () => {
+    const streams = {
+      time: [0, 60, 120, 180, 240],
+      heartRate: [100, 100, 150, 150, 150],
+      distance: null,
+      altitude: null,
+      speed: null,
+      power: null,
+    };
+    const label = activityNutrition(
+      {
+        mode: 'activity',
+        activity: run,
+        detail: { streams, splits: { metric: [], imperial: [] }, laps: [] },
+        place: null,
+        zones: [
+          { min: 0, max: 120 },
+          { min: 120, max: 140 },
+          { min: 140, max: null },
+        ],
+      },
+      context,
+      translate,
+    );
+    const time = label.rows.findIndex((row) => row.time !== undefined);
+    expect(
+      label.rows.slice(time + 1, time + 3).map((row) => [row.name, row.part, plain(row.share)]),
+    ).toEqual([
+      ['widgets.nutrition.zone(1)', true, '25 %'],
+      ['widgets.nutrition.zone(3)', true, '75 %'],
+    ]);
   });
 });

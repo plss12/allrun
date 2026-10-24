@@ -1,9 +1,9 @@
 import type { Activity } from '@/core/activity';
 import { rangeLength } from '@/core/dates';
-import type { SentenceClause, SentenceLead } from '@/core/activity-block';
+import { bigMetrics, type SentenceClause, type SentenceLead } from '@/core/activity-block';
 import type { BarSeries, LineSeries, SplitRow } from '@/core/activity-charts';
 import type { ActivityDetail } from '@/core/activity-detail';
-import type { HeartRateZones } from '@/core/heart-rate-zones';
+import { type HeartRateZones, timeInZones } from '@/core/heart-rate-zones';
 import {
   type DisplayMetric,
   isPace,
@@ -20,13 +20,16 @@ import {
   type BucketSize,
   bucketize,
   familiesOf,
+  familyTotals,
   type FamilyTotals,
   type PeriodSummary,
   type SummaryBucket,
 } from '@/core/summary';
 import {
+  ingredientShares,
   listsNoteActivities,
   noteActivities,
+  periodStreak,
   type PeriodSentenceClause,
   type PeriodSentenceLead,
   tableBucket,
@@ -113,6 +116,29 @@ export type ChartHeaderName =
   | 'total'
   | `averagePer.${BucketSize}`;
 
+/** The texts of a nutrition label, besides its servings (see `NutritionLabel`). */
+type NutritionText =
+  | 'title'
+  | 'servingSize'
+  | 'amountPer'
+  | 'calories'
+  | 'energy'
+  | 'dailyValue'
+  | 'footnote'
+  | 'average'
+  | 'per'
+  | 'partOf'
+  | 'distance'
+  | 'time'
+  | 'elevation'
+  | 'activities'
+  | 'activeDays'
+  | 'activeDaysValue'
+  | 'zone'
+  | 'ingredients'
+  | 'extras'
+  | 'traces';
+
 /** Translation key of a label the canvas draws. */
 export type LabelKey =
   | `metrics.${MetricId}`
@@ -162,6 +188,9 @@ export type LabelKey =
   | `widgets.weather.conditions.${WeatherCondition}`
   | `widgets.weather.title.${BucketSize}`
   | `widgets.weather.${'range' | 'hours'}`
+  | `widgets.nutrition.servings.${'one' | 'other'}`
+  | `widgets.nutrition.${NutritionText}`
+  | 'widgets.metro.direction'
   | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date' | 'activities' | 'time' | 'activeDays'}`
   | `widgets.cameraModes.${'video' | 'photo'}`
   | `widgets.cameraZoom.${'wide' | 'main' | 'tele'}`
@@ -1195,6 +1224,235 @@ export function periodBoardingPass(
     ],
   };
 }
+
+/** A nutrient of a nutrition label: its name, its amount, and its share of a whole. */
+export interface NutritionRow {
+  readonly name: string;
+  readonly value: string;
+  /** Its share of the whole ("64 %"), which only the American label writes; `null` for none. */
+  readonly share: string | null;
+  /** Part of the nutrient above it (a sport of the time), indented under it. */
+  readonly part: boolean;
+  /**
+   * The time, which takes the calories' big line on the American label without them, written
+   * there down to its minutes ("1h 5min").
+   */
+  readonly time?: string;
+}
+
+/** A nutrition label's texts besides its fixed ones (see `activityNutrition`). */
+export interface NutritionLabel {
+  /** How many activities it holds, as a label says how many servings ("6 actividades por envase"). */
+  readonly servings: string;
+  /** What a serving is: the period's name, or the activity's day. */
+  readonly serving: string;
+  /** Its calories ("3240"), `null` when none of its activities has any. */
+  readonly calories: string | null;
+  readonly rows: readonly NutritionRow[];
+  /** Its sports, most time first, with their shares when they are two or more. */
+  readonly ingredients: readonly string[];
+}
+
+/** A share from 0 to 1 as a percentage in the context's language ("64 %"), never under 1 %. */
+function percentText(share: number, context: TextContext): string {
+  return new Intl.NumberFormat(context.locale, {
+    style: 'percent',
+    maximumFractionDigits: 0,
+  }).format(Math.max(0.01, share));
+}
+
+/**
+ * The sports of `activities` as a label's ingredients (see `ingredientShares`), in small letters:
+ * with their shares of the time when they are two or more ("carrera (65 %)"), else alone.
+ */
+function ingredientTexts(
+  activities: readonly Activity[],
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): string[] {
+  const ingredients = ingredientShares(activities);
+  return ingredients.map(({ sport, share }) => {
+    const name = translate(`modalities.${sport}`).toLocaleLowerCase(context.locale);
+    return ingredients.length >= 2 ? `${name} (${percentText(share, context)})` : name;
+  });
+}
+
+/** How many activities a label holds, as its servings. */
+const servingsText = (
+  count: number,
+  translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
+): string =>
+  count === 1
+    ? translate('widgets.nutrition.servings.one')
+    : translate('widgets.nutrition.servings.other', { count: String(count) });
+
+/** Calories as a label writes them, bare ("3240"); `null` without any. */
+function caloriesText(calories: number | null, context: TextContext): string | null {
+  return calories === null || calories <= 0
+    ? null
+    : formatMetric(
+        toDisplayMetric('calories', calories, { unit: context.unit, sportFamily: 'training' }),
+        context.locale,
+      ).value;
+}
+
+/**
+ * An activity as a food's nutrition label: one activity per pack, its day as a serving, its
+ * calories as its energy and its data as its nutrients, in the sport's order (never a second
+ * reading of one, as the data widgets: see `bigMetrics`), its time in units, and under it the
+ * time in each of the athlete's heart rate zones and its share, when both are known (only
+ * the zones it reached); and its sport as the first ingredient. Time O(m + s · z) for m metrics,
+ * s heart rate samples and z zones.
+ */
+export function activityNutrition(
+  data: ActivityData,
+  context: TextContext,
+  translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
+): NutritionLabel {
+  const { activity } = data;
+  const streams = data.detail?.streams ?? null;
+  const zones =
+    data.zones === null || streams === null || streams.heartRate === null
+      ? []
+      : timeInZones(streams.time, streams.heartRate, data.zones);
+  const zoned = zones.reduce((sum, seconds) => sum + seconds, 0);
+  const rows = bigMetrics(activity, 'main', Number.MAX_SAFE_INTEGER)
+    .filter((metric) => metric !== 'calories')
+    .slice(0, MAX_NUTRIENTS)
+    .flatMap((metric): NutritionRow[] => {
+      const time = ACTIVITY_TIMES.has(metric);
+      const row: NutritionRow = {
+        name: translate(`metrics.${metric}`),
+        value: time
+          ? durationInWords(metricValue(activity, metric) ?? 0, 'seconds', context)
+          : withUnit(metricText(activity, metric, context), context),
+        share: null,
+        part: false,
+        ...(metric === 'movingTime'
+          ? { time: durationInWords(metricValue(activity, metric) ?? 0, 'minutes', context) }
+          : {}),
+      };
+      if (metric !== 'movingTime' || zoned <= 0) {
+        return [row];
+      }
+      return [
+        row,
+        ...zones.flatMap((seconds, i): NutritionRow[] =>
+          seconds <= 0
+            ? []
+            : [
+                {
+                  name: translate('widgets.nutrition.zone', { number: String(i + 1) }),
+                  value: durationInWords(seconds, 'minutes', context),
+                  share: percentText(seconds / zoned, context),
+                  part: true,
+                },
+              ],
+        ),
+      ];
+    });
+  return {
+    servings: servingsText(1, translate),
+    serving: formatActivityDate(activity.startLocal, context.locale, 'short'),
+    calories: caloriesText(activity.calories, context),
+    rows,
+    ingredients: ingredientTexts([activity], context, translate),
+  };
+}
+
+/**
+ * A period as a food's nutrition label: its activities as servings per pack, its name as a
+ * serving, the calories of those that have them as its energy, and its distance, time (each sport
+ * under it with its share, when it mixes them), elevation gain, activities and active days (and
+ * their share of its days) as its nutrients; its sports as its ingredients. Time O(n log n) for n
+ * activities.
+ */
+export function periodNutrition(
+  data: SummaryData,
+  context: TextContext,
+  translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
+): NutritionLabel {
+  const { summary } = data;
+  const total = (metric: SummaryMetricId, value: number) =>
+    withUnit(
+      formatMetric(toDisplaySummaryMetric(metric, value, context.unit), context.locale),
+      context,
+    );
+  // Most first, as a label lists its parts.
+  const sports = familyTotals(data.activities)
+    .filter((sport) => sport.movingTimeSeconds > 0)
+    .sort((a, b) => b.movingTimeSeconds - a.movingTimeSeconds);
+  const burned = data.activities.filter((activity) => activity.calories !== null);
+  const streak = periodStreak(summary, data.activities);
+  const rows: NutritionRow[] = [
+    ...(summaryHasDistance(summary)
+      ? [
+          {
+            name: translate('widgets.nutrition.distance'),
+            value: total('totalDistance', summary.totalDistanceMeters),
+            share: null,
+            part: false,
+          },
+        ]
+      : []),
+    {
+      name: translate('widgets.nutrition.time'),
+      value: durationInWords(summary.totalMovingTimeSeconds, 'minutes', context),
+      share: null,
+      part: false,
+      time: durationInWords(summary.totalMovingTimeSeconds, 'minutes', context),
+    },
+    ...(sports.length >= 2
+      ? sports.map((sport) => ({
+          name: translate(`families.${sport.family}`),
+          value: durationInWords(sport.movingTimeSeconds, 'minutes', context),
+          share: percentText(sport.movingTimeSeconds / summary.totalMovingTimeSeconds, context),
+          part: true,
+        }))
+      : []),
+    ...(summary.totalElevationGainMeters > 0
+      ? [
+          {
+            name: translate('widgets.nutrition.elevation'),
+            value: total('totalElevationGain', summary.totalElevationGainMeters),
+            share: null,
+            part: false,
+          },
+        ]
+      : []),
+    {
+      name: translate('widgets.nutrition.activities'),
+      value: String(summary.activityCount),
+      share: null,
+      part: false,
+    },
+    {
+      name: translate('widgets.nutrition.activeDays'),
+      value: translate('widgets.nutrition.activeDaysValue', {
+        active: String(streak.activeDays),
+        days: String(streak.days),
+      }),
+      share: percentText(streak.activeDays / streak.days, context),
+      part: false,
+    },
+  ];
+  return {
+    servings: servingsText(summary.activityCount, translate),
+    serving: periodName(data, context, translate),
+    calories:
+      burned.length === 0
+        ? null
+        : caloriesText(
+            burned.reduce((sum, activity) => sum + (activity.calories ?? 0), 0),
+            context,
+          ),
+    rows,
+    ingredients: ingredientTexts(data.activities, context, translate),
+  };
+}
+
+/** Most data an activity's nutrition label lists as its nutrients. */
+const MAX_NUTRIENTS = 6;
 
 /** A period's laps as its board or timing sheet writes them (see `periodLaps`). */
 export interface PeriodLaps {

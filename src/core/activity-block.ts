@@ -18,6 +18,7 @@ import {
   CHAT_PHRASES,
   DATA_LINE_LAYOUTS,
   LAPS_LAYOUTS,
+  NUTRITION_LABELS,
   QUOTES,
   VERSES,
 } from './template';
@@ -97,6 +98,7 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'notes':
     case 'laps':
     case 'grandPrix':
+    case 'nutrition':
     case 'alarm':
     case 'location':
     case 'splitBars':
@@ -283,8 +285,21 @@ export function activityBlocks(
     // Things of paper.
     { design: 'receipt' } as const,
     ...BRAND_COVERS.map((cover) => ({ design: 'boardingPass', cover }) as const),
+    ...nutritionLabels().map((labels) => ({ design: 'nutrition', ...labels }) as const),
   ];
 }
+
+/**
+ * Every version of a nutrition label, of an activity or a period alike: the American one and
+ * the European table, each white (as on a box) and then black.
+ */
+export const nutritionLabels = (): {
+  readonly label: (typeof NUTRITION_LABELS)[number];
+  readonly layout: (typeof APP_MODES)[number];
+}[] =>
+  NUTRITION_LABELS.flatMap((label) =>
+    (['light', 'dark'] as const).map((layout) => ({ label, layout })),
+  );
 
 /** The laps in one look, in both brand colors. */
 const lapsOf = (layout: (typeof LAPS_LAYOUTS)[number]): ActivityBlock[] =>
@@ -425,6 +440,7 @@ const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set([
   'sentence',
   'receipt',
   'boardingPass',
+  'nutrition',
 ]);
 
 /**
@@ -543,6 +559,7 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
     case 'sentence':
     case 'receipt':
     case 'boardingPass':
+    case 'nutrition':
       return lettering('inter', false);
   }
 }

@@ -1,5 +1,5 @@
 import type { Activity } from './activity';
-import type { BlockLettering } from './activity-block';
+import { type BlockLettering, nutritionLabels } from './activity-block';
 import {
   addDays,
   type DateRange,
@@ -12,7 +12,7 @@ import {
 } from './dates';
 import { bucketCount } from './periods';
 import type { SportFamily, SportModality } from './sports';
-import { type BucketSize, familyTotals, type PeriodSummary } from './summary';
+import { type BucketSize, bucketize, familyTotals, type PeriodSummary } from './summary';
 import { periodTotals, summaryHasDistance } from './summary-metrics';
 import {
   APP_MODES,
@@ -86,6 +86,8 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodCalendar',
   'periodStreak',
   'periodWeather',
+  'periodNutrition',
+  'periodMetro',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -474,6 +476,88 @@ export function weatherCondition(activeDays: number, days: number): WeatherCondi
   return share >= 0.25 ? 'mostlyCloudy' : 'cloudy';
 }
 
+/** Most sports a nutrition label lists among its ingredients. */
+export const MAX_INGREDIENTS = 5;
+
+/** A sport among a nutrition label's ingredients, and its share of the time, from 0 to 1. */
+export interface Ingredient {
+  readonly sport: SportModality;
+  readonly share: number;
+}
+
+/**
+ * The sports of `activities` as a food's ingredients: by their share of the time in motion, most
+ * first (as a label lists them by weight), at most {@link MAX_INGREDIENTS}. Empty without any
+ * time. Time O(n + s log s) for n activities and s sports.
+ */
+export function ingredientShares(activities: readonly Activity[]): Ingredient[] {
+  const time = new Map<SportModality, number>();
+  for (const activity of activities) {
+    time.set(
+      activity.sportModality,
+      (time.get(activity.sportModality) ?? 0) + activity.movingTimeSeconds,
+    );
+  }
+  const total = [...time.values()].reduce((sum, seconds) => sum + seconds, 0);
+  if (total <= 0) {
+    return [];
+  }
+  return [...time]
+    .filter(([, seconds]) => seconds > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_INGREDIENTS)
+    .map(([sport, seconds]) => ({ sport, share: seconds / total }));
+}
+
+/** Most stations a metro line draws across: a week's days. */
+export const MAX_METRO_ACROSS = 7;
+
+/**
+ * How a period's metro line runs: `across`, its stations side by side (up to
+ * {@link MAX_METRO_ACROSS}: a week, a month's weeks), or `down`, one under another (a year's
+ * months).
+ */
+export type MetroLayout = 'across' | 'down';
+
+/** How a metro line of `stations` stations runs (see {@link MetroLayout}). Time O(1). */
+export function metroLayout(stations: number): MetroLayout {
+  return stations <= MAX_METRO_ACROSS ? 'across' : 'down';
+}
+
+/** A station of a period's metro line: a day, week or month (see `tableBucket`). */
+export interface MetroStation {
+  readonly range: DateRange;
+  readonly activityCount: number;
+  /**
+   * How far it went, in meters, or how long, in seconds, in a period without any distance; 0
+   * without activities, or for a gym day in a period with some, whose sport stands for it.
+   */
+  readonly amount: number;
+  /** The family it spent most time on (see `mainFamily`); `null` without activities. */
+  readonly sport: SportFamily | null;
+}
+
+/**
+ * The stations of a period's metro line: its days, weeks or months (see `tableBucket`), each with
+ * its activities, how far (or how long, without any distance in the period) and its main sport.
+ * Time O(b · n) for b stations and n activities.
+ */
+export function metroStations(
+  summary: PeriodSummary,
+  activities: readonly Activity[],
+): MetroStation[] {
+  const distance = summaryHasDistance(summary);
+  return bucketize(activities, summary.range, tableBucket(summary.range)).map((bucket) => {
+    const inside = activities.filter((activity) => isInRange(activity.localDate, bucket.range));
+    return {
+      range: bucket.range,
+      activityCount: bucket.activityCount,
+      amount: distance ? bucket.distanceMeters : bucket.movingTimeSeconds,
+      sport: inside.length === 0 ? null : mainFamily(inside),
+    };
+  });
+}
+
 /**
  * How a period's streak draws its days under its figure: `days`, one by one with their initials
  * (a week or shorter); `weeks`, a dot per day in a row per week, as a calendar (up to
@@ -505,9 +589,11 @@ export function streakStrip(range: DateRange): StreakStrip {
  * color; its note,
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
  * days, weeks or months; its laps, on a board and a timing sheet in each brand color; its race;
- * its receipt; its boarding pass in each brand color; and those without an activity's twin: its
- * calendar and its streak, in dark and light mode, the calendar up to a year (see
- * `calendarView`); and its weather, by day and by night. None for a period without activities. Time O(1).
+ * its receipt; its boarding pass in each brand color; its nutrition label, as an activity's (see
+ * `nutritionLabels`); and those without an activity's twin: its calendar and its streak, in dark
+ * and light mode, the calendar up to a year (see `calendarView`); its weather, by day and by
+ * night; and its metro line, in each brand color. None for a period without activities. Time
+ * O(1).
  */
 export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
   if (summary.activityCount === 0) {
@@ -553,6 +639,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     { design: 'periodGrandPrix' },
     { design: 'periodReceipt' },
     ...BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodBoardingPass', cover })),
+    ...nutritionLabels().map((labels): SummaryBlock => ({ design: 'periodNutrition', ...labels })),
     ...(calendarView(summary.range) === null
       ? []
       : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
@@ -561,6 +648,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
       design: 'periodWeather',
       layout,
     })),
+    ...BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodMetro', cover })),
   ];
 }
 
@@ -602,6 +690,8 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodCalendar':
     case 'periodStreak':
     case 'periodWeather':
+    case 'periodNutrition':
+    case 'periodMetro':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }
