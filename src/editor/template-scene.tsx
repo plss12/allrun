@@ -75,6 +75,7 @@ import {
   softBackdrop,
   textShadows,
 } from './scene-text';
+import { finishParagraph } from './paragraph-arena';
 
 /**
  * A layer filled with data and measured, ready to draw. Its content is centered on (0, 0); the
@@ -831,7 +832,7 @@ function buildParagraph(
   if (style.italic === true && runs.length > 0) {
     addLeanRoom(builder, runs[runs.length - 1].fontSize);
   }
-  const paragraph = builder.build();
+  const paragraph = finishParagraph(builder);
   // Lay out once to measure, then shrink to the longest line so the block centers on (0, 0).
   paragraph.layout(wrapWidth);
   paragraph.layout(Math.ceil(paragraph.getLongestLine()) + 1);

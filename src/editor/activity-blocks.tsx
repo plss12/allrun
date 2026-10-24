@@ -79,6 +79,7 @@ import {
   softBackdrop,
   textShadows,
 } from './scene-text';
+import { discardParagraph, finishParagraph } from './paragraph-arena';
 
 /**
  * The mixed widgets of an activity (ADR 009): several of its data in one designed block, laid out
@@ -951,7 +952,7 @@ export function paragraph(
     if (style.italic === true && runs.length > 0 && wrapWidth === undefined) {
       addLeanRoom(builder, runs[runs.length - 1].size);
     }
-    return builder.build();
+    return finishParagraph(builder);
   };
   const built = build(false);
   if (wrapWidth !== undefined) {
@@ -961,6 +962,7 @@ export function paragraph(
     const words = build(false, true);
     words.layout(NO_WRAP_WIDTH);
     const widestWord = Math.ceil(words.getLongestLine()) + 1;
+    discardParagraph(words);
     built.layout(Math.max(wrapWidth, widestWord));
     const lines = built.getLineMetrics().length;
     let low = widestWord;
@@ -980,6 +982,7 @@ export function paragraph(
   }
   built.layout(NO_WRAP_WIDTH);
   if (built.getLongestLine() > maxWidth) {
+    discardParagraph(built);
     const cut = build(true);
     cut.layout(maxWidth);
     cut.layout(Math.ceil(cut.getLongestLine()) + 1);

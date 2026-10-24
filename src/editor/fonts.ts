@@ -1,6 +1,6 @@
-import { useFonts } from '@shopify/react-native-skia';
+import { loadData, Skia, type SkTypefaceFontProvider } from '@shopify/react-native-skia';
 import { useFonts as useExpoFonts } from 'expo-font';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { FONT_IDS, type FontId } from '@/core/template';
 import { logError } from '@/ui/log';
@@ -189,9 +189,66 @@ const FONT_FILES = Object.fromEntries(
   FONT_IDS.map((font) => [FONT_FAMILIES[font], Object.values(FONT_FACES[font])]),
 );
 
-/** Loads every bundled font into a Skia font provider; `null` while loading. */
-export function useEditorFonts() {
-  return useFonts(FONT_FILES);
+/**
+ * The editor's fonts once loaded, for the whole session: loading every face (some forty files,
+ * fetched from Metro in development) took seconds each time the editor opened.
+ */
+let loadedFonts: SkTypefaceFontProvider | null = null;
+/** The load under way, shared by everyone waiting for it. */
+let loadingFonts: Promise<SkTypefaceFontProvider> | null = null;
+
+/**
+ * Loads every bundled font into a Skia font provider, once a session (see `loadedFonts`); a load
+ * that fails is tried again the next time. Each face goes under its family's name, as Skia's own
+ * `useFonts` registers them.
+ */
+export function loadEditorFonts(): Promise<SkTypefaceFontProvider> {
+  if (loadedFonts !== null) {
+    return Promise.resolve(loadedFonts);
+  }
+  loadingFonts ??= Promise.all(
+    Object.entries(FONT_FILES).flatMap(([family, files]) =>
+      files.map(async (file) => {
+        const typeface = await loadData(file, (data) =>
+          Skia.Typeface.MakeFreeTypeFaceFromData(data),
+        );
+        if (typeface === null) {
+          throw new Error(`Could not load a face of ${family}`);
+        }
+        return [family, typeface] as const;
+      }),
+    ),
+  ).then(
+    (faces) => {
+      const provider = Skia.TypefaceFontProvider.Make();
+      for (const [family, typeface] of faces) {
+        provider.registerFont(typeface, family);
+      }
+      loadedFonts = provider;
+      return provider;
+    },
+    (error: unknown) => {
+      loadingFonts = null;
+      throw error;
+    },
+  );
+  return loadingFonts;
+}
+
+/**
+ * Every bundled font in a Skia font provider (see `loadEditorFonts`): at once when already
+ * loaded, `null` while loading (or when it failed, which is logged).
+ */
+export function useEditorFonts(): SkTypefaceFontProvider | null {
+  const [fonts, setFonts] = useState(loadedFonts);
+  useEffect(() => {
+    if (fonts === null) {
+      loadEditorFonts().then(setFonts, (error: unknown) =>
+        logError('Could not load the editor fonts', error),
+      );
+    }
+  }, [fonts]);
+  return fonts;
 }
 
 /**

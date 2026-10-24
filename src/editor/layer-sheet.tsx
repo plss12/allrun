@@ -1,6 +1,6 @@
 import type { ParseKeys } from 'i18next';
 import { Canvas, Group, Paint } from '@shopify/react-native-skia';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
@@ -27,6 +27,7 @@ import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
 import { layerText } from './editor-data';
+import { disposeLater } from './paragraph-arena';
 import { SheetFrame } from './sheet-frame';
 import type { LayerContext } from './template-scene';
 import {
@@ -35,7 +36,8 @@ import {
   GALLERY_PADDING,
   type GalleryPage,
   type GalleryWidget,
-  gallerySections,
+  buildGallery,
+  type BuiltGallery,
 } from './widget-gallery';
 
 interface LayerSheetProps {
@@ -106,6 +108,64 @@ const CHOICE_TITLES = {
 } as const;
 
 /**
+ * What a gallery shows of its data, as a key: the same activity or period with the same detail
+ * and place, or the same totals and sports, draws the same gallery.
+ */
+function galleryDataKey(data: LayerContext['data']): string {
+  return data.mode === 'activity'
+    ? [
+        data.activity.id,
+        data.detail === null ? '' : 'detail',
+        data.place?.city ?? '',
+        data.zones === null ? '' : 'zones',
+      ].join(':')
+    : [
+        data.kind,
+        data.summary.range.start,
+        data.summary.range.end,
+        data.summary.activityCount,
+        data.families.join(','),
+        data.current ? 'current' : '',
+      ].join(':');
+}
+
+/**
+ * The gallery's sections while `open`, laid out once for each `key` (what it draws), not again
+ * at each render; and nothing while closed. A gallery holds hundreds of native paragraphs: the
+ * one replaced, or the one shown when it closes, is freed once the screen stops drawing it (see
+ * `disposeLater`), so opening it again and again doesn't pile them up.
+ */
+function useGallery(
+  open: boolean,
+  key: string,
+  build: () => BuiltGallery,
+): BuiltGallery['sections'] {
+  const [laidOut, setLaidOut] = useState<{
+    readonly key: string;
+    readonly gallery: BuiltGallery;
+  } | null>(null);
+  const wanted = open ? key : null;
+  const current =
+    wanted === (laidOut?.key ?? null)
+      ? laidOut
+      : wanted === null
+        ? null
+        : { key: wanted, gallery: build() };
+  if (current !== laidOut) {
+    setLaidOut(current);
+  }
+  // A render that lays out a new gallery is redone at once with it stored: what the screen shows
+  // is always the one stored, freed when replaced or when the sheet goes.
+  useEffect(() => {
+    if (laidOut === null) {
+      return undefined;
+    }
+    return () => disposeLater(laidOut.gallery.dispose);
+  }, [laidOut]);
+  return current?.gallery.sections ?? [];
+}
+
+/**
  * Sheet to add a widget: a gallery of every widget drawn live with the user's data, in sections,
  * each tile scrolling sideways through the widget's variants (see `widget-gallery.ts`). A tap
  * adds the variant shown; a verse, a quote or a chat message's phrase is chosen first from its
@@ -139,10 +199,21 @@ export function LayerSheet({
       onAddText();
     }
   };
-  // Measured only while open: the sheet is closed most of the time.
-  const sections = visible
-    ? gallerySections(catalog, format, font, layerContext, window.width, t('gallery.textSample'))
-    : [];
+  const textSample = t('gallery.textSample');
+  const sections = useGallery(
+    visible,
+    [
+      galleryDataKey(layerContext.data),
+      catalog.map((section) => section.widgets.map((widget) => widget.key).join(',')).join(';'),
+      format,
+      font,
+      layerContext.textContext.unit,
+      layerContext.textContext.locale,
+      window.width,
+      textSample,
+    ].join('|'),
+    () => buildGallery(catalog, format, font, layerContext, window.width, textSample),
+  );
   return (
     <Modal
       visible={visible}
@@ -182,6 +253,8 @@ export function LayerSheet({
             keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
             stickySectionHeadersEnabled={false}
             initialNumToRender={8}
+            // Rows two screens away are let go: each tile draws on a canvas of its own.
+            windowSize={5}
             contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
             renderSectionHeader={({ section }) => (
               <Text
@@ -539,15 +612,21 @@ function WidgetTile({
               opacity: pressed ? 0.6 : 1,
             })}
           >
-            <PageCanvas
-              page={page}
-              width={pageWidth}
-              height={
-                // The hint goes where the dots would, or over them without taking room: the
-                // widget sits as high as in the tiles next to it.
-                several || hint !== undefined ? pageHeight - GALLERY_DOTS_HEIGHT : pageHeight
-              }
-            />
+            {
+              // Only the page shown and those beside it, which a swipe brings in, have a canvas:
+              // each one holds GPU memory, and a gallery has over a hundred pages.
+              Math.abs(i - shown) <= 1 ? (
+                <PageCanvas
+                  page={page}
+                  width={pageWidth}
+                  height={
+                    // The hint goes where the dots would, or over them without taking room: the
+                    // widget sits as high as in the tiles next to it.
+                    several || hint !== undefined ? pageHeight - GALLERY_DOTS_HEIGHT : pageHeight
+                  }
+                />
+              ) : null
+            }
           </Pressable>
         ))}
       </ScrollView>

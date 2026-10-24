@@ -15,6 +15,7 @@ import {
 import { CANVAS_FORMATS, type CanvasFormat, type FontId } from '@/core/template';
 
 import { layerText } from './editor-data';
+import { inParagraphArena } from './paragraph-arena';
 import { type LayerContext, type PreparedLayer, prepareLayers } from './template-scene';
 
 /**
@@ -118,6 +119,30 @@ export interface GallerySection {
  * goes up beside it (see `isCreativeWildcard`). Time O(n) for n items, each measured once
  * (and a tile left alone twice).
  */
+export function buildGallery(
+  catalog: readonly CatalogSection[],
+  format: CanvasFormat,
+  font: FontId,
+  context: LayerContext,
+  screenWidth: number,
+  textSample: string,
+): BuiltGallery {
+  const { value, dispose } = inParagraphArena(() =>
+    gallerySections(catalog, format, font, context, screenWidth, textSample),
+  );
+  return { sections: value, dispose };
+}
+
+/**
+ * A gallery laid out (see `buildGallery`), and a way to free its native paragraphs all at once,
+ * once nothing draws them anymore (see `inParagraphArena`).
+ */
+export interface BuiltGallery {
+  readonly sections: readonly GallerySection[];
+  readonly dispose: () => void;
+}
+
+/** The gallery's rows, section by section (see `buildGallery`). */
 export function gallerySections(
   catalog: readonly CatalogSection[],
   format: CanvasFormat,
