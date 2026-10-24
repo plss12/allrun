@@ -2,6 +2,7 @@ import type { Activity } from './activity';
 import type { BlockLettering } from './activity-block';
 import { type DateRange, rangeLength } from './dates';
 import { bucketCount } from './periods';
+import type { SportFamily } from './sports';
 import type { BucketSize, PeriodSummary } from './summary';
 import { periodTotals, summaryHasDistance } from './summary-metrics';
 import { APP_MODES, QUOTES, type SummaryBlock, type SummaryBlockDesign, VERSES } from './template';
@@ -56,7 +57,10 @@ export function tableBucket(range: DateRange): BucketSize {
 export const MAX_NOTES_ACTIVITIES = 16;
 
 /** Designs that recreate an app: its colors, font and icons are the app's (see `isAppReplica`). */
-const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set(['periodNotes']);
+const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
+  'periodSentence',
+  'periodNotes',
+]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
 const SUMMARY_DATA_WIDGETS: ReadonlySet<SummaryBlockDesign> = new Set([
@@ -93,6 +97,55 @@ export function listsNoteActivities(summary: PeriodSummary): boolean {
  */
 export function isSummaryReplica(design: SummaryBlockDesign): boolean {
   return SUMMARY_REPLICAS.has(design);
+}
+
+/**
+ * How a period's highlighted sentence opens, after the period's name: with its distance, said by
+ * its sport when it has one (`run`: "94,23 kilómetros corriendo"), or with its time without a
+ * distance (`training`: "3h 20min entrenando").
+ */
+export type PeriodSentenceLead =
+  'run' | 'ride' | 'walk' | 'swim' | 'distance' | 'training' | 'time';
+
+/** What a period's highlighted sentence says after its lead, in this order. */
+export type PeriodSentenceClause = 'time' | 'count';
+
+/** A period's highlighted sentence: its lead, then its clauses. */
+export interface PeriodSentencePlan {
+  readonly lead: PeriodSentenceLead;
+  readonly clauses: readonly PeriodSentenceClause[];
+}
+
+/** How a period of one family opens its sentence with its distance: by its verb when it has one. */
+const DISTANCE_LEADS: Readonly<Record<SportFamily, PeriodSentenceLead>> = {
+  run: 'run',
+  ride: 'ride',
+  walk: 'walk',
+  swim: 'swim',
+  training: 'distance',
+  other: 'distance',
+};
+
+/**
+ * The sentence that tells a period, as an activity's (see `sentencePlan`): "Esta semana: 94,23
+ * kilómetros y 7h 18min en movimiento en 6 actividades." It opens with its distance, said by its
+ * sport when it has only one that says it ("corriendo"), and its time; or with its time alone
+ * without any distance ("entrenando" for gym sessions alone); then how many activities. Never its
+ * elevation gain, which means little over sports as different as a ride and a swim. Time O(1).
+ */
+export function periodSentencePlan(summary: PeriodSummary): PeriodSentencePlan {
+  const [sport] = summary.families;
+  const single = summary.families.length === 1 ? sport : null;
+  if (summaryHasDistance(summary)) {
+    return {
+      lead: single === null ? 'distance' : DISTANCE_LEADS[single],
+      clauses: [...(summary.totalMovingTimeSeconds > 0 ? (['time'] as const) : []), 'count'],
+    };
+  }
+  return {
+    lead: single === 'training' ? 'training' : 'time',
+    clauses: ['count'],
+  };
 }
 
 /** A line of a note listing a period's activities, and whether it stands out in the accent. */
@@ -142,7 +195,8 @@ export function noteActivities(activities: readonly Activity[]): NoteActivity[] 
  * week or shorter; its activities with their routes, one by one only up to a month (a year has
  * too many) and overlaid (its main sport's icon, without any route), after its card per sport, as
  * an activity's card comes before its widgets with the route. Then its creative ones, in the order
- * of an activity's: the first quote and verse (the others are chosen from their lists); its note,
+ * of an activity's: the first quote and verse (the others are chosen from their lists); its
+ * highlighted sentence; its note,
  * in dark and light mode, of its activities (only a week's, see `listsNoteActivities`) and of its
  * days, weeks or months. None for a period without activities. Time O(1).
  */
@@ -169,6 +223,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     { design: 'periodRoutes', layout: 'overlay' },
     { design: 'quote', quote: QUOTES[0] },
     { design: 'verse', verse: VERSES[0] },
+    { design: 'periodSentence' },
     ...(['activities', 'buckets'] as const)
       .filter((rows) => rows === 'buckets' || listsNoteActivities(summary))
       .flatMap((rows) =>
@@ -204,6 +259,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
       // A quotation, in a serif italic, as an activity's.
       return { font: 'playfairDisplay', bold: false, italic: true, uppercase: false };
     // A replica writes in its app's font whatever the layer's.
+    case 'periodSentence':
     case 'periodNotes':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }

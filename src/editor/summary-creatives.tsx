@@ -1,4 +1,7 @@
-import { listsNoteActivities } from '@/core/summary-block';
+import { listsNoteActivities, periodSentencePlan } from '@/core/summary-block';
+import { toDisplaySummaryMetric } from '@/core/summary-metrics';
+import { durationParts } from '@/core/units';
+import { formatMetric } from '@/ui/format';
 import type { SummaryBlock } from '@/core/template';
 
 import {
@@ -6,6 +9,8 @@ import {
   type BlockContext,
   type Box,
   discBox,
+  highlightedSentenceBox,
+  markedPart,
   noteBox,
   NOTES_COLORS,
   NOTES_SIZES,
@@ -13,6 +18,8 @@ import {
   iconBox,
   overlay,
   row,
+  type SentencePart,
+  sentenceParts,
   symbolBox,
 } from './activity-blocks';
 import { periodName, periodNoteLines, type SummaryData } from './editor-data';
@@ -78,5 +85,54 @@ export function periodNotesBox(
     data.families.length === 1
       ? noteSportBox(fonts, block.layout, translate(`families.${sport}`), sport)
       : undefined,
+  );
+}
+
+/**
+ * A period as a sentence typed on paper, as an activity's, its totals highlighted (see
+ * `periodSentencePlan`): "Esta semana: 94,23 kilómetros y 7h 18min en movimiento en 6
+ * actividades." Its distance in words, and its time down to its minutes.
+ */
+export function periodSentenceBox(
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const { summary } = data;
+  const plan = periodSentencePlan(summary);
+  const distance = formatMetric(
+    toDisplaySummaryMetric('totalDistance', summary.totalDistanceMeters, textContext.unit),
+    textContext.locale,
+  );
+  const values: Readonly<Record<string, SentencePart>> = {
+    period: { text: periodName(data, textContext, translate), marked: false },
+    distance: markedPart(
+      distance.unit === 'km' || distance.unit === 'mi'
+        ? translate(`widgets.verified.${distance.unit}`, { value: distance.value })
+        : distance.value,
+    ),
+    time: markedPart(
+      durationParts(summary.totalMovingTimeSeconds, 'minutes')
+        .map(({ amount, unit }) => `${amount}${textContext.durationUnits[unit]}`)
+        .join(' '),
+    ),
+    count: markedPart(
+      summary.activityCount === 1
+        ? translate('widgets.periodSentence.activityOne')
+        : translate('widgets.periodSentence.activities', { number: String(summary.activityCount) }),
+    ),
+  };
+  return highlightedSentenceBox(
+    fonts,
+    sentenceParts(
+      (holders) => [
+        translate('widgets.periodSentence.opening', holders),
+        translate(`widgets.periodSentence.leads.${plan.lead}`, holders),
+        ...plan.clauses.map((clause) =>
+          translate(`widgets.periodSentence.clauses.${clause}`, holders),
+        ),
+        translate('widgets.sentence.end'),
+      ],
+      values,
+    ),
   );
 }

@@ -153,6 +153,7 @@ export const en = {
       periodCards: 'Cards by sport',
       quote: 'Quote',
       verse: 'Verse',
+      periodSentence: 'Highlighted',
       periodNotes: 'Notes',
     },
     blocks: {
@@ -421,6 +422,29 @@ export const en = {
         heartRate: ' at {{heartRate}}',
       },
       end: '.',
+    },
+    /**
+     * A period as a highlighted sentence: its name, its distance (by its sport's verb) and its
+     * time, or its time alone, then its activities: "This week: 94.23 kilometers and 7h 18min
+     * moving across 6 activities."
+     */
+    periodSentence: {
+      opening: '{{period}}: ',
+      leads: {
+        run: '{{distance}} running',
+        ride: '{{distance}} riding',
+        walk: '{{distance}} walking',
+        swim: '{{distance}} swimming',
+        distance: '{{distance}}',
+        training: '{{time}} training',
+        time: '{{time}} of activity',
+      },
+      clauses: {
+        time: ' and {{time}} moving',
+        count: ' across {{count}}',
+      },
+      activityOne: '1 activity',
+      activities: '{{number}} activities',
     },
     receipt: { total: 'Total', thanks: 'Thanks for moving!' },
     boardingPass: {

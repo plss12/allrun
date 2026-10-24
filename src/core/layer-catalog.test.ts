@@ -387,6 +387,7 @@ describe('summaryCatalog', () => {
     expect(tileKeys(catalog, 'creative')).toEqual([
       'summaryBlock-quote',
       'summaryBlock-verse',
+      'summaryBlock-periodSentence',
       'summaryBlock-periodNotes',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([

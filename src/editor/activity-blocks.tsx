@@ -1440,6 +1440,128 @@ const SENTENCE = {
    */
   marker: { padX: 0.2, tight: 0.04, above: 0.95, below: 0.3 },
 } as const;
+/** A stretch of a highlighted sentence, and whether the marker goes over it. */
+export interface SentencePart {
+  readonly text: string;
+  readonly marked: boolean;
+}
+
+/** A datum as a highlighted sentence writes it, in one piece: the marker never breaks a line. */
+export const markedPart = (content: string): SentencePart => ({
+  text: content.replace(/ /gu, '\u00A0'),
+  marked: true,
+});
+
+/**
+ * A highlighted sentence's parts: its `templates`, translated with the given placeholders (which
+ * come back as markers, and as they are where nothing fills them), each placeholder filled with its
+ * value in `values`, of an activity or a period alike.
+ *
+ * @throws Error if a template has a placeholder without a value.
+ */
+export function sentenceParts(
+  templates: (holders: Readonly<Record<string, string>>) => readonly string[],
+  values: Readonly<Record<string, SentencePart>>,
+): SentencePart[] {
+  const holders = Object.fromEntries(
+    Object.keys(values).map((name) => [name, `\uE000${name}\uE001`]),
+  );
+  return templates(holders).flatMap((template) =>
+    template
+      .replace(/\uE000(\w+)\uE001/gu, '{{$1}}')
+      .split(/\{\{(\w+)\}\}/u)
+      .flatMap((part, i) => {
+        if (i % 2 === 0) {
+          return part === '' ? [] : [{ text: part, marked: false }];
+        }
+        const value = values[part];
+        if (value === undefined) {
+          throw new Error(`Nothing to write for {{${part}}} in a sentence`);
+        }
+        return [value];
+      }),
+  );
+}
+
+/**
+ * A sentence typed on a sheet of paper, as AURA's, its `parts` that are `marked` highlighted.
+ */
+export function highlightedSentenceBox(
+  fonts: SkTypefaceFontProvider,
+  parts: readonly SentencePart[],
+): Box {
+  const sizes = SENTENCE;
+  const { colors } = sizes;
+  const laidOut = paragraph(
+    parts.map((part) => ({ text: part.text, size: sizes.text, bold: false })),
+    fonts,
+    {
+      font: 'spaceMono',
+      color: colors.ink,
+      bold: false,
+      uppercase: false,
+      italic: false,
+    },
+    { shadow: false, wrapWidth: sizes.wrap, wrapStart: true },
+  );
+  // Where each datum lies in the laid out text: a band per line it is on, from its first
+  // letter to its last, as tall on every line whatever its letters (around the line's
+  // baseline), as a marker draws it.
+  const lines = laidOut.getLineMetrics();
+  const { marker } = sizes;
+  /** How far the band goes out of a datum's end: into a space, not over a stop. */
+  const reach = (next: string | undefined) =>
+    (next === undefined || /^\s/u.test(next) ? marker.padX : marker.tight) * sizes.text;
+  let index = 0;
+  const rects = parts.flatMap((part, i) => {
+    const start = index;
+    index += part.text.length;
+    if (!part.marked) {
+      return [];
+    }
+    const before = reach(parts[i - 1]?.text.slice(-1));
+    const after = reach(parts[i + 1]?.text);
+    const pieces = laidOut.getRectsForRange(start, index);
+    return lines.flatMap((line) => {
+      const on = pieces.filter(
+        (rect) => rect.y <= line.baseline && line.baseline <= rect.y + rect.height,
+      );
+      if (on.length === 0) {
+        return [];
+      }
+      const left = Math.min(...on.map((rect) => rect.x));
+      const right = Math.max(...on.map((rect) => rect.x + rect.width));
+      return [{ x: left - before, baseline: line.baseline, width: right - left + before + after }];
+    });
+  });
+  const text = textBox(laidOut);
+  const width = text.width + 2 * sizes.padX;
+  const height = text.height + 2 * sizes.padY;
+  return {
+    width,
+    height,
+    place: (x, y) => {
+      const left = x + sizes.padX;
+      const top = y + sizes.padY;
+      return [
+        { kind: 'panel', x, y, width, height, radius: 0, color: colors.paper },
+        { kind: 'grain', x, y, width, height, color: colors.grain },
+        {
+          kind: 'highlight',
+          color: colors.marker,
+          rects: rects.map((rect) => ({
+            x: left + rect.x,
+            y: top + rect.baseline - marker.above * sizes.text,
+            width: rect.width,
+            height: (marker.above + marker.below) * sizes.text,
+          })),
+        },
+        ...text.place(left, top),
+      ];
+    },
+  };
+}
+
 /**
  * How a marker's stroke strays from a rectangle, as AURA's: its ends straight, its top and bottom
  * edges leaning together from one end to the other (by up to `tilt` of its height) and slightly
@@ -2812,20 +2934,13 @@ export function prepareActivityBlock(
         if (plan === null) {
           return null;
         }
-        const sizes = SENTENCE;
-        const { colors } = sizes;
-        /** A datum as the sentence writes it, in one piece: the marker never breaks a line. */
-        const marked = (content: string) => ({
-          text: content.replace(/ /gu, '\u00A0'),
-          marked: true,
-        });
-        const values: Readonly<Record<string, { text: string; marked: boolean }>> = {
+        const values: Readonly<Record<string, SentencePart>> = {
           // Before a sport's own word, the distance reads as one word with it ("11.34 kilometer
           // run"); before a sport's name, it is a number of kilometers.
-          distance: marked(
+          distance: markedPart(
             inWords('distance', plan.lead.lead === 'distance' ? 'verified' : 'sentence'),
           ),
-          time: marked(inWords('movingTime', 'sentence')),
+          time: markedPart(inWords('movingTime', 'sentence')),
           sport: {
             text: translate(`modalities.${activity.sportModality}`).toLocaleLowerCase(
               textContext.locale,
@@ -2835,105 +2950,23 @@ export function prepareActivityBlock(
           place: { text: place ?? '', marked: false },
           ...Object.fromEntries(
             plan.clauses.flatMap(({ clause, metric }) =>
-              metric === null || clause === 'time' ? [] : [[clause, marked(written(metric))]],
+              metric === null || clause === 'time' ? [] : [[clause, markedPart(written(metric))]],
             ),
           ),
         };
-        // Placeholders come back as markers (and as they are where nothing fills them).
-        const holders = Object.fromEntries(
-          Object.keys(values).map((name) => [name, `\uE000${name}\uE001`]),
-        );
-        const parts = [
-          translate(`widgets.sentence.leads.${plan.lead.lead}`, holders),
-          ...plan.clauses.map(({ clause }) =>
-            translate(`widgets.sentence.clauses.${clause}`, holders),
-          ),
-          translate('widgets.sentence.end'),
-        ].flatMap((template) =>
-          template
-            .replace(/\uE000(\w+)\uE001/gu, '{{$1}}')
-            .split(/\{\{(\w+)\}\}/u)
-            .flatMap((part, i) => {
-              if (i % 2 === 0) {
-                return part === '' ? [] : [{ text: part, marked: false }];
-              }
-              const value = values[part];
-              if (value === undefined) {
-                throw new Error(`Nothing to write for {{${part}}} in a sentence`);
-              }
-              return [value];
-            }),
-        );
-        const laidOut = paragraph(
-          parts.map((part) => ({ text: part.text, size: sizes.text, bold: false })),
+        return highlightedSentenceBox(
           fonts,
-          {
-            font: 'spaceMono',
-            color: colors.ink,
-            bold: false,
-            uppercase: false,
-            italic: false,
-          },
-          { shadow: false, wrapWidth: sizes.wrap, wrapStart: true },
+          sentenceParts(
+            (holders) => [
+              translate(`widgets.sentence.leads.${plan.lead.lead}`, holders),
+              ...plan.clauses.map(({ clause }) =>
+                translate(`widgets.sentence.clauses.${clause}`, holders),
+              ),
+              translate('widgets.sentence.end'),
+            ],
+            values,
+          ),
         );
-        // Where each datum lies in the laid out text: a band per line it is on, from its first
-        // letter to its last, as tall on every line whatever its letters (around the line's
-        // baseline), as a marker draws it.
-        const lines = laidOut.getLineMetrics();
-        const { marker } = sizes;
-        /** How far the band goes out of a datum's end: into a space, not over a stop. */
-        const reach = (next: string | undefined) =>
-          (next === undefined || /^\s/u.test(next) ? marker.padX : marker.tight) * sizes.text;
-        let index = 0;
-        const rects = parts.flatMap((part, i) => {
-          const start = index;
-          index += part.text.length;
-          if (!part.marked) {
-            return [];
-          }
-          const before = reach(parts[i - 1]?.text.slice(-1));
-          const after = reach(parts[i + 1]?.text);
-          const pieces = laidOut.getRectsForRange(start, index);
-          return lines.flatMap((line) => {
-            const on = pieces.filter(
-              (rect) => rect.y <= line.baseline && line.baseline <= rect.y + rect.height,
-            );
-            if (on.length === 0) {
-              return [];
-            }
-            const left = Math.min(...on.map((rect) => rect.x));
-            const right = Math.max(...on.map((rect) => rect.x + rect.width));
-            return [
-              { x: left - before, baseline: line.baseline, width: right - left + before + after },
-            ];
-          });
-        });
-        const text = textBox(laidOut);
-        const width = text.width + 2 * sizes.padX;
-        const height = text.height + 2 * sizes.padY;
-        return {
-          width,
-          height,
-          place: (x, y) => {
-            const left = x + sizes.padX;
-            const top = y + sizes.padY;
-            return [
-              { kind: 'panel', x, y, width, height, radius: 0, color: colors.paper },
-              { kind: 'grain', x, y, width, height, color: colors.grain },
-              {
-                kind: 'highlight',
-                color: colors.marker,
-                rects: rects.map((rect) => ({
-                  x: left + rect.x,
-                  y: top + rect.baseline - marker.above * sizes.text,
-                  width: rect.width,
-                  height: (marker.above + marker.below) * sizes.text,
-                })),
-              },
-              ...text.place(left, top),
-            ];
-          },
-        };
       }
       case 'receipt': {
         // The data as a shop's receipt: a line each, the main datum as the total.

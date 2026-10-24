@@ -24,7 +24,12 @@ import {
   type PeriodSummary,
   type SummaryBucket,
 } from '@/core/summary';
-import { noteActivities, tableBucket } from '@/core/summary-block';
+import {
+  noteActivities,
+  type PeriodSentenceClause,
+  type PeriodSentenceLead,
+  tableBucket,
+} from '@/core/summary-block';
 import { periodTotals, summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type {
   ActivityChartSeries,
@@ -135,6 +140,11 @@ export type LabelKey =
   | `widgets.sentence.units.${DistanceUnit}`
   | `widgets.sentence.clauses.${SentenceClause}`
   | 'widgets.sentence.end'
+  | 'widgets.periodSentence.opening'
+  | `widgets.periodSentence.leads.${PeriodSentenceLead}`
+  | `widgets.periodSentence.clauses.${PeriodSentenceClause}`
+  | 'widgets.periodSentence.activityOne'
+  | 'widgets.periodSentence.activities'
   | `widgets.receipt.${'total' | 'thanks'}`
   | `widgets.boardingPass.${'title' | 'departure' | 'arrival' | 'date'}`
   | `widgets.cameraModes.${'video' | 'photo'}`

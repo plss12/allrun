@@ -9,6 +9,7 @@ import {
   listsNoteActivities,
   MAX_NOTES_ACTIVITIES,
   noteActivities,
+  periodSentencePlan,
   summaryBlocks,
   tableBucket,
 } from './summary-block';
@@ -51,6 +52,7 @@ describe('summaryBlocks', () => {
       { design: 'periodRoutes', layout: 'overlay' },
       { design: 'quote', quote: QUOTES[0] },
       { design: 'verse', verse: VERSES[0] },
+      { design: 'periodSentence' },
       { design: 'periodNotes', layout: 'dark', rows: 'activities' },
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
@@ -88,6 +90,7 @@ describe('summaryBlocks', () => {
       { design: 'periodRoutes', layout: 'overlay' },
       { design: 'quote', quote: QUOTES[0] },
       { design: 'verse', verse: VERSES[0] },
+      { design: 'periodSentence' },
       { design: 'periodNotes', layout: 'dark', rows: 'activities' },
       { design: 'periodNotes', layout: 'light', rows: 'activities' },
       { design: 'periodNotes', layout: 'dark', rows: 'buckets' },
@@ -114,11 +117,42 @@ describe('summaryBlocks', () => {
     expect(isSummaryDataWidget('periodNotes')).toBe(false);
     // Only a replica keeps its app's look.
     expect(isSummaryReplica('periodNotes')).toBe(true);
+    expect(isSummaryReplica('periodSentence')).toBe(true);
     expect(isSummaryReplica('verse')).toBe(false);
   });
 
   it('offers nothing for a period without activities', () => {
     expect(summaryBlocks(summarize([], week))).toEqual([]);
+  });
+});
+
+describe('periodSentencePlan', () => {
+  const run = makeActivity({ sportType: 'Run', localDate: '2026-10-13' });
+  const ride = makeActivity({ sportType: 'Ride', localDate: '2026-10-14' });
+  const gym = makeActivity({
+    sportType: 'WeightTraining',
+    distanceMeters: 0,
+    elevationGainMeters: 0,
+    routePolyline: null,
+    localDate: '2026-10-15',
+  });
+
+  it('opens with the distance by its sport and the time, then the activities, never the climbing', () => {
+    expect(periodSentencePlan(summarize([run], week))).toEqual({
+      lead: 'run',
+      clauses: ['time', 'count'],
+    });
+  });
+
+  it('says the distance alone when the period mixes sports, or its sport has no verb', () => {
+    expect(periodSentencePlan(summarize([run, ride, gym], week)).lead).toBe('distance');
+  });
+
+  it('opens with the time alone without a distance', () => {
+    expect(periodSentencePlan(summarize([gym], week))).toEqual({
+      lead: 'training',
+      clauses: ['count'],
+    });
   });
 });
 

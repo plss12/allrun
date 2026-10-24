@@ -41,7 +41,7 @@ import {
 } from './editor-data';
 import { CAP_HEIGHTS } from './fonts';
 import { softBackdrop } from './scene-text';
-import { periodNotesBox } from './summary-creatives';
+import { periodNotesBox, periodSentenceBox } from './summary-creatives';
 
 /**
  * The data widgets of a period summary (R2c), laid out from measured texts as the activities'
@@ -577,6 +577,8 @@ export function prepareSummaryBlock(
           translate(`widgets.verses.${block.verse}.text`),
           translate(`widgets.verses.${block.verse}.source`),
         );
+      case 'periodSentence':
+        return periodSentenceBox(data, { fonts, textContext, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

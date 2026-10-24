@@ -148,6 +148,7 @@ export const es: Translations = {
       periodCards: 'Tarjetas por deporte',
       quote: 'Cita',
       verse: 'Versículo',
+      periodSentence: 'Subrayado',
       periodNotes: 'Notas',
     },
     blocks: {
@@ -410,6 +411,24 @@ export const es: Translations = {
         heartRate: ' a {{heartRate}}',
       },
       end: '.',
+    },
+    periodSentence: {
+      opening: '{{period}}: ',
+      leads: {
+        run: '{{distance}} corriendo',
+        ride: '{{distance}} en bici',
+        walk: '{{distance}} caminando',
+        swim: '{{distance}} nadando',
+        distance: '{{distance}}',
+        training: '{{time}} entrenando',
+        time: '{{time}} de actividad',
+      },
+      clauses: {
+        time: ' y {{time}} en movimiento',
+        count: ' en {{count}}',
+      },
+      activityOne: '1 actividad',
+      activities: '{{number}} actividades',
     },
     receipt: { total: 'Total', thanks: '¡Gracias por moverte!' },
     boardingPass: {
