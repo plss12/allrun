@@ -37,7 +37,7 @@ import {
   summaryCatalog,
 } from '@/core/layer-catalog';
 import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
-import { bucketForPeriod } from '@/core/periods';
+import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { startOf } from '@/core/place';
 import { SPORT_FAMILIES } from '@/core/sports';
 import { selectActivities, summarize } from '@/core/summary';
@@ -81,6 +81,7 @@ import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
 import { ErrorView, LoadingView } from '@/ui/state-views';
+import { todayLocal } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
 
 /** Route params, validated: they can come from a deep link, not only from our own screens. */
@@ -174,6 +175,8 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
       summary: summarize(selected, range),
       activities: selected,
       bucketSize: bucketForPeriod(params.kind, range),
+      families: params.families,
+      current: isCurrentPeriod(params.kind, range, todayLocal()),
     };
   }, JSON.stringify(params));
 

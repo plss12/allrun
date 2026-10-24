@@ -85,6 +85,8 @@ async function monthData(): Promise<EditorData> {
     summary: summarize(activities, range),
     activities,
     bucketSize: 'week',
+    families: [],
+    current: false,
   };
 }
 

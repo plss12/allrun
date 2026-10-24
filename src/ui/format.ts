@@ -164,6 +164,29 @@ function formatDayRange(range: DateRange, locale: string, format: PeriodFormat):
     : `${start}–${dayNumber(range.end, locale)}`;
 }
 
+/**
+ * The name of a row of a period's table (see `tableBucket`): a weekday ("Martes") when the period
+ * is a `week` or shorter, otherwise its date ("12 oct"); a week by its days ("6–12 oct", "28 sept
+ * – 4 oct"); a month by its name ("Octubre").
+ */
+export function formatBucketName(
+  range: DateRange,
+  size: BucketSize,
+  week: boolean,
+  locale: string,
+): string {
+  switch (size) {
+    case 'day':
+      return week
+        ? formatActivityDate(`${range.start}T00:00:00`, locale, 'weekday')
+        : formatShortDate(range.start, locale);
+    case 'week':
+      return formatDayRange(range, locale, 'short');
+    case 'month':
+      return formatPeriodName('month', range, locale, 'noYear');
+  }
+}
+
 /** Above this many day bars, only the 1st and every 5th day keep their number. */
 const MAX_DAY_NUMBERS = 16;
 /** Above this many week bars, weeks are marked by month instead of numbered. */

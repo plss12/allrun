@@ -375,9 +375,22 @@ describe('activityCatalog', () => {
 describe('summaryCatalog', () => {
   const activities = [makeActivity({ localDate: '2026-10-13' })];
 
-  it('offers every total as written each way, the texts, the routes, the charts and the logo', () => {
+  it('offers its data widgets, every total as written each way, the texts, the routes, the charts and the logo', () => {
     const catalog = summaryCatalog(summarize(activities, week), 'day');
-    expect(catalog.map((section) => section.id)).toEqual(['charts', 'basic', 'brand']);
+    expect(catalog.map((section) => section.id)).toEqual(['data', 'charts', 'basic', 'brand']);
+    expect(tileKeys(catalog, 'data')).toEqual([
+      'summaryBlock-periodData',
+      'summaryBlock-periodTable',
+    ]);
+    expect(variantKeys(catalog, 'summaryBlock-periodData')).toEqual([
+      'summaryBlock-periodData-1',
+      'summaryBlock-periodData-2',
+      'summaryBlock-periodData-3',
+    ]);
+    expect(variantKeys(catalog, 'summaryBlock-periodTable')).toEqual([
+      'summaryBlock-periodTable-distance',
+      'summaryBlock-periodTable-movingTime',
+    ]);
     expect(tileKeys(catalog, 'basic')).toEqual([
       'data',
       'summaryRoutes',
@@ -390,8 +403,6 @@ describe('summaryCatalog', () => {
       'summaryMetric-totalMovingTime-units',
       'summaryMetric-activityCount',
       'summaryMetric-totalElevationGain',
-      'summaryMetric-averagePace',
-      'summaryMetric-averagePace-marks',
       'summaryMetric-longestDistance',
     ]);
     expect(variantKeys(catalog, 'info-periodName')).toEqual([
@@ -400,45 +411,57 @@ describe('summaryCatalog', () => {
     ]);
   });
 
-  it("offers each chart plain, with each bar's value or with the average, and alone", () => {
+  it('offers highlighted bars and a line, each of distance and time, under three totals or two', () => {
     // A week only has days.
     const catalog = summaryCatalog(summarize(activities, week), 'day');
-    expect(tileKeys(catalog, 'charts')).toEqual([
-      'summaryChart-distance',
-      'summaryChart-movingTime',
+    expect(tileKeys(catalog, 'charts')).toEqual(['summaryChart-highlight', 'summaryChart-line']);
+    expect(variantKeys(catalog, 'summaryChart-highlight')).toEqual([
+      'summaryChart-highlight-distance-values',
+      'summaryChart-highlight-movingTime-values',
+      'summaryChart-highlight-distance-two-values',
+      'summaryChart-highlight-movingTime-two-values',
     ]);
-    expect(variantKeys(catalog, 'summaryChart-distance')).toEqual([
-      'summaryChart-distance',
-      'summaryChart-distance-values',
-      'summaryChart-distance-average',
-      'summaryChart-distance-noheader',
+    expect(variantKeys(catalog, 'summaryChart-line')).toEqual([
+      'summaryChart-line-distance',
+      'summaryChart-line-movingTime',
+      'summaryChart-line-distance-two',
+      'summaryChart-line-movingTime-two',
     ]);
-    expect(variantKeys(catalog, 'summaryChart-movingTime')).toEqual([
-      'summaryChart-movingTime',
-      'summaryChart-movingTime-values',
-      'summaryChart-movingTime-average',
-      'summaryChart-movingTime-noheader',
-    ]);
+    // Their header reads as written, from the left.
+    expect(
+      layerOf({ kind: 'summaryChart', value: 'distance', look: 'line', totals: 3 }),
+    ).toMatchObject({ uppercase: false, align: 'left' });
   });
 
-  it('offers every bar size of the period, its own first, following the period', () => {
+  it('offers a tile per bar size, its own first, with values only when they fit', () => {
     const month = monthRange('2026-10-14');
     const catalog = summaryCatalog(summarize(activities, month), 'day');
-    expect(variantKeys(catalog, 'summaryChart-movingTime')).toEqual([
-      'summaryChart-movingTime',
-      'summaryChart-movingTime-values',
-      'summaryChart-movingTime-average',
-      'summaryChart-movingTime-week',
-      'summaryChart-movingTime-week-values',
-      'summaryChart-movingTime-week-average',
-      'summaryChart-movingTime-noheader',
+    // Bars and line by days, then by weeks: no tile scrolls too long.
+    expect(tileKeys(catalog, 'charts')).toEqual([
+      'summaryChart-highlight',
+      'summaryChart-line',
+      'summaryChart-highlight-week',
+      'summaryChart-line-week',
+    ]);
+    // A month's 31 days are too many bars to write their values over them; its 5 weeks aren't.
+    expect(variantKeys(catalog, 'summaryChart-highlight')).toEqual([
+      'summaryChart-highlight-distance',
+      'summaryChart-highlight-movingTime',
+      'summaryChart-highlight-distance-two',
+      'summaryChart-highlight-movingTime-two',
+    ]);
+    expect(variantKeys(catalog, 'summaryChart-highlight-week')).toEqual([
+      'summaryChart-highlight-week-distance-values',
+      'summaryChart-highlight-week-movingTime-values',
+      'summaryChart-highlight-week-distance-two-values',
+      'summaryChart-highlight-week-movingTime-two-values',
     ]);
     // The period's own size stays on `auto`, so a saved design suits any period.
     const buckets = items(catalog).flatMap((item) =>
-      item.kind === 'summaryChart' && item.value === 'movingTime' ? [layerOf(item)] : [],
+      item.kind === 'summaryChart' && item.look === 'line' ? [layerOf(item)] : [],
     );
     expect(buckets[0]).toMatchObject({ bucket: 'auto' });
-    expect(buckets[3]).toMatchObject({ bucket: 'week' });
+    expect(buckets[4]).toMatchObject({ bucket: 'week' });
   });
 
   it('leaves out the routes when no activity has GPS, but keeps the charts', () => {
@@ -461,8 +484,11 @@ describe('summaryCatalog', () => {
       'summaryMetric-totalMovingTime-units',
       'summaryMetric-activityCount',
     ]);
-    expect(tileKeys(catalog, 'charts')).toEqual(['summaryChart-movingTime']);
-    expect(items(catalog)).toContainEqual({ kind: 'summaryChart', value: 'movingTime' });
+    expect(tileKeys(catalog, 'charts')).toEqual(['summaryChart-highlight', 'summaryChart-line']);
+    // With only two totals, no version under three: it would repeat them.
+    expect(variantKeys(catalog, 'summaryChart-highlight')).toEqual([
+      'summaryChart-highlight-movingTime-two-values',
+    ]);
   });
 
   it('makes valid layers', () => {

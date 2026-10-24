@@ -275,8 +275,10 @@ describe('parseTemplate', () => {
     // The title it had gives way to the header, shown when absent.
     expect(template.layers[0]).not.toHaveProperty('title');
     expect(template.layers[0]).not.toHaveProperty('header');
+    // Its rounded bars are gone: they draw as highlighted bars.
     expect(template.layers[0]).toMatchObject({
       bucket: 'auto',
+      look: 'highlight',
       axisLabels: false,
       font: 'inter',
       bold: true,

@@ -1,4 +1,5 @@
 import type { Activity } from '@/core/activity';
+import { rangeLength } from '@/core/dates';
 import type { SentenceClause, SentenceLead } from '@/core/activity-block';
 import type { BarSeries, LineSeries, SplitRow } from '@/core/activity-charts';
 import type { ActivityDetail } from '@/core/activity-detail';
@@ -16,7 +17,8 @@ import type { PeriodKind } from '@/core/periods';
 import { formatPlace, type Place } from '@/core/place';
 import type { SportFamily, SportModality } from '@/core/sports';
 import { type BucketSize, bucketize, type PeriodSummary, type SummaryBucket } from '@/core/summary';
-import { summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
+import { tableBucket } from '@/core/summary-block';
+import { periodTotals, summaryMetricValue, toDisplaySummaryMetric } from '@/core/summary-metrics';
 import type {
   ActivityChartSeries,
   ChatPhrase,
@@ -28,6 +30,7 @@ import type {
 import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
 import {
   formatActivityDate,
+  formatBucketName,
   type FormattedMetric,
   formatMetric,
   formatPeriodName,
@@ -42,6 +45,10 @@ export interface SummaryData {
   readonly activities: readonly Activity[];
   /** Bar size that suits the period, used by charts set to `auto`. */
   readonly bucketSize: BucketSize;
+  /** The sport families summed up; empty for all of them. */
+  readonly families: readonly SportFamily[];
+  /** Whether it is the week, month or year in progress (see `isCurrentPeriod`). */
+  readonly current: boolean;
 }
 
 /** One activity to fill a template with. */
@@ -92,6 +99,10 @@ export type LabelKey =
   | `modalities.${SportModality}`
   | `splitHeaders.${'elevation' | 'heartRate'}`
   | `chartHeaders.${ChartHeaderName}`
+  | 'thisWeek'
+  | `tableMeasures.${DistanceUnit | 'hours'}`
+  | 'tableTotal'
+  | `families.${SportFamily}`
   | `chartCaptions.activity.${ActivityChartSeries}`
   | 'widgets.chatLine'
   | 'widgets.alarmLabel'
@@ -730,4 +741,169 @@ export function periodChartHeader(
       context,
     ),
   ];
+}
+
+/** A header that names the period over its data. */
+export interface TitledHeader {
+  readonly title: string;
+  readonly data: readonly HeaderDatum[];
+}
+
+/**
+ * How a period's widgets name it: "Esta semana" for the week in progress, a month or a year by its
+ * name, short and telling ("Octubre de 2026", "2026"), other weeks and ranges by their days; and a
+ * summary of one sport names it after the period ("Esta semana · Carreras"). Time and space O(1).
+ */
+export function periodTitle(
+  data: SummaryData,
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): string {
+  const period =
+    data.current && data.kind === 'week'
+      ? translate('thisWeek')
+      : formatPeriodName(data.kind, data.summary.range, context.locale);
+  return data.families.length === 1
+    ? `${period} · ${translate(`families.${data.families[0]}`)}`
+    : period;
+}
+
+/**
+ * The period's name over the first `count` of its main totals (see `periodTotals`), the total of
+ * the chart's `value` first, as the header of a chart: "Octubre de 2026" over "Distancia 94,23 km
+ * · Tiempo 7:18 h · Desnivel 630 m". The week in progress reads "Esta semana" (a month or a year
+ * keeps its name, short and telling), and a summary of one sport names it after the period ("Esta
+ * semana · Carreras"). Time and space O(1).
+ */
+export function periodTotalsHeader(
+  data: SummaryData,
+  value: Extract<Layer, { kind: 'summaryChart' }>['value'],
+  count: number,
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): TitledHeader {
+  return {
+    title: periodTitle(data, context, translate),
+    data: periodTotals(data.summary, value === 'distance' ? 'totalDistance' : 'totalMovingTime')
+      .slice(0, count)
+      .map((metric) => {
+        const written = formatMetric(
+          toDisplaySummaryMetric(
+            metric,
+            summaryMetricValue(data.summary, metric) ?? 0,
+            context.unit,
+          ),
+          context.locale,
+        );
+        return {
+          label: `summaryMetrics.${metric}`,
+          value: written.value,
+          unit: written.unit === null ? null : context.unitLabel(written.unit),
+        };
+      }),
+  };
+}
+
+/**
+ * A period's total as its data widgets write it: numbers with a decimal point and no thousands
+ * separator in any language ("94.23 km", "630 m", with at most `fractionDigits` decimals when
+ * given: "94.2 km"), a time in hours and minutes in the context's units ("7h 18min"), a count
+ * bare ("6"). Time and space O(1).
+ */
+export function plainSummaryText(
+  metric: SummaryMetricId,
+  value: number,
+  context: TextContext,
+  fractionDigits?: number,
+): string {
+  if (metric === 'totalMovingTime') {
+    return durationParts(value, 'minutes')
+      .map(({ amount, unit }) => `${amount}${context.durationUnits[unit]}`)
+      .join(' ');
+  }
+  const display = toDisplaySummaryMetric(metric, value, context.unit);
+  if (display.kind === 'time') {
+    return display.unit === null
+      ? display.text
+      : `${display.text} ${context.unitLabel(display.unit)}`;
+  }
+  const digits = Math.min(display.fractionDigits, fractionDigits ?? display.fractionDigits);
+  const amount = display.amount.toFixed(digits);
+  return display.unit === null ? amount : `${amount} ${context.unitLabel(display.unit)}`;
+}
+
+/** A period's table as its widget writes it (see `periodTable`). */
+export interface PeriodTable {
+  /** The period's name, over the rows' names. */
+  readonly title: string;
+  /** What the values are, over them ("Kilómetros", "Horas"). */
+  readonly measure: string;
+  readonly rows: readonly { readonly name: string; readonly value: string }[];
+  readonly total: string;
+}
+
+/**
+ * A period's table of distance or time: a row per day, week or month with some (see
+ * `tableBucket`), named by it, and the total. Distances with one decimal and without their unit,
+ * which the header names ("10.9"); times in hours and minutes ("1:05"). Time O(b + n) for b
+ * rows and n activities.
+ */
+export function periodTable(
+  data: SummaryData,
+  value: Extract<Layer, { kind: 'summaryChart' }>['value'],
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): PeriodTable {
+  const size = tableBucket(data.summary.range);
+  const amount = (bucket: SummaryBucket) =>
+    value === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds;
+  const write = (total: number) => {
+    const display =
+      value === 'distance'
+        ? toDisplaySummaryMetric('totalDistance', total, context.unit)
+        : toDisplaySummaryMetric('totalMovingTime', total, context.unit);
+    return display.kind === 'number' ? display.amount.toFixed(1) : display.text;
+  };
+  const week = rangeLength(data.summary.range) <= 7;
+  const rows = bucketize(data.activities, data.summary.range, size)
+    .filter((bucket) => amount(bucket) > 0)
+    .map((bucket) => ({
+      name: formatBucketName(bucket.range, size, week, context.locale),
+      value: write(amount(bucket)),
+    }));
+  return {
+    title: periodTitle(data, context, translate),
+    measure: translate(`tableMeasures.${value === 'distance' ? context.unit : 'hours'}`),
+    rows,
+    total: write(
+      value === 'distance' ? data.summary.totalDistanceMeters : data.summary.totalMovingTimeSeconds,
+    ),
+  };
+}
+
+/**
+ * A bar's value as a chart writes it over the bar or on its scale, rounded: whole kilometres or
+ * miles ("41"), a time in hours and minutes ("1:18"); with `unit`, followed by it ("41 km",
+ * "1:18 h"). Nothing is "0", so empty bars read as such. Time and space O(1).
+ */
+export function roundedChartValue(
+  value: Extract<Layer, { kind: 'summaryChart' }>['value'],
+  amount: number,
+  context: TextContext,
+  unit: boolean,
+): string {
+  const display =
+    value === 'distance'
+      ? toDisplaySummaryMetric('totalDistance', amount, context.unit)
+      : toDisplaySummaryMetric('totalMovingTime', amount, context.unit);
+  const written: FormattedMetric =
+    display.kind === 'number'
+      ? {
+          value: new Intl.NumberFormat(context.locale, { maximumFractionDigits: 0 }).format(
+            Math.round(display.amount),
+          ),
+          unit: display.unit,
+        }
+      : { value: amount <= 0 ? '0' : display.text, unit: display.unit };
+  return unit ? withUnit(written, context) : written.value;
 }

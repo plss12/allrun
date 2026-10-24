@@ -1,10 +1,11 @@
 import type { Activity } from './activity';
 import { activityBlocks, blockTile, isDataWidget } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
-import { chartBucketOptions } from './periods';
+import { bucketCount, chartBucketOptions } from './periods';
 import { PLACE_FORMATS } from './place';
 import type { BucketSize, PeriodSummary } from './summary';
-import { availableSummaryMetrics, summaryHasDistance } from './summary-metrics';
+import { summaryBlocks } from './summary-block';
+import { availableSummaryMetrics, periodTotals, summaryHasDistance } from './summary-metrics';
 import {
   type ActivityChartSeries,
   DATE_FORMATS,
@@ -48,7 +49,10 @@ export type CatalogItem =
   | ({ readonly kind: 'route' } & LineLook)
   | ({ readonly kind: 'summaryRoutes' } & LineLook)
   | Readonly<
-      Pick<LayerOf<'summaryChart'>, 'kind' | 'value' | 'barValues' | 'averageLine' | 'header'> &
+      Pick<
+        LayerOf<'summaryChart'>,
+        'kind' | 'value' | 'look' | 'totals' | 'barValues' | 'averageLine' | 'header'
+      > &
         Partial<Pick<LayerOf<'summaryChart'>, 'bucket'>>
     >
   | Readonly<
@@ -67,7 +71,8 @@ export type CatalogItem =
   | Readonly<
       Pick<LayerOf<'logo'>, 'kind' | 'brand' | 'variant'> & Partial<Pick<LayerOf<'logo'>, 'tone'>>
     >
-  | Readonly<Pick<LayerOf<'activityBlock'>, 'kind' | 'block'>>;
+  | Readonly<Pick<LayerOf<'activityBlock'>, 'kind' | 'block'>>
+  | Readonly<Pick<LayerOf<'summaryBlock'>, 'kind' | 'block'>>;
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
 export type NewLayer =
@@ -105,10 +110,15 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'activityChart':
       return `chart-${item.series}`;
     case 'summaryChart':
-      return `summaryChart-${item.value}`;
+      // A tile per look and bar size, with both values in it.
+      return item.bucket === undefined || item.bucket === 'auto'
+        ? `summaryChart-${item.look}`
+        : `summaryChart-${item.look}-${item.bucket}`;
     case 'activityBlock':
       // Designs alike share a tile (see `blockTile`).
       return `block-${blockTile(item.block)}`;
+    case 'summaryBlock':
+      return `summaryBlock-${item.block.design}`;
     case 'text':
     case 'route':
     case 'summaryRoutes':
@@ -143,8 +153,10 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           item.header === false ? 'noheader' : undefined,
         ];
       case 'summaryChart':
+        // The look and the bar size are in the widget's key already.
         return [
-          item.bucket === 'auto' ? undefined : item.bucket,
+          item.value,
+          item.totals === 2 ? 'two' : undefined,
           flag(item.barValues, 'values'),
           flag(item.averageLine, 'average'),
           item.header === false ? 'noheader' : undefined,
@@ -174,6 +186,12 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           'phrase' in item.block && typeof item.block.phrase === 'string'
             ? item.block.phrase
             : undefined,
+        ];
+      case 'summaryBlock':
+        // Every version is named: how many data, or which.
+        return [
+          'count' in item.block ? item.block.count : undefined,
+          'value' in item.block ? item.block.value : undefined,
         ];
       case 'text':
         return [];
@@ -290,33 +308,43 @@ function chartEntries(
   return tileEntries('charts', items);
 }
 
+/** Most bars whose values fit over them upright; a month of days goes without them. */
+const MAX_VALUED_BARS = 16;
+
 /**
- * A period's bar charts: of distance (only when it has some) and of time, each with its bars of
- * every size the period offers (its own size first, on `auto`, so the design suits any period),
- * plain, with each bar's value, or with the average, all under their header; and last the
- * bars alone, without it.
+ * A period's charts, a tile per look and bar size, so none scrolls too long: for each size the
+ * period offers (its own first, on `auto`, so the design suits any period), highlighted bars
+ * (with their values when they fit) and then a line. A tile holds the chart of distance (only
+ * when the period has some) and of time under the period's name and three of its main totals,
+ * then both under two (when it has three).
  */
 function periodChartEntries(summary: PeriodSummary, autoBucket: BucketSize): Entry[] {
   const values = summaryHasDistance(summary)
     ? (['distance', 'movingTime'] as const)
     : (['movingTime'] as const);
-  const buckets = [
-    undefined,
+  const sizes = [
+    autoBucket,
     ...chartBucketOptions(summary.range).filter((size) => size !== autoBucket),
   ];
-  return values.flatMap((value) =>
-    tileEntries(
-      'charts',
-      buckets
-        .flatMap((bucket): CatalogItem[] => {
-          const chart = {
+  const counts = periodTotals(summary).length === 3 ? ([3, 2] as const) : ([2] as const);
+  return sizes.flatMap((size) =>
+    (['highlight', 'line'] as const).flatMap((look) =>
+      tileEntries(
+        'charts',
+        counts.flatMap((totals) =>
+          values.map((value): CatalogItem => ({
             kind: 'summaryChart',
             value,
-            ...(bucket === undefined ? {} : { bucket }),
-          } as const;
-          return [chart, { ...chart, barValues: true }, { ...chart, averageLine: true }];
-        })
-        .concat({ kind: 'summaryChart', value, header: false }),
+            look,
+            totals,
+            // The period's own size stays on `auto`.
+            ...(size === autoBucket ? {} : { bucket: size }),
+            ...(look === 'highlight' && bucketCount(summary.range, size) <= MAX_VALUED_BARS
+              ? { barValues: true }
+              : {}),
+          })),
+        ),
+      ),
     ),
   );
 }
@@ -410,13 +438,19 @@ export function activityCatalog(
 }
 
 /**
- * Widgets for a period summary: the bar charts (`autoBucket` is the period's own bar size, see
- * `bucketForPeriod`), its basics (every total in one tile, the overlaid routes when any activity
- * has GPS, free text, the period name in each format), and the logo. Formats of the name that write a period the same
- * (all of them, for a year) are one widget for the user: the gallery drops the repeats. Time O(1).
+ * Widgets for a period summary: its data widgets (see `summaryBlocks`), the charts (`autoBucket`
+ * is the period's own bar size, see `bucketForPeriod`), its basics (every total in one tile, the
+ * overlaid routes when any activity has GPS, free text, the period name in each format), and the
+ * logo. Formats of the name that write a period the same (all of them, for a year) are one widget
+ * for the user: the gallery drops the repeats. Time O(1).
  */
 export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): CatalogSection[] {
   return sections([
+    ...summaryBlocks(summary).map((block): Entry => [
+      'data',
+      `summaryBlock-${block.design}`,
+      { kind: 'summaryBlock', block },
+    ]),
     ...availableSummaryMetrics(summary).flatMap((metric) =>
       dataEntries({ kind: 'summaryMetric', metric }),
     ),

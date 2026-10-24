@@ -1,14 +1,31 @@
 import { customRange, monthRange, rangeLength, weekRange, yearRange } from './dates';
 import {
   bucketForPeriod,
+  bucketCount,
   chartBucketOptions,
   customRangeLimits,
+  isCurrentPeriod,
   MAX_CUSTOM_DAYS,
   periodContaining,
   setCustomRangeDate,
   shiftPeriod,
   startCustomRange,
 } from './periods';
+
+describe('isCurrentPeriod', () => {
+  it('tells the week, month and year in progress from past ones', () => {
+    const today = '2026-10-24';
+    expect(isCurrentPeriod('week', weekRange('2026-10-20'), today)).toBe(true);
+    expect(isCurrentPeriod('week', weekRange('2026-10-14'), today)).toBe(false);
+    expect(isCurrentPeriod('month', monthRange('2026-10-01'), today)).toBe(true);
+    expect(isCurrentPeriod('month', monthRange('2025-10-01'), today)).toBe(false);
+    expect(isCurrentPeriod('year', yearRange('2026-01-01'), today)).toBe(true);
+  });
+
+  it('never takes a custom range for the current period, even one that matches it', () => {
+    expect(isCurrentPeriod('custom', weekRange('2026-10-24'), '2026-10-24')).toBe(false);
+  });
+});
 
 describe('shiftPeriod', () => {
   it('steps weeks, months and years', () => {
@@ -112,6 +129,15 @@ describe('chartBucketOptions', () => {
     expect(chartBucketOptions(yearRange('2026-10-14'))).toEqual(['week', 'month']);
     // A 10-week training block.
     expect(chartBucketOptions(customRange('2026-08-10', '2026-10-18'))).toEqual(['week', 'month']);
+  });
+
+  it('counts the bars of each size', () => {
+    const october = monthRange('2026-10-14');
+    expect(bucketCount(october, 'day')).toBe(31);
+    expect(bucketCount(october, 'week')).toBe(5);
+    expect(bucketCount(october, 'month')).toBe(1);
+    expect(bucketCount(yearRange('2026-10-14'), 'month')).toBe(12);
+    expect(bucketCount(customRange('2026-11-20', '2027-02-03'), 'month')).toBe(4);
   });
 
   it('offers nothing for a range too short for any chart', () => {

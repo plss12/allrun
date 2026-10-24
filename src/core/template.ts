@@ -102,6 +102,11 @@ export const SUMMARY_METRIC_IDS = [
 
 export type SummaryMetricId = (typeof SUMMARY_METRIC_IDS)[number];
 
+/** How a period's chart draws its bars (see the `summaryChart` layer's `look`). */
+export const SUMMARY_CHART_LOOKS = ['highlight', 'line'] as const;
+
+export type SummaryChartLook = (typeof SUMMARY_CHART_LOOKS)[number];
+
 /**
  * How an activity's date reads (Spanish examples): `full` "Miércoles, 14 de octubre de 2026",
  * `weekday` "Miércoles", `long` "14 de octubre de 2026", `short` "14 oct", `numeric`
@@ -447,6 +452,23 @@ const activityBlockSchema = z.discriminatedUnion('design', [
 
 export type ActivityBlock = z.infer<typeof activityBlockSchema>;
 
+/**
+ * The data widgets of a period summary (R2c), written in the user's lettering: the period's name
+ * over one, two or three of its main totals in a line; a table of its days, weeks or months with
+ * their distance or time, and the total; and the period's name over each sport's total.
+ */
+const summaryBlockSchema = z.discriminatedUnion('design', [
+  z.object({
+    design: z.literal('periodData'),
+    count: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  }),
+  z.object({ design: z.literal('periodTable'), value: z.enum(['distance', 'movingTime']) }),
+  z.object({ design: z.literal('periodSports') }),
+]);
+
+export type SummaryBlock = z.infer<typeof summaryBlockSchema>;
+export type SummaryBlockDesign = SummaryBlock['design'];
+
 /** Most layers a template can hold. */
 export const MAX_LAYERS = 50;
 
@@ -599,6 +621,17 @@ export const layerSchema = z.discriminatedUnion('kind', [
      */
     bucket: z.enum(['auto', 'day', 'week', 'month']).default('auto'),
     value: z.enum(['distance', 'movingTime']),
+    /**
+     * How the bars are drawn: `highlight` square and translucent but the best one, in full color;
+     * `line` a dot per bar joined over a fading area, on a grid with its scale. Templates saved
+     * when bars were rounded and alike, without a look, read as highlighted bars.
+     */
+    look: z.enum(SUMMARY_CHART_LOOKS).default('highlight'),
+    /**
+     * How many of the period's main totals (see `periodTotals`) the header writes under the
+     * period's name, instead of the chart's total and average per bar.
+     */
+    totals: z.union([z.literal(2), z.literal(3)]).optional(),
     color: colorSchema,
     /** Day, date or month initial under each bar. */
     axisLabels: z.boolean().default(false),
@@ -621,8 +654,9 @@ export const layerSchema = z.discriminatedUnion('kind', [
     /** A dashed line across the bars at their average (written in the header). */
     averageLine: z.boolean().optional(),
     /**
-     * Each bar's value, in a row over the chart. Templates saved when the highest bar could be
-     * marked alone (`maxLabel`) still read: the field is dropped.
+     * Each bar's value over it, rounded and without its unit ("41", "1:18", "0" for an empty
+     * bar). Templates saved when the highest bar could be marked alone (`maxLabel`) still read:
+     * the field is dropped. A line ignores it.
      */
     barValues: z.boolean().optional(),
   }),
@@ -676,6 +710,14 @@ export const layerSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     ...layerBase,
+    kind: z.literal('summaryBlock'),
+    block: summaryBlockSchema,
+    /** The AllRun name at the foot of the block, in its color, as the activities' widgets. */
+    logo: z.boolean(),
+    style: blockStyleSchema,
+  }),
+  z.object({
+    ...layerBase,
     kind: z.literal('logo'),
     /**
      * Only AllRun for now. Strava's guidelines allow just its official "Powered by" / "Compatible
@@ -706,6 +748,7 @@ const SUMMARY_ONLY: ReadonlySet<LayerKind> = new Set([
   'summaryMetric',
   'summaryRoutes',
   'summaryChart',
+  'summaryBlock',
 ]);
 
 /** Whether a layer can be used in a template of the given mode. */

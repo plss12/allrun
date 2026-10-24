@@ -76,6 +76,8 @@ async function cases(): Promise<Record<string, EditorData>> {
     summary: summarize(activities, range),
     activities,
     bucketSize: bucketForPeriod('year', range),
+    families: [],
+    current: false,
   });
   return {
     'a run with a long name': {

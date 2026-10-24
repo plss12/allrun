@@ -46,7 +46,7 @@ type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
 /** A period's chart or an activity's: they share how their texts look. */
 type AnyChartLayer = Extract<Layer, { kind: 'summaryChart' | 'activityChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
-type BlockLayer = Extract<Layer, { kind: 'activityBlock' }>;
+type BlockLayer = Extract<Layer, { kind: 'activityBlock' | 'summaryBlock' }>;
 
 function isTextLayer(layer: Layer): layer is TextLayer {
   return (
@@ -74,6 +74,7 @@ function tabsFor(layer: Layer): readonly Tab[] {
       return ['color', 'width', 'opacity'];
     case 'summaryChart':
     case 'activityChart':
+    case 'summaryBlock':
       return ['color', 'font', 'format', 'opacity'];
     case 'activityBlock':
       // A replica of an app keeps the app's look: only how see-through it is can change.
@@ -258,9 +259,9 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
   readonly format: Format;
   readonly change: (patch: Partial<Format>) => StyleChange;
 } {
-  if (layer.kind === 'activityBlock') {
+  if (layer.kind === 'activityBlock' || layer.kind === 'summaryBlock') {
     // A block lays out its own texts: no alignment. A data widget can go on a backdrop and open
-    // its letters up, as a text widget.
+    // its letters up, as a text widget; a summary's are all data widgets.
     const { font, bold, italic, uppercase, backdrop, letterSpacing } = layer.style;
     return {
       format: {
@@ -269,7 +270,8 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
         italic: italic ?? false,
         uppercase,
         // A card is a backdrop already.
-        ...(isDataWidget(layer.block.design) && layer.block.design !== 'card'
+        ...(layer.kind === 'summaryBlock' ||
+        (isDataWidget(layer.block.design) && layer.block.design !== 'card')
           ? { backdrop: backdrop ?? 'none', letterSpacing: letterSpacing ?? 'normal' }
           : {}),
       },
@@ -326,7 +328,8 @@ function TabContent({
         !isTextLayer(layer) &&
         layer.kind !== 'summaryChart' &&
         layer.kind !== 'activityChart' &&
-        layer.kind !== 'activityBlock'
+        layer.kind !== 'activityBlock' &&
+        layer.kind !== 'summaryBlock'
       ) {
         return null;
       }
@@ -349,7 +352,7 @@ function TabContent({
                 onChange((template) => setAxisLabels(template, layer.id, !layer.axisLabels))
               }
             />
-          ) : layer.kind === 'activityBlock' ? (
+          ) : layer.kind === 'activityBlock' || layer.kind === 'summaryBlock' ? (
             <Chip
               label={t('style.logo')}
               selected={layer.logo}

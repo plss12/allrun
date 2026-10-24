@@ -4,6 +4,7 @@ import type { NewLayer } from './layer-catalog';
 import { at, fitWidth, logoLayer, row, type Slot, slot, textStyle, WHITE } from './layout-kit';
 import { availableMetrics } from './metrics';
 import type { PeriodSummary } from './summary';
+import { summaryBlockLettering } from './summary-block';
 import { defaultSummaryMetrics, summaryHasDistance } from './summary-metrics';
 import type { CanvasFormat, FontId, Layer, Template } from './template';
 
@@ -195,6 +196,7 @@ export function defaultSummaryTemplate(
       id: 'chart',
       kind: 'summaryChart',
       bucket: 'auto',
+      look: 'highlight',
       value: summaryHasDistance(summary) ? 'distance' : 'movingTime',
       color: WHITE,
       axisLabels: true,
@@ -297,8 +299,9 @@ export function newLayer(
         axisLabels: true,
         font,
         bold: true,
-        uppercase: true,
-        align: 'center',
+        // The period's name and its totals read as written ("Distance"), from the left.
+        uppercase: item.totals === undefined,
+        align: item.totals === undefined ? 'center' : 'left',
         transform: centered(layout.chart.scale),
         opacity: 0.9,
       };
@@ -332,6 +335,17 @@ export function newLayer(
         logo: false,
         style: { ...blockLettering(item.block), color: WHITE },
         transform: centered(framesCanvas(item.block) ? 1 : layout.scale / LAYOUTS.story.scale),
+        opacity: 1,
+      };
+    case 'summaryBlock':
+      // As the activities' data widgets: in the lettering that suits each (see
+      // `summaryBlockLettering`), shrinking with the other widgets in smaller formats.
+      return {
+        ...item,
+        id,
+        logo: false,
+        style: { ...summaryBlockLettering(item.block), color: WHITE },
+        transform: centered(layout.scale / LAYOUTS.story.scale),
         opacity: 1,
       };
   }
@@ -368,6 +382,7 @@ function textFont(layer: Layer): FontId | null {
     case 'info':
     case 'text':
     case 'activityBlock':
+    case 'summaryBlock':
       return layer.style.font;
     case 'summaryChart':
     case 'activityChart':

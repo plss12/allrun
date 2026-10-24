@@ -357,6 +357,8 @@ function pageLabel(
       case 'summaryChart':
         return [
           t(`widgets.${item.value === 'distance' ? 'distanceChart' : 'timeChart'}`),
+          t(`gallery.chartLooks.${item.look}`),
+          flag(item.totals === 2, t('gallery.chartLooks.twoTotals')),
           item.bucket === undefined || item.bucket === 'auto'
             ? ''
             : t(`gallery.buckets.${item.bucket}`),
@@ -407,6 +409,17 @@ function pageLabel(
           name,
           t(`gallery.blockLayouts.${block.layout}`),
           'top' in block && block.top === 'time' ? t('gallery.timeOnTop') : '',
+        ];
+      }
+      case 'summaryBlock': {
+        const { block } = item;
+        return [
+          t(`widgets.summaryBlocks.${block.design}`),
+          block.design === 'periodData'
+            ? t(`gallery.dataCounts.${(['one', 'two', 'three'] as const)[block.count - 1]}`)
+            : block.design === 'periodTable'
+              ? t(`widgets.${block.value === 'distance' ? 'distanceChart' : 'timeChart'}`)
+              : '',
         ];
       }
     }

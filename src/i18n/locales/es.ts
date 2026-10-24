@@ -139,6 +139,11 @@ export const es: Translations = {
       averageCadence: 'Cadencia',
       calories: 'Cal',
     },
+    summaryBlocks: {
+      periodData: 'Periodo y datos',
+      periodTable: 'Tabla',
+      periodSports: 'Por deporte',
+    },
     blocks: {
       bigTrio: 'Dato grande y tres',
       bigPair: 'Dato grande y dos',
@@ -483,6 +488,11 @@ export const es: Translations = {
     },
   },
   gallery: {
+    dataCounts: {
+      one: 'Un dato',
+      two: 'Dos datos',
+      three: 'Tres datos',
+    },
     textSample: 'Texto',
     moreVariants: 'Desliza para ver otras versiones',
     placeSample: {
@@ -502,6 +512,11 @@ export const es: Translations = {
     heartRate: 'Frecuencia cardiaca',
     values: 'Con datos',
     named: 'Con su nombre',
+    chartLooks: {
+      highlight: 'Con el mejor destacado',
+      line: 'Línea',
+      twoTotals: 'Con dos datos',
+    },
     zones: {
       line: 'Zonas',
       lineAndTable: 'Zonas y tabla',
@@ -654,6 +669,13 @@ export const es: Translations = {
       month: 'Horas por mes',
     },
   },
+  thisWeek: 'Esta semana',
+  tableMeasures: {
+    km: 'Kilómetros',
+    mi: 'Millas',
+    hours: 'Horas',
+  },
+  tableTotal: 'Total',
   chartHeaders: {
     averagePace: 'Ritmo medio',
     fastestPace: 'Ritmo más rápido',

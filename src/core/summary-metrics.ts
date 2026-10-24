@@ -83,13 +83,37 @@ export function defaultSummaryMetrics(summary: PeriodSummary): SummaryMetricId[]
 
 /**
  * Totals worth offering for a period, in the editor's order: distance-based ones only when it
- * has distance, elevation only when it climbed. Time and space O(1).
+ * has distance, elevation only when it climbed. Never the average pace: a week or a month mixes
+ * easy runs, intervals and walks, so their average says nothing (decision of product); designs
+ * saved with it still draw it. Time and space O(1).
  */
 export function availableSummaryMetrics(summary: PeriodSummary): SummaryMetricId[] {
   return SUMMARY_METRIC_IDS.filter((metric) => {
+    if (metric === 'averagePace') {
+      return false;
+    }
     if (DISTANCE_METRICS.has(metric)) {
       return summaryHasDistance(summary);
     }
     return metric !== 'totalElevationGain' || summary.totalElevationGainMeters > 0;
   });
+}
+
+/**
+ * The three totals a chart writes over it, among those the period has: `lead` first (what the
+ * chart draws, when the period has it), then by importance: distance, time, elevation gain and
+ * number of activities ("Distance · Time · Elevation" for runs, "Time · Distance · Elevation"
+ * over their time, "Time · Activities" for a month of gym sessions). Time and space O(1).
+ */
+export function periodTotals(
+  summary: PeriodSummary,
+  lead: SummaryMetricId = 'totalDistance',
+): SummaryMetricId[] {
+  const offered = availableSummaryMetrics(summary);
+  return [
+    lead,
+    ...(['totalDistance', 'totalMovingTime', 'totalElevationGain', 'activityCount'] as const),
+  ]
+    .filter((metric, i, all) => offered.includes(metric) && all.indexOf(metric) === i)
+    .slice(0, 3);
 }

@@ -25,6 +25,18 @@ export function periodContaining(kind: Exclude<PeriodKind, 'custom'>, date: Loca
 }
 
 /**
+ * Whether `range` is the calendar week, month or year in progress on `today`, which reads as "this
+ * week" rather than its dates. A custom range never is. Time and space O(1).
+ */
+export function isCurrentPeriod(kind: PeriodKind, range: DateRange, today: LocalDate): boolean {
+  if (kind === 'custom') {
+    return false;
+  }
+  const current = periodContaining(kind, today);
+  return current.start === range.start && current.end === range.end;
+}
+
+/**
  * The previous (`step` = -1) or next (`step` = 1) period of the same kind. Custom ranges move by
  * their own length, so a 10-week block steps to the previous or next 10 weeks.
  */
@@ -118,16 +130,28 @@ const MAX_BARS = 62;
  * offers a chart of each. Time and space O(1).
  */
 export function chartBucketOptions(range: DateRange): BucketSize[] {
+  return (['day', 'week', 'month'] as const).filter((size) => {
+    const count = bucketCount(range, size);
+    return count >= MIN_BARS && count <= MAX_BARS;
+  });
+}
+
+/**
+ * Number of bars of a chart of `range` in bars of `size`: its days, its 7-day blocks (the last
+ * may be shorter) or the calendar months it touches, as `bucketize` splits it. Time and space
+ * O(1).
+ */
+export function bucketCount(range: DateRange, size: BucketSize): number {
   const days = rangeLength(range);
-  const [startYear, startMonth] = range.start.split('-').map(Number);
-  const [endYear, endMonth] = range.end.split('-').map(Number);
-  const counts = {
-    day: days,
-    week: Math.ceil(days / 7),
-    month: (endYear - startYear) * 12 + endMonth - startMonth + 1,
-  } as const;
-  const sizes = (['day', 'week', 'month'] as const).filter(
-    (size) => counts[size] >= MIN_BARS && counts[size] <= MAX_BARS,
-  );
-  return sizes;
+  switch (size) {
+    case 'day':
+      return days;
+    case 'week':
+      return Math.ceil(days / 7);
+    case 'month': {
+      const [startYear, startMonth] = range.start.split('-').map(Number);
+      const [endYear, endMonth] = range.end.split('-').map(Number);
+      return (endYear - startYear) * 12 + endMonth - startMonth + 1;
+    }
+  }
 }

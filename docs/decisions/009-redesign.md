@@ -116,6 +116,28 @@ comes later.
   right-aligned and without units, under short names of the columns ("Desn.", "FC"); no average.
   The splits that write each pace come first and have no header (it would repeat them); only the
   splits without paces carry the average pace and the fastest split over them.
+- **A period's data widgets (R2c):** written data only, for a week, a month, a year or a custom
+  range: the period's name small and centered over one, two or three of its main totals in a
+  line; a table of its days with activity (its weeks in a month, its months in a year), each name
+  small at the start and its value big at the end, rules between them and the total last; and
+  the period's name over each sport's total, only when it mixes sports. A layer of their own
+  (`summaryBlock`), laid out with the activities' measured boxes and in a lettering each.
+- **A period's charts (R2c):** only the period's own data, never a trend over earlier periods
+  (unlike the apps they draw from). Two widgets, each of distance and of time, under three totals
+  and under two: square bars, translucent but the best one, with each value just over its bar;
+  and a line with a dot per bar on a grid with its scale (the highest value, its half and zero),
+  the highest dot with a halo and its value. Over them, the period's name and its main totals
+  (distance, time, elevation gain and activities, those it has; names as written, "Distancia",
+  not in capitals), what the chart draws first. The week in progress reads "Esta semana" rather
+  than its dates; a month or a year keeps its name, short and telling. A summary of one sport
+  names it after the period ("Esta semana · Carreras"). The rounded bars charts had before are
+  gone, too close to the highlighted ones: designs saved with them read as highlighted bars, as
+  the default design and AllRun's templates now are. The gallery has a tile per look and bar size
+  (a year: bars by month, line by month, bars by week, line by week), so no carousel runs long.
+  Values over bars are rounded
+  and without unit ("41", "1:18"), "0" on empty bars so every bar reads alike, and only offered up
+  to 16 bars (a month of days goes without). The average pace isn't offered in a summary: it mixes
+  easy runs, intervals and walks, and says nothing.
 - **Cards with depth:** the activity and summary cards and the gallery's tiles share one surface,
   dark and lit from above like the charts' areas, with a faint edge and a soft shadow; an
   activity's route glows softly. In the gallery each chart fills its own page (a zones table no

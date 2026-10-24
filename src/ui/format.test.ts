@@ -5,6 +5,7 @@ import {
   formatActivityDate,
   formatTimeAfter,
   formatBucketLabels,
+  formatBucketName,
   formatChartValue,
   formatMetric,
   formatPeriodName,
@@ -112,6 +113,22 @@ describe('formatPeriodName', () => {
     expect(formatPeriodName('month', month, 'es', 'short')).toBe('Oct 2026');
     expect(formatPeriodName('month', month, 'es', 'numeric')).toBe('10/2026');
     expect(formatPeriodName('year', yearRange('2026-10-16'), 'es', 'numeric')).toBe('2026');
+  });
+});
+
+describe('formatBucketName', () => {
+  it('names a day by its weekday in a week, and by its date in a longer range', () => {
+    const tuesday = { start: '2026-10-13', end: '2026-10-13' };
+    expect(formatBucketName(tuesday, 'day', true, 'es')).toBe('Martes');
+    expect(formatBucketName(tuesday, 'day', true, 'en')).toBe('Tuesday');
+    expect(formatBucketName(tuesday, 'day', false, 'es')).toBe('13 oct');
+  });
+
+  it('names a week by its days and a month by its name', () => {
+    expect(formatBucketName(customRange('2026-10-05', '2026-10-11'), 'week', false, 'es')).toBe(
+      '5–11 oct',
+    );
+    expect(formatBucketName(monthRange('2026-10-01'), 'month', false, 'es')).toBe('Octubre');
   });
 });
 

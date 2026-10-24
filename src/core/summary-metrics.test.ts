@@ -5,6 +5,7 @@ import { summarize } from './summary';
 import {
   availableSummaryMetrics,
   defaultSummaryMetrics,
+  periodTotals,
   summaryHasDistance,
   summaryMetricValue,
   toDisplaySummaryMetric,
@@ -110,17 +111,46 @@ describe('which totals a summary shows', () => {
       'totalMovingTime',
       'activityCount',
       'totalElevationGain',
-      'averagePace',
       'longestDistance',
     ]);
     expect(availableSummaryMetrics(summarize([flatSwim], week))).toEqual([
       'totalDistance',
       'totalMovingTime',
       'activityCount',
-      'averagePace',
       'longestDistance',
     ]);
     expect(availableSummaryMetrics(summarize([gym], week))).toEqual([
+      'totalMovingTime',
+      'activityCount',
+    ]);
+  });
+
+  it('never offers the average pace, which means nothing over mixed activities', () => {
+    expect(availableSummaryMetrics(summarize([run, flatSwim], week))).not.toContain('averagePace');
+  });
+
+  it('writes the three most important totals the period has over its charts', () => {
+    expect(periodTotals(summarize([run], week))).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'totalElevationGain',
+    ]);
+    expect(periodTotals(summarize([flatSwim], week))).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'activityCount',
+    ]);
+    expect(periodTotals(summarize([gym], week))).toEqual(['totalMovingTime', 'activityCount']);
+  });
+
+  it('writes first the total of what the chart draws', () => {
+    expect(periodTotals(summarize([run], week), 'totalMovingTime')).toEqual([
+      'totalMovingTime',
+      'totalDistance',
+      'totalElevationGain',
+    ]);
+    // A lead the period hasn't is left out.
+    expect(periodTotals(summarize([gym], week), 'totalDistance')).toEqual([
       'totalMovingTime',
       'activityCount',
     ]);

@@ -28,6 +28,15 @@ export interface PeriodSummary {
   readonly longestActivity: Activity | null;
   /** Encoded routes of the included activities, oldest first, for the overlaid-routes widget. */
   readonly routes: readonly string[];
+  /** The sport families of its activities, in the usual order (see `familiesOf`). */
+  readonly families: readonly SportFamily[];
+}
+
+/** What a period's activities of one sport family add up to. */
+export interface FamilyTotals {
+  readonly family: SportFamily;
+  readonly distanceMeters: number;
+  readonly movingTimeSeconds: number;
 }
 
 /** Totals of one bar in the per-day, per-week or per-month chart. */
@@ -116,7 +125,23 @@ export function summarize(
     routes: selected.flatMap((activity) =>
       activity.routePolyline ? [activity.routePolyline] : [],
     ),
+    families: familiesOf(selected),
   };
+}
+
+/**
+ * The totals of each sport family among `activities`, in the usual order of the families (see
+ * `familiesOf`). Time O(n · f) for n activities and f families, space O(f).
+ */
+export function familyTotals(activities: readonly Activity[]): FamilyTotals[] {
+  return familiesOf(activities).map((family) => {
+    const ofFamily = activities.filter((activity) => activity.sportFamily === family);
+    return {
+      family,
+      distanceMeters: sum(ofFamily, (activity) => activity.distanceMeters),
+      movingTimeSeconds: sum(ofFamily, (activity) => activity.movingTimeSeconds),
+    };
+  });
 }
 
 /**

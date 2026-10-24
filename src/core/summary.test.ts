@@ -1,7 +1,7 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
 import { customRange, monthRange, weekRange } from './dates';
-import { bucketize, familiesOf, summarize, summaryPages } from './summary';
+import { bucketize, familiesOf, familyTotals, summarize, summaryPages } from './summary';
 
 const week = weekRange('2026-10-14'); // Mon 12 to Sun 18 October 2026
 
@@ -16,7 +16,20 @@ describe('summarize', () => {
       averageSpeed: null,
       longestActivity: null,
       routes: [],
+      families: [],
     });
+  });
+
+  it('names the sport families of its activities, in the usual order', () => {
+    const summary = summarize(
+      [
+        makeActivity({ sportType: 'Ride' }),
+        makeActivity({ sportType: 'Run' }),
+        makeActivity({ sportType: 'TrailRun' }),
+      ],
+      week,
+    );
+    expect(summary.families).toEqual(['run', 'ride']);
   });
 
   it('adds up the activities of the period, including both boundary days', () => {
@@ -184,5 +197,19 @@ describe('familiesOf and summaryPages', () => {
   it('pages a single family alone, and an empty period as all sports', () => {
     expect(summaryPages([run, run], week)).toEqual(['run']);
     expect(summaryPages([climb], week)).toEqual(['all']);
+  });
+});
+
+describe('familyTotals', () => {
+  it('adds up each sport family, in the usual order', () => {
+    const totals = familyTotals([
+      makeActivity({ sportType: 'WeightTraining', distanceMeters: 0, movingTimeSeconds: 3600 }),
+      makeActivity({ sportType: 'Run', distanceMeters: 10_000, movingTimeSeconds: 3000 }),
+      makeActivity({ sportType: 'TrailRun', distanceMeters: 12_000, movingTimeSeconds: 4500 }),
+    ]);
+    expect(totals).toEqual([
+      { family: 'run', distanceMeters: 22_000, movingTimeSeconds: 7500 },
+      { family: 'training', distanceMeters: 0, movingTimeSeconds: 3600 },
+    ]);
   });
 });

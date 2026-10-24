@@ -130,13 +130,13 @@ type TextLayer = LayerOf<'metric' | 'summaryMetric' | 'info' | 'text'>;
 export type TextStyle = TextLayer['style'];
 type ChartLayer = LayerOf<'summaryChart'>;
 type LogoLayer = LayerOf<'logo'>;
-type BlockLayer = LayerOf<'activityBlock'>;
+type BlockLayer = LayerOf<'activityBlock' | 'summaryBlock'>;
 
 const TEXT_KINDS = ['metric', 'summaryMetric', 'info', 'text'] as const;
 const DATA_KINDS = ['metric', 'summaryMetric'] as const;
 const LINE_KINDS = ['route', 'summaryRoutes'] as const;
 const CHART_KINDS = ['summaryChart', 'activityChart'] as const;
-const BLOCK_KINDS = ['activityBlock'] as const;
+const BLOCK_KINDS = ['activityBlock', 'summaryBlock'] as const;
 const ALL_KINDS = [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS, ...BLOCK_KINDS, 'logo'] as const;
 
 function isKind<K extends LayerKind>(layer: Layer, kinds: readonly K[]): layer is LayerOf<K> {
@@ -186,6 +186,7 @@ export function layerColor(layer: Layer): string | null {
     case 'info':
     case 'text':
     case 'activityBlock':
+    case 'summaryBlock':
       return layer.style.color;
     case 'route':
     case 'summaryRoutes':
@@ -221,6 +222,7 @@ export function setLayerColor(template: Template, id: string, color: string): Te
         case 'text':
           return { ...layer, style: { ...layer.style, color } };
         case 'activityBlock':
+        case 'summaryBlock':
           return { ...layer, style: { ...layer.style, color } };
         case 'route':
         case 'summaryRoutes':

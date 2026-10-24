@@ -143,6 +143,12 @@ export const en = {
       averageCadence: 'Cadence',
       calories: 'Cal',
     },
+    /** The data widgets of a period summary. */
+    summaryBlocks: {
+      periodData: 'Period and data',
+      periodTable: 'Table',
+      periodSports: 'By sport',
+    },
     blocks: {
       bigTrio: 'Big datum and three',
       bigPair: 'Big datum and two',
@@ -491,6 +497,12 @@ export const en = {
     },
   },
   gallery: {
+    /** How many data a version of a widget shows. */
+    dataCounts: {
+      one: 'One datum',
+      two: 'Two data',
+      three: 'Three data',
+    },
     textSample: 'Text',
     moreVariants: 'Swipe to see other versions',
     placeSample: {
@@ -510,6 +522,11 @@ export const en = {
     heartRate: 'Heart rate',
     values: 'With values',
     named: 'With its name',
+    chartLooks: {
+      highlight: 'Best highlighted',
+      line: 'Line',
+      twoTotals: 'With two data',
+    },
     zones: {
       line: 'Zones',
       lineAndTable: 'Zones and table',
@@ -667,6 +684,15 @@ export const en = {
       month: 'Hours per month',
     },
   },
+  /** The week in progress, as a chart's header names it. */
+  thisWeek: 'This week',
+  /** What a period's table measures, over its values. */
+  tableMeasures: {
+    km: 'Kilometers',
+    mi: 'Miles',
+    hours: 'Hours',
+  },
+  tableTotal: 'Total',
   /** The two data over a chart (see `activityChartHeader` and `periodChartHeader`). */
   chartHeaders: {
     averagePace: 'Avg pace',

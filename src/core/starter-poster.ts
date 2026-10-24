@@ -195,6 +195,7 @@ export function posterTemplate(data: TemplateData, format: CanvasFormat): Templa
         id: 'chart',
         kind: 'summaryChart',
         bucket: 'auto',
+        look: 'highlight',
         value: summaryHasDistance(summary) ? 'distance' : 'movingTime',
         color: WHITE,
         axisLabels: false,

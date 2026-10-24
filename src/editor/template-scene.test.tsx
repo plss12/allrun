@@ -177,7 +177,7 @@ describe('prepareLayers', () => {
           {
             ...template,
             layers: texts.map((layer) =>
-              'style' in layer && layer.kind !== 'activityBlock'
+              'style' in layer && layer.kind !== 'activityBlock' && layer.kind !== 'summaryBlock'
                 ? { ...layer, style: { ...layer.style, font, italic } }
                 : layer,
             ),
@@ -341,9 +341,15 @@ describe("a period's bar values", () => {
       summary: summarize(activities, month),
       activities,
       bucketSize: 'day',
+      families: [],
+      current: false,
     } as const;
     const base = defaultSummaryTemplate(data.summary, 'story');
-    const chart = newLayer({ kind: 'summaryChart', value: 'distance' }, 'chart', 'story');
+    const chart = newLayer(
+      { kind: 'summaryChart', value: 'distance', look: 'highlight' },
+      'chart',
+      'story',
+    );
     if (chart.kind !== 'summaryChart') {
       throw new Error('No summary chart');
     }

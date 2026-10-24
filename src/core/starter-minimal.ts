@@ -158,6 +158,7 @@ export function minimalTemplate(data: TemplateData, format: CanvasFormat): Templ
       id: 'chart',
       kind: 'summaryChart',
       bucket: 'auto',
+      look: 'highlight',
       value: summaryHasDistance(data.summary) ? 'distance' : 'movingTime',
       color: WHITE,
       axisLabels: false,

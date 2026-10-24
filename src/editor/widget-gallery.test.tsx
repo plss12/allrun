@@ -77,6 +77,8 @@ function summaryData(kind: 'week' | 'year'): EditorData {
     summary: summarize(activities, range),
     activities,
     bucketSize: kind === 'week' ? 'day' : 'month',
+    families: [],
+    current: false,
   };
 }
 

@@ -1,5 +1,6 @@
 import {
   BlurMask,
+  Circle,
   DashPathEffect,
   FilterMode,
   FontWeight,
@@ -47,19 +48,22 @@ import { formatBucketLabels } from '@/ui/format';
 import {
   activityChartHeader,
   chartBuckets,
-  chartValueText,
   type EditorData,
   type HeaderDatum,
   type LabelKey,
   layerText,
   type ParagraphContent,
   periodChartHeader,
+  periodTotalsHeader,
+  roundedChartValue,
   speedMeasure,
   splitRowTexts,
   type TextContext,
   textRuns,
+  type TitledHeader,
 } from './editor-data';
 import { prepareActivityBlock } from './activity-blocks';
+import { prepareSummaryBlock } from './summary-blocks';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
 import { CAP_HEIGHTS, drawsBold, FONT_FAMILIES } from './fonts';
@@ -354,34 +358,66 @@ function prepareLayer(
           )
         : null;
       const headerStyle = { ...chartText, uppercase: layer.uppercase, align: layer.align };
-      // Without its two data, the chart says what it shows.
+      // Without its data, the chart says what it shows.
       const header =
         (layer.header ?? true)
-          ? prepareHeader(
-              periodChartHeader(layer.value, size, values, textContext),
-              fonts,
-              headerStyle,
-              translate,
-            )
+          ? layer.totals !== undefined
+            ? prepareTitledHeader(
+                periodTotalsHeader(data, layer.value, layer.totals, textContext, translate),
+                fonts,
+                headerStyle,
+                translate,
+              )
+            : prepareHeader(
+                periodChartHeader(layer.value, size, values, textContext),
+                fonts,
+                headerStyle,
+                translate,
+              )
           : prepareCaption(
               translate(`chartCaptions.${layer.value}.${size}`, { unit: textContext.unit }),
               fonts,
               headerStyle,
             );
-      const measure = layer.value === 'distance' ? 'periodDistance' : 'periodTime';
+      const line = (text: string, size: number, opacity = 1) =>
+        buildParagraph(
+          fonts,
+          chartText,
+          { label: null, value: text, unit: null, valueSize: size },
+          NO_WRAP_WIDTH,
+          opacity,
+        );
+      if (layer.look === 'line') {
+        const max = Math.max(...values);
+        const withUnit = (value: number) =>
+          roundedChartValue(layer.value, value, textContext, true);
+        const body = preparePeriodLine({
+          values,
+          color: layer.color,
+          labels,
+          // Lines at the labelled bars, also when the labels aren't written.
+          marks: formatBucketLabels(buckets, size, textContext.locale).map((label) => label !== ''),
+          ticks: [max, max / 2, 0].map((tick) =>
+            line(withUnit(tick), AXIS_LABEL_SIZE, SCALE_OPACITY),
+          ),
+          peak: max > 0 ? line(withUnit(max), AXIS_LABEL_SIZE * PEAK_TEXT_GAIN) : null,
+        });
+        return {
+          layer,
+          width: CHART_WIDTH,
+          height: framedHeight(header, body.height),
+          content: (
+            <ChartFrame header={header} align={layer.align} bodyHeight={body.height}>
+              {body.content}
+            </ChartFrame>
+          ),
+        };
+      }
       const texts =
         layer.barValues === true
           ? fitBarTexts(
-              values.map((value) =>
-                value > 0 ? chartValueText(measure, value, textContext) : null,
-              ),
-              (text, size) =>
-                buildParagraph(fonts, chartText, {
-                  label: null,
-                  value: text,
-                  unit: null,
-                  valueSize: size,
-                }),
+              values.map((value) => roundedChartValue(layer.value, value, textContext, false)),
+              (text, size) => line(text, size),
             )
           : null;
       const bodyHeight = barsHeight(labels !== null, texts?.band ?? 0);
@@ -546,6 +582,13 @@ function prepareLayer(
         return null;
       }
       const block = prepareActivityBlock(layer, data, { fonts, textContext, translate, canvas });
+      return block === null ? null : { layer, ...block };
+    }
+    case 'summaryBlock': {
+      if (data.mode !== 'summary') {
+        return null;
+      }
+      const block = prepareSummaryBlock(layer, data, { fonts, textContext, translate });
       return block === null ? null : { layer, ...block };
     }
     case 'logo': {
@@ -952,9 +995,13 @@ interface HeaderCell {
   readonly width: number;
 }
 
-/** A chart's header laid out: its two data side by side. */
+/** A chart's header laid out: its data side by side, under a title when it has one. */
 interface PreparedHeader {
+  readonly title: SkParagraph | null;
+  /** How far down the data start, under the title. */
+  readonly cellsTop: number;
   readonly cells: readonly HeaderCell[];
+  /** Width of the data side by side. */
   readonly width: number;
   readonly height: number;
 }
@@ -1012,9 +1059,44 @@ function prepareHeader(
       ? natural
       : build((HEADER_VALUE_SIZE * (CHART_WIDTH - gaps)) / cellsWidth(natural));
   return {
+    title: null,
+    cellsTop: 0,
     cells,
     width: cellsWidth(cells) + gaps,
     height: Math.max(...cells.map((cell) => cell.valueY + cell.value.getHeight())),
+  };
+}
+
+/**
+ * Size of a header's title as a share of its values' natural size, and the room under it as a
+ * share of the title's size.
+ */
+const HEADER_TITLE = { size: 0.46, gap: 0.5 } as const;
+
+/**
+ * Lays out a header with a title (a period's name) over its data, both aligned as the chart's
+ * header is; the title shrinks to the chart's width when longer.
+ */
+function prepareTitledHeader(
+  { title, data }: TitledHeader,
+  fonts: SkTypefaceFontProvider,
+  style: TextStyle,
+  translate: (key: LabelKey) => string,
+): PreparedHeader {
+  const size = HEADER_VALUE_SIZE * HEADER_TITLE.size;
+  const titleParagraph = buildFittedParagraph(
+    fonts,
+    style,
+    { label: null, value: title, unit: null, valueSize: size },
+    CHART_WIDTH,
+  );
+  const cells = prepareHeader(data, fonts, style, translate);
+  const cellsTop = titleParagraph.getHeight() + size * HEADER_TITLE.gap;
+  return {
+    ...cells,
+    title: titleParagraph,
+    cellsTop,
+    height: cellsTop + cells.height,
   };
 }
 
@@ -1038,6 +1120,8 @@ function prepareCaption(
   );
   const width = widthOf(caption);
   return {
+    title: null,
+    cellsTop: 0,
     cells: [{ label: null, value: caption, valueY: 0, width }],
     width,
     height: caption.getHeight(),
@@ -1069,6 +1153,14 @@ function ChartFrame({
   let left = header === null ? 0 : alignedX(align, header.width, CHART_WIDTH);
   return (
     <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
+      {header === null || header.title === null ? null : (
+        <Paragraph
+          paragraph={header.title}
+          x={alignedX(align, widthOf(header.title), CHART_WIDTH)}
+          y={0}
+          width={widthOf(header.title)}
+        />
+      )}
       {header?.cells.map((cell, i) => {
         const x = left;
         left += cell.width + HEADER_CELL_GAP;
@@ -1079,14 +1171,14 @@ function ChartFrame({
               <Paragraph
                 paragraph={cell.label}
                 x={at(cell.label)}
-                y={0}
+                y={header.cellsTop}
                 width={widthOf(cell.label)}
               />
             )}
             <Paragraph
               paragraph={cell.value}
               x={at(cell.value)}
-              y={cell.valueY}
+              y={header.cellsTop + cell.valueY}
               width={widthOf(cell.value)}
             />
           </Group>
@@ -1424,10 +1516,179 @@ function SplitRows({
   );
 }
 
+/** How opaque the values of a line's scale are, and its grid. */
+const SCALE_OPACITY = 0.65;
+const GRID_OPACITY = 0.3;
+const GRID_WIDTH = 2;
+/** The highest point's value is this much bigger than the scale's. */
+const PEAK_TEXT_GAIN = 1.2;
+/** Room between the scale's values and the grid, and between texts and the dots. */
+const SCALE_GAP = 18;
+/** Radius of a line's dots, few or many (a month of days), and of the highest one's halo. */
+const DOT = { few: 9, many: 5, halo: 2.4 } as const;
+/** Most points drawn with big dots. */
+const FEW_POINTS = 16;
+
+/** A chart's body laid out: what it draws from its top-left corner, and how tall it is. */
+interface PreparedBody {
+  readonly height: number;
+  readonly content: ReactElement;
+}
+
 /**
- * A period's bars, drawn from their top-left corner: each bar's value over them when shown, the
- * bars (empty ones as a faint mark), an optional dashed line at their average (empty bars count),
- * and the axis labels under them.
+ * A period's bars as a line (as the summaries of the home screen draw it): a dot per bar joined
+ * over an area that fades out downwards, on a grid with its scale on the left (the highest
+ * value, its half and zero) and a line at each marked bar; the highest dot with a halo and its
+ * value over it, and the axis labels under the line. It spans {@link CHART_WIDTH}; the scale's
+ * width depends on its values. Time O(n) for n bars.
+ */
+function preparePeriodLine({
+  values,
+  color,
+  labels,
+  marks,
+  ticks,
+  peak,
+}: {
+  readonly values: readonly number[];
+  readonly color: string;
+  /** One paragraph per bar (`null` for unlabelled bars), or `null` for no axis labels. */
+  readonly labels: readonly (SkParagraph | null)[] | null;
+  /** The bars with a line of the grid across them. */
+  readonly marks: readonly boolean[];
+  /** The scale's values: the highest, its half and zero, top to bottom. */
+  readonly ticks: readonly SkParagraph[];
+  /** The highest value, over its dot; `null` when every bar is empty. */
+  readonly peak: SkParagraph | null;
+}): PreparedBody {
+  const radius = values.length <= FEW_POINTS ? DOT.few : DOT.many;
+  const halo = radius * DOT.halo;
+  const gridLeft = Math.max(...ticks.map(widthOf)) + SCALE_GAP;
+  const left = gridLeft + radius;
+  const right = CHART_WIDTH - halo;
+  const top = (peak === null ? 0 : peak.getHeight() + SCALE_GAP) + halo;
+  const bottom = top + CHART_HEIGHT;
+  const max = Math.max(...values);
+  const best = max > 0 ? values.indexOf(max) : -1;
+  const points = values.map((value, i) => ({
+    x: values.length > 1 ? left + (i * (right - left)) / (values.length - 1) : (left + right) / 2,
+    y: bottom - (max > 0 ? (value / max) * CHART_HEIGHT : 0),
+  }));
+  const labelsTop = bottom + radius + SCALE_GAP / 2;
+  const labelsHeight = Math.max(0, ...(labels ?? []).map((label) => label?.getHeight() ?? 0));
+  const height = labels === null ? bottom + radius : labelsTop + labelsHeight;
+  const linePath = Skia.PathBuilder.Make();
+  points.forEach(({ x, y }, i) => (i === 0 ? linePath.moveTo(x, y) : linePath.lineTo(x, y)));
+  const area = Skia.PathBuilder.Make();
+  area.moveTo(points[0].x, bottom);
+  points.forEach(({ x, y }) => area.lineTo(x, y));
+  area.lineTo(points[points.length - 1].x, bottom);
+  area.close();
+  const grid = withAlpha(color, GRID_OPACITY);
+  const peakAt = best < 0 ? null : points[best];
+  const content = (
+    <Group>
+      {ticks.map((tick, i) => {
+        const y = top + (i * CHART_HEIGHT) / (ticks.length - 1);
+        return (
+          <Group key={`tick-${i}`}>
+            <Line
+              p1={{ x: gridLeft, y }}
+              p2={{ x: CHART_WIDTH, y }}
+              color={grid}
+              strokeWidth={GRID_WIDTH}
+            />
+            <Paragraph
+              paragraph={tick}
+              x={gridLeft - SCALE_GAP - widthOf(tick)}
+              y={y - tick.getHeight() / 2}
+              width={widthOf(tick)}
+            />
+          </Group>
+        );
+      })}
+      {points.map(({ x }, i) =>
+        marks[i] ? (
+          <Line
+            key={`mark-${i}`}
+            p1={{ x, y: top }}
+            p2={{ x, y: bottom }}
+            color={grid}
+            strokeWidth={GRID_WIDTH}
+          />
+        ) : null,
+      )}
+      <Path path={area.detach()}>
+        <LinearGradient
+          start={{ x: 0, y: top }}
+          end={{ x: 0, y: bottom }}
+          colors={[withAlpha(color, AREA_OPACITY), withAlpha(color, 0)]}
+        />
+      </Path>
+      {/* One shadow for the line and its dots, drawn as a layer. */}
+      <Group
+        layer={
+          castsShadow(color) ? (
+            <Paint>
+              <DropShadow />
+            </Paint>
+          ) : undefined
+        }
+      >
+        <Path
+          path={linePath.detach()}
+          style="stroke"
+          strokeWidth={LINE_WIDTH}
+          strokeJoin="round"
+          strokeCap="round"
+          color={color}
+        />
+        {points.map(({ x, y }, i) => (
+          <Circle key={`dot-${i}`} cx={x} cy={y} r={radius} color={color} />
+        ))}
+      </Group>
+      {peakAt === null ? null : (
+        <Circle cx={peakAt.x} cy={peakAt.y} r={halo} color={withAlpha(color, GRID_OPACITY)} />
+      )}
+      {peak === null || peakAt === null ? null : (
+        <Paragraph
+          paragraph={peak}
+          // Centered over its dot, but never past the chart's ends.
+          x={Math.min(Math.max(peakAt.x - widthOf(peak) / 2, 0), CHART_WIDTH - widthOf(peak))}
+          y={peakAt.y - halo - SCALE_GAP / 2 - peak.getHeight()}
+          width={widthOf(peak)}
+        />
+      )}
+      {labels?.map((label, i) => {
+        if (label === null) {
+          return null;
+        }
+        const width = widthOf(label);
+        return (
+          <Paragraph
+            key={`label-${i}`}
+            paragraph={label}
+            x={points[i].x - width / 2}
+            y={labelsTop}
+            width={width}
+          />
+        );
+      })}
+    </Group>
+  );
+  return { height, content };
+}
+
+/** Share of its slot a bar takes across. */
+const BAR_SHARE = 0.88;
+/** How opaque bars are but the best one. */
+const DIM_BAR_OPACITY = 0.4;
+
+/**
+ * A period's bars, drawn from their top-left corner: square and translucent, but the best one (the
+ * first, on a tie) in full color, empty ones as a faint mark; each bar's value just over it when
+ * shown, an optional dashed line at their average (empty bars count), and the axis labels under
+ * them.
  */
 function BarsBody({
   values,
@@ -1448,12 +1709,14 @@ function BarsBody({
     return null;
   }
   const max = Math.max(...values);
+  const best = max > 0 ? values.indexOf(max) : -1;
   const slot = CHART_WIDTH / values.length;
-  const barWidth = slot * 0.7;
+  const barWidth = slot * BAR_SHARE;
   // Empty days still get a small mark so the time axis stays readable.
   const minHeight = Math.min(8, barWidth);
   const top = texts?.band ?? 0;
   const heightOf = (value: number) => (max <= 0 ? 0 : (value / max) * CHART_HEIGHT);
+  const barHeight = (value: number) => Math.max(minHeight, heightOf(value));
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   return (
     <Group transform={[{ translateY: top }]}>
@@ -1468,7 +1731,7 @@ function BarsBody({
         }
       >
         {values.map((value, i) => {
-          const height = Math.max(minHeight, heightOf(value));
+          const height = barHeight(value);
           return (
             <RoundedRect
               key={i}
@@ -1476,9 +1739,9 @@ function BarsBody({
               y={CHART_HEIGHT - height}
               width={barWidth}
               height={height}
-              r={Math.min(barWidth / 2, 12)}
+              r={Math.min(barWidth / 2, 3)}
               color={color}
-              opacity={value > 0 ? 1 : 0.4}
+              opacity={i === best ? 1 : DIM_BAR_OPACITY}
             />
           );
         })}
@@ -1492,13 +1755,15 @@ function BarsBody({
         }
         const width = Math.ceil(paragraph.getLongestLine()) + 1;
         const center = i * slot + slot / 2;
-        // Bottom-aligned just over the chart, upright or reading upwards.
+        // Just over its own bar (the band over the chart makes room for the highest one), upright
+        // or reading upwards.
+        const barTop = CHART_HEIGHT - barHeight(values[i]);
         return texts.turned ? (
           <Group
             key={`text-${i}`}
             transform={[
               { translateX: center },
-              { translateY: -BAR_TEXT_GAP },
+              { translateY: barTop - BAR_TEXT_GAP },
               { rotate: -Math.PI / 2 },
             ]}
           >
@@ -1509,7 +1774,7 @@ function BarsBody({
             key={`text-${i}`}
             paragraph={paragraph}
             x={center - width / 2}
-            y={-BAR_TEXT_GAP - paragraph.getHeight()}
+            y={barTop - BAR_TEXT_GAP - paragraph.getHeight()}
             width={width}
           />
         );

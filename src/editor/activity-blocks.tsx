@@ -75,7 +75,7 @@ import {
  */
 
 type BlockLayer = Extract<Layer, { kind: 'activityBlock' }>;
-type BlockStyle = BlockLayer['style'];
+export type BlockStyle = BlockLayer['style'];
 
 /** What a block needs besides its activity: fonts, how to write data, and translations. */
 export interface BlockContext {
@@ -260,7 +260,7 @@ type AppSymbol =
   | 'check';
 
 /** A measured part of a block, which places its pieces with its top-left corner at (x, y). */
-interface Box {
+export interface Box {
   readonly width: number;
   readonly height: number;
   readonly place: (x: number, y: number) => Piece[];
@@ -273,7 +273,7 @@ const offset = (align: Align, size: number, span: number): number =>
   align === 'start' ? 0 : align === 'end' ? span - size : (span - size) / 2;
 
 /** Boxes one under another, `gap` apart, aligned across. */
-function column(boxes: readonly Box[], gap: number, align: Align): Box {
+export function column(boxes: readonly Box[], gap: number, align: Align): Box {
   const width = Math.max(0, ...boxes.map((box) => box.width));
   const height =
     boxes.reduce((sum, box) => sum + box.height, 0) + gap * Math.max(0, boxes.length - 1);
@@ -310,7 +310,7 @@ function turned(box: Box): Box {
 }
 
 /** Boxes side by side, `gap` apart, aligned up and down. */
-function row(boxes: readonly Box[], gap: number, align: Align): Box {
+export function row(boxes: readonly Box[], gap: number, align: Align): Box {
   const width =
     boxes.reduce((sum, box) => sum + box.width, 0) + gap * Math.max(0, boxes.length - 1);
   const height = Math.max(0, ...boxes.map((box) => box.height));
@@ -382,7 +382,7 @@ function justified(boxes: readonly Box[], width: number, minGap: number): Box {
  * A `width` × `height` box with each of `parts` at its own place in it (top-left corners), for
  * a replica that copies where an app puts each thing.
  */
-function placed(
+export function placed(
   width: number,
   height: number,
   parts: readonly { readonly box: Box; readonly x: number; readonly y: number }[],
@@ -550,7 +550,7 @@ const centeredAt = (box: Box, cx: number, cy: number) => ({
 const GLASS_EDGE = 2;
 
 /** A replica's thin line from (0, 0) to (`dx`, `dy`) of where it is placed. */
-const hairlineBox = (dx: number, dy: number, width: number, color: string): Box => ({
+export const hairlineBox = (dx: number, dy: number, width: number, color: string): Box => ({
   width: dx,
   height: dy,
   place: (x, y) => [{ kind: 'hairline', x1: x, y1: y, x2: x + dx, y2: y + dy, width, color }],
@@ -614,7 +614,7 @@ function barcodeBox(width: number, height: number, seed: number, color: string):
   );
 }
 
-const textBox = (paragraph: SkParagraph): Box => ({
+export const textBox = (paragraph: SkParagraph): Box => ({
   width: Math.ceil(paragraph.getLongestLine()) + 1,
   height: paragraph.getHeight(),
   place: (x, y) => [{ kind: 'text', paragraph, x, y }],
@@ -670,7 +670,7 @@ const markBox = (kind: 'chevron' | 'ticks', size: number, color: string): Box =>
 });
 
 /** One stretch of a text with its own size and weight. */
-interface Run {
+export interface Run {
   readonly text: string;
   readonly size: number;
   readonly bold: boolean;
@@ -683,7 +683,7 @@ interface Run {
 }
 
 /** How opaque faded texts and rules are. */
-const FADED_ALPHA = 0.72;
+export const FADED_ALPHA = 0.72;
 /** A layout width no text reaches: lines only break where the text does. */
 const NO_WRAP_WIDTH = 1_000_000;
 
@@ -694,7 +694,7 @@ interface AppLettering {
 }
 
 /** How a text is laid out besides its runs and style (see `paragraph`). */
-interface TextLook {
+export interface TextLook {
   /** With the drop shadow of its color (a text on a bubble needs none). */
   readonly shadow?: boolean;
   /** Longest a line is: longer ones are cut short with an ellipsis, as apps cut a long title. */
@@ -713,7 +713,7 @@ interface TextLook {
  * Lays out runs in the block's font and color, on one line unless it is to wrap, shrunk to fit
  * them (see `TextLook`).
  */
-function paragraph(
+export function paragraph(
   runs: readonly Run[],
   fonts: SkTypefaceFontProvider,
   style: BlockStyle,
@@ -816,6 +816,67 @@ function paragraph(
   }
   built.layout(Math.ceil(built.getLongestLine()) + 1);
   return built;
+}
+
+/**
+ * `runs` at `size` cut to their letters: from the top of their capitals, or of their small
+ * letters when they have any, to `below` under the baseline (room for a comma's tail, or for
+ * what goes under them), and as far again as their small letters go down (see
+ * `lettersExtent`), so what goes over or under them sits as close as it looks. Over an accented
+ * capital ("MIÉRCOLES"), the line keeps its own room above. Drawn `taller` times taller than
+ * the font (squashed when less than one), in the block's lettering or in another `lettering`,
+ * laid out with `look`. Texts side by side on one baseline are cut as one, all their letters
+ * in `shared`.
+ */
+export function capitalsBox(
+  fonts: SkTypefaceFontProvider,
+  runs: readonly Run[],
+  size: number,
+  below: number,
+  taller: number,
+  lettering: BlockStyle,
+  look: TextLook = {},
+  shared?: string,
+): Box {
+  const stretch = (STRETCHED_FONTS[lettering.font] ?? 1) * taller;
+  // A stretched text's own shadow would stretch with it, down past its room: it casts the
+  // shadow of shapes once stretched instead, as long as it would have one.
+  const shadow =
+    stretch !== 1 &&
+    (look.shadow ?? true) &&
+    (lettering.backdrop ?? 'none') === 'none' &&
+    castsShadow(lettering.color);
+  const laidOut = paragraph(
+    runs,
+    fonts,
+    lettering,
+    stretch === 1 ? look : { ...look, shadow: false },
+  );
+  const baseline = laidOut.getLineMetrics()[0]?.baseline ?? laidOut.getHeight();
+  const written = shared ?? runs.map((run) => run.text).join('');
+  const extent = lettersExtent(
+    lettering.uppercase ? written.toLocaleUpperCase() : written,
+    lettering.font,
+  );
+  const top = extent.top === null ? 0 : baseline - extent.top * size;
+  // What the letters draw under the baseline stretches with them: their descenders, and the
+  // dip of round letters ("C", "O"), which only shows once stretched. The room asked for under
+  // them stays as it is.
+  const under = (extent.descent * stretch + ROUND_DIP * (stretch - 1)) * size;
+  return {
+    width: textBox(laidOut).width,
+    height: (baseline - top) * stretch + under + below,
+    place: (x, y) => [
+      {
+        kind: 'text',
+        paragraph: laidOut,
+        x,
+        y: y - top * stretch,
+        ...(stretch === 1 ? {} : { stretch }),
+        ...(shadow ? { shadow } : {}),
+      },
+    ],
+  };
 }
 
 /**
@@ -1338,16 +1399,7 @@ export function prepareActivityBlock(
         },
       ),
     );
-  /**
-   * `runs` at `size` cut to their letters: from the top of their capitals, or of their small
-   * letters when they have any, to `below` under the baseline (room for a comma's tail, or for
-   * what goes under them), and as far again as their small letters go down (see
-   * `lettersExtent`), so what goes over or under them sits as close as it looks. Over an accented
-   * capital ("MIÉRCOLES"), the line keeps its own room above. Drawn `taller` times taller than
-   * the font (squashed when less than one), in the block's lettering or in another `lettering`,
-   * laid out with `look`. Texts side by side on one baseline are cut as one, all their letters
-   * in `shared`.
-   */
+  /** `runs` cut to their letters (see `capitalsBox`), in the block's lettering by default. */
   const capitals = (
     runs: readonly Run[],
     size: number,
@@ -1356,47 +1408,7 @@ export function prepareActivityBlock(
     lettering: BlockStyle = style,
     look: TextLook = {},
     shared?: string,
-  ): Box => {
-    const stretch = (STRETCHED_FONTS[lettering.font] ?? 1) * taller;
-    // A stretched text's own shadow would stretch with it, down past its room: it casts the
-    // shadow of shapes once stretched instead, as long as it would have one.
-    const shadow =
-      stretch !== 1 &&
-      (look.shadow ?? true) &&
-      (lettering.backdrop ?? 'none') === 'none' &&
-      castsShadow(lettering.color);
-    const laidOut = paragraph(
-      runs,
-      fonts,
-      lettering,
-      stretch === 1 ? look : { ...look, shadow: false },
-    );
-    const baseline = laidOut.getLineMetrics()[0]?.baseline ?? laidOut.getHeight();
-    const written = shared ?? runs.map((run) => run.text).join('');
-    const extent = lettersExtent(
-      lettering.uppercase ? written.toLocaleUpperCase() : written,
-      lettering.font,
-    );
-    const top = extent.top === null ? 0 : baseline - extent.top * size;
-    // What the letters draw under the baseline stretches with them: their descenders, and the
-    // dip of round letters ("C", "O"), which only shows once stretched. The room asked for under
-    // them stays as it is.
-    const under = (extent.descent * stretch + ROUND_DIP * (stretch - 1)) * size;
-    return {
-      width: textBox(laidOut).width,
-      height: (baseline - top) * stretch + under + below,
-      place: (x, y) => [
-        {
-          kind: 'text',
-          paragraph: laidOut,
-          x,
-          y: y - top * stretch,
-          ...(stretch === 1 ? {} : { stretch }),
-          ...(shadow ? { shadow } : {}),
-        },
-      ],
-    };
-  };
+  ): Box => capitalsBox(fonts, runs, size, below, taller, lettering, look, shared);
   /**
    * `text` on one line at `size` in the block's lettering, cut to its letters, or to all of
    * `shared`'s when it sits on one baseline with others (see `capitals`).
@@ -3070,10 +3082,21 @@ export function prepareActivityBlock(
   }
 
   // A replica is the app's own view: no signature under it.
-  const signed =
-    layer.logo && !isAppReplica(block.design)
-      ? column([body, logoBox(LOGO_WIDTH)], LOGO_GAP, 'center')
-      : body;
+  return finishBlock(body, layer, !isAppReplica(block.design), hole);
+}
+
+/**
+ * A block's `body` finished: signed with the AllRun name under it when the layer asks for its
+ * `logo` and the design is `signable` (a replica is the app's own view: no signature), on its
+ * backdrop when it has one, and drawn centered on (0, 0); `hole` is its see-through part.
+ */
+export function finishBlock(
+  body: Box,
+  { logo, style }: { readonly logo: boolean; readonly style: BlockStyle },
+  signable: boolean,
+  hole?: HitHole,
+): PreparedBlock {
+  const signed = logo && signable ? column([body, logoBox(LOGO_WIDTH)], LOGO_GAP, 'center') : body;
   // On a backdrop (only data widgets offer one), as a text widget: a box of the color opposite
   // to its texts', translucent or solid, padded in proportion.
   const backdrop = style.backdrop ?? 'none';

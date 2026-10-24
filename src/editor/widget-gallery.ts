@@ -238,7 +238,7 @@ function measureWidget(
       FILLS_PAGE.has(item.kind) ||
       (item.kind === 'activityBlock' && !isDataWidget(item.block.design))
         ? fill(prepared)
-        : item.kind === 'activityBlock'
+        : item.kind === 'activityBlock' || item.kind === 'summaryBlock'
           ? capped(prepared)
           : shared,
   }));

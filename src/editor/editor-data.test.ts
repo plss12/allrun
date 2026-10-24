@@ -1,4 +1,4 @@
-import { weekRange } from '@/core/dates';
+import { monthRange, weekRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate } from '@/core/default-layout';
 import type { MetricUnit } from '@/core/metrics';
 import { summarize } from '@/core/summary';
@@ -18,9 +18,13 @@ import {
   isTimeLayer,
   layerText,
   periodChartHeader,
+  periodTable,
+  periodTotalsHeader,
   MISSING_VALUE,
   plainMetricParts,
   plainMetricText,
+  plainSummaryText,
+  roundedChartValue,
   speedMeasure,
   splitGapText,
   splitRowTexts,
@@ -239,6 +243,8 @@ describe('layerText for a summary', () => {
     summary: summarize(activities, range),
     activities,
     bucketSize: 'day',
+    families: [],
+    current: false,
   };
   const { layers } = defaultSummaryTemplate(makeSummary());
 
@@ -280,6 +286,8 @@ describe('chartBuckets', () => {
     summary: summarize(activities, range),
     activities,
     bucketSize: 'day',
+    families: [],
+    current: false,
   };
   const found = layer('chart', defaultSummaryTemplate(makeSummary(), 'story').layers);
   if (found.kind !== 'summaryChart') {
@@ -402,6 +410,158 @@ describe('periodChartHeader', () => {
       { label: 'chartHeaders.total', value: '3:00', unit: 'h' },
       { label: 'chartHeaders.averagePer.day', value: '1:30', unit: 'h' },
     ]);
+  });
+});
+
+describe('periodTotalsHeader', () => {
+  /** English labels, looked up by their key. */
+  const translate = (key: string): string => {
+    const text = key
+      .split('.')
+      .reduce<unknown>((node, part) => (node as Record<string, unknown>)[part], en);
+    if (typeof text !== 'string') {
+      throw new Error(`No text for ${key}`);
+    }
+    return text;
+  };
+  const run = makeActivity({
+    localDate: '2026-10-13',
+    distanceMeters: 12_340,
+    movingTimeSeconds: 3_900,
+    elevationGainMeters: 85,
+  });
+  const range = weekRange('2026-10-14');
+  const data: SummaryData = {
+    mode: 'summary',
+    kind: 'week',
+    summary: summarize([run], range),
+    activities: [run],
+    bucketSize: 'day',
+    families: [],
+    current: false,
+  };
+
+  it('names the period over its main totals, as they are written', () => {
+    expect(periodTotalsHeader(data, 'distance', 3, context, translate)).toEqual({
+      title: '12 oct – 18 oct 2026',
+      data: [
+        { label: 'summaryMetrics.totalDistance', value: '12,34', unit: 'km' },
+        { label: 'summaryMetrics.totalMovingTime', value: '1:05', unit: 'h' },
+        { label: 'summaryMetrics.totalElevationGain', value: '85', unit: 'm' },
+      ],
+    });
+    expect(periodTotalsHeader(data, 'distance', 2, context, translate).data).toHaveLength(2);
+  });
+
+  it('writes first the total of what the chart draws', () => {
+    expect(
+      periodTotalsHeader(data, 'movingTime', 2, context, translate).data.map(
+        (datum) => datum.label,
+      ),
+    ).toEqual(['summaryMetrics.totalMovingTime', 'summaryMetrics.totalDistance']);
+  });
+
+  it('calls the period in progress "this week", and names the sport of a filtered one', () => {
+    expect(
+      periodTotalsHeader({ ...data, current: true }, 'distance', 3, context, translate).title,
+    ).toBe('This week');
+    expect(
+      periodTotalsHeader(
+        { ...data, current: true, families: ['run'] },
+        'distance',
+        3,
+        context,
+        translate,
+      ).title,
+    ).toBe('This week · Running');
+    expect(
+      periodTotalsHeader({ ...data, families: ['run'] }, 'distance', 3, context, translate).title,
+    ).toBe('12 oct – 18 oct 2026 · Running');
+    // A month or a year in progress keeps its name: short, and it says which one.
+    const october = monthRange('2026-10-01');
+    const month: SummaryData = {
+      ...data,
+      kind: 'month',
+      summary: summarize([run], october),
+      current: true,
+    };
+    expect(periodTotalsHeader(month, 'distance', 3, context, translate).title).toBe(
+      'Octubre de 2026',
+    );
+    // A summary of several sports names none.
+    expect(
+      periodTotalsHeader({ ...data, families: ['run', 'ride'] }, 'distance', 3, context, translate)
+        .title,
+    ).toBe('12 oct – 18 oct 2026');
+  });
+});
+
+describe('plainSummaryText', () => {
+  it('writes totals with a decimal point, a time in units and a count bare', () => {
+    expect(plainSummaryText('totalDistance', 94_231, context)).toBe('94.23 km');
+    expect(plainSummaryText('totalDistance', 94_231, context, 1)).toBe('94.2 km');
+    expect(plainSummaryText('totalElevationGain', 12_909, context)).toBe('12909 m');
+    expect(plainSummaryText('totalMovingTime', 26_280, context)).toBe(
+      `7${TEST_DURATION_UNITS.hours} 18${TEST_DURATION_UNITS.minutes}`,
+    );
+    expect(plainSummaryText('activityCount', 6, context)).toBe('6');
+  });
+});
+
+describe('periodTable', () => {
+  const translate = (key: string): string =>
+    ({ 'tableMeasures.km': 'Kilómetros', 'tableMeasures.hours': 'Horas', thisWeek: 'Esta semana' })[
+      key
+    ] ?? key;
+  const range = weekRange('2026-10-14');
+  const activities = [
+    makeActivity({ localDate: '2026-10-13', distanceMeters: 10_940, movingTimeSeconds: 3_900 }),
+    makeActivity({ localDate: '2026-10-14', distanceMeters: 6_000, movingTimeSeconds: 1_800 }),
+    makeActivity({ localDate: '2026-10-14', distanceMeters: 5_300, movingTimeSeconds: 1_700 }),
+  ];
+  const data: SummaryData = {
+    mode: 'summary',
+    kind: 'week',
+    summary: summarize(activities, range),
+    activities,
+    bucketSize: 'day',
+    families: [],
+    current: true,
+  };
+
+  it("writes a row per day with some, in one decimal without unit, and the period's total", () => {
+    expect(periodTable(data, 'distance', context, translate)).toEqual({
+      title: 'Esta semana',
+      measure: 'Kilómetros',
+      rows: [
+        { name: 'Martes', value: '10.9' },
+        { name: 'Miércoles', value: '11.3' },
+      ],
+      total: '22.2',
+    });
+  });
+
+  it('writes times in hours and minutes', () => {
+    const table = periodTable(data, 'movingTime', context, translate);
+    expect(table.measure).toBe('Horas');
+    expect(table.rows.map((row) => row.value)).toEqual(['1:05', '0:58']);
+    expect(table.total).toBe('2:03');
+  });
+});
+
+describe('roundedChartValue', () => {
+  it('rounds distances to whole units and writes times in hours and minutes', () => {
+    expect(roundedChartValue('distance', 41_490, context, false)).toBe('41');
+    expect(roundedChartValue('distance', 41_500, context, true)).toBe('42 km');
+    expect(roundedChartValue('distance', 41_500, { ...context, unit: 'mi' }, false)).toBe('26');
+    expect(roundedChartValue('movingTime', 4_680, context, false)).toBe('1:18');
+    expect(roundedChartValue('movingTime', 4_680, context, true)).toBe('1:18 h');
+  });
+
+  it('writes an empty bar as 0, so every bar has its value', () => {
+    expect(roundedChartValue('distance', 0, context, false)).toBe('0');
+    expect(roundedChartValue('movingTime', 0, context, false)).toBe('0');
+    expect(roundedChartValue('movingTime', 0, context, true)).toBe('0 h');
   });
 });
 
