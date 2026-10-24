@@ -457,3 +457,61 @@ describe('TemplateScene bold', () => {
     expect(ink(await draw(styled(true)))).toBe(ink(await draw(styled(false))));
   });
 });
+
+describe('TemplateScene missing glyphs', () => {
+  /** Rows between the first and the last with a pixel more opaque than half. */
+  const inkHeight = (image: SkImage): number => {
+    const info = image.getImageInfo();
+    const pixels = image.readPixels(0, 0, info);
+    if (pixels === null) {
+      throw new Error('Could not read the pixels');
+    }
+    let top = info.height;
+    let bottom = -1;
+    for (let y = 0; y < info.height; y++) {
+      for (let x = 0; x < info.width; x++) {
+        if (pixels[(y * info.width + x) * 4 + 3] > 128) {
+          top = Math.min(top, y);
+          bottom = Math.max(bottom, y);
+        }
+      }
+    }
+    return bottom < top ? 0 : bottom - top + 1;
+  };
+  const drawDot = (font: 'orbitron' | 'inter') => {
+    const text = newLayer({ kind: 'text', content: '·' }, 'text', 'story');
+    if (text.kind !== 'text') {
+      throw new Error('Expected a text');
+    }
+    const layer: Layer = { ...text, style: { ...text.style, font, shadow: false } };
+    return drawOffscreen(
+      makeOffscreenSurface(1080, 1920),
+      <scene.TemplateScene
+        format="story"
+        layers={scene.prepareLayers(
+          { version: 1, id: 'dot', mode: 'activity', format: 'story', layers: [layer] },
+          {
+            data: { mode: 'activity', activity, detail: null, place: null, zones: null },
+            fonts: loadTestFonts(['orbitron', 'inter']),
+            textContext: {
+              unit: 'km',
+              locale: 'en',
+              durationUnits: TEST_DURATION_UNITS,
+              unitLabel: testUnitLabel,
+            },
+            translate: (key) => key,
+          },
+        )}
+        background={{ kind: 'none' }}
+      />,
+    );
+  };
+
+  // Orbitron has no middle dot ("3h 25min · 5:58/km"): it would draw its empty box, as tall as a
+  // capital, instead of borrowing the dot from the app's plain font.
+  it('borrows a character its font lacks from the plain font', async () => {
+    const inter = inkHeight(await drawDot('inter'));
+    expect(inter).toBeGreaterThan(0);
+    expect(inkHeight(await drawDot('orbitron'))).toBeLessThanOrEqual(inter * 2);
+  });
+});

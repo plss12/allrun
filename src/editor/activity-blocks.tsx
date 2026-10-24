@@ -55,7 +55,7 @@ import {
   splitRowTexts,
   type TextContext,
 } from './editor-data';
-import { CAP_HEIGHTS, drawsBold, FONT_FAMILIES, lettersExtent } from './fonts';
+import { CAP_HEIGHTS, drawsBold, fontFamiliesOf, lettersExtent } from './fonts';
 import { SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
 import {
   addLeanRoom,
@@ -754,7 +754,7 @@ export function paragraph(
       builder
         .pushStyle({
           color,
-          fontFamilies: [FONT_FAMILIES[style.font]],
+          fontFamilies: fontFamiliesOf(style.font),
           fontSize: run.size,
           fontStyle: {
             weight:

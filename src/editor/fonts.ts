@@ -205,6 +205,14 @@ export function isCapsOnly(font: FontId): boolean {
   return CAPS_ONLY.has(font);
 }
 
+/**
+ * The families a text in `font` is laid out with: its own, then the app's plain one, which writes
+ * the characters `font` lacks (Orbitron has no middle dot "·") instead of an empty box.
+ */
+export function fontFamiliesOf(font: FontId): string[] {
+  return font === 'inter' ? [FONT_FAMILIES.inter] : [FONT_FAMILIES[font], FONT_FAMILIES.inter];
+}
+
 /** Whether a font ships a bold weight; without one, bold text would look the same. */
 export function hasBold(font: FontId): boolean {
   return FONT_FACES[font].bold !== undefined;

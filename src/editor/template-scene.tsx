@@ -66,7 +66,7 @@ import { prepareActivityBlock } from './activity-blocks';
 import { prepareSummaryBlock } from './summary-blocks';
 import { watermarkLayout } from './brand/watermark-layout';
 import { Watermark } from './brand/brand-art';
-import { CAP_HEIGHTS, drawsBold, FONT_FAMILIES } from './fonts';
+import { CAP_HEIGHTS, drawsBold, fontFamiliesOf } from './fonts';
 import {
   addLeanRoom,
   DropShadow,
@@ -800,7 +800,7 @@ function buildParagraph(
   color[3] *= opacity;
   const textStyle = (fontSize: number, bold: boolean): SkTextStyle => ({
     color,
-    fontFamilies: [FONT_FAMILIES[style.font]],
+    fontFamilies: fontFamiliesOf(style.font),
     fontSize,
     fontStyle: {
       weight: drawsBold(style.font, bold) ? FontWeight.Bold : FontWeight.Normal,
