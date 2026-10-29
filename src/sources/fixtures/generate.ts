@@ -106,7 +106,11 @@ function planFor(weekday: number, random: Random): SessionPlan | null {
             elevationGain: between(random, 300, 900),
           }
         : run('Run', between(random, 14_000, 24_000), between(random, 315, 350), random);
-    default: // Sunday: long ride, hike or rest
+    default: // Sunday: long ride (sometimes on a mountain bike), hike or rest
+      // The same draws as a road ride, so adding mountain bikes changed no other activity.
+      if (roll < 0.2) {
+        return ride('MountainBikeRide', between(random, 25_000, 50_000), random);
+      }
       if (roll < 0.5) {
         return ride('Ride', between(random, 50_000, 100_000), random);
       }
@@ -138,12 +142,14 @@ function run(
 }
 
 function ride(sportType: string, distanceMeters: number, random: Random): SessionPlan {
+  // Off-road a bike goes slower, and climbs more for its distance.
+  const mountain = sportType === 'MountainBikeRide';
   return {
     sportType,
     distanceMeters,
-    speed: between(random, 26, 31) / 3.6,
+    speed: (mountain ? between(random, 15, 20) : between(random, 26, 31)) / 3.6,
     hasRoute: true,
-    elevationGain: between(random, 150, 900),
+    elevationGain: mountain ? between(random, 500, 1300) : between(random, 150, 900),
   };
 }
 
@@ -163,6 +169,7 @@ const HEART_RATE: Readonly<Record<string, readonly [number, number]>> = {
   VirtualRun: [150, 165],
   TrailRun: [140, 155],
   Ride: [130, 145],
+  MountainBikeRide: [140, 155],
   Swim: [130, 145],
   Walk: [95, 110],
   Hike: [110, 125],
@@ -175,6 +182,7 @@ const LABELS: Readonly<Record<string, string>> = {
   VirtualRun: 'Treadmill Run',
   TrailRun: 'Trail Run',
   Ride: 'Ride',
+  MountainBikeRide: 'Mountain Bike Ride',
   Swim: 'Swim',
   Walk: 'Walk',
   Hike: 'Hike',
@@ -201,7 +209,7 @@ function buildActivity(
   );
   const [minHr, maxHr] = HEART_RATE[plan.sportType] ?? [120, 140];
   const averageHeartRate = round(between(random, minHr, maxHr), 1);
-  const isRide = plan.sportType === 'Ride';
+  const isRide = plan.sportType === 'Ride' || plan.sportType === 'MountainBikeRide';
   const hasPower = isRide && random() < 0.6;
   const averageWatts = hasPower ? Math.round(between(random, 170, 230)) : null;
   const elevationGain = round(plan.elevationGain, 1);
@@ -242,6 +250,7 @@ function buildActivity(
 function caloriesPerSecond(sportType: string): number {
   switch (sportType) {
     case 'Ride':
+    case 'MountainBikeRide':
       return 0.17;
     case 'Walk':
     case 'Hike':

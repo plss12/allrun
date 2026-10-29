@@ -48,3 +48,14 @@ export const colors = {
     default: '#ff3b30',
   }),
 };
+
+/**
+ * The labels' colors of iOS's dark mode as plain strings, for what Skia draws on screen (the
+ * sports' icons): Skia can't take the platform's semantic colors, and the app is always dark
+ * (ADR 009). Android's dynamic colors may differ slightly.
+ */
+export const darkLabelInk = {
+  primary: '#FFFFFF',
+  secondary: 'rgba(235, 235, 245, 0.6)',
+  tertiary: 'rgba(235, 235, 245, 0.3)',
+} as const;

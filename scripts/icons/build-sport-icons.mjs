@@ -1,9 +1,9 @@
-// Builds the sport icons: the paths drawn into images (src/editor/icons/sport-icons.generated.ts),
-// and PNGs of them for the screens, which tint them with the system's colors, and for the native
-// menus, which take images only (assets/images/sports, and its menu folder). Also the paths of the
-// few icons the replicas of apps draw besides their own marks (a streak's flame, the weather's
-// location arrow and its moon for a day of rest, the things the equivalences compare with), into
-// images only.
+// Builds the sport icons: the paths Skia draws into images and on screen
+// (src/editor/icons/sport-icons.generated.ts). Trail running and mountain biking have icons of
+// our own: the runner's and the bike's symbols over an uneven ground rising to the right, joined
+// into one path with CanvasKit. Also the paths of the few icons the replicas of apps draw besides
+// their own marks (a streak's flame, the weather's location arrow and its moon for a day of rest,
+// the things the equivalences compare with), into images only.
 //
 // The icons are Material Symbols (Outlined, filled, weight 400) by Google, under the Apache
 // License 2.0 (https://github.com/google/material-design-icons/blob/master/LICENSE). SF Symbols
@@ -16,18 +16,17 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { Resvg } from '@resvg/resvg-js';
+import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit.js';
 import { format, resolveConfig } from 'prettier';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const OUT = join(ROOT, 'src', 'editor', 'icons', 'sport-icons.generated.ts');
-const PNG_OUT = join(ROOT, 'assets', 'images', 'sports');
 
 const SOURCE = 'https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web';
 
 /**
  * Icon of each sport family, plus hiking, which has a symbol of its own, and all sports together
- * (only on screen, in the filter).
+ * (only on screen, in the filter). Trail running and mountain biking are composed (`ON_GROUND`).
  */
 const ICONS = {
   run: 'directions_run',
@@ -38,6 +37,27 @@ const ICONS = {
   training: 'fitness_center',
   other: 'sports',
   all: 'apps',
+};
+
+/**
+ * The ground of the trail and mountain icons, drawn for AllRun: low bumps on the left rising to a
+ * rounded peak on the right, in the symbols' square.
+ */
+const GROUND =
+  'M0 0 L0 -60 C40 -100 90 -100 135 -78 C185 -55 235 -62 285 -98 C335 -134 395 -126 445 -100 C505 -70 565 -88 615 -135 C665 -182 725 -175 775 -205 C825 -235 855 -320 892 -330 C928 -338 948 -290 960 -245 L960 0 Z';
+
+/**
+ * Icons composed over the ground: a symbol scaled and moved onto it (its foot or wheels sunk in
+ * a little, with no air under them), and turned around `pivot` to follow the slope.
+ */
+const ON_GROUND = {
+  trailRun: { symbol: 'directions_run', scale: 0.82, translate: [60, -20] },
+  mountainBike: {
+    symbol: 'directions_bike',
+    scale: 0.8,
+    translate: [40, 24],
+    rotate: { degrees: -10, pivot: [200, -80] },
+  },
 };
 
 /** Icons the replicas of apps draw into images, by their name in `APP_ICON_PATHS`. */
@@ -63,13 +83,6 @@ const APP_ICONS = {
   pizza: 'local_pizza',
 };
 
-/**
- * Side of an icon on screen and in a menu, in points; their PNGs come at 1x, 2x and 3x. On
- * screen they are drawn as big as an activity's card shows them, and smaller from the same file.
- */
-const SCREEN_ICON_POINTS = 96;
-const MENU_ICON_POINTS = 24;
-
 async function fetchPath(symbol) {
   const url = `${SOURCE}/${symbol}/materialsymbolsoutlined/${symbol}_fill1_24px.svg`;
   const response = await fetch(url);
@@ -87,23 +100,39 @@ async function fetchPath(symbol) {
   return paths.join(' ');
 }
 
-/** A PNG of `path`, black on transparent (screens and menus tint it), `side` pixels square. */
-function png(path, side) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="${side}" height="${side}"><path d="${path}" fill="#000000"/></svg>`;
-  return new Resvg(svg, { fitTo: { mode: 'width', value: side } }).render().asPng();
-}
-
-mkdirSync(join(PNG_OUT, 'menu'), { recursive: true });
 const entries = [];
 for (const [id, symbol] of Object.entries(ICONS)) {
-  const path = await fetchPath(symbol);
   // One line per path, as Prettier leaves them: a string longer than the line can't wrap.
-  entries.push(`  // ${symbol}\n  ${id}: '${path}',`);
-  for (const scale of [1, 2, 3]) {
-    const name = scale === 1 ? `${id}.png` : `${id}@${scale}x.png`;
-    writeFileSync(join(PNG_OUT, name), png(path, SCREEN_ICON_POINTS * scale));
-    writeFileSync(join(PNG_OUT, 'menu', name), png(path, MENU_ICON_POINTS * scale));
-  }
+  entries.push(`  // ${symbol}\n  ${id}: '${await fetchPath(symbol)}',`);
+}
+
+const CanvasKit = await CanvasKitInit();
+for (const [id, { symbol, scale, translate, rotate }] of Object.entries(ON_GROUND)) {
+  const symbolPath = CanvasKit.Path.MakeFromSVGString(await fetchPath(symbol));
+  const ground = CanvasKit.Path.MakeFromSVGString(GROUND);
+  const placed = CanvasKit.Matrix.multiply(
+    CanvasKit.Matrix.translated(...translate),
+    CanvasKit.Matrix.scaled(scale, scale),
+  );
+  // Paths are immutable: a builder copies the symbol to move it.
+  const figure = new CanvasKit.PathBuilder(symbolPath)
+    .transform(
+      rotate === undefined
+        ? placed
+        : CanvasKit.Matrix.multiply(
+            CanvasKit.Matrix.rotated((rotate.degrees * Math.PI) / 180, ...rotate.pivot),
+            placed,
+          ),
+    )
+    .detachAndDelete();
+  // One filled shape: the union keeps the wheels' and the figure's holes where the ground isn't.
+  const joined = CanvasKit.Path.MakeFromOp(figure, ground, CanvasKit.PathOp.Union);
+  // Tenths of a unit are far below a pixel at any size the app draws.
+  const path = joined
+    .toSVGString()
+    .replace(/-?\d+\.\d+/g, (number) => String(Math.round(Number(number) * 10) / 10));
+  entries.push(`  // ${symbol} over the ground\n  ${id}: '${path}',`);
+  [symbolPath, figure, ground, joined].forEach((each) => each.delete());
 }
 
 const appEntries = [];
@@ -136,4 +165,4 @@ ${appEntries.join('\n')}
 mkdirSync(dirname(OUT), { recursive: true });
 // Formatted as the rest of the code, so the lint (which runs Prettier) passes.
 writeFileSync(OUT, await format(source, { ...(await resolveConfig(OUT)), filepath: OUT }));
-console.log(`Wrote ${OUT} and the PNGs in ${PNG_OUT}`);
+console.log(`Wrote ${OUT}`);

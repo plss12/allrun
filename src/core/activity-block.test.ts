@@ -433,10 +433,16 @@ describe('framesCanvas', () => {
 });
 
 describe('sportIcon', () => {
-  it("is the family's icon, or the hiker's for a hike", () => {
-    expect(sportIcon(makeActivity({ sportType: 'TrailRun' }))).toBe('run');
+  it("is the family's icon, or the hiker's, the trail's or the mountain bike's", () => {
+    expect(sportIcon(makeActivity({ sportType: 'Run' }))).toBe('run');
+    expect(sportIcon(makeActivity({ sportType: 'VirtualRun' }))).toBe('run');
+    expect(sportIcon(makeActivity({ sportType: 'TrailRun' }))).toBe('trailRun');
     expect(sportIcon(makeActivity({ sportType: 'Hike' }))).toBe('hike');
     expect(sportIcon(makeActivity({ sportType: 'Walk' }))).toBe('walk');
+    expect(sportIcon(makeActivity({ sportType: 'Ride' }))).toBe('ride');
+    expect(sportIcon(makeActivity({ sportType: 'MountainBikeRide' }))).toBe('mountainBike');
+    // An electric mountain bike is an e-bike first: the plain bike.
+    expect(sportIcon(makeActivity({ sportType: 'EMountainBikeRide' }))).toBe('ride');
     expect(sportIcon(makeActivity({ sportType: 'RockClimbing' }))).toBe('other');
   });
 });

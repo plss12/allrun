@@ -13,10 +13,9 @@ import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy
 import { type Box, largestFit, projectRoutes, routeSpan } from '@/core/route-projection';
 import type { DistanceUnit } from '@/core/units';
 import { cardSurface } from '@/theme/card-surface';
-import { colors } from '@/theme/colors';
+import { colors, darkLabelInk } from '@/theme/colors';
 import { formatMetric, formatRelativeDay } from '@/ui/format';
-
-import { SportIcon } from './sport-icons';
+import { SportGlyph } from '@/ui/sport-glyph';
 
 /** Room around the route inside its box, so its line never touches the card's edge. */
 const ROUTE_INSET = 6;
@@ -107,10 +106,10 @@ export function ActivityCard({
             justifyContent: 'center',
           }}
         >
-          <SportIcon
+          <SportGlyph
             icon={sportIcon(activity)}
             size={routeHeight * 0.45}
-            color={colors.tertiaryLabel}
+            color={darkLabelInk.tertiary}
           />
         </View>
       ) : (
@@ -144,7 +143,7 @@ export function ActivityCard({
         >
           {day}
         </Text>
-        <SportIcon icon={sportIcon(activity)} size={20} color={colors.secondaryLabel} />
+        <SportGlyph icon={sportIcon(activity)} size={20} color={darkLabelInk.secondary} />
       </View>
       <View style={{ position: 'absolute', left: PADDING, bottom: PADDING }}>
         {data.map((text, i) => (

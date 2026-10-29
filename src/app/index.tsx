@@ -6,12 +6,11 @@ import { FlatList, ScrollView, Text, useWindowDimensions } from 'react-native';
 
 import type { Activity } from '@/core/activity';
 import type { PeriodKind } from '@/core/periods';
-import type { SportFamily } from '@/core/sports';
 import { familiesOf } from '@/core/summary';
 import { useActivitySource } from '@/data/activity-source';
 import { ActivityCard } from '@/home/activity-card';
 import { PeriodCard } from '@/home/period-card';
-import { SPORT_MENU_ICONS } from '@/home/sport-icons';
+import { type SportFilter, SportFilterMenu } from '@/home/sport-filter-menu';
 import { colors } from '@/theme/colors';
 import { useDisplaySettings } from '@/ui/settings';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
@@ -53,7 +52,8 @@ function Activities() {
   const { t } = useTranslation();
   const source = useActivitySource();
   const recent = useAsync(() => source.listRecent(RECENT_LIMIT), 'recent');
-  const [sport, setSport] = useState<SportFamily | 'all'>('all');
+  const [sport, setSport] = useState<SportFilter>('all');
+  const [filterOpen, setFilterOpen] = useState(false);
 
   if (recent.status === 'loading') {
     return <LoadingView />;
@@ -67,36 +67,25 @@ function Activities() {
   return (
     <>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu
+        <Stack.Toolbar.Button
           icon={
             shown === 'all'
               ? 'line.3.horizontal.decrease.circle'
               : 'line.3.horizontal.decrease.circle.fill'
           }
           accessibilityLabel={t('home.filter')}
-          title={t('home.filter')}
+          onPress={() => setFilterOpen(true)}
         >
-          <Stack.Toolbar.MenuAction
-            icon={SPORT_MENU_ICONS.all}
-            iconRenderingMode="template"
-            isOn={shown === 'all'}
-            onPress={() => setSport('all')}
-          >
-            {t('summary.allSports')}
-          </Stack.Toolbar.MenuAction>
-          {families.map((family) => (
-            <Stack.Toolbar.MenuAction
-              key={family}
-              icon={SPORT_MENU_ICONS[family]}
-              iconRenderingMode="template"
-              isOn={shown === family}
-              onPress={() => setSport(family)}
-            >
-              {t(`families.${family}`)}
-            </Stack.Toolbar.MenuAction>
-          ))}
-        </Stack.Toolbar.Menu>
+          {t('home.filter')}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
+      <SportFilterMenu
+        visible={filterOpen}
+        families={families}
+        chosen={shown}
+        onChoose={setSport}
+        onClose={() => setFilterOpen(false)}
+      />
       <Gallery
         activities={
           shown === 'all'

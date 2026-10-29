@@ -431,12 +431,28 @@ export function fastestIndex(speeds: readonly number[]): number {
   return speeds.reduce((best, speed, i) => (best === -1 || speed > speeds[best] ? i : best), -1);
 }
 
-/** The icons a mixed widget can draw: one per sport family, and hiking's own. */
-export type SportIconId = SportFamily | 'hike';
+/**
+ * The icons of the sports: one per sport family, and the modalities that look apart from the rest
+ * of theirs: hiking (the hiker), trail running and mountain biking (the runner and the bike over
+ * uneven ground).
+ */
+export type SportIconId = SportFamily | 'hike' | 'trailRun' | 'mountainBike';
 
-/** The icon of an activity's sport: its family's, or the hiker for a hike. */
+/**
+ * The icon of an activity's sport: its family's, or its modality's own. An electric mountain bike
+ * is an e-bike first, with the plain bike.
+ */
 export function sportIcon(activity: Activity): SportIconId {
-  return activity.sportModality === 'hike' ? 'hike' : activity.sportFamily;
+  switch (activity.sportModality) {
+    case 'hike':
+      return 'hike';
+    case 'trailRun':
+      return 'trailRun';
+    case 'mountainBikeRide':
+      return 'mountainBike';
+    default:
+      return activity.sportFamily;
+  }
 }
 
 /**
