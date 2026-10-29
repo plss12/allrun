@@ -3,6 +3,8 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { defaultActivityTemplate } from './default-layout';
 import {
   applyDesign,
+  setLanguage,
+  setUnits,
   canStartOver,
   type DefaultTemplate,
   editLayers,
@@ -18,6 +20,7 @@ import {
 } from './editor-document';
 import { commit, createHistory, undo } from './history';
 import { COVER_PLACEMENT } from './photo-placement';
+import { parseTemplate } from './template';
 import { removeLayer } from './template-edit';
 
 const activity = makeActivity();
@@ -107,7 +110,50 @@ describe('applyDesign', () => {
       photo: framed,
       background: night,
       layers,
+      units: null,
+      language: null,
     });
+  });
+
+  it("takes its unit and language too, and the device's and app's when it has none", () => {
+    const layers = defaultTemplate('story').layers;
+    const own = applyDesign(INITIAL_DESIGN, {
+      layers,
+      photo: framed,
+      background: night,
+      units: 'mi',
+      language: 'en',
+    });
+    expect([own.units, own.language]).toEqual(['mi', 'en']);
+    const plain = applyDesign(own, { layers, photo: framed, background: night });
+    expect([plain.units, plain.language]).toEqual([null, null]);
+  });
+});
+
+describe('setUnits and setLanguage', () => {
+  it('set them for the whole design, and record no step when they are the same', () => {
+    const miles = setUnits(INITIAL_DESIGN, 'mi');
+    expect(miles).toEqual({ ...INITIAL_DESIGN, units: 'mi' });
+    expect(setUnits(miles, 'mi')).toBe(miles);
+    expect(setUnits(INITIAL_DESIGN, null)).toBe(INITIAL_DESIGN);
+    const english = setLanguage(INITIAL_DESIGN, 'en');
+    expect(english).toEqual({ ...INITIAL_DESIGN, language: 'en' });
+    expect(setLanguage(english, 'en')).toBe(english);
+  });
+
+  it('go into the template only when the design has its own', () => {
+    expect(layoutTemplate(defaultTemplate, INITIAL_DESIGN)).not.toHaveProperty('units');
+    expect(layoutTemplate(defaultTemplate, INITIAL_DESIGN)).not.toHaveProperty('language');
+    const own = setLanguage(setUnits(INITIAL_DESIGN, 'mi'), 'es');
+    const template = layoutTemplate(defaultTemplate, own);
+    expect([template.units, template.language]).toEqual(['mi', 'es']);
+    expect(parseTemplate(template)).toEqual(template);
+  });
+
+  it('are undone by starting over', () => {
+    const own = setLanguage(setUnits(INITIAL_DESIGN, 'mi'), 'en');
+    expect(canStartOver(own)).toBe(true);
+    expect(startOver(own)).toEqual(INITIAL_DESIGN);
   });
 });
 

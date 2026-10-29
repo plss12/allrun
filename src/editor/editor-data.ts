@@ -49,7 +49,9 @@ import type {
   Quote,
   SummaryMetricId,
   Verse,
+  FontId,
 } from '@/core/template';
+import { writesInCapitals } from '@/core/template';
 import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
 import {
   formatActivityDate,
@@ -493,10 +495,10 @@ const UNIT_SCALE = 0.45;
  * them, so the widget reads as one block. Time and space O(length of the text).
  */
 export function textRuns(
-  style: { readonly bold: boolean; readonly uppercase: boolean },
+  style: { readonly bold: boolean; readonly uppercase: boolean; readonly font?: FontId },
   content: ParagraphContent,
 ): TextRun[] {
-  const caseOf = (text: string) => (style.uppercase ? text.toLocaleUpperCase() : text);
+  const caseOf = (text: string) => (writesInCapitals(style) ? text.toLocaleUpperCase() : text);
   const run = (text: string, fontSize: number): TextRun => ({
     text: caseOf(text),
     fontSize,

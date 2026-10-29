@@ -10,7 +10,13 @@ import {
   View,
 } from 'react-native';
 
-import { CHAT_PHRASES, MAX_CHAT_LENGTH, QUOTES, VERSES } from '@/core/template';
+import {
+  CHAT_PHRASES,
+  type DesignLanguage,
+  MAX_CHAT_LENGTH,
+  QUOTES,
+  VERSES,
+} from '@/core/template';
 import type { ChosenWords } from '@/core/template-edit';
 import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
@@ -49,19 +55,23 @@ function entryKey(words: ChosenWords): string | null {
  * The verses, quotes or phrases to choose from, each on a card: a verse's or a quote's words in
  * quotation marks, and where they come from or who said them under them; a phrase as it is, after
  * a field to write one's own. The list is the one of `words`, and a chat's phrase keeps its look.
- * A tap chooses one. When the widget is already on the canvas (`marked`), its words are marked,
+ * They read in the design's language. A tap chooses one. When the widget is already on the canvas (`marked`), its words are marked,
  * and shown, and its own phrase is in the field.
  */
 export function ChoiceList({
   words,
+  language,
   marked = false,
   onChoose,
 }: {
   readonly words: ChosenWords;
+  /** The design's language, the widget's words are in: the list shows them as they will be. */
+  readonly language: DesignLanguage;
   readonly marked?: boolean;
   readonly onChoose: (words: ChosenWords) => void;
 }) {
-  const { t } = useTranslation();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(language);
   const entries = ((): ChoiceEntry[] => {
     switch (words.design) {
       case 'verse':
@@ -208,10 +218,12 @@ function OwnPhrase({
  */
 export function ChoiceSheet({
   words,
+  language,
   onChoose,
   onClose,
 }: {
   readonly words: ChosenWords | null;
+  readonly language: DesignLanguage;
   readonly onChoose: (words: ChosenWords) => void;
   readonly onClose: () => void;
 }) {
@@ -238,7 +250,13 @@ export function ChoiceSheet({
           onClose={onClose}
         >
           {/* Keyed by the widget's words, so each opening scrolls to its own. */}
-          <ChoiceList key={JSON.stringify(shown)} words={shown} marked onChoose={onChoose} />
+          <ChoiceList
+            key={JSON.stringify(shown)}
+            words={shown}
+            language={language}
+            marked
+            onChoose={onChoose}
+          />
         </SheetFrame>
       )}
     </Modal>

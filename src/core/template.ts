@@ -56,6 +56,34 @@ export const FONT_IDS = [
 export type FontId = (typeof FONT_IDS)[number];
 
 /**
+ * Fonts without lowercase letters of their own: Bangers writes its capitals for them, and Bowlby
+ * One SC, Graduate and Permanent Marker smaller capitals (small caps), which only shrank a word
+ * when its capitals were turned off. Checked by drawing every font's "Run RUN run".
+ */
+const CAPS_ONLY_FONTS: ReadonlySet<FontId> = new Set([
+  'bangers',
+  'bowlbyOneSC',
+  'graduate',
+  'permanentMarker',
+]);
+
+/** Whether a font only has capital letters, so it always writes in capitals. */
+export function isCapsOnly(font: FontId): boolean {
+  return CAPS_ONLY_FONTS.has(font);
+}
+
+/**
+ * Whether a text is written in capitals: when it asks for them, or always in a font that only has
+ * capitals (see `isCapsOnly`), whatever it asks. Time and space O(1).
+ */
+export function writesInCapitals(style: {
+  readonly font?: FontId;
+  readonly uppercase: boolean;
+}): boolean {
+  return style.uppercase || (style.font !== undefined && isCapsOnly(style.font));
+}
+
+/**
  * Fonts the app no longer bundles (too close to another one, or unfit for sport images), and the
  * closest one left, which designs saved with them read with.
  */
@@ -914,6 +942,13 @@ function migrateTemplate(json: unknown): unknown {
   return { ...json, version: 2, photo: COVER_PLACEMENT, background: AUTO_BACKGROUND };
 }
 
+/**
+ * The languages a design's widgets can be written in, whatever the app's: their names, dates,
+ * numbers, sports, replicas, verses, quotes and phrases (ADR 009). The free text stays as typed.
+ */
+export const DESIGN_LANGUAGES = ['en', 'es'] as const;
+export type DesignLanguage = (typeof DESIGN_LANGUAGES)[number];
+
 const templateObjectSchema = z
   .object({
     /** Bumped on breaking changes, with a migration for stored templates (`migrateTemplate`). */
@@ -926,8 +961,10 @@ const templateObjectSchema = z
     layers: z.preprocess(withoutRetiredBlocks, z.array(layerSchema).max(MAX_LAYERS)),
     photo: photoPlacementSchema,
     background: backgroundSchema,
-    /** The design's own distance unit; absent, the device's (settings come in R3c). */
+    /** The design's own distance unit; absent, the device's. */
     units: z.enum(['km', 'mi']).optional(),
+    /** The language of the design's widgets (see `DESIGN_LANGUAGES`); absent, the app's. */
+    language: z.enum(DESIGN_LANGUAGES).optional(),
   })
   .superRefine((template, context) => {
     const seen = new Set<string>();

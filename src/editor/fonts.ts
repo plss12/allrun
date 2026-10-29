@@ -252,17 +252,6 @@ export function useEditorFonts(): SkTypefaceFontProvider | null {
 }
 
 /**
- * Fonts whose lowercase letters are just uppercase ones (same height and width), so uppercase
- * changes nothing. Checked against the font files' glyph metrics.
- */
-const CAPS_ONLY: ReadonlySet<FontId> = new Set(['bangers']);
-
-/** Whether a font only has capital letters, so the uppercase option would do nothing. */
-export function isCapsOnly(font: FontId): boolean {
-  return CAPS_ONLY.has(font);
-}
-
-/**
  * The families a text in `font` is laid out with: its own, then the app's plain one, which writes
  * the characters `font` lacks (Orbitron has no middle dot "·") instead of an empty box.
  */
@@ -273,6 +262,27 @@ export function fontFamiliesOf(font: FontId): string[] {
 /** Whether a font ships a bold weight; without one, bold text would look the same. */
 export function hasBold(font: FontId): boolean {
   return FONT_FACES[font].bold !== undefined;
+}
+
+/**
+ * Fonts without a bold face that are heavy already: their only weight reads as bold (Bangers,
+ * Permanent Marker, Anton, Bowlby One SC, Rubik Glitch). Graduate and Sacramento, the other two
+ * without one, are of a regular or thin stroke. Checked by drawing them.
+ */
+const HEAVY_ONLY: ReadonlySet<FontId> = new Set([
+  'bangers',
+  'permanentMarker',
+  'anton',
+  'bowlbyOneSC',
+  'rubikGlitch',
+]);
+
+/**
+ * Whether a font's text reads as bold, as its bold option shows it: as asked in a font with a
+ * bold face; always in a heavy one without (see `HEAVY_ONLY`), never in a light one without.
+ */
+export function looksBold(font: FontId, bold: boolean): boolean {
+  return hasBold(font) ? bold : HEAVY_ONLY.has(font);
 }
 
 /**

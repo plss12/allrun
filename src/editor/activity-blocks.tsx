@@ -48,6 +48,7 @@ import type {
   Layer,
   NUTRITION_LABELS,
 } from '@/core/template';
+import { writesInCapitals } from '@/core/template';
 import { durationParts } from '@/core/units';
 import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 
@@ -941,7 +942,7 @@ export function paragraph(
           shadows,
         })
         .addText(
-          (style.uppercase ? run.text.toLocaleUpperCase() : run.text).replace(
+          (writesInCapitals(style) ? run.text.toLocaleUpperCase() : run.text).replace(
             / /gu,
             wordPerLine ? '\n' : ' ',
           ),
@@ -1029,7 +1030,7 @@ export function capitalsBox(
   const baseline = laidOut.getLineMetrics()[0]?.baseline ?? laidOut.getHeight();
   const written = shared ?? runs.map((run) => run.text).join('');
   const extent = lettersExtent(
-    lettering.uppercase ? written.toLocaleUpperCase() : written,
+    writesInCapitals(lettering) ? written.toLocaleUpperCase() : written,
     lettering.font,
   );
   const top = extent.top === null ? 0 : baseline - extent.top * size;
@@ -1097,12 +1098,20 @@ const SIZES = {
   dataStack: { value: 110, footer: 0.3 },
   /**
    * A tower's lines: their size, how many times taller than the font they are drawn, the room
-   * under each (a share of their capitals' height) and how narrow its sport's word may be squeezed
-   * to be no wider than the lines over it. The data on their side: the room between them and
-   * beside the word (shares of their capitals' height), and the biggest they get (a share of the
-   * lines' size).
+   * under each (a share of their capitals' height), how much wider than the lines over it its
+   * sport's word may be (`spread`) and how narrow it may be squeezed to stay within that. The data
+   * on their side: the room between them and beside the word (shares of their capitals' height),
+   * and the biggest they get (a share of the lines' size).
    */
-  tower: { value: 150, stretch: 1.9, gap: 0.15, squeeze: 0.6, sideGap: 0.5, sideMax: 0.3 },
+  tower: {
+    value: 150,
+    stretch: 1.9,
+    gap: 0.15,
+    spread: 1.45,
+    squeeze: 0.6,
+    sideGap: 0.5,
+    sideMax: 0.3,
+  },
   /**
    * The data in a line, and the room between them, a share of their size; named, the names'
    * size and the room under them, and the room between data, shares of the data's size too.
@@ -2996,12 +3005,14 @@ export function prepareActivityBlock(
         const over = [amount, ...(unit === null ? [] : [textContext.unitLabel(unit)])].map((text) =>
           big(text, sizes.value, letters * sizes.gap),
         );
-        // A long word is squeezed, up to a point, to the width of the lines over it: written
-        // smaller and drawn taller, its capitals as tall as theirs.
+        // A staircase, to sit in a corner: the sport's word is the widest step, as wide as it is
+        // written ("RUN" wider than "KM"). Only a long one ("CARRERA") is squeezed, up to a point,
+        // to `spread` times the lines over it: written smaller and drawn taller, its capitals as
+        // tall as theirs.
         const word = translate(`widgets.tower.sports.${activity.sportModality}`);
         const natural = big(word, sizes.value, 0).width;
         const widest = Math.max(...over.map((box) => box.width));
-        const squeeze = Math.min(1, Math.max(sizes.squeeze, widest / natural));
+        const squeeze = Math.min(1, Math.max(sizes.squeeze, (widest * sizes.spread) / natural));
         const sport = big(word, sizes.value * squeeze, 0);
         if (block.layout === 'plain') {
           return column([...over, sport], 0, 'start');

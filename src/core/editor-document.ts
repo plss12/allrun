@@ -4,8 +4,10 @@ import {
   AUTO_BACKGROUND,
   type CanvasFormat,
   type DesignBackground,
+  type DesignLanguage,
   type Template,
 } from './template';
+import type { DistanceUnit } from './units';
 
 /**
  * The widgets of a design. `null` while they are the default layout, which each format lays out
@@ -26,6 +28,10 @@ export interface EditorDesign {
   /** What shows where the photo leaves the canvas empty. */
   readonly background: DesignBackground;
   readonly layers: EditorLayers;
+  /** The distance unit of every widget; `null`, the device's. */
+  readonly units: DistanceUnit | null;
+  /** The language of every widget; `null`, the app's. */
+  readonly language: DesignLanguage | null;
 }
 
 /** Default layout of the current activity or summary for a format. */
@@ -36,18 +42,20 @@ export const INITIAL_FORMAT: CanvasFormat = 'story';
 
 /**
  * How the editor opens: the story format, the photo covering the canvas over its dominant color,
- * and the default widgets.
+ * and the default widgets, in the device's unit and the app's language.
  */
 export const INITIAL_DESIGN: EditorDesign = {
   format: INITIAL_FORMAT,
   photo: COVER_PLACEMENT,
   background: AUTO_BACKGROUND,
   layers: null,
+  units: null,
+  language: null,
 };
 
 /**
  * The design on the canvas: the default layout of its format, or the user's layers in it, with
- * its photo's placement and its background.
+ * its photo's placement, its background, and its unit and language when it has its own.
  */
 export function layoutTemplate(defaultTemplate: DefaultTemplate, design: EditorDesign): Template {
   const template = defaultTemplate(design.format);
@@ -56,6 +64,8 @@ export function layoutTemplate(defaultTemplate: DefaultTemplate, design: EditorD
     layers: design.layers ?? template.layers,
     photo: design.photo,
     background: design.background,
+    ...(design.units === null ? {} : { units: design.units }),
+    ...(design.language === null ? {} : { language: design.language }),
   };
 }
 
@@ -80,14 +90,38 @@ export function setLayers(design: EditorDesign, layers: EditorLayers): EditorDes
 }
 
 /**
- * Applies a saved design: its widgets, where its photo goes and its background (the format is the
- * same: the designs offered are the format's).
+ * Applies a saved design: its widgets, where its photo goes, its background, and its unit and
+ * language (the device's and the app's when it has none; the format is the same: the designs
+ * offered are the format's).
  */
 export function applyDesign(
   design: EditorDesign,
-  saved: Pick<Template, 'layers' | 'photo' | 'background'>,
+  saved: Pick<Template, 'layers' | 'photo' | 'background' | 'units' | 'language'>,
 ): EditorDesign {
-  return { ...design, layers: saved.layers, photo: saved.photo, background: saved.background };
+  return {
+    ...design,
+    layers: saved.layers,
+    photo: saved.photo,
+    background: saved.background,
+    units: saved.units ?? null,
+    language: saved.language ?? null,
+  };
+}
+
+/**
+ * Another distance unit for every widget (`null`: the device's). Returns `design` itself when it
+ * is the same.
+ */
+export function setUnits(design: EditorDesign, units: DistanceUnit | null): EditorDesign {
+  return units === design.units ? design : { ...design, units };
+}
+
+/**
+ * Another language for every widget (`null`: the app's). Returns `design` itself when it is the
+ * same.
+ */
+export function setLanguage(design: EditorDesign, language: DesignLanguage | null): EditorDesign {
+  return language === design.language ? design : { ...design, language };
 }
 
 /**
@@ -137,10 +171,15 @@ export function startOver(design: EditorDesign): EditorDesign {
   return canStartOver(design) ? { ...INITIAL_DESIGN, format: design.format } : design;
 }
 
-/** Whether starting over would change anything: the widgets, the photo or the background. */
+/**
+ * Whether starting over would change anything: the widgets, the photo, the background, the unit
+ * or the language.
+ */
 export function canStartOver(design: EditorDesign): boolean {
   return (
     design.layers !== null ||
+    design.units !== null ||
+    design.language !== null ||
     !samePlacement(design.photo, INITIAL_DESIGN.photo) ||
     !sameBackground(design.background, INITIAL_DESIGN.background)
   );

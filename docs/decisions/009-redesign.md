@@ -206,6 +206,11 @@ comes later.
   from the canvas, opacity and favorite colors, all in one place.
 - **KM or MI for the whole design**, whatever the device or account says. A unit per widget stays
   out: one image mixing units would be odd.
+- **The widgets' language for the whole design** (Spanish or English), whatever the app's: some
+  read better in English ("Run" rather than "Carrera"). It changes all the widgets write (names,
+  sports, dates, numbers, replicas, verses, quotes and phrases), not the free text or the place's
+  name; one per widget stays out, for the same reason as the unit. Both sit in the side menu next
+  to Ratio, switched with a tap, and are saved with the user's designs.
 - **An image as a sticker:** another photo as a layer to move, scale and turn. Removing its
   background comes in milestone 5, with the same segmentation module as the depth effect.
 

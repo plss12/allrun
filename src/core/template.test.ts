@@ -1,5 +1,13 @@
 import { COVER_PLACEMENT } from './photo-placement';
-import { isLayerAllowed, type Layer, newTemplate, parseTemplate, type Template } from './template';
+import {
+  isCapsOnly,
+  isLayerAllowed,
+  type Layer,
+  newTemplate,
+  parseTemplate,
+  type Template,
+  writesInCapitals,
+} from './template';
 
 const center = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
 const textStyle = {
@@ -372,5 +380,17 @@ describe('isLayerAllowed', () => {
     expect(isLayerAllowed('activity', info('periodName'))).toBe(false);
     expect(isLayerAllowed('summary', info('periodName'))).toBe(true);
     expect(isLayerAllowed('summary', info('activityName'))).toBe(false);
+  });
+});
+
+describe('writesInCapitals', () => {
+  it('follows the uppercase option, but always writes capitals in a font with capitals only', () => {
+    expect(writesInCapitals({ font: 'inter', uppercase: false })).toBe(false);
+    expect(writesInCapitals({ font: 'inter', uppercase: true })).toBe(true);
+    for (const font of ['bangers', 'bowlbyOneSC', 'graduate', 'permanentMarker'] as const) {
+      expect(isCapsOnly(font)).toBe(true);
+      expect(writesInCapitals({ font, uppercase: false })).toBe(true);
+    }
+    expect(writesInCapitals({ uppercase: false })).toBe(false);
   });
 });

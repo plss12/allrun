@@ -1,4 +1,6 @@
-import { CAP_HEIGHTS, lettersExtent } from './fonts';
+import { FONT_IDS } from '@/core/template';
+
+import { CAP_HEIGHTS, hasBold, lettersExtent, looksBold } from './fonts';
 
 // Only the measures are tested: the font loading hooks need the native modules.
 jest.mock('@shopify/react-native-skia', () => ({ useFonts: jest.fn() }));
@@ -25,5 +27,42 @@ describe('lettersExtent', () => {
     expect(lettersExtent('150 ppm', 'inter').descent).toBeGreaterThan(0);
     expect(lettersExtent('150 PPM', 'inter').descent).toBe(0);
     expect(lettersExtent('150 ppm', 'bowlbyOneSC').descent).toBe(0);
+  });
+});
+
+describe('looksBold', () => {
+  it('follows the option in fonts with a bold face', () => {
+    expect(looksBold('inter', true)).toBe(true);
+    expect(looksBold('inter', false)).toBe(false);
+  });
+
+  it('is always on in heavy fonts without one, and off in light ones, whatever was asked', () => {
+    for (const font of [
+      'bangers',
+      'permanentMarker',
+      'anton',
+      'bowlbyOneSC',
+      'rubikGlitch',
+    ] as const) {
+      expect([font, looksBold(font, false)]).toEqual([font, true]);
+    }
+    for (const font of ['graduate', 'sacramento'] as const) {
+      expect([font, looksBold(font, true)]).toEqual([font, false]);
+    }
+  });
+
+  it('knows every font without a bold face as heavy or light', () => {
+    const without = FONT_IDS.filter((font) => !hasBold(font));
+    expect(new Set(without)).toEqual(
+      new Set([
+        'bangers',
+        'permanentMarker',
+        'anton',
+        'bowlbyOneSC',
+        'rubikGlitch',
+        'graduate',
+        'sacramento',
+      ]),
+    );
   });
 });

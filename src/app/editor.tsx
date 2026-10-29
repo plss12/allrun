@@ -39,8 +39,10 @@ import {
   setBackground,
   setFormat,
   setLayers,
+  setLanguage,
   setLayerTransform,
   setPhotoPlacement,
+  setUnits,
   startOver,
 } from '@/core/editor-document';
 import { canRedo, canUndo, commit, createHistory, redo, undo } from '@/core/history';
@@ -63,6 +65,7 @@ import {
   type CanvasFormat,
   CANVAS_FORMATS,
   type DesignBackground,
+  type DesignLanguage,
   type Layer,
   type Template,
 } from '@/core/template';
@@ -259,10 +262,10 @@ function EditorWorkspace({
   readonly data: EditorData;
   readonly fonts: NonNullable<ReturnType<typeof useEditorFonts>>;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const notice = useNotice();
-  const { unit, locale } = useDisplaySettings();
+  const { unit: deviceUnit, locale: appLocale } = useDisplaySettings();
   /**
    * Where the activity was done, for its place widget: named in the background, without asking
    * for anything; on Android, where naming it needs the location permission, it is asked for only
@@ -292,6 +295,12 @@ function EditorWorkspace({
    */
   const [history, setHistory] = useState(() => createHistory<EditorDesign>(INITIAL_DESIGN));
   const design = history.present;
+  /** The widgets' unit and language: the design's own, or the device's and the app's. */
+  const unit = design.units ?? deviceUnit;
+  const language: DesignLanguage = design.language ?? (appLocale === 'es' ? 'es' : 'en');
+  const locale = design.language ?? appLocale;
+  /** The widgets' texts, in the design's language. */
+  const widgetT = design.language === null ? t : i18n.getFixedT(design.language);
   const template = layoutTemplate(defaultTemplate, design);
   /** Applies a change of the design as one undo step (none when it changes nothing). */
   const change = (next: (current: EditorDesign) => EditorDesign) =>
@@ -356,13 +365,13 @@ function EditorWorkspace({
       unit,
       locale,
       durationUnits: {
-        hours: t('durationUnits.hours'),
-        minutes: t('durationUnits.minutes'),
-        seconds: t('durationUnits.seconds'),
+        hours: widgetT('durationUnits.hours'),
+        minutes: widgetT('durationUnits.minutes'),
+        seconds: widgetT('durationUnits.seconds'),
       },
-      unitLabel: (metricUnit) => t(`metricUnits.${metricUnit}`),
+      unitLabel: (metricUnit) => widgetT(`metricUnits.${metricUnit}`),
     },
-    translate: (key, values) => t(key, values),
+    translate: (key, values) => widgetT(key, values),
   };
   // While typing, the text leaves the canvas for the typing overlay, which shows it as typed.
   const shownTemplate =
@@ -794,6 +803,7 @@ function EditorWorkspace({
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
       <ChoiceSheet
         words={choosingWords}
+        language={language}
         onChoose={(words) => {
           if (choosingId !== null) {
             edit((current) => setChosenWords(current, choosingId, words));
@@ -823,6 +833,7 @@ function EditorWorkspace({
               }
             : layerContext
         }
+        language={language}
         onAdd={addNewLayer}
         onAddText={addText}
         onClose={() => setSheetOpen(false)}
@@ -966,6 +977,12 @@ function EditorWorkspace({
           }}
           onActivity={comingSoon}
           sport={data.mode === 'activity' ? sportIcon(data.activity) : null}
+          units={unit}
+          onToggleUnits={() => change((current) => setUnits(current, unit === 'km' ? 'mi' : 'km'))}
+          language={language}
+          onToggleLanguage={() =>
+            change((current) => setLanguage(current, language === 'es' ? 'en' : 'es'))
+          }
         />
       </KeptMounted>
       {controlsShown && !exporting && selected !== null ? (

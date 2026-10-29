@@ -21,6 +21,7 @@ import {
 import {
   BACKDROPS,
   FONT_IDS,
+  isCapsOnly,
   type FontId,
   LETTER_SPACINGS,
   type Layer,
@@ -34,7 +35,7 @@ import { ColorMenu, OpacityBar } from './color-menu';
 import { hasUnit } from './editor-data';
 import { keepingArea } from './font-change';
 import type { LayerContext } from './template-scene';
-import { hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts } from './fonts';
+import { hasBold, looksBold, PREVIEW_FAMILIES, usePreviewFonts } from './fonts';
 
 /** A style edit of the template, applied by the editor as one undo step. */
 export type StyleChange = (template: Template) => Template;
@@ -254,7 +255,8 @@ function FormatRow({
       <IconToggle
         icon={{ ios: 'bold', android: 'format_bold' }}
         label={t('style.bold')}
-        selected={bold}
+        // A font without a bold face shows what it draws, and keeps it: heavy ones on, light off.
+        selected={looksBold(font, bold)}
         disabled={!hasBold(font)}
         onPress={() => onPatch({ bold: !bold })}
       />
@@ -269,7 +271,8 @@ function FormatRow({
         <IconToggle
           icon={{ ios: 'textformat', android: 'match_case' }}
           label={t('style.uppercase')}
-          selected={uppercase}
+          // A font with capitals only always writes in them: the option shows on, and stays.
+          selected={uppercase || isCapsOnly(font)}
           disabled={isCapsOnly(font)}
           onPress={() => onPatch({ uppercase: !uppercase })}
         />

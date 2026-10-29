@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import type { CanvasFormat } from '@/core/template';
+import type { CanvasFormat, DesignLanguage } from '@/core/template';
+import type { DistanceUnit } from '@/core/units';
 import { SportGlyph, type SportIconName } from '@/ui/sport-glyph';
 
 import { TOP_BAR_GAP } from './editor-top-bar';
@@ -27,12 +28,25 @@ interface EditorSideMenuProps {
   readonly onActivity: () => void;
   /** The Activity button's icon: the activity's sport, or `null` for a period's calendar. */
   readonly sport: SportIconName | null;
+  /** The design's distance unit, and switching it (km and mi) for every widget. */
+  readonly units: DistanceUnit;
+  readonly onToggleUnits: () => void;
+  /** The language of the design's widgets, and switching it (es and en). */
+  readonly language: DesignLanguage;
+  readonly onToggleLanguage: () => void;
 }
+
+/** Each language by its own name, as anyone looking for theirs reads it. */
+const LANGUAGE_NAMES: Readonly<Record<DesignLanguage, string>> = {
+  en: 'English',
+  es: 'Español',
+};
 
 /**
  * The top right corner of the editor (ADR 009): adding an image, the depth effect and a chevron in
  * a row, and under them the design's menus in a column, Collages, Designs, Ratio (the format, as
- * "9:16") and Activity, which the chevron unfolds (it starts folded, leaving the photo clear).
+ * "9:16"), the unit ("KM") and the language ("ES") of every widget, each switched with a tap, and
+ * Activity, which the chevron unfolds (it starts folded, leaving the photo clear).
  * Every button is the size of the top left ones. The menus' names show next to them for a moment
  * when the column opens, then only the icons stay.
  */
@@ -47,6 +61,10 @@ export function EditorSideMenu({
   onDesigns,
   onActivity,
   sport,
+  units,
+  onToggleUnits,
+  language,
+  onToggleLanguage,
 }: EditorSideMenuProps) {
   const { t } = useTranslation();
   // Folded at first, so the photo shows whole; the names show when the user opens it.
@@ -119,20 +137,23 @@ export function EditorSideMenu({
             onPress={() => onFormatsOpenChange(!formatsOpen)}
             selected={formatsOpen}
           >
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              maxFontSizeMultiplier={1}
-              style={{
-                color: FLOATING_INK,
-                fontSize: 13,
-                fontWeight: '700',
-                fontVariant: ['tabular-nums'],
-                paddingHorizontal: 3,
-              }}
-            >
-              {t(`formatRatios.${format}`)}
-            </Text>
+            <ButtonText>{t(`formatRatios.${format}`)}</ButtonText>
+          </RoundButton>
+        </Item>
+        <Item label={t('editor.units')} showLabel={showLabels}>
+          <RoundButton
+            label={`${t('editor.units')}, ${t(`editor.unitNames.${units}`)}`}
+            onPress={onToggleUnits}
+          >
+            <ButtonText>{units.toUpperCase()}</ButtonText>
+          </RoundButton>
+        </Item>
+        <Item label={t('editor.language')} showLabel={showLabels}>
+          <RoundButton
+            label={`${t('editor.language')}, ${LANGUAGE_NAMES[language]}`}
+            onPress={onToggleLanguage}
+          >
+            <ButtonText>{language.toUpperCase()}</ButtonText>
           </RoundButton>
         </Item>
         <Item
@@ -149,6 +170,26 @@ export function EditorSideMenu({
         </Item>
       </KeptMounted>
     </View>
+  );
+}
+
+/** A few letters in place of a button's icon: the ratio, the unit, the language. */
+function ButtonText({ children }: { readonly children: string }) {
+  return (
+    <Text
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      maxFontSizeMultiplier={1}
+      style={{
+        color: FLOATING_INK,
+        fontSize: 13,
+        fontWeight: '700',
+        fontVariant: ['tabular-nums'],
+        paddingHorizontal: 3,
+      }}
+    >
+      {children}
+    </Text>
   );
 }
 

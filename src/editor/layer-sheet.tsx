@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
-import type { CanvasFormat, FontId } from '@/core/template';
+import type { CanvasFormat, DesignLanguage, FontId } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
@@ -36,6 +36,8 @@ import {
 interface LayerSheetProps {
   readonly visible: boolean;
   readonly catalog: readonly CatalogSection[];
+  /** The design's language: its verses, quotes and phrases are listed in it. */
+  readonly language: DesignLanguage;
   /** Format and font of the design: each widget is drawn as it will be added. */
   readonly format: CanvasFormat;
   readonly font: FontId;
@@ -163,6 +165,7 @@ export function LayerSheet({
   format,
   font,
   layerContext,
+  language,
   onAdd,
   onAddText,
   onClose,
@@ -226,6 +229,7 @@ export function LayerSheet({
         >
           <ChoiceList
             words={choosing.block}
+            language={language}
             onChoose={(block) => {
               setChoosing(null);
               onAdd(chosenLayer(choosing.kind, block));
