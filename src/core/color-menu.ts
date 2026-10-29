@@ -59,6 +59,14 @@ function channelHex(value: number): string {
 }
 
 /**
+ * The `#RRGGBB` of a pixel's red, green and blue (0..255 each), as the eyedropper reads it. Time
+ * and space O(1).
+ */
+export function rgbToHex(red: number, green: number, blue: number): string {
+  return `#${channelHex(red / 255)}${channelHex(green / 255)}${channelHex(blue / 255)}`;
+}
+
+/**
  * The `#RRGGBB` of an HSL color: `hue` in degrees, `saturation` and `lightness` in 0..1. The
  * standard conversion (CSS Color 4, "HSL to RGB": https://www.w3.org/TR/css-color-4/#hsl-to-rgb).
  * Time and space O(1).

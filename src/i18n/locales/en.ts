@@ -612,6 +612,9 @@ export const en = {
   /** The color menu: its grid, the eyedropper and the favorites. */
   colorMenu: {
     eyedropper: 'Eyedropper',
+    eyedropperHint: 'Move the loupe and lift your finger to pick its color',
+    eyedropperError: "Couldn't open the eyedropper",
+    cancelEyedropper: 'Close the eyedropper',
     addFavorite: 'Add to favorites',
     favorite: 'Favorite {{n}}',
     removeHint: 'Touch and hold to remove it from your favorites',

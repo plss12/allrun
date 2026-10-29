@@ -58,7 +58,7 @@ import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { startOf } from '@/core/place';
 import { SPORT_FAMILIES } from '@/core/sports';
 import { selectActivities, summarize } from '@/core/summary';
-import { setLayerOpacity } from '@/core/layer-style';
+import { setLayerColor, setLayerOpacity } from '@/core/layer-style';
 import {
   type CanvasFormat,
   CANVAS_FORMATS,
@@ -87,6 +87,8 @@ import { useActivitySource } from '@/data/activity-source';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
 import { ColorMenu } from '@/editor/color-menu';
+import { Eyedropper } from '@/editor/eyedropper';
+import { snapshotDesign } from '@/editor/eyedropper-snapshot';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar } from '@/editor/editor-top-bar';
@@ -101,6 +103,7 @@ import { useEditorFonts } from '@/editor/fonts';
 import { ChoiceSheet } from '@/editor/choice-list';
 import { LayerSheet } from '@/editor/layer-sheet';
 import { Notice, useNotice } from '@/editor/notice';
+import { disposeLater } from '@/editor/paragraph-arena';
 import { photoDominantColor } from '@/editor/photo-color';
 import type { PickedPhoto } from '@/editor/photo-plan';
 import { preparePhoto } from '@/editor/prepare-photo';
@@ -482,6 +485,57 @@ function EditorWorkspace({
    */
   const dominant = canvasImage === null ? null : readDominant(canvasImage);
 
+  /**
+   * The eyedropper, while it is open: a snapshot of the design, taken once when it opens, and what
+   * the color it picks goes to, the selected widget or the background.
+   */
+  const [eyedropper, setEyedropper] = useState<{
+    readonly target: 'layer' | 'background';
+    readonly image: SkImage;
+  } | null>(null);
+  const openEyedropper = (target: 'layer' | 'background') => {
+    void (async () => {
+      try {
+        const image = await snapshotDesign({
+          template,
+          layerContext,
+          photo: canvasImage,
+          dominant,
+        });
+        setEyedropper({ target, image });
+      } catch (error) {
+        logError('Could not take the snapshot for the eyedropper', error);
+        notice.show(t('colorMenu.eyedropperError'));
+      }
+    })();
+  };
+  /** Closes the eyedropper; its snapshot is freed once the screen stops drawing it. */
+  const closeEyedropper = () => {
+    if (eyedropper !== null) {
+      const { image } = eyedropper;
+      disposeLater(() => image.dispose());
+    }
+    setEyedropper(null);
+  };
+  /**
+   * The color picked, as one undo step: the widget's, or the background's at its opacity. Where
+   * the design is transparent there is none to pick, and nothing changes.
+   */
+  const pickColor = (hex: string | null) => {
+    if (hex === null) {
+      // Nothing under the loupe: the color stays.
+    } else if (eyedropper?.target === 'layer' && selectedId !== null) {
+      edit((current) => setLayerColor(current, selectedId, hex));
+    } else if (eyedropper?.target === 'background') {
+      const shown = backgroundColor(design.background, dominant);
+      const opacity = shown === null ? 1 : splitOpacity(shown).opacity;
+      change((current) =>
+        setBackground(current, { kind: 'color', color: withOpacity(hex, opacity) }),
+      );
+    }
+    closeEyedropper();
+  };
+
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     // The place needs the permission first (Android): asked now, the widget is added once named.
@@ -662,32 +716,37 @@ function EditorWorkspace({
   };
 
   // Leaving with a photo or edits asks first: the design is not kept. Going back while exporting
-  // leaves the export, and while typing commits the text.
+  // leaves the export, while typing commits the text, and with the eyedropper open closes it.
   const unsaved = photo !== null || canUndo(history);
   /**
    * Whether the user confirmed leaving: prevention stops and the blocked action is repeated
    * (expo-router's `repeat`; dispatching it again while still prevented did nothing).
    */
   const [leaving, setLeaving] = useState(false);
-  usePreventRemove(!leaving && (unsaved || exporting || typing), ({ repeat }) => {
-    if (exporting) {
-      exporter.stop();
-    } else if (typing) {
-      finishTyping();
-    } else {
-      Alert.alert(t('editor.discardTitle'), t('editor.discardMessage'), [
-        { text: t('editor.cancel'), style: 'cancel' },
-        {
-          text: t('editor.discard'),
-          style: 'destructive',
-          onPress: () => {
-            setLeaving(true);
-            repeat();
+  usePreventRemove(
+    !leaving && (unsaved || exporting || typing || eyedropper !== null),
+    ({ repeat }) => {
+      if (eyedropper !== null) {
+        closeEyedropper();
+      } else if (exporting) {
+        exporter.stop();
+      } else if (typing) {
+        finishTyping();
+      } else {
+        Alert.alert(t('editor.discardTitle'), t('editor.discardMessage'), [
+          { text: t('editor.cancel'), style: 'cancel' },
+          {
+            text: t('editor.discard'),
+            style: 'destructive',
+            onPress: () => {
+              setLeaving(true);
+              repeat();
+            },
           },
-        },
-      ]);
-    }
-  });
+        ]);
+      }
+    },
+  );
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   /**
@@ -704,9 +763,15 @@ function EditorWorkspace({
   // The panel of a widget's options is always at the bottom. If it would cover the widget, the
   // whole canvas rises just enough for the widget to show over it, on its own part of the photo
   // (judging a color or a backdrop against another part would mislead), and settles back when
-  // the panel closes. Not an edit: the design doesn't change.
+  // the panel closes, or steps aside for the eyedropper, which looks at the whole canvas. Not an
+  // edit: the design doesn't change.
   const lift =
-    dock === 'style' && selected !== null && selectedSize !== null && dockHeight > 0 && area
+    dock === 'style' &&
+    eyedropper === null &&
+    selected !== null &&
+    selectedSize !== null &&
+    dockHeight > 0 &&
+    area
       ? (() => {
           const ratio = displayWidth / size.width;
           const reach = layerVerticalReach(selected.transform, selectedSize, size, LAYER_MARGIN);
@@ -723,7 +788,7 @@ function EditorWorkspace({
   }, [lift, liftY]);
   const liftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: liftY.get() }] }));
   /** The controls step aside while a widget is dragged or a text is typed. */
-  const controlsShown = !dragging && !typing;
+  const controlsShown = !dragging && !typing && eyedropper === null;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
@@ -819,6 +884,9 @@ function EditorWorkspace({
               onLayerRemove={(id) => edit((current) => removeLayer(current, id))}
               trashLabel={t('editor.removeLayer')}
             />
+            {eyedropper === null ? null : (
+              <Eyedropper image={eyedropper.image} displayWidth={displayWidth} onPick={pickColor} />
+            )}
             {photo !== null && canvasImage === null ? (
               <View
                 pointerEvents="none"
@@ -855,6 +923,16 @@ function EditorWorkspace({
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
       ) : null}
+      {eyedropper === null ? null : (
+        // The eyedropper's way out, where the close button was.
+        <View style={{ position: 'absolute', top: insets.top + EDGE, left: EDGE }}>
+          <RoundButton
+            icon={{ ios: 'xmark', android: 'close' }}
+            label={t('colorMenu.cancelEyedropper')}
+            onPress={closeEyedropper}
+          />
+        </View>
+      )}
       {controlsShown && !exporting ? (
         <View style={{ position: 'absolute', top: insets.top + EDGE, left: EDGE }}>
           <EditorTopBar
@@ -1020,7 +1098,7 @@ function EditorWorkspace({
                   edit((current) => setLayerOpacity(current, styled.layer.id, opacity));
                   setAdjusting(null);
                 }}
-                onEyedropper={comingSoon}
+                onEyedropper={() => openEyedropper('layer')}
               />
             ) : backgroundMenu ? (
               <BackgroundMenu
@@ -1034,11 +1112,20 @@ function EditorWorkspace({
                   change((current) => setBackground(current, background));
                   setAdjusting(null);
                 }}
-                onEyedropper={comingSoon}
+                onEyedropper={() => openEyedropper('background')}
               />
             ) : (
               <>
+                {/* Removing first, on its own at the left (user's choice), then change, cover and the
+                    background. */}
                 <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <ActionTile
+                    icon={{ ios: 'trash', android: 'delete' }}
+                    label={t('editor.removePhoto')}
+                    onPress={removePhoto}
+                    disabled={photo === null}
+                    destructive
+                  />
                   <ActionTile
                     icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
                     label={t(photo === null ? 'editor.choosePhoto' : 'editor.changePhoto')}
@@ -1049,13 +1136,6 @@ function EditorWorkspace({
                     label={t('editor.fitPhoto')}
                     onPress={() => change((current) => setPhotoPlacement(current, COVER_PLACEMENT))}
                     disabled={photo === null || samePlacement(design.photo, COVER_PLACEMENT)}
-                  />
-                  <ActionTile
-                    icon={{ ios: 'trash', android: 'delete' }}
-                    label={t('editor.removePhoto')}
-                    onPress={removePhoto}
-                    disabled={photo === null}
-                    destructive
                   />
                   <ActionTile
                     icon={{ ios: 'paintbrush.fill', android: 'format_paint' }}

@@ -594,6 +594,9 @@ export const es: Translations = {
   /** The color menu: its grid, the eyedropper and the favorites. */
   colorMenu: {
     eyedropper: 'Cuentagotas',
+    eyedropperHint: 'Mueve la lupa y suelta para elegir su color',
+    eyedropperError: 'No se pudo abrir el cuentagotas',
+    cancelEyedropper: 'Cerrar el cuentagotas',
     addFavorite: 'Añadir a favoritos',
     favorite: 'Favorito {{n}}',
     removeHint: 'Mantén pulsado para quitarlo de favoritos',

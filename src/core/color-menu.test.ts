@@ -5,6 +5,7 @@ import {
   GRID_COLUMNS,
   GRID_SHADES,
   hslToHex,
+  rgbToHex,
   MAX_FAVORITES,
   parseFavorites,
   removeFavorite,
@@ -21,6 +22,15 @@ describe('hslToHex', () => {
     expect(hslToHex(0, 0, 0)).toBe('#000000');
     expect(hslToHex(0, 0, 1)).toBe('#FFFFFF');
     expect(hslToHex(210, 0.5, 0.4)).toBe('#336699');
+  });
+});
+
+describe('rgbToHex', () => {
+  it("writes a pixel's channels in capitals, two digits each", () => {
+    expect(rgbToHex(201, 74, 46)).toBe('#C94A2E');
+    expect(rgbToHex(0, 0, 0)).toBe('#000000');
+    expect(rgbToHex(255, 255, 255)).toBe('#FFFFFF');
+    expect(rgbToHex(1, 2, 3)).toBe('#010203');
   });
 });
 
