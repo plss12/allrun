@@ -11,7 +11,15 @@ import { ImpactFeedbackStyle, impactAsync } from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  GestureDetector,
+  useCompetingGestures,
+  usePanGesture,
+  usePinchGesture,
+  useRotationGesture,
+  useSimultaneousGestures,
+  useTapGesture,
+} from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   FadeIn,
@@ -369,18 +377,18 @@ export function EditorCanvas({
     resetSnaps();
   };
 
-  const pan = Gesture.Pan()
+  const pan = usePanGesture({
     // Android follows the first finger by default; iOS and this follow the fingers' centroid.
-    .averageTouches(true)
-    .onBegin((event) => {
+    averageTouches: true,
+    onBegin: (event) => {
       touchStart.set({ x: event.x / ratio, y: event.y / ratio });
-    })
-    .onStart(() => {
+    },
+    onActivate: () => {
       // Where the finger went down, not where it was once it had moved enough to start.
       chooseTarget(touchStart.get());
       startGesture();
-    })
-    .onChange((event) => {
+    },
+    onUpdate: (event) => {
       const dx = event.changeX / ratio;
       const dy = event.changeY / ratio;
       if (target.get() === TARGET_LAYER) {
@@ -389,15 +397,16 @@ export function EditorCanvas({
       } else if (photoSize !== null) {
         liveFraming.set(panFraming(photoSize, canvas, liveFraming.get(), dx, dy));
       }
-    })
-    .onEnd(endGesture);
+    },
+    onDeactivate: endGesture,
+  });
 
-  const pinch = Gesture.Pinch()
-    .onStart((event) => {
+  const pinch = usePinchGesture({
+    onActivate: (event) => {
       chooseTarget({ x: event.focalX / ratio, y: event.focalY / ratio });
       startGesture();
-    })
-    .onChange((event) => {
+    },
+    onUpdate: (event) => {
       // The first event of some devices carries no scale yet.
       if (!(event.scaleChange > 0)) {
         return;
@@ -412,15 +421,16 @@ export function EditorCanvas({
           }),
         );
       }
-    })
-    .onEnd(endGesture);
+    },
+    onDeactivate: endGesture,
+  });
 
-  const rotation = Gesture.Rotation()
-    .onStart((event) => {
+  const rotation = useRotationGesture({
+    onActivate: (event) => {
       chooseTarget({ x: event.anchorX / ratio, y: event.anchorY / ratio });
       startGesture();
-    })
-    .onChange((event) => {
+    },
+    onUpdate: (event) => {
       if (target.get() === TARGET_LAYER) {
         updateLayer(rotateLayer(rawTransform.get(), event.rotationChange));
       } else if (photoSize !== null) {
@@ -432,15 +442,21 @@ export function EditorCanvas({
         photoStraight.set(straight.snapped);
         liveFraming.set(rotateFraming(photoSize, canvas, liveFraming.get(), straight.angle));
       }
-    })
-    .onEnd(endGesture);
-
-  const tap = Gesture.Tap().onEnd((event, success) => {
-    if (success) {
-      const point = { x: event.x / ratio, y: event.y / ratio };
-      scheduleOnRN(tapAt, hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio));
-    }
+    },
+    onDeactivate: endGesture,
   });
+
+  const tap = useTapGesture({
+    onDeactivate: (event) => {
+      if (!event.canceled) {
+        const point = { x: event.x / ratio, y: event.y / ratio };
+        scheduleOnRN(tapAt, hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio));
+      }
+    },
+  });
+
+  // Dragging, pinching and rotating go together; a tap only when none of them started.
+  const gesture = useCompetingGestures(useSimultaneousGestures(pan, pinch, rotation), tap);
 
   // Strokes in screen points, whatever the canvas scale.
   const hairline = 1 / ratio;
@@ -486,7 +502,7 @@ export function EditorCanvas({
 
   return (
     <View style={{ width: displayWidth, height: displayHeight }}>
-      <GestureDetector gesture={Gesture.Race(Gesture.Simultaneous(pan, pinch, rotation), tap)}>
+      <GestureDetector gesture={gesture}>
         <Canvas style={{ width: displayWidth, height: displayHeight }}>
           <Group transform={[{ scale: ratio }]}>
             <TemplateScene

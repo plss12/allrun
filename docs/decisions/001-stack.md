@@ -52,8 +52,12 @@ relies on Expo Go on an iPhone, we moved to SDK 57 on 2026-10-16, and back to SD
 - React Native 0.88 types its components as functions: a ref holds a `HostInstance` (or a
   `ScrollViewInstance`), not the component (`useRef<View>` no longer type-checks).
 - `usePreventRemove` is imported from `expo-router`, which exports it from SDK 58 on.
-- `react-native-gesture-handler` 3 keeps the `Gesture` builder API the editor uses, but marks it
-  deprecated in favour of hooks (`usePanGesture`…). Migrating the editor's gestures is pending.
+- `react-native-gesture-handler` 3 keeps the `Gesture` builder API the editor used, but marks it
+  deprecated in favour of hooks. The editor's gestures moved to them on 2026-10-29: `Gesture.Pan()`
+  and the rest became `usePanGesture` and its siblings; `onStart`, `onChange` and `onEnd` became
+  `onActivate`, `onUpdate` and `onDeactivate` (a tap succeeds when `!event.canceled`); and
+  `Gesture.Race` and `Gesture.Simultaneous` became `useCompetingGestures` and
+  `useSimultaneousGestures`.
 
 Alternatives discarded: a development build or `eas go` (both require the paid Apple Developer
 account before it is otherwise needed), or pausing device testing for weeks.
