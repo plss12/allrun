@@ -82,6 +82,8 @@ interface EditorCanvasProps {
   /** Id of the selected layer, or `null`. */
   readonly selectedId: string | null;
   readonly onSelect: (id: string | null) => void;
+  /** Called on a tap on the layer already selected: a text or a verse is edited. */
+  readonly onTapSelected: (id: string) => void;
   /** Called on a tap that hits no layer: on the photo, or on the empty canvas. */
   readonly onTapPhoto: () => void;
   /** Called when a layer starts and stops being dragged, so the editor can clear the way. */
@@ -191,6 +193,7 @@ export function EditorCanvas({
   backdrop,
   selectedId,
   onSelect,
+  onTapSelected,
   onTapPhoto,
   onDraggingChange,
   onPlacementChange,
@@ -245,10 +248,15 @@ export function EditorCanvas({
     setDraggingId(null);
     onDraggingChange(false);
   };
-  /** A tap selects the layer under it; elsewhere, it is a tap on the photo. */
+  /**
+   * A tap selects the layer under it, or taps it if it already is; elsewhere, it is a tap on the
+   * photo.
+   */
   const tapAt = (id: string | null) => {
     if (id === null) {
       onTapPhoto();
+    } else if (id === selectedId) {
+      onTapSelected(id);
     } else {
       onSelect(id);
     }

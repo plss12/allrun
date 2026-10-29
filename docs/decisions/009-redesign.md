@@ -180,10 +180,10 @@ comes later.
   a Bible verse with its reference, and a famous athlete's or writer's quote with its author. The
   gallery shows the first of each with a "Tap to choose" hint; a tap opens the list of all of
   them, and the one chosen is added. The first of each list is a short one (Philippians 4:13,
-  Kipchoge's "No human is limited"), so the hint covers little of it. Pending: review the
-  current verses and quotes, add a long list of both, and change a verse or quote already on the
-  canvas by tapping it, without removing it and adding another. Phrases of our own over the data were
-  tried and left out. Bible verses come from
+  Kipchoge's "No human is limited"), so the hint covers little of it. A tap on one already on the
+  canvas and selected (or its Edit button) opens its list with its words marked, and another one
+  replaces them in place, keeping its place, size and style, as one undo step; the chat message's
+  phrase too. Phrases of our own over the data were tried and left out. Bible verses come from
   public-domain translations only (World English Bible or King James in English, Reina-Valera 1909
   in Spanish); the NIV or the Reina-Valera 1960 are copyrighted.
 

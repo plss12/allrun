@@ -124,7 +124,8 @@ label already says anything the user wants.
 Free text is typed like in a story editor: the text rises from its place to just above the
 keyboard, straight and readable, over the photo so its real contrast shows, and settles back on
 "Done". It is a native text field styled like the widget (selection, copy and paste work), and
-the whole edit is one undo step.
+the whole edit is one undo step. A tap on a free text already selected opens it, as its Edit
+button does (as a verse, a quote or a chat message opens its list).
 
 ## Alternatives discarded
 

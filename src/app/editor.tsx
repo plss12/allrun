@@ -53,9 +53,11 @@ import {
   addLayer,
   canAddLayer,
   canMoveLayer,
+  chosenWordsOf,
   duplicateLayer,
   moveLayer,
   removeLayer,
+  setChosenWords,
   uniqueLayerId,
 } from '@/core/template-edit';
 import {
@@ -79,6 +81,7 @@ import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
+import { ChoiceSheet } from '@/editor/choice-list';
 import { LayerSheet } from '@/editor/layer-sheet';
 import { Notice, useNotice } from '@/editor/notice';
 import { photoDominantColor } from '@/editor/photo-color';
@@ -290,6 +293,10 @@ function EditorWorkspace({
   if (styling && styled === null) {
     setStyling(false);
   }
+  /** The widget whose verse, quote or phrase is being chosen again from its list. */
+  const [choosingId, setChoosingId] = useState<string | null>(null);
+  const choosing = template.layers.find((layer) => layer.id === choosingId);
+  const choosingWords = choosing === undefined ? null : chosenWordsOf(choosing);
   /** Free text being typed, committed as one undo step on "Done". */
   const [textDraft, setTextDraft] = useState<TextDraft | null>(null);
   const typing = textDraft !== null;
@@ -504,6 +511,25 @@ function EditorWorkspace({
     setTextDraft(null);
   };
 
+  /**
+   * Rewrites a free text, or opens the list of a verse, a quote or a chat message's phrase to
+   * choose other words; `undefined` for the other widgets.
+   */
+  const editLayerOf = (layer: Layer): (() => void) | undefined => {
+    if (layer.kind === 'text') {
+      return () => startTyping(editTextDraft(layer));
+    }
+    return chosenWordsOf(layer) === null ? undefined : () => setChoosingId(layer.id);
+  };
+
+  /** A tap on the selected widget edits it as its Edit button does, as in a story editor. */
+  const tapSelected = (id: string) => {
+    const layer = template.layers.find((candidate) => candidate.id === id);
+    if (layer !== undefined) {
+      editLayerOf(layer)?.();
+    }
+  };
+
   const duplicateSelected = (id: string) => {
     const copyId = uniqueLayerId(template, id);
     edit((current) => duplicateLayer(current, id, copyId));
@@ -634,6 +660,16 @@ function EditorWorkspace({
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
+      <ChoiceSheet
+        words={choosingWords}
+        onChoose={(words) => {
+          if (choosingId !== null) {
+            edit((current) => setChosenWords(current, choosingId, words));
+          }
+          setChoosingId(null);
+        }}
+        onClose={() => setChoosingId(null)}
+      />
       <LayerSheet
         visible={sheetOpen}
         catalog={catalog}
@@ -700,6 +736,7 @@ function EditorWorkspace({
               backdrop={backgroundColor(design.background, dominant)}
               selectedId={typing ? null : selectedId}
               onSelect={selectLayer}
+              onTapSelected={tapSelected}
               onTapPhoto={tapPhoto}
               onDraggingChange={setDragging}
               onPlacementChange={(placement) =>
@@ -794,12 +831,13 @@ function EditorWorkspace({
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {/* The photo's tools, as a tap on it opens them (choosing one among them without a
-                photo). Here rather than over the canvas, where it kept widgets from being moved. */}
+            {/* The photo's tools, as a tap on it opens them; without a photo, the picker straight
+                away (a tap on the empty canvas still opens the background). Here rather than over
+                the canvas, where it kept widgets from being moved. */}
             <RoundButton
               icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
-              label={t('editor.photoTools')}
-              onPress={openPhotoTools}
+              label={t(photo === null ? 'editor.choosePhoto' : 'editor.photoTools')}
+              onPress={photo === null ? () => void pickPhoto() : openPhotoTools}
               size={BOTTOM_BUTTON_SIZE}
             />
             <PillButton
@@ -869,9 +907,7 @@ function EditorWorkspace({
               />
             ) : selected !== null ? (
               <SelectionBar
-                onEditText={
-                  selected.kind === 'text' ? () => startTyping(editTextDraft(selected)) : undefined
-                }
+                onEdit={editLayerOf(selected)}
                 onStyle={() => setStyling(true)}
                 onDuplicate={() => duplicateSelected(selected.id)}
                 onBringToFront={() => edit((current) => moveLayer(current, selected.id, 'front'))}

@@ -1,11 +1,13 @@
 import { scaleLayer } from './layer-transform';
 import type { Size } from './photo-placement';
 import {
+  type ActivityBlock,
   CANVAS_FORMATS,
   isLayerAllowed,
   type Layer,
   MAX_LAYERS,
   MAX_TEXT_LENGTH,
+  type SummaryBlock,
   type Template,
 } from './template';
 
@@ -177,5 +179,78 @@ export function setTextContent(template: Template, id: string, content: string):
   const layers = template.layers.map((layer) =>
     layer.id === id && layer.kind === 'text' ? { ...layer, content: text } : layer,
   );
+  return { ...template, layers };
+}
+
+/**
+ * The words of a widget chosen from a list: a Bible verse, a quote or a chat message's phrase (of
+ * the list or the user's own), of an activity's widget or, but for the chat, of a period's.
+ */
+export type ChosenWords =
+  | Extract<ActivityBlock, { design: 'verse' | 'quote' | 'chat' }>
+  | Extract<SummaryBlock, { design: 'verse' | 'quote' }>;
+
+/** The words a layer shows from a list, if its words are chosen from one. */
+export function chosenWordsOf(layer: Layer): ChosenWords | null {
+  if (layer.kind === 'activityBlock') {
+    const { block } = layer;
+    return block.design === 'verse' || block.design === 'quote' || block.design === 'chat'
+      ? block
+      : null;
+  }
+  if (layer.kind === 'summaryBlock') {
+    const { block } = layer;
+    return block.design === 'verse' || block.design === 'quote' ? block : null;
+  }
+  return null;
+}
+
+function sameWords(a: ChosenWords, b: ChosenWords): boolean {
+  switch (a.design) {
+    case 'verse':
+      return b.design === 'verse' && a.verse === b.verse;
+    case 'quote':
+      return b.design === 'quote' && a.quote === b.quote;
+    case 'chat': {
+      if (b.design !== 'chat' || a.layout !== b.layout) {
+        return false;
+      }
+      const own = (phrase: typeof a.phrase) => (typeof phrase === 'string' ? null : phrase.own);
+      return own(a.phrase) === null ? a.phrase === b.phrase : own(a.phrase) === own(b.phrase);
+    }
+  }
+}
+
+/**
+ * Other words for a widget chosen from a list (another verse, quote or phrase), keeping its
+ * place, size, rotation and style; `template` itself when the layer is missing or already says
+ * that. Time and space O(n).
+ *
+ * @throws Error when the layer's words are not chosen from a list, or from another list.
+ */
+export function setChosenWords(template: Template, id: string, words: ChosenWords): Template {
+  const current = template.layers.find((layer) => layer.id === id);
+  if (current === undefined) {
+    return template;
+  }
+  const chosen = chosenWordsOf(current);
+  if (chosen === null || chosen.design !== words.design) {
+    throw new Error(`Layer "${id}" can't take the words of a ${words.design}`);
+  }
+  if (sameWords(chosen, words)) {
+    return template;
+  }
+  const layers = template.layers.map((layer): Layer => {
+    if (layer !== current) {
+      return layer;
+    }
+    if (layer.kind === 'activityBlock') {
+      return { ...layer, block: words };
+    }
+    if (layer.kind === 'summaryBlock' && words.design !== 'chat') {
+      return { ...layer, block: words };
+    }
+    throw new Error(`Layer "${id}" can't take the words of a ${words.design}`);
+  });
   return { ...template, layers };
 }

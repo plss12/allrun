@@ -1,17 +1,20 @@
 import { makeActivity } from '@/test-utils/make-activity';
+import { makeSummary } from '@/test-utils/make-summary';
 
-import { defaultActivityTemplate } from './default-layout';
+import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
 import { type Layer, MAX_LAYERS, MAX_TEXT_LENGTH, parseTemplate, type Template } from './template';
 import {
   addLayer,
   canAddLayer,
   canMoveLayer,
+  chosenWordsOf,
   cleanText,
   DUPLICATE_OFFSET,
   duplicateLayer,
   keepLayerArea,
   moveLayer,
   removeLayer,
+  setChosenWords,
   setTextContent,
   uniqueLayerId,
 } from './template-edit';
@@ -184,5 +187,80 @@ describe('cleanText and setTextContent', () => {
     expect(setTextContent(withText, 'missing', 'Hi')).toBe(withText);
     expect(setTextContent(withText, 'text', 'Race day ')).toBe(withText);
     expect(() => setTextContent(withText, 'text', '   ')).toThrow(/1 to 200 characters/);
+  });
+});
+
+describe('chosenWordsOf and setChosenWords', () => {
+  const verse = newLayer(
+    { kind: 'activityBlock', block: { design: 'verse', verse: 'philippians4v13' } },
+    'verse',
+    'story',
+  );
+  const chat = newLayer(
+    { kind: 'activityBlock', block: { design: 'chat', layout: 'light', phrase: 'zombieMode' } },
+    'chat',
+    'story',
+  );
+  const moved = { ...verse, transform: { x: 0.3, y: 0.7, scale: 1.4, rotation: 0.2 } };
+  const withWords = addLayer(addLayer(template, moved), chat);
+
+  it('tells the widgets whose words are chosen from a list', () => {
+    expect(chosenWordsOf(verse)).toEqual({ design: 'verse', verse: 'philippians4v13' });
+    expect(chosenWordsOf(chat)).toEqual({ design: 'chat', layout: 'light', phrase: 'zombieMode' });
+    expect(chosenWordsOf(text('text'))).toBeNull();
+    for (const layer of template.layers) {
+      expect(chosenWordsOf(layer)).toBeNull();
+    }
+  });
+
+  it('changes the words and keeps the place, size, rotation and style', () => {
+    const edited = setChosenWords(withWords, 'verse', { design: 'verse', verse: 'romans8v18' });
+    const layer = edited.layers.find(({ id }) => id === 'verse');
+    expect(layer).toEqual({ ...moved, block: { design: 'verse', verse: 'romans8v18' } });
+    expect(ids(edited)).toEqual(ids(withWords));
+    expect(parseTemplate(edited)).toEqual(edited);
+  });
+
+  it("takes the user's own phrase in a chat, keeping its look", () => {
+    const own = { design: 'chat', layout: 'light', phrase: { own: 'Hola' } } as const;
+    const edited = setChosenWords(withWords, 'chat', own);
+    expect(chosenWordsOf(edited.layers.find(({ id }) => id === 'chat') ?? text('none'))).toEqual(
+      own,
+    );
+    expect(setChosenWords(edited, 'chat', { ...own, phrase: { own: 'Hola' } })).toBe(edited);
+    expect(setChosenWords(edited, 'chat', { ...own, phrase: 'zombieMode' })).not.toBe(edited);
+  });
+
+  it('changes a period widget too', () => {
+    const summary = defaultSummaryTemplate(makeSummary(), 'story');
+    const quote = newLayer(
+      { kind: 'summaryBlock', block: { design: 'quote', quote: 'kipchoge' } },
+      'quote',
+      'story',
+    );
+    const edited = setChosenWords(addLayer(summary, quote), 'quote', {
+      design: 'quote',
+      quote: 'bolt',
+    });
+    expect(chosenWordsOf(edited.layers.at(-1) ?? text('none'))).toEqual({
+      design: 'quote',
+      quote: 'bolt',
+    });
+  });
+
+  it('records nothing for the same words or a missing layer', () => {
+    expect(setChosenWords(withWords, 'verse', { design: 'verse', verse: 'philippians4v13' })).toBe(
+      withWords,
+    );
+    expect(setChosenWords(withWords, 'gone', { design: 'verse', verse: 'romans8v18' })).toBe(
+      withWords,
+    );
+  });
+
+  it("throws for a widget whose words aren't from that list", () => {
+    expect(() => setChosenWords(withWords, 'verse', { design: 'quote', quote: 'bolt' })).toThrow();
+    expect(() =>
+      setChosenWords(withWords, 'route', { design: 'verse', verse: 'romans8v18' }),
+    ).toThrow();
   });
 });

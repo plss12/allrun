@@ -9,23 +9,16 @@ import {
   ScrollView,
   SectionList,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
-import {
-  type CanvasFormat,
-  CHAT_PHRASES,
-  type FontId,
-  MAX_CHAT_LENGTH,
-  QUOTES,
-  VERSES,
-} from '@/core/template';
+import type { CanvasFormat, FontId } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
+import { CHOICE_TITLES, ChoiceList } from './choice-list';
 import { layerText } from './editor-data';
 import { disposeLater } from './paragraph-arena';
 import { SheetFrame } from './sheet-frame';
@@ -99,13 +92,6 @@ function chosenLayer(
     ? { kind, block }
     : { kind: 'activityBlock', block };
 }
-
-/** The title of each list to choose from. */
-const CHOICE_TITLES = {
-  verse: 'gallery.chooseVerse',
-  quote: 'gallery.chooseQuote',
-  chat: 'gallery.chooseChat',
-} as const;
 
 /**
  * What a gallery shows of its data, as a key: the same activity or period with the same detail
@@ -239,7 +225,7 @@ export function LayerSheet({
           onClose={() => setChoosing(null)}
         >
           <ChoiceList
-            choice={choosing}
+            words={choosing.block}
             onChoose={(block) => {
               setChoosing(null);
               onAdd(chosenLayer(choosing.kind, block));
@@ -298,137 +284,6 @@ export function LayerSheet({
         </SheetFrame>
       )}
     </Modal>
-  );
-}
-
-/** One entry of a list to choose from: its words, where they come from, and the widget. */
-interface ChoiceEntry {
-  readonly key: string;
-  readonly words: string;
-  readonly source: string | null;
-  readonly block: ChoiceBlock;
-}
-
-/**
- * The verses, quotes or phrases to choose from, each on a card: a verse's or a quote's words in
- * quotation marks, and where they come from or who said them under them; a phrase as it is, after
- * a field to write one's own. A tap adds it.
- */
-function ChoiceList({
-  choice,
-  onChoose,
-}: {
-  readonly choice: Choice;
-  readonly onChoose: (block: ChoiceBlock) => void;
-}) {
-  const { t } = useTranslation();
-  const { block } = choice;
-  const entries = ((): ChoiceEntry[] => {
-    switch (block.design) {
-      case 'verse':
-        return VERSES.map((verse) => ({
-          key: verse,
-          words: t('widgets.quoted', { text: t(`widgets.verses.${verse}.text`) }),
-          source: t(`widgets.verses.${verse}.source`),
-          block: { design: 'verse', verse },
-        }));
-      case 'quote':
-        return QUOTES.map((quote) => ({
-          key: quote,
-          words: t('widgets.quoted', { text: t(`widgets.quotes.${quote}.text`) }),
-          source: t(`widgets.quotes.${quote}.author`),
-          block: { design: 'quote', quote },
-        }));
-      case 'chat':
-        return CHAT_PHRASES.map((phrase) => ({
-          key: phrase,
-          words: t(`widgets.phrases.${phrase}`),
-          source: null,
-          block: { ...block, phrase },
-        }));
-    }
-  })();
-  return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: GALLERY_PADDING, gap: GALLERY_GAP, paddingBottom: 32 }}
-    >
-      {block.design === 'chat' ? (
-        <OwnPhrase onAdd={(own) => onChoose({ ...block, phrase: { own } })} />
-      ) : null}
-      {entries.map((entry) => (
-        <Pressable
-          key={entry.key}
-          accessibilityRole="button"
-          accessibilityLabel={
-            entry.source === null ? entry.words : `${entry.words} ${entry.source}`
-          }
-          onPress={() => onChoose(entry.block)}
-          style={({ pressed }) => ({
-            ...cardSurface(14),
-            paddingHorizontal: 18,
-            paddingVertical: 16,
-            gap: 6,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Text style={{ color: colors.label, fontSize: 17, lineHeight: 23 }}>{entry.words}</Text>
-          {entry.source === null ? null : (
-            <Text style={{ color: colors.secondaryLabel, fontSize: 15, fontStyle: 'italic' }}>
-              {entry.source}
-            </Text>
-          )}
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
-
-/** A card to write one's own phrase, and its button to add it, on once there is something. */
-function OwnPhrase({ onAdd }: { readonly onAdd: (phrase: string) => void }) {
-  const { t } = useTranslation();
-  const [phrase, setPhrase] = useState('');
-  const written = phrase.trim();
-  const add = () => {
-    if (written !== '') {
-      onAdd(written);
-    }
-  };
-  return (
-    <View
-      style={{
-        ...cardSurface(14),
-        paddingHorizontal: 18,
-        paddingVertical: 10,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-      }}
-    >
-      <TextInput
-        value={phrase}
-        onChangeText={setPhrase}
-        onSubmitEditing={add}
-        placeholder={t('gallery.ownPhrase')}
-        placeholderTextColor={colors.secondaryLabel}
-        accessibilityLabel={t('gallery.ownPhrase')}
-        maxLength={MAX_CHAT_LENGTH}
-        returnKeyType="done"
-        style={{ flex: 1, color: colors.label, fontSize: 17, paddingVertical: 8 }}
-      />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: written === '' }}
-        disabled={written === ''}
-        onPress={add}
-        hitSlop={8}
-        style={({ pressed }) => ({ opacity: written === '' ? 0.35 : pressed ? 0.6 : 1 })}
-      >
-        <Text style={{ color: colors.tint, fontSize: 17, fontWeight: '600' }}>
-          {t('gallery.addOwnPhrase')}
-        </Text>
-      </Pressable>
-    </View>
   );
 }
 

@@ -4,8 +4,11 @@ import { View } from 'react-native';
 import { ActionTile } from './action-tile';
 
 interface SelectionBarProps {
-  /** Rewrites the selected free text; absent for other layers. */
-  readonly onEditText?: () => void;
+  /**
+   * Rewrites the selected free text, or chooses another verse, quote or chat message's phrase;
+   * absent for other layers.
+   */
+  readonly onEdit?: () => void;
   /** Opens the style panel; absent for layers without style options. */
   readonly onStyle?: () => void;
   readonly onDuplicate: () => void;
@@ -22,7 +25,7 @@ interface SelectionBarProps {
  * drag-to-trash has an accessible equivalent.
  */
 export function SelectionBar({
-  onEditText,
+  onEdit,
   onStyle,
   onDuplicate,
   onBringToFront,
@@ -39,11 +42,11 @@ export function SelectionBar({
       accessibilityLabel={t('editor.selectedLayer')}
       style={{ flexDirection: 'row', gap: 6 }}
     >
-      {onEditText === undefined ? null : (
+      {onEdit === undefined ? null : (
         <ActionTile
           icon={{ ios: 'character.cursor.ibeam', android: 'edit' }}
           label={t('editor.editText')}
-          onPress={onEditText}
+          onPress={onEdit}
         />
       )}
       {onStyle === undefined ? null : (
