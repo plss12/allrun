@@ -1164,9 +1164,6 @@ const BIG_HEADER = {
  */
 const DATE = { headGap: 0.1, lineGap: 0.3, stackGap: 0.12, minGap: 1.2 } as const;
 
-/** The typewriter's letters of the data on their side beside a tower's sport, as a caption. */
-const TOWER_SIDE_FONT: FontId = 'spaceMono';
-
 /** Data a card puts in a row. */
 const CARD_COLUMNS = 3;
 
@@ -2983,7 +2980,8 @@ export function prepareActivityBlock(
       case 'tower': {
         // The big datum's amount, its unit and the sport's word, one under another, tall and
         // narrow; the other two small beside the word, on their side, read upwards from its foot
-        // and as long as it is tall.
+        // and as long as it is tall, in the widget's letters too (but never bold); or the big
+        // datum alone.
         const sizes = SIZES.tower;
         const [first, ...rest] = metrics;
         const letters =
@@ -3005,11 +3003,14 @@ export function prepareActivityBlock(
         const widest = Math.max(...over.map((box) => box.width));
         const squeeze = Math.min(1, Math.max(sizes.squeeze, widest / natural));
         const sport = big(word, sizes.value * squeeze, 0);
-        const caption: BlockStyle = { ...style, font: TOWER_SIDE_FONT, bold: false };
+        if (block.layout === 'plain') {
+          return column([...over, sport], 0, 'start');
+        }
+        const caption: BlockStyle = { ...style, bold: false };
         const captions = rest.map((metric) =>
           plainMetricText(activity, metric, compactContext, 'tight'),
         );
-        const captionCap = CAP_HEIGHTS[TOWER_SIDE_FONT];
+        const captionCap = CAP_HEIGHTS[style.font];
         const longest = Math.max(
           ...captions.map(
             (text) =>

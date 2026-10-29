@@ -742,6 +742,8 @@ export const en = {
       light: 'Light',
       board: 'Board',
       sheet: 'Timing sheet',
+      withData: 'With data',
+      plain: 'Alone',
     },
     /** What a period's note lists: its activities, or its days, weeks or months. */
     noteRows: { activities: 'By activity', buckets: 'By day, week or month' },

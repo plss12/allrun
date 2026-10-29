@@ -198,6 +198,23 @@ describe('parseTemplate', () => {
     );
   });
 
+  it('reads a tower saved before its plain version as one with data', () => {
+    const tower = {
+      id: 'tower',
+      kind: 'activityBlock',
+      block: { design: 'tower' },
+      logo: false,
+      style: { font: 'bowlbyOneSC', color: '#FFFFFF', bold: false, uppercase: true },
+      transform: center,
+      opacity: 1,
+    };
+    const [read] = parseTemplate({ ...activityTemplate, layers: [tower] }).layers;
+    expect(read.kind === 'activityBlock' && read.block).toEqual({
+      design: 'tower',
+      layout: 'withData',
+    });
+  });
+
   it('takes activity charts in activity templates only', () => {
     const chart = {
       id: 'chart',

@@ -123,8 +123,9 @@ describe('activityBlocks', () => {
       { design: 'bigSolo', layout: 'smallDay', top: 'main' },
       { design: 'bigSolo', layout: 'day', top: 'main' },
       { design: 'bigSolo', layout: 'stretchedDay', top: 'main' },
-      // The tower; the data alone, stacked and in a line; the card.
-      { design: 'tower' },
+      // The tower, with data and alone; the data alone, stacked and in a line; the card.
+      { design: 'tower', layout: 'withData' },
+      { design: 'tower', layout: 'plain' },
       { design: 'dataStack', layout: 'three' },
       { design: 'dataStack', layout: 'two' },
       { design: 'dataLine', layout: 'namedThree' },
@@ -195,8 +196,9 @@ describe('activityBlocks', () => {
       { design: 'bigSolo', layout: 'smallDay', top: 'main' },
       { design: 'bigSolo', layout: 'day', top: 'main' },
       { design: 'bigSolo', layout: 'stretchedDay', top: 'main' },
-      // The tower with its calories, time and heart rate.
-      { design: 'tower' },
+      // The tower with its calories, time and heart rate, and alone.
+      { design: 'tower', layout: 'withData' },
+      { design: 'tower', layout: 'plain' },
       { design: 'dataStack', layout: 'three' },
       { design: 'dataStack', layout: 'two' },
       { design: 'dataLine', layout: 'namedThree' },
@@ -350,6 +352,19 @@ describe('towerMetrics', () => {
     expect(towerMetrics(gym)).toEqual(['calories', 'movingTime', 'averageHeartRate']);
   });
 
+  it('writes the big datum alone in a plain tower', () => {
+    expect(towerMetrics(makeActivity({ sportType: 'Run' }), 'plain')).toEqual(['distance']);
+    // Without a heart rate a gym session has no tower with data, but still a plain one.
+    const gym = makeActivity({
+      sportType: 'WeightTraining',
+      distanceMeters: 0,
+      averageSpeed: null,
+      averageHeartRate: null,
+    });
+    expect(towerMetrics(gym)).toEqual([]);
+    expect(towerMetrics(gym, 'plain')).toEqual(['calories']);
+  });
+
   it("is empty when the activity can't fill it", () => {
     const gym = makeActivity({
       sportType: 'WeightTraining',
@@ -375,8 +390,9 @@ describe('blockDataCount', () => {
     expect(blockDataCount({ design: 'dayOver', layout: 'narrow' })).toBe(2);
     expect(blockDataCount({ design: 'dayColumns', layout: 'three' })).toBe(3);
     expect(blockDataCount({ design: 'dataStack', layout: 'two' })).toBe(2);
-    // The tower's big datum and two more beside its sport.
-    expect(blockDataCount({ design: 'tower' })).toBe(3);
+    // The tower's big datum and two more beside its sport, or alone.
+    expect(blockDataCount({ design: 'tower', layout: 'withData' })).toBe(3);
+    expect(blockDataCount({ design: 'tower', layout: 'plain' })).toBe(1);
     expect(blockDataCount({ design: 'dataLine', layout: 'three' })).toBe(3);
     expect(blockDataCount({ design: 'dataLine', layout: 'two' })).toBe(2);
     expect(blockDataCount({ design: 'dataLine', layout: 'namedThree' })).toBe(3);
@@ -496,7 +512,7 @@ describe('isAppReplica and blockLettering', () => {
       'barlowCondensed',
     ]);
     // The tower heavy and stretched upwards; the line of data wide and heavy.
-    expect(blockLettering({ design: 'tower' })).toEqual({
+    expect(blockLettering({ design: 'tower', layout: 'withData' })).toEqual({
       font: 'bowlbyOneSC',
       bold: false,
       ...capitals,

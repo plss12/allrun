@@ -10,6 +10,7 @@ import {
   BIG_SOLO_LAYOUTS,
   CARD_LAYOUTS,
   DATA_STACK_LAYOUTS,
+  TOWER_LAYOUTS,
   DAY_BETWEEN_LAYOUTS,
   DAY_COLUMNS_LAYOUTS,
   DAY_OVER_LAYOUTS,
@@ -85,7 +86,7 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'dataStack':
       return block.layout === 'three' ? 3 : 2;
     case 'tower':
-      return 3;
+      return block.layout === 'plain' ? 1 : 3;
     case 'dataLine':
       return block.layout === 'three' || block.layout === 'namedThree' ? 3 : 2;
     case 'card':
@@ -141,19 +142,30 @@ export function bigMetrics(
 const TOWER_PACES: readonly MetricId[] = ['pace', 'swimPace', 'speed', 'movingTime'];
 
 /**
- * The three data of a tower: the distance big, and how fast (its pace or speed) and how long
- * small, in the sport's order; or, for a sport without a distance, the calories big, and the time
- * and heart rate small. Never the elevation gain, which reads as minutes without its name. Empty
- * when the activity can't fill it. Time O(m) for the m metrics of its sport.
+ * The data of a tower: the distance big, and how fast (its pace or speed) and how long small, in
+ * the sport's order; or, for a sport without a distance, the calories big, and the time and heart
+ * rate small. A `plain` tower writes the big datum alone. Never the elevation gain, which reads as
+ * minutes without its name. Empty when the activity can't fill it. Time O(m) for the m metrics of
+ * its sport.
  */
-export function towerMetrics(activity: Activity): MetricId[] {
+export function towerMetrics(
+  activity: Activity,
+  layout: (typeof TOWER_LAYOUTS)[number] = 'withData',
+): MetricId[] {
   const available = availableMetrics(activity);
-  const metrics = available.includes('distance')
-    ? ['distance' as const, ...available.filter((metric) => TOWER_PACES.includes(metric))]
-    : (['calories', 'movingTime', 'averageHeartRate'] as const).filter((metric) =>
-        available.includes(metric),
-      );
-  return metrics.length === 3 ? metrics : [];
+  const big = available.includes('distance') ? 'distance' : 'calories';
+  if (!available.includes(big)) {
+    return [];
+  }
+  if (layout === 'plain') {
+    return [big];
+  }
+  const small = available.filter((metric) =>
+    big === 'distance'
+      ? TOWER_PACES.includes(metric)
+      : metric === 'movingTime' || metric === 'averageHeartRate',
+  );
+  return small.length === 2 ? [big, ...small] : [];
 }
 
 /**
@@ -162,7 +174,7 @@ export function towerMetrics(activity: Activity): MetricId[] {
  */
 export function dataWidgetMetrics(activity: Activity, block: ActivityBlock): MetricId[] {
   return block.design === 'tower'
-    ? towerMetrics(activity)
+    ? towerMetrics(activity, block.layout)
     : bigMetrics(activity, dataTop(block), blockDataCount(block));
 }
 
@@ -182,7 +194,7 @@ const DATA_TILES: readonly (readonly ActivityBlock[])[] = [
   [...bigWithData('wide'), ...bigWithData('stretched')],
   [...bigWithData('day'), ...bigWithData('stretchedDay')],
   BIG_SOLO_LAYOUTS.map((layout) => ({ design: 'bigSolo', layout, top: 'main' }) as const),
-  [{ design: 'tower' }],
+  TOWER_LAYOUTS.map((layout) => ({ design: 'tower', layout }) as const),
   DATA_STACK_LAYOUTS.map((layout) => ({ design: 'dataStack', layout }) as const),
   DATA_LINE_LAYOUTS.map((layout) => ({ design: 'dataLine', layout }) as const),
   CARD_LAYOUTS.map((layout) => ({ design: 'card', layout }) as const),

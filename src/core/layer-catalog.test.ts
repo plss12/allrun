@@ -108,7 +108,10 @@ describe('activityCatalog', () => {
       'block-bigSolo-day',
       'block-bigSolo-stretchedDay',
     ]);
-    expect(variantKeys(trail, 'block-tower')).toEqual(['block-tower']);
+    expect(variantKeys(trail, 'block-tower')).toEqual([
+      'block-tower-withData',
+      'block-tower-plain',
+    ]);
     expect(variantKeys(trail, 'block-dataStack')).toEqual([
       'block-dataStack-three',
       'block-dataStack-two',

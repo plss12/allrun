@@ -723,6 +723,8 @@ export const es: Translations = {
       light: 'Claro',
       board: 'Tablero',
       sheet: 'Hoja de tiempos',
+      withData: 'Con datos',
+      plain: 'Sola',
     },
     noteRows: { activities: 'Por actividad', buckets: 'Por días, semanas o meses' },
     timeOnTop: 'Tiempo arriba',

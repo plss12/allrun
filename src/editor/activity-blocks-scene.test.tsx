@@ -84,7 +84,10 @@ describe('a data widget in small letters', () => {
   it.each(['tower', 'dataStack'] as const)(
     'cuts the lines of the %s to their letters, as close as in capitals, and within its size',
     async (design) => {
-      const block = design === 'tower' ? { design } : { design, layout: 'three' as const };
+      const block =
+        design === 'tower'
+          ? { design, layout: 'withData' as const }
+          : { design, layout: 'three' as const };
       const prepared = (uppercase: boolean) => {
         const layer = newLayer({ kind: 'activityBlock', block }, design, 'story');
         if (layer.kind !== 'activityBlock') {

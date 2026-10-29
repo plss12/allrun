@@ -196,9 +196,9 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * - `dataStack` (data): three (`three`) or two (`two`) data big, one under another, over the
  *   short weekday and start time;
  * - `tower` (data): the distance, or else the calories, tall and narrow, its amount, unit and
- *   sport's word one under another, with two data small and turned on their side beside the
- *   sport's word (the pace and time, or else the time and heart rate), to fit a corner of the
- *   photo (see `towerMetrics`);
+ *   sport's word one under another, to fit a corner of the photo, with two data small and turned
+ *   on their side beside the sport's word (`withData`: the pace and time, or else the time and
+ *   heart rate) or alone (`plain`) (see `towerMetrics`);
  * - `dataLine` (data): the three (`three`) or two (`two`) most telling data in a line, with their
  *   names over them, aligned to their start (`namedThree`, `namedTwo`) or not;
  * - `card` (data): three or six data with their short names, in a row or two, on a square-cornered
@@ -295,6 +295,8 @@ export const DAY_OVER_LAYOUTS = ['wide', 'narrow'] as const;
 export const DAY_COLUMNS_LAYOUTS = ['three', 'four'] as const;
 /** How many data are stacked over the day and start time. */
 export const DATA_STACK_LAYOUTS = ['three', 'two'] as const;
+/** A tower with two data small beside its sport (first in the gallery), or alone. */
+export const TOWER_LAYOUTS = ['withData', 'plain'] as const;
 /** How many data go in a line, with their names over them (first in the gallery) or not. */
 export const DATA_LINE_LAYOUTS = ['namedThree', 'three', 'namedTwo', 'two'] as const;
 /** A card's data: three or six, under the activity's name (first in the gallery) or not. */
@@ -428,7 +430,8 @@ const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('dayColumns'), layout: z.enum(DAY_COLUMNS_LAYOUTS) }),
   z.object({ design: z.literal('dataStack'), layout: z.enum(DATA_STACK_LAYOUTS) }),
   z.object({ design: z.literal('dataLine'), layout: z.enum(DATA_LINE_LAYOUTS) }),
-  z.object({ design: z.literal('tower') }),
+  // Towers saved before the plain one existed all had their data beside the sport.
+  z.object({ design: z.literal('tower'), layout: z.enum(TOWER_LAYOUTS).default('withData') }),
   z.object({ design: z.literal('card'), layout: z.enum(CARD_LAYOUTS) }),
   z.object({ design: z.literal('notes'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('message'), layout: z.enum(APP_MODES) }),
