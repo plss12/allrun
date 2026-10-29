@@ -1,10 +1,11 @@
+import { splitOpacity, withOpacity } from './color-menu';
 import { coversCanvas, type Size } from './photo-placement';
 import { CANVAS_FORMATS, type DesignBackground, type Template } from './template';
 
 /**
  * The color a design's background shows, or `null` for none (transparent): `auto` is the photo's
- * dominant color (`dominant`, `null` without a photo or before it is known), so a design without
- * a photo stays a transparent sticker. Time and space O(1).
+ * dominant color (`dominant`, a `#RRGGBB`, `null` without a photo or before it is known), at its
+ * opacity, so a design without a photo stays a transparent sticker. Time and space O(1).
  */
 export function backgroundColor(
   background: DesignBackground,
@@ -12,7 +13,7 @@ export function backgroundColor(
 ): string | null {
   switch (background.kind) {
     case 'auto':
-      return dominant;
+      return dominant === null ? null : withOpacity(dominant, background.opacity ?? 1);
     case 'color':
       return background.color;
     case 'transparent':
@@ -22,12 +23,13 @@ export function backgroundColor(
 
 /**
  * Whether an image of the design has no see-through pixel, so it can go out as a JPEG: a
- * background of some color, or a photo (of size `photo`) covering the whole canvas. Time and
- * space O(1).
+ * background of some opaque color (a translucent one lets what is under it show), or a photo (of
+ * size `photo`) covering the whole canvas. Time and space O(1).
  */
 export function isOpaque(design: Template, photo: Size | null, dominant: string | null): boolean {
+  const color = backgroundColor(design.background, dominant);
   return (
-    backgroundColor(design.background, dominant) !== null ||
+    (color !== null && splitOpacity(color).opacity === 1) ||
     (photo !== null && coversCanvas(photo, CANVAS_FORMATS[design.format], design.photo))
   );
 }

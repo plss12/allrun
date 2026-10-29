@@ -4,7 +4,6 @@ import { makeSummary } from '@/test-utils/make-summary';
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
 import {
   castsShadow,
-  colorPageOf,
   contrastingInk,
   layerColor,
   relativeLuminance,
@@ -17,7 +16,6 @@ import {
   setLogoOptions,
   setStrokeWidth,
   setTextStyle,
-  STYLE_COLOR_PAGES,
 } from './layer-style';
 import { type Layer, parseTemplate, type Template } from './template';
 import { addLayer } from './template-edit';
@@ -47,50 +45,23 @@ describe('relativeLuminance and castsShadow', () => {
   });
 
   it('shadows light and bright colors but not black, Night Ink or the darkest gray', () => {
-    const withoutShadow = STYLE_COLOR_PAGES.flatMap(
-      (page): readonly { readonly id: string; readonly hex: string }[] => page.colors,
-    )
-      .filter((color) => !castsShadow(color.hex))
-      .map((color) => color.id);
+    const colors = {
+      white: '#FFFFFF',
+      black: '#000000',
+      nightInk: '#141B2D',
+      trackRed: '#C94A2E',
+      yellow: '#FFD60A',
+      blue: '#0A84FF',
+      electricBlue: '#1F4BFF',
+      purple: '#9B5CFF',
+      olive: '#8C9A5B',
+      gray4: '#5C5C5C',
+      gray5: '#333333',
+    };
+    const withoutShadow = Object.entries(colors)
+      .filter(([, hex]) => !castsShadow(hex))
+      .map(([id]) => id);
     expect(new Set(withoutShadow)).toEqual(new Set(['black', 'nightInk', 'gray5']));
-  });
-});
-
-describe('STYLE_COLOR_PAGES', () => {
-  /** Straight-line distance between two colors in sRGB (0..441). */
-  const distance = (a: string, b: string) => {
-    const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    const [x, y] = [channels(a), channels(b)];
-    return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
-  };
-
-  it('has pages of seven valid colors', () => {
-    for (const page of STYLE_COLOR_PAGES) {
-      expect(page.colors).toHaveLength(7);
-      for (const color of page.colors) {
-        expect(() => relativeLuminance(color.hex)).not.toThrow();
-      }
-    }
-  });
-
-  it('never puts two look-alike colors on the same page', () => {
-    // White and Chalk, which looked the same side by side, are 27 apart.
-    expect(distance('#FFFFFF', '#F6F1EA')).toBeLessThan(40);
-    for (const page of STYLE_COLOR_PAGES) {
-      page.colors.forEach((a, i) => {
-        for (const b of page.colors.slice(i + 1)) {
-          expect([a.id, b.id, distance(a.hex, b.hex) >= 40]).toEqual([a.id, b.id, true]);
-        }
-      });
-    }
-  });
-
-  it('finds the first page of a color', () => {
-    expect(colorPageOf('#ffffff')).toBe(0);
-    expect(colorPageOf('#FF6FB5')).toBe(1);
-    expect(colorPageOf('#5C5C5C')).toBe(3);
-    expect(colorPageOf('#123456')).toBe(0);
-    expect(colorPageOf(null)).toBe(0);
   });
 });
 

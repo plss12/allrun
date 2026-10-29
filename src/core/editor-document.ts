@@ -151,5 +151,12 @@ function sameTransform(a: LayerTransform, b: LayerTransform): boolean {
 }
 
 function sameBackground(a: DesignBackground, b: DesignBackground): boolean {
-  return a.kind === b.kind && (a.kind !== 'color' || (b.kind === 'color' && a.color === b.color));
+  switch (a.kind) {
+    case 'auto':
+      return b.kind === 'auto' && (a.opacity ?? 1) === (b.opacity ?? 1);
+    case 'color':
+      return b.kind === 'color' && a.color === b.color;
+    case 'transparent':
+      return b.kind === 'transparent';
+  }
 }

@@ -1,23 +1,21 @@
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { type ReactNode, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, type ScrollViewInstance, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
+import { splitOpacity } from '@/core/color-menu';
 import {
-  colorPageOf,
   layerColor,
   setAxisLabels,
   setBlockOptions,
   setChartOptions,
   setDataLabels,
   setLayerColor,
-  setLayerOpacity,
   setLogoOptions,
   setStrokeWidth,
   setTextStyle,
   STROKE_WIDTHS,
-  STYLE_COLOR_PAGES,
-  STYLE_OPACITIES,
   type TextStyle,
 } from '@/core/layer-style';
 import {
@@ -32,6 +30,7 @@ import { isAppReplica, isDataWidget } from '@/core/activity-block';
 import { isSummaryDataWidget, isSummaryReplica } from '@/core/summary-block';
 import { colors } from '@/theme/colors';
 
+import { ColorMenu, OpacityBar } from './color-menu';
 import { hasUnit } from './editor-data';
 import { keepingArea } from './font-change';
 import type { LayerContext } from './template-scene';
@@ -107,7 +106,7 @@ function backdropOf(layer: TextLayer | AnyChartLayer | BlockLayer): WidgetTools[
     : { value: format.backdrop, change: (backdrop) => change({ backdrop }) };
 }
 
-/** Height of a row of options (with the color dots). */
+/** Height of a row of options. */
 const OPTIONS_HEIGHT = 50;
 const ROW_GAP = 6;
 
@@ -115,31 +114,63 @@ interface StylePanelProps {
   readonly layer: Layer;
   /** The column's tool whose options show. */
   readonly tool: StyleTool;
-  readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
   /** How the layer is drawn, to keep its size when its font changes (see `keepingArea`). */
   readonly layerContext: LayerContext;
+  /** The widget's opacity while its bar is dragged, which the canvas draws. */
+  readonly liveOpacity: SharedValue<number>;
+  /** Called when the opacity bar starts being dragged. */
+  readonly onOpacityStart: () => void;
+  /** Called with the opacity chosen, once, when the bar is let go. */
+  readonly onOpacity: (opacity: number) => void;
+  readonly onEyedropper: () => void;
 }
 
 /**
- * The options of a tool of the widget column, in rows: the fonts over the format (or a route's
- * line widths), or the colors (or the logo's tones) over the opacity and the text's backdrop.
- * Every tap is one undo step.
+ * The options of a tool of the widget column: the fonts over the format (or a route's line
+ * widths), in rows; or the color menu with the text's backdrop under it (the logo's tones, or a
+ * replica's opacity alone, instead). Every choice is one undo step.
  */
-export function StylePanel({ layer, tool, locale, onChange, layerContext }: StylePanelProps) {
+export function StylePanel({
+  layer,
+  tool,
+  onChange,
+  layerContext,
+  liveOpacity,
+  onOpacityStart,
+  onOpacity,
+  onEyedropper,
+}: StylePanelProps) {
   const tools = widgetTools(layer);
-  const opacity = <OpacityRow key="opacity" layer={layer} locale={locale} onChange={onChange} />;
+  const opacityControl = {
+    value: layer.opacity,
+    live: liveOpacity,
+    onStart: onOpacityStart,
+    onEnd: onOpacity,
+  };
+  const color = layerColor(layer);
+  if (tool === 'color' && tools.color === 'colors' && color !== null) {
+    return (
+      <ColorMenu
+        color={splitOpacity(color).hex}
+        onColor={(hex) => onChange((template) => setLayerColor(template, layer.id, hex))}
+        opacity={opacityControl}
+        onEyedropper={onEyedropper}
+      >
+        {tools.backdrop === null ? null : (
+          <View style={{ height: OPTIONS_HEIGHT, justifyContent: 'center' }}>
+            <BackdropRow backdrop={tools.backdrop} onChange={onChange} />
+          </View>
+        )}
+      </ColorMenu>
+    );
+  }
+  const opacity = <OpacityBar key="opacity" control={opacityControl} color="#FFFFFF" />;
   const rows = ((): ReactNode[] => {
     if (tool === 'color') {
       switch (tools.color) {
         case 'colors':
-          return [
-            <ColorPager key="colors" layer={layer} onChange={onChange} />,
-            opacity,
-            ...(tools.backdrop === null
-              ? []
-              : [<BackdropRow key="backdrop" backdrop={tools.backdrop} onChange={onChange} />]),
-          ];
+          return [opacity];
         case 'tones':
           return layer.kind === 'logo'
             ? [<LogoRow key="tones" layer={layer} onChange={onChange} />, opacity]
@@ -357,117 +388,6 @@ function WidgetOptions({
   );
 }
 
-/** Largest swatch; touches reach 44 pt through a small slop. Smaller when seven don't fit. */
-const SWATCH = 40;
-const COLORS_PER_PAGE = 7;
-
-/** Pages of seven swatches swiped sideways, with a dot per page that also jumps to it. */
-function ColorPager({
-  layer,
-  onChange,
-}: {
-  readonly layer: Layer;
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const { t } = useTranslation();
-  const current = layerColor(layer)?.toUpperCase() ?? null;
-  const [width, setWidth] = useState(0);
-  const [page, setPage] = useState(() => colorPageOf(current));
-  const pager = useRef<ScrollViewInstance>(null);
-  const swatch = Math.min(SWATCH, width / COLORS_PER_PAGE);
-  const goTo = (index: number, animated: boolean) => {
-    pager.current?.scrollTo({ x: index * width, animated });
-    setPage(index);
-  };
-  return (
-    <View style={{ gap: 4 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
-      {width === 0 ? (
-        <View style={{ height: SWATCH }} />
-      ) : (
-        <ScrollView
-          ref={pager}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          // Opens on the page of the layer's color.
-          onLayout={() => pager.current?.scrollTo({ x: page * width, animated: false })}
-          onMomentumScrollEnd={(event) =>
-            setPage(Math.round(event.nativeEvent.contentOffset.x / width))
-          }
-        >
-          {STYLE_COLOR_PAGES.map((colorPage) => (
-            <View
-              key={colorPage.id}
-              style={{
-                width,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              {colorPage.colors.map((color) => {
-                const selected = current === color.hex;
-                return (
-                  <Pressable
-                    key={`${colorPage.id}-${color.id}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={t(`style.colors.${color.id}`)}
-                    accessibilityState={{ selected }}
-                    hitSlop={2}
-                    onPress={() =>
-                      onChange((template) => setLayerColor(template, layer.id, color.hex))
-                    }
-                    style={({ pressed }) => ({
-                      width: swatch,
-                      height: swatch,
-                      borderRadius: swatch / 2,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 2,
-                      borderColor: selected ? colors.tint : 'transparent',
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                  >
-                    <View
-                      style={{
-                        width: swatch - 12,
-                        height: swatch - 12,
-                        borderRadius: (swatch - 12) / 2,
-                        backgroundColor: color.hex,
-                        // Light swatches would vanish on a light interface without an edge.
-                        borderWidth: 1,
-                        borderColor: colors.separator,
-                      }}
-                    />
-                  </Pressable>
-                );
-              })}
-            </View>
-          ))}
-        </ScrollView>
-      )}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
-        {STYLE_COLOR_PAGES.map((colorPage, index) => (
-          <Pressable
-            key={colorPage.id}
-            accessibilityRole="button"
-            accessibilityLabel={t(`style.colorPages.${colorPage.id}`)}
-            accessibilityState={{ selected: index === page }}
-            hitSlop={10}
-            onPress={() => goTo(index, true)}
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: index === page ? colors.label : colors.separator,
-            }}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
 /** The bundled fonts, each named by its style and written in itself. */
 function FontRow({
   font: current,
@@ -613,30 +533,6 @@ function BackdropRow({
           label={t(`style.backdrops.${option}`)}
           selected={backdrop.value === option}
           onPress={() => onChange(backdrop.change(option))}
-        />
-      ))}
-    </Row>
-  );
-}
-
-function OpacityRow({
-  layer,
-  locale,
-  onChange,
-}: {
-  readonly layer: Layer;
-  readonly locale: string;
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const percent = new Intl.NumberFormat(locale, { style: 'percent' });
-  return (
-    <Row>
-      {STYLE_OPACITIES.map((opacity) => (
-        <Chip
-          key={opacity}
-          label={percent.format(opacity)}
-          selected={Math.abs(layer.opacity - opacity) < 0.005}
-          onPress={() => onChange((template) => setLayerOpacity(template, layer.id, opacity))}
         />
       ))}
     </Row>

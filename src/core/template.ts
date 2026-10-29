@@ -888,9 +888,11 @@ const photoPlacementSchema = z.object({
 /**
  * What shows where the photo leaves the canvas empty, and with no photo: the photo's dominant
  * color (`auto`, none without a photo), a color, or nothing (the image exports transparent).
+ * The photo's color may be see-through (`opacity`, opaque when absent); a color carries its own
+ * as `#RRGGBBAA`.
  */
 const backgroundSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('auto') }),
+  z.object({ kind: z.literal('auto'), opacity: z.number().min(0).max(1).optional() }),
   z.object({ kind: z.literal('color'), color: colorSchema }),
   z.object({ kind: z.literal('transparent') }),
 ]);

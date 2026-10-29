@@ -78,6 +78,10 @@ describe('setLayers, setFormat, setPhotoPlacement and setBackground', () => {
     expect(setFormat(INITIAL_DESIGN, 'story')).toBe(INITIAL_DESIGN);
     expect(setPhotoPlacement(INITIAL_DESIGN, { ...COVER_PLACEMENT })).toBe(INITIAL_DESIGN);
     expect(setBackground(INITIAL_DESIGN, { kind: 'auto' })).toBe(INITIAL_DESIGN);
+    expect(setBackground(INITIAL_DESIGN, { kind: 'auto', opacity: 1 })).toBe(INITIAL_DESIGN);
+    const faint = setBackground(INITIAL_DESIGN, { kind: 'auto', opacity: 0.5 });
+    expect(faint.background).toEqual({ kind: 'auto', opacity: 0.5 });
+    expect(setBackground(faint, { kind: 'auto', opacity: 0.5 })).toBe(faint);
     const dark = setBackground(INITIAL_DESIGN, night);
     expect(setBackground(dark, { ...night })).toBe(dark);
   });

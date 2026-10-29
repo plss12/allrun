@@ -23,7 +23,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/app/`: solo pantallas y layouts (Expo Router).
 - `src/core/`: dominio puro y testeado (deportes, métricas, resúmenes, gráficas, widgets, plantillas, catálogo de la galería, exportación). Sin imports de React Native ni de E/S.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/schema.ts` valida con Zod y mapea al modelo `Activity`, y `strava/detail.ts` los _streams_, parciales y vueltas al `ActivityDetail`; `fixtures/` genera un historial sintético con el formato de Strava (y _streams_, parciales y vueltas coherentes con los totales: algunas carreras son series) que pasa por esos mismos esquemas.
-- `src/data/`: proveedores de datos de la app: la fuente de actividades, el almacén de plantillas del usuario (`TemplateStore`: un JSON por plantilla en local; Supabase cuando llegue el login) y el nombre del lugar de una actividad (`place-lookup.ts`, con el geocodificador del sistema hasta el hito 4).
+- `src/data/`: proveedores de datos de la app: la fuente de actividades, el almacén de plantillas del usuario (`TemplateStore`: un JSON por plantilla en local; Supabase cuando llegue el login), los colores favoritos (`color-favorites.ts`, un JSON en local) y el nombre del lugar de una actividad (`place-lookup.ts`, con el geocodificador del sistema hasta el hito 4).
 - `src/editor/`: lienzo Skia, widgets, galería, gestos y exportación.
 - `src/home/`: inicio: galería de actividades, tarjetas de resumen por periodo y su gráfica de línea.
 - `src/ui/`: piezas comunes de interfaz (formato de fechas y datos, estados de carga y error, la pantalla de carga).

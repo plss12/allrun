@@ -170,13 +170,20 @@ export interface TemplateSceneProps {
   readonly layers: readonly PreparedLayer[];
   /**
    * What shows where the photo leaves the canvas empty (and with no photo):
-   * - `color`: the design's background;
+   * - `color`: the design's background, at `opacity` when given (on screen, live while its bar
+   *   moves), and over the checkerboard when `onChecker` (on screen, where a translucent one shows
+   *   what it lets through);
    * - `checker`: nothing, shown as the usual checkerboard of transparency (dark, so white widgets
    *   stay readable), on screen;
    * - `none`: nothing, for the transparent export.
    */
   readonly backdrop:
-    | { readonly kind: 'color'; readonly color: string }
+    | {
+        readonly kind: 'color';
+        readonly color: string;
+        readonly opacity?: SharedValue<number>;
+        readonly onChecker?: boolean;
+      }
     | { readonly kind: 'checker' }
     | { readonly kind: 'none' };
   /**
@@ -245,13 +252,21 @@ export function TemplateScene({
   const { width, height } = canvas;
   return (
     <Group>
-      {backdrop.kind === 'checker' ? (
+      {backdrop.kind === 'checker' || (backdrop.kind === 'color' && backdrop.onChecker === true) ? (
         <Group clip={{ x: 0, y: 0, width, height }}>
           <Rect x={0} y={0} width={width} height={height} color={CHECKER_DARK} />
           <Path path={checkerPath(format)} color={CHECKER_LIGHT} />
         </Group>
-      ) : backdrop.kind === 'color' ? (
-        <Rect x={0} y={0} width={width} height={height} color={backdrop.color} />
+      ) : null}
+      {backdrop.kind === 'color' ? (
+        <Rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          color={backdrop.color}
+          opacity={backdrop.opacity}
+        />
       ) : null}
       {photo === null ? null : (
         <Group clip={{ x: 0, y: 0, width, height }}>

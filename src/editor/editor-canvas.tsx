@@ -35,6 +35,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { splitOpacity } from '@/core/color-menu';
 import {
   hitTestLayers,
   LAYER_MARGIN,
@@ -83,11 +84,13 @@ interface EditorCanvasProps {
   /** Id of the selected layer, or `null`. */
   readonly selectedId: string | null;
   /**
-   * Whether the size slider is being dragged: the selected layer is drawn at `liveScale`
-   * meanwhile, without a render per frame.
+   * What is being adjusted on a bar, if anything: the selected layer's size, drawn at
+   * `adjustedScale` meanwhile, or its opacity, or the background's, at `adjustedOpacity`, without
+   * a render per frame.
    */
-  readonly resizing: boolean;
-  readonly liveScale: SharedValue<number>;
+  readonly adjusting: 'scale' | 'opacity' | 'background' | null;
+  readonly adjustedScale: SharedValue<number>;
+  readonly adjustedOpacity: SharedValue<number>;
   readonly onSelect: (id: string | null) => void;
   /** Called on a tap on the layer already selected: a text or a verse is edited. */
   readonly onTapSelected: (id: string) => void;
@@ -204,8 +207,9 @@ export function EditorCanvas({
   placement,
   backdrop,
   selectedId,
-  resizing,
-  liveScale,
+  adjusting,
+  adjustedScale,
+  adjustedOpacity,
   onSelect,
   onTapSelected,
   onSelectedSizeChange,
@@ -528,20 +532,30 @@ export function EditorCanvas({
   const liveFrameRect = useDerivedValue(() =>
     frameRect(liveTransform.get(), dragged?.width ?? 0, dragged?.height ?? 0, frameInset),
   );
-  // The selected layer at the size slider's scale, while it is dragged.
+  // The selected layer at the size slider's scale, or the opacity bar's, while one is dragged.
   const selectedTransform = selected?.transform ?? IDENTITY;
-  const resizedTransform = useDerivedValue((): LayerTransform => ({
-    ...selectedTransform,
-    scale: liveScale.get(),
-  }));
-  const resizedMatrix = useDerivedValue(() => layerMatrix(resizedTransform.get(), canvas));
   const selectedOpacity = layers.find(({ layer }) => layer.id === selectedId)?.layer.opacity ?? 1;
-  const resizedOpacity = useDerivedValue(() => selectedOpacity);
+  const resizedTransform = useDerivedValue((): LayerTransform =>
+    adjusting === 'scale'
+      ? { ...selectedTransform, scale: adjustedScale.get() }
+      : selectedTransform,
+  );
+  const resizedMatrix = useDerivedValue(() => layerMatrix(resizedTransform.get(), canvas));
+  const resizedOpacity = useDerivedValue(() =>
+    adjusting === 'opacity' ? adjustedOpacity.get() : selectedOpacity,
+  );
   const resizedFrameMatrix = useDerivedValue(() => frameMatrix(resizedTransform.get(), canvas));
   const resizedFrameRect = useDerivedValue(() =>
     frameRect(resizedTransform.get(), selectedWidth, selectedHeight, frameInset),
   );
-  const resized = resizing && draggingId === null ? selected : null;
+  const resized =
+    (adjusting === 'scale' || adjusting === 'opacity') && draggingId === null ? selected : null;
+  // The background's color, at its own opacity or the bar's while it moves.
+  const background = backdrop === null ? null : splitOpacity(backdrop);
+  const backgroundOpacity = background?.opacity ?? 1;
+  const liveBackgroundOpacity = useDerivedValue(() =>
+    adjusting === 'background' ? adjustedOpacity.get() : backgroundOpacity,
+  );
 
   const frame =
     selected === null
@@ -584,7 +598,14 @@ export function EditorCanvas({
               format={template.format}
               layers={layers}
               backdrop={
-                backdrop === null ? { kind: 'checker' } : { kind: 'color', color: backdrop }
+                background === null
+                  ? { kind: 'checker' }
+                  : {
+                      kind: 'color',
+                      color: background.hex,
+                      opacity: liveBackgroundOpacity,
+                      onChecker: true,
+                    }
               }
               photo={
                 photo === null

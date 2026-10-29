@@ -10,6 +10,7 @@ import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
+  type SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -49,6 +50,7 @@ import {
   type NewLayer,
   summaryCatalog,
 } from '@/core/layer-catalog';
+import { splitOpacity, withOpacity } from '@/core/color-menu';
 import { backgroundColor } from '@/core/design-background';
 import { LAYER_MARGIN, layerVerticalReach, liftToClear } from '@/core/layer-transform';
 import { COVER_PLACEMENT, samePlacement, type Size } from '@/core/photo-placement';
@@ -56,7 +58,14 @@ import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { startOf } from '@/core/place';
 import { SPORT_FAMILIES } from '@/core/sports';
 import { selectActivities, summarize } from '@/core/summary';
-import { type CanvasFormat, CANVAS_FORMATS, type Layer, type Template } from '@/core/template';
+import { setLayerOpacity } from '@/core/layer-style';
+import {
+  type CanvasFormat,
+  CANVAS_FORMATS,
+  type DesignBackground,
+  type Layer,
+  type Template,
+} from '@/core/template';
 import {
   addLayer,
   canAddLayer,
@@ -77,7 +86,7 @@ import {
 import { useActivitySource } from '@/data/activity-source';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
-import { BackgroundPicker } from '@/editor/background-picker';
+import { ColorMenu } from '@/editor/color-menu';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar } from '@/editor/editor-top-bar';
@@ -318,9 +327,18 @@ function EditorWorkspace({
   const [selectedSize, setSelectedSize] = useState<Size | null>(null);
   /** The dock's height, as laid out: where its top edge is. */
   const [dockHeight, setDockHeight] = useState(0);
-  /** The selected widget's scale while the size slider is dragged, drawn by the canvas. */
+  /**
+   * The selected widget's scale or opacity while its bar is dragged, drawn by the canvas, and
+   * which of them is.
+   */
   const liveScale = useSharedValue(1);
-  const [resizing, setResizing] = useState(false);
+  const liveOpacity = useSharedValue(1);
+  const [adjusting, setAdjusting] = useState<'scale' | 'opacity' | 'background' | null>(null);
+  /** Whether the photo's tools give way to the color menu of the design's background. */
+  const [backgroundMenu, setBackgroundMenu] = useState(false);
+  if (backgroundMenu && !photoTools) {
+    setBackgroundMenu(false);
+  }
   /** The widget whose verse, quote or phrase is being chosen again from its list. */
   const [choosingId, setChoosingId] = useState<string | null>(null);
   const choosing = template.layers.find((layer) => layer.id === choosingId);
@@ -784,8 +802,9 @@ function EditorWorkspace({
               placement={design.photo}
               backdrop={backgroundColor(design.background, dominant)}
               selectedId={typing ? null : selectedId}
-              resizing={resizing}
-              liveScale={liveScale}
+              adjusting={adjusting}
+              adjustedScale={liveScale}
+              adjustedOpacity={liveOpacity}
               onSelect={selectLayer}
               onTapSelected={tapSelected}
               onSelectedSizeChange={setSelectedSize}
@@ -896,13 +915,13 @@ function EditorWorkspace({
               canSendToBack: canMoveLayer(template, selected.id, 'back'),
             }}
             liveScale={liveScale}
-            onResizeStart={() => setResizing(true)}
+            onResizeStart={() => setAdjusting('scale')}
             onResize={(scale) => {
               // The new size and the end of the live drawing in one update: no stale frame.
               edit((current) =>
                 setLayerTransform(current, selected.id, { ...selected.transform, scale }),
               );
-              setResizing(false);
+              setAdjusting(null);
             }}
           />
         </View>
@@ -981,7 +1000,9 @@ function EditorWorkspace({
                 ? exporter.stop
                 : dock === 'style'
                   ? () => setTool(null)
-                  : () => setPhotoTools(false)
+                  : backgroundMenu
+                    ? () => setBackgroundMenu(false)
+                    : () => setPhotoTools(false)
             }
           >
             {dock === 'export' ? (
@@ -990,9 +1011,30 @@ function EditorWorkspace({
               <StylePanel
                 layer={styled.layer}
                 tool={styled.tool}
-                locale={locale}
                 onChange={edit}
                 layerContext={layerContext}
+                liveOpacity={liveOpacity}
+                onOpacityStart={() => setAdjusting('opacity')}
+                onOpacity={(opacity) => {
+                  // As with the size: the opacity and the end of the live drawing together.
+                  edit((current) => setLayerOpacity(current, styled.layer.id, opacity));
+                  setAdjusting(null);
+                }}
+                onEyedropper={comingSoon}
+              />
+            ) : backgroundMenu ? (
+              <BackgroundMenu
+                background={design.background}
+                dominant={dominant}
+                onChange={(background) => change((current) => setBackground(current, background))}
+                liveOpacity={liveOpacity}
+                onOpacityStart={() => setAdjusting('background')}
+                onOpacity={(background) => {
+                  // As with a widget's: the opacity and the end of the live drawing together.
+                  change((current) => setBackground(current, background));
+                  setAdjusting(null);
+                }}
+                onEyedropper={comingSoon}
               />
             ) : (
               <>
@@ -1015,12 +1057,12 @@ function EditorWorkspace({
                     disabled={photo === null}
                     destructive
                   />
+                  <ActionTile
+                    icon={{ ios: 'paintbrush.fill', android: 'format_paint' }}
+                    label={t('editor.background')}
+                    onPress={() => setBackgroundMenu(true)}
+                  />
                 </View>
-                <BackgroundPicker
-                  background={design.background}
-                  dominant={dominant}
-                  onChange={(background) => change((current) => setBackground(current, background))}
-                />
               </>
             )}
           </Dock>
@@ -1052,6 +1094,91 @@ function readDominant(image: SkImage): string | null {
     logError("Could not read the photo's dominant color", error);
     return null;
   }
+}
+
+/**
+ * The design's background in the color menu: the photo's own color (auto, its dominant one) and
+ * none (transparent, as a sticker) first, then any color; the photo's color or any other, at an
+ * opacity. Without a photo's color, auto is none: only "Transparent" shows, chosen. Each choice is
+ * one undo step.
+ */
+function BackgroundMenu({
+  background,
+  dominant,
+  onChange,
+  liveOpacity,
+  onOpacityStart,
+  onOpacity,
+  onEyedropper,
+}: {
+  readonly background: DesignBackground;
+  /** The photo's dominant color, shown on the auto swatch; `null` while unknown. */
+  readonly dominant: string | null;
+  readonly onChange: (background: DesignBackground) => void;
+  /** The background's opacity while its bar is dragged, which the canvas draws. */
+  readonly liveOpacity: SharedValue<number>;
+  readonly onOpacityStart: () => void;
+  /** Called with the background at the opacity chosen, once, when the bar is let go. */
+  readonly onOpacity: (background: DesignBackground) => void;
+  readonly onEyedropper: () => void;
+}) {
+  const { t } = useTranslation();
+  const own = background.kind === 'color' ? splitOpacity(background.color) : null;
+  const photoColor = background.kind === 'auto' ? dominant : null;
+  // What the bar fades, and at what opacity: a color, or the photo's; none has no opacity.
+  const shown =
+    own ?? (photoColor === null ? null : { hex: photoColor, opacity: autoOpacity(background) });
+  /** The photo's color at `opacity`, opaque without the field. */
+  const auto = (opacity: number): DesignBackground =>
+    opacity < 1 ? { kind: 'auto', opacity } : { kind: 'auto' };
+  return (
+    <ColorMenu
+      color={own?.hex ?? null}
+      onColor={(hex) => onChange({ kind: 'color', color: withOpacity(hex, shown?.opacity ?? 1) })}
+      opacity={{
+        value: shown?.opacity ?? 1,
+        disabled: shown === null,
+        color: shown?.hex,
+        live: liveOpacity,
+        onStart: onOpacityStart,
+        onEnd: (opacity) => {
+          if (own !== null) {
+            onOpacity({ kind: 'color', color: withOpacity(own.hex, opacity) });
+          } else if (background.kind === 'auto') {
+            onOpacity(auto(opacity));
+          }
+        },
+      }}
+      specials={[
+        ...(dominant === null
+          ? []
+          : [
+              {
+                key: 'auto',
+                label: t('editor.backgrounds.auto'),
+                fill: dominant,
+                selected: background.kind === 'auto',
+                onPress: () => onChange(auto(shown?.opacity ?? 1)),
+              },
+            ]),
+        {
+          key: 'transparent',
+          label: t('editor.backgrounds.transparent'),
+          fill: null,
+          // Without the photo's color, auto shows nothing: it is none.
+          selected:
+            background.kind === 'transparent' || (background.kind === 'auto' && dominant === null),
+          onPress: () => onChange({ kind: 'transparent' }),
+        },
+      ]}
+      onEyedropper={onEyedropper}
+    />
+  );
+}
+
+/** The opacity of a background of the photo's color, 1 when it has none. */
+function autoOpacity(background: DesignBackground): number {
+  return background.kind === 'auto' ? (background.opacity ?? 1) : 1;
 }
 
 /**
