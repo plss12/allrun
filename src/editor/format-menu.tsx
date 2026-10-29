@@ -4,14 +4,17 @@ import { Pressable, Text, View } from 'react-native';
 import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
 import { colors } from '@/theme/colors';
 
-import { ACTION_TILE_HEIGHT } from './action-tile';
+import { floatingSurface } from '@/theme/card-surface';
+
+import { FLOATING_INK } from './round-button';
 
 /** Formats from tallest to widest. */
 const FORMATS: readonly CanvasFormat[] = ['story', 'tall', 'portrait', 'square', 'landscape'];
-/** Longest side of the shape drawn on each format button. */
-const SHAPE = 28;
+/** Longest side of the shape drawn on each format's row. */
+const SHAPE = 24;
+const ROW_HEIGHT = 44;
 
-/** Size of a format's shape on its button: its proportions, with the longer side fixed. */
+/** Size of a format's shape: its proportions, with the longer side fixed. */
 function formatShape(format: CanvasFormat): { width: number; height: number } {
   const { width, height } = CANVAS_FORMATS[format];
   return width >= height
@@ -19,8 +22,11 @@ function formatShape(format: CanvasFormat): { width: number; height: number } {
     : { width: (SHAPE * width) / height, height: SHAPE };
 }
 
-/** The canvas formats in one row, each button showing its shape and proportions. */
-export function FormatPicker({
+/**
+ * The canvas formats in a floating panel, opened from the editor's Ratio button: a row per
+ * format with its shape and proportions, the chosen one lit.
+ */
+export function FormatMenu({
   format: current,
   onPick,
 }: {
@@ -30,34 +36,34 @@ export function FormatPicker({
   const { t } = useTranslation();
   return (
     <View
-      style={{ flexDirection: 'row', gap: 6 }}
-      accessibilityRole="tablist"
+      accessibilityRole="menu"
       accessibilityLabel={t('editor.format')}
+      style={{ ...floatingSurface(18), padding: 6, gap: 2 }}
     >
       {FORMATS.map((format) => {
         const chosen = format === current;
-        const ink = chosen ? colors.onTint : colors.label;
+        const ink = chosen ? colors.onTint : FLOATING_INK;
         return (
           <Pressable
             key={format}
-            accessibilityRole="tab"
+            accessibilityRole="menuitem"
             accessibilityLabel={t(`formats.${format}`)}
             accessibilityState={{ selected: chosen }}
-            hitSlop={4}
             onPress={() => onPick(format)}
             style={({ pressed }) => ({
-              flex: 1,
-              height: ACTION_TILE_HEIGHT,
-              borderRadius: 14,
-              borderCurve: 'continuous',
+              height: ROW_HEIGHT,
+              minWidth: 104,
+              paddingHorizontal: 12,
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              backgroundColor: chosen ? colors.tint : colors.secondarySystemBackground,
+              gap: 12,
+              borderRadius: 12,
+              borderCurve: 'continuous',
+              backgroundColor: chosen ? colors.tint : 'transparent',
               opacity: pressed ? 0.7 : 1,
             })}
           >
-            <View style={{ height: SHAPE, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: SHAPE, alignItems: 'center' }}>
               <View
                 style={{
                   ...formatShape(format),
@@ -69,10 +75,8 @@ export function FormatPicker({
             </View>
             <Text
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
               maxFontSizeMultiplier={1.3}
-              style={{ color: ink, fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] }}
+              style={{ color: ink, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] }}
             >
               {t(`formatRatios.${format}`)}
             </Text>

@@ -3,12 +3,15 @@ import {
   launchImageLibraryAsync,
   UIImagePickerPreferredAssetRepresentationMode,
 } from 'expo-image-picker';
-import { Stack, useLocalSearchParams, usePreventRemove } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
+import { sportIcon } from '@/core/activity-block';
 import { availableActivityCharts } from '@/core/activity-charts';
 import { customRange } from '@/core/dates';
 import {
@@ -18,13 +21,18 @@ import {
   newLayer,
 } from '@/core/default-layout';
 import {
-  canRestore,
+  canStartOver,
   type DefaultTemplate,
   editLayers,
+  type EditorDesign,
   type EditorLayers,
-  INITIAL_FORMAT,
+  INITIAL_DESIGN,
   layoutTemplate,
+  setFormat,
+  setFraming,
+  setLayers,
   setLayerTransform,
+  startOver,
 } from '@/core/editor-document';
 import { canRedo, canUndo, commit, createHistory, redo, undo } from '@/core/history';
 import {
@@ -33,7 +41,7 @@ import {
   type NewLayer,
   summaryCatalog,
 } from '@/core/layer-catalog';
-import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
+import { DEFAULT_FRAMING } from '@/core/photo-framing';
 import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { startOf } from '@/core/place';
 import { SPORT_FAMILIES } from '@/core/sports';
@@ -56,7 +64,10 @@ import {
 } from '@/core/text-draft';
 import { useActivitySource } from '@/data/activity-source';
 import { useUserTemplates } from '@/data/user-templates';
+import { ActionTile } from '@/editor/action-tile';
 import { EditorCanvas } from '@/editor/editor-canvas';
+import { EditorSideMenu } from '@/editor/editor-side-menu';
+import { EditorTopBar, TOP_BAR_GAP } from '@/editor/editor-top-bar';
 import { ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
 import type { ExportDesign } from '@/editor/export-scene';
@@ -65,15 +76,22 @@ import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
-import { FormatPicker } from '@/editor/format-picker';
 import { LayerSheet } from '@/editor/layer-sheet';
+import { Notice, useNotice } from '@/editor/notice';
 import type { PickedPhoto } from '@/editor/photo-plan';
 import { preparePhoto } from '@/editor/prepare-photo';
-import { QuickActions } from '@/editor/quick-actions';
+import {
+  FLOATING_INK,
+  KeptMounted,
+  PillButton,
+  ROUND_BUTTON_SIZE,
+  RoundButton,
+} from '@/editor/round-button';
 import { SelectionBar } from '@/editor/selection-bar';
-import { STYLE_PANEL_HEIGHT, StylePanel } from '@/editor/style-panel';
+import { StylePanel } from '@/editor/style-panel';
 import { TemplateSheet } from '@/editor/template-sheet';
 import { useExport } from '@/editor/use-export';
+import { floatingSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
@@ -111,16 +129,15 @@ interface EditorPhoto {
   readonly exportUri: string | null;
 }
 
-const MAIN_BUTTON_HEIGHT = 50;
-/** Room under the controls, above the home indicator. */
-const CONTROLS_BOTTOM = 32;
-
-/**
- * Height of the controls under the canvas: a row of tiles (the formats, the quick actions or the
- * selected layer's actions) or the style panel, and the main buttons. It never changes, so
- * neither does the canvas, whichever step the editor is in.
- */
-const CONTROLS_HEIGHT = STYLE_PANEL_HEIGHT + 12 + MAIN_BUTTON_HEIGHT + CONTROLS_BOTTOM;
+/** Room between the screen's safe area and the floating controls, in points. */
+const EDGE = 12;
+const MAIN_BUTTON_HEIGHT = 44;
+/** Where the right column starts, under the top right buttons, from the safe area's top. */
+const BELOW_TOP_BAR = EDGE + ROUND_BUTTON_SIZE + 12;
+/** Where a dock on top starts: under the left column (close, undo, redo, Start over). */
+const BELOW_LEFT_COLUMN = EDGE + 4 * ROUND_BUTTON_SIZE + 3 * TOP_BAR_GAP + 12;
+/** The bottom row: "+", "Aa" and export. */
+const BOTTOM_BUTTON_SIZE = 56;
 
 export default function Editor() {
   const { t } = useTranslation();
@@ -190,6 +207,13 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
   return <EditorWorkspace data={data.data} fonts={fonts} />;
 }
 
+/**
+ * The editor, in one step and full screen (ADR 009): the canvas fills the screen and the controls
+ * float over it. On top, close, undo, redo, Start over, adding an image, depth and export; on the
+ * right, the design's menus (Collages, Designs, Ratio, Activity); at the bottom, "+" and "Aa".
+ * A selected widget's actions, the photo's (a tap on it) and the export's float in a dock, at the
+ * bottom or, for a widget in the lower half, at the top, so they never cover what they change.
+ */
 function EditorWorkspace({
   data: loaded,
   fonts,
@@ -198,6 +222,8 @@ function EditorWorkspace({
   readonly fonts: NonNullable<ReturnType<typeof useEditorFonts>>;
 }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const notice = useNotice();
   const { unit, locale } = useDisplaySettings();
   /**
    * Where the activity was done, for its place widget: named in the background, without asking
@@ -222,41 +248,30 @@ function EditorWorkspace({
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
       : defaultSummaryTemplate(data.summary, format);
-  /**
-   * The editor works in two steps on the same canvas: first the photo (optional: without one the
-   * image is transparent), its format and framing (the layers show but can't be touched), then
-   * the design, where the photo can still be framed
-   * but neither replaced nor given another format. Laying out widgets in one format and then
-   * switching to a very different one would pile them up.
-   */
-  const [step, setStep] = useState<'photo' | 'design'>('photo');
-  // The format and the photo framing come first and stay out of the history: undo and Start
-  // over only change the widgets (see `EditorLayers`).
-  const [format, setFormat] = useState<CanvasFormat>(INITIAL_FORMAT);
-  const [framing, setFraming] = useState<PhotoFraming>(DEFAULT_FRAMING);
-  const [history, setHistory] = useState(() => createHistory<EditorLayers>(null));
-  const template = layoutTemplate(defaultTemplate, format, history.present);
-  /** Applies an edit of the widgets as one undo step (none when it changes nothing). */
-  const edit = (change: (template: Template) => Template) =>
-    setHistory((current) =>
-      commit(
-        current,
-        editLayers(
-          current.present,
-          layoutTemplate(defaultTemplate, format, current.present),
-          change,
-        ),
-      ),
-    );
+  /** The whole design, format and framing included, one undo step per gesture or change. */
+  const [history, setHistory] = useState(() => createHistory<EditorDesign>(INITIAL_DESIGN));
+  const design = history.present;
+  const template = layoutTemplate(defaultTemplate, design);
+  /** Applies a change of the design as one undo step (none when it changes nothing). */
+  const change = (next: (current: EditorDesign) => EditorDesign) =>
+    setHistory((current) => commit(current, next(current.present)));
+  /** Applies an edit of the widgets as one undo step. */
+  const edit = (next: (template: Template) => Template) =>
+    change((current) => editLayers(current, defaultTemplate, next));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Undo can take away the selected layer; then nothing is selected.
   const selected = template.layers.find((layer) => layer.id === selectedId) ?? null;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [formatsOpen, setFormatsOpen] = useState(false);
+  /** Whether the photo's actions show, after a tap on it. */
+  const [photoTools, setPhotoTools] = useState(false);
+  /** A widget is being dragged: the controls step aside, as in a story editor. */
+  const [dragging, setDragging] = useState(false);
   const userTemplates = useUserTemplates();
   /**
-   * Whether the style panel replaces the bottom controls. It closes when nothing is selected; a
-   * tap on another layer switches the panel to it.
+   * Whether the style panel replaces the selected layer's actions. It closes when nothing is
+   * selected; a tap on another layer switches the panel to it.
    */
   const [styling, setStyling] = useState(false);
   const styled = styling ? selected : null;
@@ -306,24 +321,30 @@ function EditorWorkspace({
         )
       : summaryCatalog(data.summary, data.bucketSize);
   const [photo, setPhoto] = useState<EditorPhoto | null>(null);
-  const [photoError, setPhotoError] = useState(false);
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const [nextPhotoId, setNextPhotoId] = useState(1);
   /** The full-quality copy being prepared in the background, to wait for it when exporting. */
   const pendingExportCopy = useRef<{ id: number; uri: Promise<string> } | null>(null);
   /**
-   * Exporting replaces the design controls with what to do with the image; the canvas, frozen
-   * meanwhile, shows exactly what is exported.
+   * Exporting replaces the controls with what to do with the image; the canvas, frozen meanwhile,
+   * shows exactly what is exported.
    */
   const exporter = useExport();
   const exporting = exporter.state.status !== 'idle';
-  const startExport = () =>
+  const startExport = () => {
+    setSelectedId(null);
+    setPhotoTools(false);
+    setFormatsOpen(false);
     exporter.start(async (): Promise<ExportDesign> => ({
       template,
       layerContext,
-      framing,
+      framing: design.framing,
       photo: photo === null ? null : await loadPhoto(await exportCopyOf(photo)),
     }));
+  };
+
+  /** Says that a planned button's feature is on its way (ADR 009: every button shows already). */
+  const comingSoon = () => notice.show(t('editor.comingSoon'));
 
   /** Applies a change only if `id` is still the current photo. */
   const updatePhoto = (id: number, change: Partial<EditorPhoto>) =>
@@ -332,7 +353,7 @@ function EditorWorkspace({
   const failPhoto = (id: number, context: string, error: unknown) => {
     logError(context, error);
     setPhoto((current) => (current?.id === id ? null : current));
-    setPhotoError(true);
+    notice.show(t('editor.photoError'));
   };
 
   /**
@@ -416,7 +437,7 @@ function EditorWorkspace({
     edit((current) =>
       addLayer(current, newLayer(item, id, current.format, designFont(current.layers))),
     );
-    setSelectedId(id);
+    selectLayer(id);
     setSheetOpen(false);
   };
 
@@ -425,14 +446,21 @@ function EditorWorkspace({
    * closes the sheet.
    */
   const chooseTemplate = (layers: EditorLayers) => {
-    setHistory((current) => commit(current, layers));
+    change((current) => setLayers(current, layers));
     setSelectedId(null);
     setTemplatesOpen(false);
+  };
+
+  /** Another format, as one undo step: the widgets keep their relative places. */
+  const chooseFormat = (format: CanvasFormat) => {
+    change((current) => setFormat(current, format));
+    setFormatsOpen(false);
   };
 
   /** Opens the keyboard to type a text. */
   const startTyping = (draft: TextDraft) => {
     setStyling(false);
+    setPhotoTools(false);
     setTextDraft(draft);
   };
 
@@ -456,29 +484,41 @@ function EditorWorkspace({
     setSelectedId(copyId);
   };
 
+  /** Selects a layer (`null`: none); the photo's actions give way to it. */
+  const selectLayer = (id: string | null) => {
+    setSelectedId(id);
+    if (id !== null) {
+      setPhotoTools(false);
+    }
+  };
+
+  /** A tap on the photo first lets go of the selected widget; then it shows the photo's actions. */
+  const tapPhoto = () => {
+    if (selectedId !== null) {
+      setSelectedId(null);
+    } else if (photo !== null) {
+      setPhotoTools((shown) => !shown);
+    }
+  };
+
   const size = CANVAS_FORMATS[template.format];
   const displayWidth =
     area === null ? 0 : Math.min(area.width, (area.height * size.width) / size.height);
   const displayHeight = (displayWidth * size.height) / size.width;
+  // The canvas's top-left corner, from the safe area's top-left corner.
+  const canvasLeft = ((area?.width ?? 0) - displayWidth) / 2;
+  const canvasTop = ((area?.height ?? 0) - displayHeight) / 2;
 
-  /**
-   * Where a layer is on screen, in the editor's coordinates: the canvas is centered in its area,
-   * inside a 16 pt padding.
-   */
-  const originOf = (layer: Layer): TextOrigin => {
-    const ratio = displayWidth / size.width;
-    const left = 16 + ((area?.width ?? 0) - displayWidth) / 2;
-    const top = 16 + ((area?.height ?? 0) - displayHeight) / 2;
-    return {
-      x: left + layer.transform.x * displayWidth,
-      y: top + layer.transform.y * displayHeight,
-      scale: ratio * layer.transform.scale,
-      rotation: layer.transform.rotation,
-    };
-  };
+  /** Where a layer is on screen, from the safe area's top-left corner. */
+  const originOf = (layer: Layer): TextOrigin => ({
+    x: canvasLeft + layer.transform.x * displayWidth,
+    y: canvasTop + layer.transform.y * displayHeight,
+    scale: (displayWidth / size.width) * layer.transform.scale,
+    rotation: layer.transform.rotation,
+  });
 
   const pickPhoto = async () => {
-    setPhotoError(false);
+    setPhotoTools(false);
     try {
       const result = await launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -493,125 +533,68 @@ function EditorWorkspace({
         setNextPhotoId(id + 1);
         setPhoto({ id, picked, editorUri: null, editorReencoded: false, exportUri: null });
         // Framings are proportions of one photo and mean nothing for another: center the new one.
-        setFraming(DEFAULT_FRAMING);
+        change((current) => setFraming(current, DEFAULT_FRAMING));
         void preparePhotoCopies(id, picked, false);
       }
     } catch (error) {
       logError('Could not open the photo library', error);
-      setPhotoError(true);
+      notice.show(t('editor.photoError'));
     }
   };
 
+  /** Back to no photo: the design goes on transparent, as a sticker; the widgets stay. */
+  const removePhoto = () => {
+    setPhoto(null);
+    setPhotoTools(false);
+    change((current) => setFraming(current, DEFAULT_FRAMING));
+  };
+
+  // Leaving with a photo or edits asks first: the design is not kept. Going back while exporting
+  // leaves the export, and while typing commits the text.
+  const unsaved = photo !== null || canUndo(history);
   /**
-   * Picks another format. A new format starts a new design, with an empty history: undoing into
-   * layers laid out for the old format would pile them up. Losing the user's own layers asks
-   * first.
+   * Whether the user confirmed leaving: prevention stops and the blocked action is repeated
+   * (expo-router's `repeat`; dispatching it again while still prevented did nothing).
    */
-  const chooseFormat = (next: CanvasFormat) => {
-    if (next === format) {
-      return;
-    }
-    const change = () => {
-      setFormat(next);
-      setHistory(createHistory<EditorLayers>(null));
-    };
-    if (history.present === null) {
-      change();
-      return;
-    }
-    Alert.alert(t('editor.formatChangeTitle'), t('editor.formatChangeMessage'), [
-      { text: t('editor.cancel'), style: 'cancel' },
-      { text: t('editor.formatChangeConfirm'), onPress: change },
-    ]);
-  };
-
-  /** Back to the photo and format; the design stays as it is until the format changes. */
-  const backToPhoto = () => {
-    setSelectedId(null);
-    setStyling(false);
-    setSheetOpen(false);
-    setTemplatesOpen(false);
-    setStep('photo');
-  };
-
-  // While designing, going back (the header's back button, Android's back) returns to the photo
-  // step instead of leaving the editor; exporting is left and the text being typed is committed
-  // first. The iOS swipe
-  // back is off then: react-native-screens lets UIKit pop the screen and pushes it back after,
-  // which flashes the previous screen.
-  usePreventRemove(step === 'design', () => {
+  const [leaving, setLeaving] = useState(false);
+  usePreventRemove(!leaving && (unsaved || exporting || typing), ({ repeat }) => {
     if (exporting) {
       exporter.stop();
     } else if (typing) {
       finishTyping();
     } else {
-      backToPhoto();
+      Alert.alert(t('editor.discardTitle'), t('editor.discardMessage'), [
+        { text: t('editor.cancel'), style: 'cancel' },
+        {
+          text: t('editor.discard'),
+          style: 'destructive',
+          onPress: () => {
+            setLeaving(true);
+            repeat();
+          },
+        },
+      ]);
     }
   });
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
-  /** Back to no photo: the design goes on transparent, as a sticker; the widgets stay. */
-  const removePhoto = () => {
-    setPhoto(null);
-    setPhotoError(false);
-    setFraming(DEFAULT_FRAMING);
-  };
+  /** What the dock shows, if anything: the export, the selected widget's tools, the photo's. */
+  const dock: 'export' | 'style' | 'selection' | 'photo' | null = exporting
+    ? 'export'
+    : styled !== null
+      ? 'style'
+      : selected !== null
+        ? 'selection'
+        : photoTools && photo !== null
+          ? 'photo'
+          : null;
+  // A widget in the lower half gets its tools on top, out of its way.
+  const dockOnTop = selected !== null && selected.transform.y > 0.5 && !exporting;
+  /** The controls step aside while a widget is dragged or a text is typed. */
+  const controlsShown = !dragging && !typing;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.systemBackground }}>
-      <Stack.Screen
-        options={{
-          title: t(step === 'photo' ? 'editor.photoStep' : 'editor.designStep'),
-          gestureEnabled: step === 'photo',
-          // Keeps the native back button next to the left toolbar instead of replaced by it.
-          headerBackVisible: true,
-        }}
-      />
-      {step === 'photo' && photo !== null ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="trash"
-            accessibilityLabel={t('editor.removePhoto')}
-            onPress={removePhoto}
-          >
-            {t('editor.removePhoto')}
-          </Stack.Toolbar.Button>
-        </Stack.Toolbar>
-      ) : null}
-      {step === 'design' ? (
-        <>
-          {/* Two buttons on each side, so the title has room in the middle (UIKit only centers it
-              when it fits between the wider side and its mirror). Restoring sits apart from undo;
-              nothing is edited while typing, since the draft isn't in the history yet. */}
-          <Stack.Toolbar placement="left">
-            <Stack.Toolbar.Button
-              icon="arrow.counterclockwise"
-              accessibilityLabel={t('editor.restore')}
-              disabled={typing || exporting || !canRestore(history.present)}
-              onPress={() => setHistory((current) => commit(current, null))}
-            >
-              {t('editor.restore')}
-            </Stack.Toolbar.Button>
-          </Stack.Toolbar>
-          <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Button
-              icon="arrow.uturn.backward"
-              accessibilityLabel={t('editor.undo')}
-              disabled={typing || exporting || !canUndo(history)}
-              onPress={() => setHistory(undo)}
-            >
-              {t('editor.undo')}
-            </Stack.Toolbar.Button>
-            <Stack.Toolbar.Button
-              icon="arrow.uturn.forward"
-              accessibilityLabel={t('editor.redo')}
-              disabled={typing || exporting || !canRedo(history)}
-              onPress={() => setHistory(redo)}
-            >
-              {t('editor.redo')}
-            </Stack.Toolbar.Button>
-          </Stack.Toolbar>
-        </>
-      ) : null}
+    <View style={{ flex: 1, backgroundColor: '#000000' }}>
       <LayerSheet
         visible={sheetOpen}
         catalog={catalog}
@@ -641,41 +624,45 @@ function EditorWorkspace({
         visible={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
         data={data}
-        format={format}
+        format={design.format}
         design={template}
         layerContext={layerContext}
         photo={canvasImage}
-        framing={framing}
+        framing={design.framing}
         userTemplates={userTemplates}
         onChoose={chooseTemplate}
       />
       <View
-        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        style={{
+          position: 'absolute',
+          top: insets.top,
+          bottom: insets.bottom,
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
         onLayout={(event) => {
           const { width, height } = event.nativeEvent.layout;
-          setArea({ width: width - 32, height: height - 32 });
+          setArea({ width, height });
         }}
       >
         {displayWidth > 0 ? (
           <View
             pointerEvents={exporting ? 'none' : 'auto'}
-            style={{
-              borderRadius: 12,
-              borderCurve: 'continuous',
-              overflow: 'hidden',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
-            }}
+            style={{ borderRadius: 12, borderCurve: 'continuous', overflow: 'hidden' }}
           >
             <EditorCanvas
               displayWidth={displayWidth}
               template={shownTemplate}
               layerContext={layerContext}
               photo={canvasImage}
-              framing={framing}
-              layersLocked={step === 'photo'}
+              framing={design.framing}
               selectedId={typing ? null : selectedId}
-              onSelect={setSelectedId}
-              onFramingChange={setFraming}
+              onSelect={selectLayer}
+              onTapPhoto={tapPhoto}
+              onDraggingChange={setDragging}
+              onFramingChange={(framing) => change((current) => setFraming(current, framing))}
               onLayerTransform={(id, transform) =>
                 edit((current) => setLayerTransform(current, id, transform))
               }
@@ -702,49 +689,149 @@ function EditorWorkspace({
                 />
               </View>
             ) : null}
-            {photoError ? (
+            {photo === null && controlsShown && !exporting ? (
               <View
-                pointerEvents="none"
+                pointerEvents="box-none"
                 style={{
                   position: 'absolute',
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  padding: 10,
-                  borderRadius: 10,
-                  borderCurve: 'continuous',
-                  backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                <Text
-                  accessibilityRole="alert"
-                  accessibilityLiveRegion="polite"
-                  style={{ color: '#FFFFFF', fontSize: 14, textAlign: 'center' }}
-                >
-                  {t('editor.photoError')}
-                </Text>
+                <ChoosePhotoButton onPress={() => void pickPhoto()} />
               </View>
             ) : null}
           </View>
         ) : null}
       </View>
 
-      <View
-        style={{
-          height: CONTROLS_HEIGHT,
-          gap: 12,
-          paddingHorizontal: 16,
-          paddingBottom: CONTROLS_BOTTOM,
-        }}
+      {formatsOpen ? (
+        // A tap anywhere else closes the formats' panel, as with any menu.
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no"
+          onPress={() => setFormatsOpen(false)}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      ) : null}
+      {controlsShown && !exporting ? (
+        <View style={{ position: 'absolute', top: insets.top + EDGE, left: EDGE }}>
+          <EditorTopBar
+            onClose={close}
+            onUndo={() => setHistory(undo)}
+            onRedo={() => setHistory(redo)}
+            onStartOver={() => change(startOver)}
+            canUndo={canUndo(history)}
+            canRedo={canRedo(history)}
+            canStartOver={canStartOver(design)}
+          />
+        </View>
+      ) : null}
+      {/* Hidden rather than unmounted, so it stays folded or open as the user left it and its
+          sport's icon doesn't load again. */}
+      <KeptMounted
+        hidden={!controlsShown || dock !== null}
+        style={{ position: 'absolute', top: insets.top + EDGE, right: EDGE }}
       >
-        {styled !== null ? (
-          <StylePanel layer={styled} locale={locale} onChange={edit} layerContext={layerContext} />
-        ) : (
-          <View style={{ height: STYLE_PANEL_HEIGHT, justifyContent: 'center' }}>
-            {step === 'photo' ? (
-              <FormatPicker format={format} onPick={chooseFormat} />
-            ) : exporting ? (
+        <EditorSideMenu
+          onAddImage={comingSoon}
+          onDepth={comingSoon}
+          format={design.format}
+          formatsOpen={formatsOpen}
+          onFormatsOpenChange={setFormatsOpen}
+          onPickFormat={chooseFormat}
+          onCollages={comingSoon}
+          onDesigns={() => {
+            setFormatsOpen(false);
+            setTemplatesOpen(true);
+          }}
+          onActivity={comingSoon}
+          sport={data.mode === 'activity' ? sportIcon(data.activity) : null}
+        />
+      </KeptMounted>
+      {controlsShown && dock === null ? (
+        // What to add on the left; exporting, the step that finishes the image, on the right.
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            bottom: insets.bottom + EDGE,
+            left: EDGE,
+            right: EDGE,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <PillButton
+              icon={{ ios: 'plus', android: 'add' }}
+              label={t('editor.addLayer')}
+              onPress={() => setSheetOpen(true)}
+              disabled={!canAddLayer(template)}
+              height={BOTTOM_BUTTON_SIZE}
+              minWidth={96}
+            />
+            <RoundButton
+              label={t('editor.addText')}
+              onPress={addText}
+              disabled={!canAddLayer(template)}
+              size={BOTTOM_BUTTON_SIZE}
+            >
+              <Text
+                importantForAccessibility="no"
+                maxFontSizeMultiplier={1}
+                style={{ color: FLOATING_INK, fontSize: 22, fontWeight: '700' }}
+              >
+                Aa
+              </Text>
+            </RoundButton>
+          </View>
+          <PillButton
+            icon={{ ios: 'square.and.arrow.up', android: 'ios_share' }}
+            label={t('editor.export')}
+            showLabel
+            onPress={startExport}
+            accent
+            height={BOTTOM_BUTTON_SIZE}
+          />
+        </View>
+      ) : null}
+      {controlsShown && dock !== null ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: EDGE / 2,
+            right: EDGE / 2,
+            ...(dockOnTop
+              ? { top: insets.top + BELOW_LEFT_COLUMN }
+              : { bottom: insets.bottom + EDGE / 2 }),
+          }}
+        >
+          <Dock
+            onDone={
+              dock === 'export'
+                ? exporter.stop
+                : dock === 'style'
+                  ? () => setStyling(false)
+                  : dock === 'selection'
+                    ? () => setSelectedId(null)
+                    : () => setPhotoTools(false)
+            }
+          >
+            {dock === 'export' ? (
               <ExportBar state={exporter.state} onRetry={startExport} />
+            ) : styled !== null ? (
+              <StylePanel
+                layer={styled}
+                locale={locale}
+                onChange={edit}
+                layerContext={layerContext}
+              />
             ) : selected !== null ? (
               <SelectionBar
                 onEditText={
@@ -763,89 +850,101 @@ function EditorWorkspace({
                 canSendToBack={canMoveLayer(template, selected.id, 'back')}
               />
             ) : (
-              <QuickActions
-                onAddLayer={() => setSheetOpen(true)}
-                onAddText={addText}
-                onTemplates={() => setTemplatesOpen(true)}
-                canAdd={canAddLayer(template)}
-              />
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <ActionTile
+                  icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+                  label={t('editor.changePhoto')}
+                  onPress={() => void pickPhoto()}
+                />
+                <ActionTile
+                  icon={{ ios: 'trash', android: 'delete' }}
+                  label={t('editor.removePhoto')}
+                  onPress={removePhoto}
+                  destructive
+                />
+              </View>
             )}
-          </View>
-        )}
-        <View style={{ height: MAIN_BUTTON_HEIGHT, flexDirection: 'row', gap: 12 }}>
-          {step === 'photo' ? (
-            // Without a photo the design can go on too: it exports transparent, as a sticker.
-            // The button most people want next stands out.
-            <>
-              <MainButton
-                label={photo === null ? t('editor.choosePhoto') : t('editor.changePhoto')}
-                onPress={pickPhoto}
-                secondary={photo !== null}
-              />
-              <MainButton
-                label={t('editor.next')}
-                onPress={() => setStep('design')}
-                secondary={photo === null}
-              />
-            </>
-          ) : selected !== null ? (
-            // "Done" goes one step back: from the style panel to the layer's actions, then from
-            // those to no selection.
-            <MainButton
-              label={t('editor.done')}
-              onPress={styled !== null ? () => setStyling(false) : () => setSelectedId(null)}
-            />
-          ) : exporting ? (
-            <MainButton label={t('editor.done')} onPress={exporter.stop} secondary />
-          ) : (
-            <MainButton label={t('editor.export')} onPress={startExport} />
-          )}
+          </Dock>
         </View>
-      </View>
+      ) : null}
+      <Notice message={notice.message} top={insets.top + BELOW_TOP_BAR} />
       {textDraft === null || typedLayer?.kind !== 'text' ? null : (
-        <TypingOverlay
-          layer={typedLayer}
-          origin={originOf(typedLayer)}
-          onChangeText={(content) => setTextDraft({ ...textDraft, content })}
-          onDone={finishTyping}
-        />
+        <View style={{ position: 'absolute', top: insets.top, left: 0, right: 0, bottom: 0 }}>
+          <TypingOverlay
+            layer={typedLayer}
+            origin={originOf(typedLayer)}
+            onChangeText={(content) => setTextDraft({ ...textDraft, content })}
+            onDone={finishTyping}
+          />
+        </View>
       )}
     </View>
   );
 }
 
-/** A wide button under the controls; side by side, they share the row equally. */
-function MainButton({
-  label,
-  onPress,
-  secondary = false,
-}: {
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly secondary?: boolean;
-}) {
+/**
+ * A floating panel over the canvas with a set of tools and "Done" under them, which goes one
+ * step back (from the style panel to the widget's actions, from those to no selection).
+ */
+function Dock({ children, onDone }: { readonly children: ReactNode; readonly onDone: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={{ ...floatingSurface(24), padding: 10, gap: 10 }}>
+      {children}
+      <Pressable
+        accessibilityRole="button"
+        onPress={onDone}
+        style={({ pressed }) => ({
+          height: MAIN_BUTTON_HEIGHT,
+          backgroundColor: colors.tint,
+          borderRadius: 14,
+          borderCurve: 'continuous',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}
+        >
+          {t('editor.done')}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** "Choose photo" in the middle of the empty canvas, over the checkerboard. */
+function ChoosePhotoButton({ onPress }: { readonly onPress: () => void }) {
+  const { t } = useTranslation();
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => ({
-        flex: 1,
-        backgroundColor: secondary ? colors.secondarySystemBackground : colors.tint,
-        borderRadius: 14,
-        borderCurve: 'continuous',
+        minHeight: 48,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 8,
+        borderRadius: 24,
+        backgroundColor: colors.tint,
         opacity: pressed ? 0.8 : 1,
       })}
     >
+      <SymbolView
+        name={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+        size={20}
+        tintColor={colors.onTint}
+      />
       <Text
         numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
         maxFontSizeMultiplier={1.3}
-        style={{ color: secondary ? colors.label : colors.onTint, fontSize: 17, fontWeight: '700' }}
+        style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}
       >
-        {label}
+        {t('editor.choosePhoto')}
       </Text>
     </Pressable>
   );

@@ -67,8 +67,12 @@ export default function RootLayout() {
                   headerLeft: () => <BrandMark height={22} />,
                 }}
               />
-              {/* The editor opens in its photo step; the screen titles each step itself. */}
-              <Stack.Screen name="editor" options={{ title: t('editor.photoStep') }} />
+              {/* The editor is full screen, with its own floating controls (ADR 009); it rises
+                  as a modal and closes with its own button, which asks before losing edits. */}
+              <Stack.Screen
+                name="editor"
+                options={{ headerShown: false, presentation: 'fullScreenModal' }}
+              />
             </Stack>
           </TemplateStoreProvider>
         </ActivitySourceProvider>

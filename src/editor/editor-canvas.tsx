@@ -68,11 +68,13 @@ interface EditorCanvasProps {
   /** The photo, or `null` for none: the image is transparent under the widgets. */
   readonly photo: SkImage | null;
   readonly framing: PhotoFraming;
-  /** Whether the layers ignore touches, so that every gesture frames the photo. */
-  readonly layersLocked: boolean;
   /** Id of the selected layer, or `null`. */
   readonly selectedId: string | null;
   readonly onSelect: (id: string | null) => void;
+  /** Called on a tap that hits no layer: on the photo, or on the empty canvas. */
+  readonly onTapPhoto: () => void;
+  /** Called when a layer starts and stops being dragged, so the editor can clear the way. */
+  readonly onDraggingChange: (dragging: boolean) => void;
   /** Called once per gesture on the photo, when the fingers lift. */
   readonly onFramingChange: (framing: PhotoFraming) => void;
   /** Called once per gesture on a layer, when the fingers lift. */
@@ -153,9 +155,9 @@ function playHaptic(style: ImpactFeedbackStyle): void {
 
 /**
  * The template scene scaled down from its 1080 px export size to the screen, edited with the
- * fingers: a tap selects the layer under it (or clears the selection), and dragging, pinching and
- * rotating move whatever is under the fingers when the gesture starts: a layer, or else the photo
- * (always the photo while the layers are locked).
+ * fingers: a tap selects the layer under it (elsewhere it goes to `onTapPhoto`), and dragging,
+ * pinching and rotating move whatever is under the fingers when the gesture starts: a layer, or
+ * else the photo.
  *
  * Layers snap to the canvas center lines, to its edges and to straight angles, with guides and a
  * haptic tick; dropping one on the trash that appears while dragging removes it. The photo snaps
@@ -172,9 +174,10 @@ export function EditorCanvas({
   layerContext,
   photo,
   framing,
-  layersLocked,
   selectedId,
   onSelect,
+  onTapPhoto,
+  onDraggingChange,
   onFramingChange,
   onLayerTransform,
   onLayerRemove,
@@ -195,8 +198,6 @@ export function EditorCanvas({
     ...(hole === undefined ? {} : { hole }),
   }));
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
-  /** Layers a finger can grab: none while they are locked. */
-  const touchable = layersLocked ? [] : boxes;
   const thresholds = { distance: SNAP_DISTANCE / ratio, rotation: SNAP_ANGLE };
   // The trash center, in screen points from the canvas's top-left corner.
   const trashX = displayWidth / 2;
@@ -213,16 +214,27 @@ export function EditorCanvas({
   const startDrag = (id: string) => {
     onSelect(id);
     setDraggingId(id);
+    onDraggingChange(true);
   };
   const finishDrag = (id: string, transform: LayerTransform) => {
     onLayerTransform(id, transform);
     setDraggingId(null);
+    onDraggingChange(false);
   };
   const dropOnTrash = (id: string) => {
     playHaptic(ImpactFeedbackStyle.Medium);
     onLayerRemove(id);
     onSelect(null);
     setDraggingId(null);
+    onDraggingChange(false);
+  };
+  /** A tap selects the layer under it; elsewhere, it is a tap on the photo. */
+  const tapAt = (id: string | null) => {
+    if (id === null) {
+      onTapPhoto();
+    } else {
+      onSelect(id);
+    }
   };
 
   const activeGestures = useSharedValue(0);
@@ -280,7 +292,7 @@ export function EditorCanvas({
       return;
     }
     resetSnaps();
-    const id = hitTestLayers(touchable, point, canvas, MIN_TOUCH / ratio);
+    const id = hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio);
     const box = id === null ? undefined : boxes.find((candidate) => candidate.id === id);
     if (box === undefined) {
       target.set(TARGET_PHOTO);
@@ -426,7 +438,7 @@ export function EditorCanvas({
   const tap = Gesture.Tap().onEnd((event, success) => {
     if (success) {
       const point = { x: event.x / ratio, y: event.y / ratio };
-      scheduleOnRN(onSelect, hitTestLayers(touchable, point, canvas, MIN_TOUCH / ratio));
+      scheduleOnRN(tapAt, hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio));
     }
   });
 

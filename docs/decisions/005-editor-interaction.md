@@ -2,6 +2,11 @@
 
 Date: 2026-10-18
 
+Status: partly superseded by ADR 009 as the redesign is built. Since R3a the editor is one
+full-screen step, and undo covers the whole design (format, framing and widgets); a format change
+keeps the widgets. "Two steps on one canvas", "Undo, redo and Start over" and "Controls and
+header" below describe the editor before that.
+
 ## Context
 
 The editor is the core of the app: a photo with data widgets laid over it, edited with the
