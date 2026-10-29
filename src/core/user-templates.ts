@@ -51,16 +51,18 @@ export function templatesFor(
 }
 
 /**
- * Whether `design` is already saved: one of `saved` has its format, mode and widgets, whatever
- * its id. Saving it again would only add a second identical thumbnail. Time O(n · s) for n
- * templates of size s.
+ * Whether `design` is already saved: one of `saved` has its format, mode, widgets, photo
+ * placement and background, whatever its id. Saving it again would only add a second identical
+ * thumbnail. Time O(n · s) for n templates of size s.
  */
 export function isSaved(saved: readonly SavedTemplate[], design: Template): boolean {
   return saved.some(
     ({ template }) =>
       template.format === design.format &&
       template.mode === design.mode &&
-      sameJson(template.layers, design.layers),
+      sameJson(template.layers, design.layers) &&
+      sameJson(template.photo, design.photo) &&
+      sameJson(template.background, design.background),
   );
 }
 

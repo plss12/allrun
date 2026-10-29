@@ -15,6 +15,7 @@ import {
   type FontId,
   type Layer,
   type Template,
+  newTemplate,
 } from './template';
 
 /**
@@ -172,11 +173,10 @@ export function minimalTemplate(data: TemplateData, format: CanvasFormat): Templ
     });
   }
 
-  return {
-    version: 1,
+  return newTemplate({
     id: `minimal-${data.mode}`,
     mode: data.mode,
     format,
     layers: [...graphics, ...titles, ...values, logo],
-  };
+  });
 }

@@ -3,7 +3,7 @@ import { newLayer } from '@/core/default-layout';
 import { bucketForPeriod, type PeriodKind } from '@/core/periods';
 import { summarize } from '@/core/summary';
 import { isSummaryDataWidget, summaryBlockLettering, summaryBlocks } from '@/core/summary-block';
-import type { Layer, SummaryBlock } from '@/core/template';
+import { type Layer, type SummaryBlock, newTemplate } from '@/core/template';
 import type { SummaryData } from '@/editor/editor-data';
 import type { LayerContext, PreparedLayer } from '@/editor/template-scene';
 import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
@@ -75,7 +75,7 @@ export async function overflowingSummaryBlocks(
       : [signed];
   });
   const prepared = scene.prepareLayers(
-    { version: 1, id: 'blocks', mode: 'summary', format: 'story', layers },
+    newTemplate({ id: 'blocks', mode: 'summary', format: 'story', layers }),
     {
       data,
       fonts: loadTestFonts(blocks.map((block) => summaryBlockLettering(block).font)),

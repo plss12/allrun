@@ -1,10 +1,9 @@
-import { useImage } from '@shopify/react-native-skia';
+import { type SkImage, useImage } from '@shopify/react-native-skia';
 import {
   launchImageLibraryAsync,
   UIImagePickerPreferredAssetRepresentationMode,
 } from 'expo-image-picker';
 import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
@@ -26,12 +25,14 @@ import {
   editLayers,
   type EditorDesign,
   type EditorLayers,
+  applyDesign,
   INITIAL_DESIGN,
   layoutTemplate,
+  setBackground,
   setFormat,
-  setFraming,
   setLayers,
   setLayerTransform,
+  setPhotoPlacement,
   startOver,
 } from '@/core/editor-document';
 import { canRedo, canUndo, commit, createHistory, redo, undo } from '@/core/history';
@@ -41,7 +42,8 @@ import {
   type NewLayer,
   summaryCatalog,
 } from '@/core/layer-catalog';
-import { DEFAULT_FRAMING } from '@/core/photo-framing';
+import { backgroundColor } from '@/core/design-background';
+import { COVER_PLACEMENT, samePlacement } from '@/core/photo-placement';
 import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { startOf } from '@/core/place';
 import { SPORT_FAMILIES } from '@/core/sports';
@@ -65,6 +67,7 @@ import {
 import { useActivitySource } from '@/data/activity-source';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
+import { BackgroundPicker } from '@/editor/background-picker';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar, TOP_BAR_GAP } from '@/editor/editor-top-bar';
@@ -78,6 +81,7 @@ import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
 import { LayerSheet } from '@/editor/layer-sheet';
 import { Notice, useNotice } from '@/editor/notice';
+import { photoDominantColor } from '@/editor/photo-color';
 import type { PickedPhoto } from '@/editor/photo-plan';
 import { preparePhoto } from '@/editor/prepare-photo';
 import {
@@ -136,8 +140,13 @@ const MAIN_BUTTON_HEIGHT = 44;
 const BELOW_TOP_BAR = EDGE + ROUND_BUTTON_SIZE + 12;
 /** Where a dock on top starts: under the left column (close, undo, redo, Start over). */
 const BELOW_LEFT_COLUMN = EDGE + 4 * ROUND_BUTTON_SIZE + 3 * TOP_BAR_GAP + 12;
-/** The bottom row: "+", "Aa" and export. */
-const BOTTOM_BUTTON_SIZE = 56;
+/** The bottom row: the photo, "+", "Aa" and export. */
+const BOTTOM_BUTTON_SIZE = 52;
+/**
+ * "+", the main thing to do, stands out by being wider, never taller: every button of the row is
+ * as tall as the others.
+ */
+const ADD_BUTTON_WIDTH = 84;
 
 export default function Editor() {
   const { t } = useTranslation();
@@ -248,7 +257,10 @@ function EditorWorkspace({
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
       : defaultSummaryTemplate(data.summary, format);
-  /** The whole design, format and framing included, one undo step per gesture or change. */
+  /**
+   * The whole design, format, photo placement and background included, one undo step per gesture
+   * or change.
+   */
   const [history, setHistory] = useState(() => createHistory<EditorDesign>(INITIAL_DESIGN));
   const design = history.present;
   const template = layoutTemplate(defaultTemplate, design);
@@ -338,8 +350,8 @@ function EditorWorkspace({
     exporter.start(async (): Promise<ExportDesign> => ({
       template,
       layerContext,
-      framing: design.framing,
       photo: photo === null ? null : await loadPhoto(await exportCopyOf(photo)),
+      dominant,
     }));
   };
 
@@ -411,6 +423,12 @@ function EditorWorkspace({
     }
   });
 
+  /**
+   * The photo's dominant color, the `auto` background: read once per photo from the editor copy
+   * (a reduced copy of it, see `photo-color.ts`), and used for the export too, so both match.
+   */
+  const dominant = canvasImage === null ? null : readDominant(canvasImage);
+
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     // The place needs the permission first (Android): asked now, the widget is added once named.
@@ -442,11 +460,19 @@ function EditorWorkspace({
   };
 
   /**
-   * Replaces the widgets with a template's (`null`: the default design) as one undo step, and
-   * closes the sheet.
+   * Applies a design of the user's (its widgets, photo placement and background) or AllRun's
+   * widgets (`null`: the default design), as one undo step, and closes the sheet.
    */
-  const chooseTemplate = (layers: EditorLayers) => {
-    change((current) => setLayers(current, layers));
+  const chooseTemplate = (
+    choice:
+      | { readonly kind: 'design'; readonly template: Template }
+      | { readonly kind: 'layers'; readonly layers: EditorLayers },
+  ) => {
+    change((current) =>
+      choice.kind === 'design'
+        ? applyDesign(current, choice.template)
+        : setLayers(current, choice.layers),
+    );
     setSelectedId(null);
     setTemplatesOpen(false);
   };
@@ -492,11 +518,21 @@ function EditorWorkspace({
     }
   };
 
-  /** A tap on the photo first lets go of the selected widget; then it shows the photo's actions. */
+  /** Opens the photo's tools and the background (the bottom row's photo button). */
+  const openPhotoTools = () => {
+    setSelectedId(null);
+    setFormatsOpen(false);
+    setPhotoTools(true);
+  };
+
+  /**
+   * A tap on the photo first lets go of the selected widget; then it shows the photo's tools and
+   * the background, also without a photo (a sticker over a color).
+   */
   const tapPhoto = () => {
     if (selectedId !== null) {
       setSelectedId(null);
-    } else if (photo !== null) {
+    } else {
       setPhotoTools((shown) => !shown);
     }
   };
@@ -532,8 +568,8 @@ function EditorWorkspace({
         const id = nextPhotoId;
         setNextPhotoId(id + 1);
         setPhoto({ id, picked, editorUri: null, editorReencoded: false, exportUri: null });
-        // Framings are proportions of one photo and mean nothing for another: center the new one.
-        change((current) => setFraming(current, DEFAULT_FRAMING));
+        // A new photo starts centered and covering the canvas (user's choice), as one undo step.
+        change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
         void preparePhotoCopies(id, picked, false);
       }
     } catch (error) {
@@ -542,11 +578,14 @@ function EditorWorkspace({
     }
   };
 
-  /** Back to no photo: the design goes on transparent, as a sticker; the widgets stay. */
+  /**
+   * Back to no photo: the design goes on over its background (transparent by default, as a
+   * sticker); the widgets stay.
+   */
   const removePhoto = () => {
     setPhoto(null);
     setPhotoTools(false);
-    change((current) => setFraming(current, DEFAULT_FRAMING));
+    change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
   };
 
   // Leaving with a photo or edits asks first: the design is not kept. Going back while exporting
@@ -585,7 +624,7 @@ function EditorWorkspace({
       ? 'style'
       : selected !== null
         ? 'selection'
-        : photoTools && photo !== null
+        : photoTools
           ? 'photo'
           : null;
   // A widget in the lower half gets its tools on top, out of its way.
@@ -628,7 +667,7 @@ function EditorWorkspace({
         design={template}
         layerContext={layerContext}
         photo={canvasImage}
-        framing={design.framing}
+        dominant={dominant}
         userTemplates={userTemplates}
         onChoose={chooseTemplate}
       />
@@ -657,12 +696,15 @@ function EditorWorkspace({
               template={shownTemplate}
               layerContext={layerContext}
               photo={canvasImage}
-              framing={design.framing}
+              placement={design.photo}
+              backdrop={backgroundColor(design.background, dominant)}
               selectedId={typing ? null : selectedId}
               onSelect={selectLayer}
               onTapPhoto={tapPhoto}
               onDraggingChange={setDragging}
-              onFramingChange={(framing) => change((current) => setFraming(current, framing))}
+              onPlacementChange={(placement) =>
+                change((current) => setPhotoPlacement(current, placement))
+              }
               onLayerTransform={(id, transform) =>
                 edit((current) => setLayerTransform(current, id, transform))
               }
@@ -687,22 +729,6 @@ function EditorWorkspace({
                   color="#FFFFFF"
                   accessibilityLabel={t('editor.loadingPhoto')}
                 />
-              </View>
-            ) : null}
-            {photo === null && controlsShown && !exporting ? (
-              <View
-                pointerEvents="box-none"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <ChoosePhotoButton onPress={() => void pickPhoto()} />
               </View>
             ) : null}
           </View>
@@ -767,14 +793,23 @@ function EditorWorkspace({
             justifyContent: 'space-between',
           }}
         >
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* The photo's tools, as a tap on it opens them (choosing one among them without a
+                photo). Here rather than over the canvas, where it kept widgets from being moved. */}
+            <RoundButton
+              icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+              label={t('editor.photoTools')}
+              onPress={openPhotoTools}
+              size={BOTTOM_BUTTON_SIZE}
+            />
             <PillButton
               icon={{ ios: 'plus', android: 'add' }}
+              iconSize={28}
               label={t('editor.addLayer')}
               onPress={() => setSheetOpen(true)}
               disabled={!canAddLayer(template)}
               height={BOTTOM_BUTTON_SIZE}
-              minWidth={96}
+              minWidth={ADD_BUTTON_WIDTH}
             />
             <RoundButton
               label={t('editor.addText')}
@@ -850,19 +885,33 @@ function EditorWorkspace({
                 canSendToBack={canMoveLayer(template, selected.id, 'back')}
               />
             ) : (
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                <ActionTile
-                  icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
-                  label={t('editor.changePhoto')}
-                  onPress={() => void pickPhoto()}
+              <>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <ActionTile
+                    icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+                    label={t(photo === null ? 'editor.choosePhoto' : 'editor.changePhoto')}
+                    onPress={() => void pickPhoto()}
+                  />
+                  <ActionTile
+                    icon={{ ios: 'arrow.up.left.and.arrow.down.right', android: 'fit_screen' }}
+                    label={t('editor.fitPhoto')}
+                    onPress={() => change((current) => setPhotoPlacement(current, COVER_PLACEMENT))}
+                    disabled={photo === null || samePlacement(design.photo, COVER_PLACEMENT)}
+                  />
+                  <ActionTile
+                    icon={{ ios: 'trash', android: 'delete' }}
+                    label={t('editor.removePhoto')}
+                    onPress={removePhoto}
+                    disabled={photo === null}
+                    destructive
+                  />
+                </View>
+                <BackgroundPicker
+                  background={design.background}
+                  dominant={dominant}
+                  onChange={(background) => change((current) => setBackground(current, background))}
                 />
-                <ActionTile
-                  icon={{ ios: 'trash', android: 'delete' }}
-                  label={t('editor.removePhoto')}
-                  onPress={removePhoto}
-                  destructive
-                />
-              </View>
+              </>
             )}
           </Dock>
         </View>
@@ -880,6 +929,19 @@ function EditorWorkspace({
       )}
     </View>
   );
+}
+
+/**
+ * The photo's dominant color, or `null` (no auto background) when it can't be read. Read once per
+ * image (see `photoDominantColor`), however often the editor renders.
+ */
+function readDominant(image: SkImage): string | null {
+  try {
+    return photoDominantColor(image);
+  } catch (error) {
+    logError("Could not read the photo's dominant color", error);
+    return null;
+  }
 }
 
 /**
@@ -913,39 +975,5 @@ function Dock({ children, onDone }: { readonly children: ReactNode; readonly onD
         </Text>
       </Pressable>
     </View>
-  );
-}
-
-/** "Choose photo" in the middle of the empty canvas, over the checkerboard. */
-function ChoosePhotoButton({ onPress }: { readonly onPress: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 48,
-        paddingHorizontal: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        borderRadius: 24,
-        backgroundColor: colors.tint,
-        opacity: pressed ? 0.8 : 1,
-      })}
-    >
-      <SymbolView
-        name={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
-        size={20}
-        tintColor={colors.onTint}
-      />
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.3}
-        style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}
-      >
-        {t('editor.choosePhoto')}
-      </Text>
-    </Pressable>
   );
 }

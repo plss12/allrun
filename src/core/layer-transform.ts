@@ -1,12 +1,12 @@
 import { normalizeAngle, snapAngle } from './angles';
-import type { Size } from './photo-framing';
+import type { Size } from './photo-placement';
 import type { Layer } from './template';
 
 /**
  * Moving, scaling and rotating layers with the fingers, snapping them to the canvas center and
  * edges, and finding which layer a touch lands on.
  *
- * Like `photo-framing.ts`, every function is a worklet so gestures run it on the UI thread, and
+ * Like `photo-placement.ts`, every function is a worklet so gestures run it on the UI thread, and
  * helpers are defined before the functions that use them (worklets aren't hoisted).
  */
 
@@ -175,8 +175,18 @@ export interface HitHole {
 }
 
 /**
- * A layer as the hit test sees it: its transform, its size before scaling (canvas pixels), and
- * the hole touches go through, if it has one.
+ * The lines a layer draws, when only they can be grabbed (a route, which may cross its box on the
+ * diagonal and leave most of it empty): each line its points as x, y pairs from the layer's
+ * center, before scaling, and half the stroke's width.
+ */
+export interface HitLine {
+  readonly routes: readonly (readonly number[])[];
+  readonly halfWidth: number;
+}
+
+/**
+ * A layer as the hit test sees it: its transform, its size before scaling (canvas pixels), the
+ * hole touches go through, if it has one, and the lines that alone take touches, if it draws some.
  */
 export interface LayerBox {
   readonly id: string;
@@ -184,6 +194,7 @@ export interface LayerBox {
   readonly width: number;
   readonly height: number;
   readonly hole?: HitHole;
+  readonly line?: HitLine;
 }
 
 /** Whether a point of a layer's frame (from its center, scaled) is in its hole. */
@@ -198,14 +209,57 @@ function inHole(box: LayerBox, localX: number, localY: number): boolean {
   return x > hole.x && x < hole.x + hole.width && y > hole.y && y < hole.y + hole.height;
 }
 
+/** Distance from (`x`, `y`) to the segment from (`x1`, `y1`) to (`x2`, `y2`). */
+function segmentDistance(
+  x: number,
+  y: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
+  'worklet';
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const length = dx * dx + dy * dy;
+  // The closest point of the segment, as a share of it (its ends for a point beyond them).
+  const t = length === 0 ? 0 : Math.min(1, Math.max(0, ((x - x1) * dx + (y - y1) * dy) / length));
+  return Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy));
+}
+
+/**
+ * Whether a point of a layer's frame (from its center, scaled) is within `reach` canvas pixels of
+ * one of its lines, plus their half width. The reach is the same on the canvas whatever the
+ * layer's scale.
+ */
+function onLine(box: LayerBox, line: HitLine, localX: number, localY: number, reach: number) {
+  'worklet';
+  const { scale } = box.transform;
+  const x = localX / scale;
+  const y = localY / scale;
+  const limit = reach / scale + line.halfWidth;
+  for (const route of line.routes) {
+    if (route.length === 2 && Math.hypot(x - route[0], y - route[1]) <= limit) {
+      return true;
+    }
+    for (let i = 2; i + 1 < route.length; i += 2) {
+      if (segmentDistance(x, y, route[i - 2], route[i - 1], route[i], route[i + 1]) <= limit) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Id of the topmost layer under `point` (canvas pixels), or `null` when the touch is on the
  * photo. `boxes` go bottom to top, like template layers.
  *
  * The point is taken into each layer's own frame (undoing its rotation) and compared with its
  * scaled half-size. Every layer is at least `minSize` canvas pixels wide and tall for touching,
- * so thin text or a small logo stay easy to grab. A touch in a layer's hole goes through it. Time
- * O(n) for n layers, space O(1).
+ * so thin text or a small logo stay easy to grab. A touch in a layer's hole goes through it, and
+ * so does one in a line layer's box away from its lines: a layer of lines is grabbed within
+ * half of `minSize` of them. Time O(n + p) for n layers and p points of their lines, space O(1).
  */
 export function hitTestLayers(
   boxes: readonly LayerBox[],
@@ -224,10 +278,12 @@ export function hitTestLayers(
     const localY = dx * sin + dy * cos;
     const halfWidth = Math.max(width * transform.scale, minSize) / 2;
     const halfHeight = Math.max(height * transform.scale, minSize) / 2;
+    const line = boxes[i].line;
     if (
       Math.abs(localX) <= halfWidth &&
       Math.abs(localY) <= halfHeight &&
-      !inHole(boxes[i], localX, localY)
+      !inHole(boxes[i], localX, localY) &&
+      (line === undefined || onLine(boxes[i], line, localX, localY, minSize / 2))
     ) {
       return boxes[i].id;
     }

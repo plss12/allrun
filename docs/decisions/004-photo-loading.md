@@ -28,7 +28,7 @@ Skia alone draws the photo, from two copies (`src/editor/photo-plan.ts`):
 
 A copy is the original file when it is already decodable and small enough; otherwise
 `expo-image-manipulator` re-encodes it once with the platform decoder, which reads HEIC. The
-framing is stored as proportions of the photo (`src/core/photo-framing.ts`), so both copies give
+photo's placement is relative to the canvas (`src/core/photo-placement.ts`), so both copies give
 the same picture.
 
 ## Future: native decoding (with the development build, milestone 5)

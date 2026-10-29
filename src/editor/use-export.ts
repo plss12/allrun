@@ -1,6 +1,7 @@
 import type { SkImage } from '@shopify/react-native-skia';
 import { useRef, useState } from 'react';
 
+import { isOpaque } from '@/core/design-background';
 import { type ExportEncoding, exportEncoding, exportFileName } from '@/core/export';
 import { logError } from '@/ui/log';
 import { toLocalTimestamp } from '@/ui/today';
@@ -25,8 +26,9 @@ const IDLE: ExportState = { status: 'idle' };
 
 /**
  * Exporting: `start` draws the design once, at full quality, so that saving, sharing and copying
- * it are instant; `stop` leaves. A design without a photo becomes a transparent PNG, one with a
- * photo a JPEG (see `core/export.ts`). A result that arrives after `stop` is dropped.
+ * it are instant; `stop` leaves. An opaque design becomes a JPEG, one with see-through parts (no
+ * photo, or the photo leaving the canvas partly empty over no background) a transparent PNG (see
+ * `core/export.ts`). A result that arrives after `stop` is dropped.
  */
 export function useExport() {
   const [state, setState] = useState<ExportState>(IDLE);
@@ -41,7 +43,14 @@ export function useExport() {
     void (async () => {
       try {
         const resolved = await design();
-        const encoding = exportEncoding(resolved.photo !== null);
+        const { photo } = resolved;
+        const encoding = exportEncoding(
+          isOpaque(
+            resolved.template,
+            photo === null ? null : { width: photo.width(), height: photo.height() },
+            resolved.dominant,
+          ),
+        );
         const image = await renderDesign(resolved);
         const name = exportFileName(encoding, toLocalTimestamp(new Date()));
         const uri = writeImage(image, encoding, name);

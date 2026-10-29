@@ -6,7 +6,7 @@ import { availableMetrics } from './metrics';
 import type { PeriodSummary } from './summary';
 import { summaryBlockLettering } from './summary-block';
 import { defaultSummaryMetrics, summaryHasDistance } from './summary-metrics';
-import type { CanvasFormat, FontId, Layer, Template } from './template';
+import { type CanvasFormat, type FontId, type Layer, type Template, newTemplate } from './template';
 
 /**
  * Starting compositions for the editor: something good-looking on screen the moment a photo is
@@ -160,7 +160,7 @@ export function defaultActivityTemplate(
     })),
     logo(layout),
   );
-  return { version: 1, id: 'default-activity', name: 'AllRun', mode: 'activity', format, layers };
+  return newTemplate({ id: 'default-activity', name: 'AllRun', mode: 'activity', format, layers });
 }
 
 /**
@@ -222,7 +222,7 @@ export function defaultSummaryTemplate(
     })),
     logo(layout),
   ];
-  return { version: 1, id: 'default-summary', name: 'AllRun', mode: 'summary', format, layers };
+  return newTemplate({ id: 'default-summary', name: 'AllRun', mode: 'summary', format, layers });
 }
 
 /**

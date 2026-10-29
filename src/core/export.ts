@@ -2,7 +2,8 @@
  * How a finished design is saved. It always exports at its canvas size (`CANVAS_FORMATS`: 1080
  * px wide, Instagram's own sizes, so no app rescales it). With a photo it is a JPEG: at this
  * quality it looks the same as a PNG at a fraction of the size, and social apps recompress it
- * anyway. Without a photo it is a PNG sticker, transparent under the widgets.
+ * anyway. When something shows through (no photo, or a photo leaving the canvas partly empty over
+ * no background) it is a PNG, transparent there, as a sticker.
  */
 export interface ExportEncoding {
   readonly format: 'jpeg' | 'png';
@@ -34,9 +35,12 @@ const PNG: ExportEncoding = {
   uti: 'public.png',
 };
 
-/** A JPEG for a design over a photo, a transparent PNG for one without. */
-export function exportEncoding(hasPhoto: boolean): ExportEncoding {
-  return hasPhoto ? JPEG : PNG;
+/**
+ * A JPEG for an opaque design, a PNG for one with see-through pixels (see `isOpaque` in
+ * `design-background.ts`).
+ */
+export function exportEncoding(opaque: boolean): ExportEncoding {
+  return opaque ? JPEG : PNG;
 }
 
 /**

@@ -2,26 +2,29 @@ import { makeActivity } from '@/test-utils/make-activity';
 
 import { defaultActivityTemplate } from './default-layout';
 import {
+  applyDesign,
   canStartOver,
   type DefaultTemplate,
   editLayers,
   type EditorDesign,
   INITIAL_DESIGN,
   layoutTemplate,
+  setBackground,
   setFormat,
-  setFraming,
   setLayers,
   setLayerTransform,
+  setPhotoPlacement,
   startOver,
 } from './editor-document';
 import { commit, createHistory, undo } from './history';
-import { DEFAULT_FRAMING } from './photo-framing';
+import { COVER_PLACEMENT } from './photo-placement';
 import { removeLayer } from './template-edit';
 
 const activity = makeActivity();
 const defaultTemplate: DefaultTemplate = (format) => defaultActivityTemplate(activity, format);
 const moved = { x: 0.3, y: 0.4, scale: 1.5, rotation: 0.2 };
-const framed = { centerX: 0.4, centerY: 0.6, zoom: 1.5, rotation: 0.1 };
+const framed = { x: 0.4, y: 0.6, scale: 0.5, rotation: 0.1 };
+const night = { kind: 'color', color: '#141B2D' } as const;
 
 /** `design` with its first layer moved. */
 function withFirstMoved(design: EditorDesign): EditorDesign {
@@ -34,6 +37,13 @@ describe('layoutTemplate', () => {
   it('uses the default layout of each format while the widgets are untouched', () => {
     const square = setFormat(INITIAL_DESIGN, 'square');
     expect(layoutTemplate(defaultTemplate, square)).toEqual(defaultTemplate('square'));
+  });
+
+  it("carries the design's photo placement and background", () => {
+    const design = setBackground(setPhotoPlacement(INITIAL_DESIGN, framed), night);
+    const template = layoutTemplate(defaultTemplate, design);
+    expect(template.photo).toBe(framed);
+    expect(template.background).toBe(night);
   });
 
   it("keeps the user's layers in any format", () => {
@@ -52,7 +62,7 @@ describe('editLayers', () => {
     );
     expect(edited.layers).toEqual(rest);
     expect(edited.format).toBe('story');
-    expect(edited.framing).toBe(INITIAL_DESIGN.framing);
+    expect(edited.photo).toBe(INITIAL_DESIGN.photo);
   });
 
   it('returns the same design when the edit changes nothing', () => {
@@ -62,11 +72,14 @@ describe('editLayers', () => {
   });
 });
 
-describe('setLayers, setFormat and setFraming', () => {
+describe('setLayers, setFormat, setPhotoPlacement and setBackground', () => {
   it('return the same design when nothing changes, so no undo step is recorded', () => {
     expect(setLayers(INITIAL_DESIGN, null)).toBe(INITIAL_DESIGN);
     expect(setFormat(INITIAL_DESIGN, 'story')).toBe(INITIAL_DESIGN);
-    expect(setFraming(INITIAL_DESIGN, { ...DEFAULT_FRAMING })).toBe(INITIAL_DESIGN);
+    expect(setPhotoPlacement(INITIAL_DESIGN, { ...COVER_PLACEMENT })).toBe(INITIAL_DESIGN);
+    expect(setBackground(INITIAL_DESIGN, { kind: 'auto' })).toBe(INITIAL_DESIGN);
+    const dark = setBackground(INITIAL_DESIGN, night);
+    expect(setBackground(dark, { ...night })).toBe(dark);
   });
 
   it('change only their part of the design', () => {
@@ -76,7 +89,21 @@ describe('setLayers, setFormat and setFraming', () => {
       ...INITIAL_DESIGN,
       format: 'landscape',
     });
-    expect(setFraming(INITIAL_DESIGN, framed)).toEqual({ ...INITIAL_DESIGN, framing: framed });
+    expect(setPhotoPlacement(INITIAL_DESIGN, framed)).toEqual({ ...INITIAL_DESIGN, photo: framed });
+    expect(setBackground(INITIAL_DESIGN, night)).toEqual({ ...INITIAL_DESIGN, background: night });
+  });
+});
+
+describe('applyDesign', () => {
+  it("takes a saved design's widgets, photo placement and background, keeping the format", () => {
+    const layers = defaultTemplate('square').layers.slice(2);
+    const square = setFormat(INITIAL_DESIGN, 'square');
+    expect(applyDesign(square, { layers, photo: framed, background: night })).toEqual({
+      format: 'square',
+      photo: framed,
+      background: night,
+      layers,
+    });
   });
 });
 
@@ -114,9 +141,12 @@ describe('the history of a design', () => {
     expect(layoutTemplate(defaultTemplate, square)).toEqual(defaultTemplate('square'));
   });
 
-  it('undoes a framing of the photo like any other step', () => {
-    const history = commit(createHistory(INITIAL_DESIGN), setFraming(INITIAL_DESIGN, framed));
-    expect(history.present.framing).toEqual(framed);
+  it("undoes the photo's placement and the background like any other step", () => {
+    let history = commit(createHistory(INITIAL_DESIGN), setPhotoPlacement(INITIAL_DESIGN, framed));
+    history = commit(history, setBackground(history.present, night));
+    expect(history.present).toMatchObject({ photo: framed, background: night });
+    history = undo(history);
+    expect(history.present.background).toEqual({ kind: 'auto' });
     expect(undo(history).present).toBe(INITIAL_DESIGN);
   });
 });
@@ -131,15 +161,15 @@ describe('startOver', () => {
     expect(startOver(square)).toBe(square);
   });
 
-  it('brings back the default widgets and framing, keeping the format', () => {
-    const edited = setFraming(withFirstMoved(setFormat(INITIAL_DESIGN, 'portrait')), framed);
+  it('brings back the default widgets, photo placement and background, keeping the format', () => {
+    const edited = setBackground(
+      setPhotoPlacement(withFirstMoved(setFormat(INITIAL_DESIGN, 'portrait')), framed),
+      night,
+    );
     expect(canStartOver(edited)).toBe(true);
-    expect(startOver(edited)).toEqual({
-      format: 'portrait',
-      framing: DEFAULT_FRAMING,
-      layers: null,
-    });
-    expect(canStartOver(setFraming(INITIAL_DESIGN, framed))).toBe(true);
+    expect(startOver(edited)).toEqual({ ...INITIAL_DESIGN, format: 'portrait' });
+    expect(canStartOver(setPhotoPlacement(INITIAL_DESIGN, framed))).toBe(true);
+    expect(canStartOver(setBackground(INITIAL_DESIGN, { kind: 'transparent' }))).toBe(true);
   });
 
   it('is one more undoable step', () => {

@@ -1,4 +1,5 @@
-import { isLayerAllowed, type Layer, parseTemplate, type Template } from './template';
+import { COVER_PLACEMENT } from './photo-placement';
+import { isLayerAllowed, type Layer, newTemplate, parseTemplate, type Template } from './template';
 
 const center = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
 const textStyle = {
@@ -38,14 +39,13 @@ const monthTotal: Layer = {
   opacity: 1,
 };
 
-const activityTemplate: Template = {
-  version: 1,
+const activityTemplate: Template = newTemplate({
   id: 'tpl-1',
   name: 'Minimal',
   mode: 'activity',
   format: 'story',
   layers: [route, distance],
-};
+});
 
 describe('parseTemplate', () => {
   it('accepts a valid template and survives a JSON round trip', () => {
@@ -271,8 +271,46 @@ describe('parseTemplate', () => {
   });
 
   it('rejects unknown versions and blank names', () => {
-    expect(() => parseTemplate({ ...activityTemplate, version: 2 })).toThrow(/version/);
+    expect(() => parseTemplate({ ...activityTemplate, version: 3 })).toThrow(/version/);
     expect(() => parseTemplate({ ...activityTemplate, name: '   ' })).toThrow(/name/);
+  });
+
+  it('reads a template of version 1 with its photo covering, over the auto background', () => {
+    const { photo: _photo, background: _background, ...stored } = activityTemplate;
+    expect(parseTemplate({ ...stored, version: 1 })).toEqual({
+      ...activityTemplate,
+      photo: COVER_PLACEMENT,
+      background: { kind: 'auto' },
+    });
+  });
+
+  it('keeps where the photo goes, the background and the units of a design', () => {
+    const design: Template = {
+      ...activityTemplate,
+      photo: { x: 0.3, y: 0.8, scale: 0.4, rotation: -0.5 },
+      background: { kind: 'color', color: '#141B2D' },
+      units: 'mi',
+    };
+    expect(parseTemplate(JSON.parse(JSON.stringify(design)))).toEqual(design);
+    expect(parseTemplate({ ...design, background: { kind: 'transparent' } }).background).toEqual({
+      kind: 'transparent',
+    });
+  });
+
+  it('rejects a photo or a background out of bounds', () => {
+    const photo = (overrides: object) => ({
+      ...activityTemplate,
+      photo: { ...COVER_PLACEMENT, ...overrides },
+    });
+    expect(() => parseTemplate(photo({ scale: 0.05 }))).toThrow(/scale/);
+    expect(() => parseTemplate(photo({ x: 1.5 }))).toThrow(/x/);
+    expect(() =>
+      parseTemplate({ ...activityTemplate, background: { kind: 'color', color: 'navy' } }),
+    ).toThrow(/color/);
+    expect(() => parseTemplate({ ...activityTemplate, background: { kind: 'blur' } })).toThrow();
+    // Version 2 says where the photo goes: without it, a design is incomplete.
+    const { photo: _photo, ...incomplete } = activityTemplate;
+    expect(() => parseTemplate(incomplete)).toThrow(/photo/);
   });
 
   it('reads a chart stored before its newer options with how it looked then', () => {

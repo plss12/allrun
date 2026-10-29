@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 
 import type { EditorLayers } from '@/core/editor-document';
-import type { PhotoFraming } from '@/core/photo-framing';
 import { STARTER_TEMPLATE_IDS, starterTemplate } from '@/core/starter-templates';
 import { CANVAS_FORMATS, type CanvasFormat, type Template } from '@/core/template';
 import { isSaved, saveDesign, type SavedTemplate, templatesFor } from '@/core/user-templates';
@@ -37,10 +36,18 @@ interface TemplateSheetProps {
   readonly design: Template;
   readonly layerContext: LayerContext;
   readonly photo: SkImage | null;
-  readonly framing: PhotoFraming;
+  /** The photo's dominant color, for the `auto` background; `null` without a photo. */
+  readonly dominant: string | null;
   readonly userTemplates: UserTemplates;
-  /** Replaces the widgets with a template's: `null` for the default design (Sport). */
-  readonly onChoose: (layers: EditorLayers) => void;
+  /**
+   * What choosing a template does: one of the user's designs brings its widgets, where its photo
+   * goes and its background; one of AllRun's, its widgets only (`null` for the default, Sport).
+   */
+  readonly onChoose: (
+    choice:
+      | { readonly kind: 'design'; readonly template: Template }
+      | { readonly kind: 'layers'; readonly layers: EditorLayers },
+  ) => void;
 }
 
 /** Room around and between the thumbnails, in points. */
@@ -49,8 +56,8 @@ const GAP = 12;
 
 /**
  * Sheet to pick a template, each one drawn live with the user's data and photo (ADR 007): on
- * top the user's own templates of this format, with a button to save the current design; below,
- * AllRun's.
+ * top the user's own designs of this format, with a button to save the current one; below,
+ * AllRun's, drawn with the current photo placement and background, which they keep.
  */
 export function TemplateSheet(props: TemplateSheetProps) {
   const { t } = useTranslation();
@@ -82,7 +89,7 @@ function TemplateGrid({
   design,
   layerContext,
   photo,
-  framing,
+  dominant,
   userTemplates,
   onChoose,
 }: TemplateSheetProps) {
@@ -98,7 +105,7 @@ function TemplateGrid({
       template={template}
       layerContext={layerContext}
       photo={photo}
-      framing={framing}
+      dominant={dominant}
       width={width}
     />
   );
@@ -172,7 +179,7 @@ function TemplateGrid({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={t('templates.saved', { number: i + 1 })}
-                  onPress={() => onChoose(saved.template.layers)}
+                  onPress={() => onChoose({ kind: 'design', template: saved.template })}
                   style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                 >
                   <Frame>{thumbnail(saved.template)}</Frame>
@@ -209,33 +216,41 @@ function TemplateGrid({
       </Section>
       <Section title={t('templates.allrun')}>
         <Grid>
-          {STARTER_TEMPLATE_IDS.map((id) => (
-            <Pressable
-              key={id}
-              accessibilityRole="button"
-              accessibilityLabel={t(`templates.starters.${id}`)}
-              onPress={() =>
-                // Sport is the default design: choosing it goes back to it, like Start over.
-                onChoose(id === 'sport' ? null : starterTemplate(id, data, format).layers)
-              }
-              style={({ pressed }) => ({ width, gap: 6, opacity: pressed ? 0.7 : 1 })}
-            >
-              <Frame>{thumbnail(starterTemplate(id, data, format))}</Frame>
-              <Text
-                numberOfLines={1}
-                importantForAccessibility="no"
-                maxFontSizeMultiplier={1.3}
-                style={{
-                  color: colors.label,
-                  fontSize: 13,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                }}
+          {STARTER_TEMPLATE_IDS.map((id) => {
+            // Only their widgets change: they show over the photo and background as they are.
+            const starter = {
+              ...starterTemplate(id, data, format),
+              photo: design.photo,
+              background: design.background,
+            };
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="button"
+                accessibilityLabel={t(`templates.starters.${id}`)}
+                onPress={() =>
+                  // Sport is the default design: choosing it goes back to its widgets.
+                  onChoose({ kind: 'layers', layers: id === 'sport' ? null : starter.layers })
+                }
+                style={({ pressed }) => ({ width, gap: 6, opacity: pressed ? 0.7 : 1 })}
               >
-                {t(`templates.starters.${id}`)}
-              </Text>
-            </Pressable>
-          ))}
+                <Frame>{thumbnail(starter)}</Frame>
+                <Text
+                  numberOfLines={1}
+                  importantForAccessibility="no"
+                  maxFontSizeMultiplier={1.3}
+                  style={{
+                    color: colors.label,
+                    fontSize: 13,
+                    fontWeight: '600',
+                    textAlign: 'center',
+                  }}
+                >
+                  {t(`templates.starters.${id}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </Grid>
       </Section>
     </ScrollView>

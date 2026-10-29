@@ -1,5 +1,5 @@
 import { scaleLayer } from './layer-transform';
-import type { Size } from './photo-framing';
+import type { Size } from './photo-placement';
 import {
   CANVAS_FORMATS,
   isLayerAllowed,

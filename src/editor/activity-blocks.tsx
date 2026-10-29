@@ -39,7 +39,7 @@ import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
 import type { HitHole } from '@/core/layer-transform';
-import type { Size } from '@/core/photo-framing';
+import type { Size } from '@/core/photo-placement';
 import type {
   APP_MODES,
   BRAND_COVERS,

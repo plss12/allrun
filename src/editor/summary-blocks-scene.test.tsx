@@ -18,6 +18,7 @@ import { periodData, testSummaryWidgets } from '@/test-utils/summary-blocks';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
 import type { SummaryData } from './editor-data';
+import { newTemplate } from '@/core/template';
 
 // Draw with CanvasKit instead of the native module (see `template-scene.test.tsx`).
 jest.mock('@shopify/react-native-skia/lib/commonjs/Platform', () => ({
@@ -51,7 +52,7 @@ describe('prepareSummaryBlock', () => {
       'story',
     );
     const [prepared] = scene().prepareLayers(
-      { version: 1, id: 'blocks', mode: 'summary', format: 'story', layers: [layer] },
+      newTemplate({ id: 'blocks', mode: 'summary', format: 'story', layers: [layer] }),
       {
         data,
         fonts: loadTestFonts(['unbounded']),
@@ -85,7 +86,7 @@ describe('prepareSummaryBlock', () => {
       'story',
     );
     const prepared = scene().prepareLayers(
-      { version: 1, id: 'blocks', mode: 'summary', format: 'story', layers: [layer] },
+      newTemplate({ id: 'blocks', mode: 'summary', format: 'story', layers: [layer] }),
       {
         data,
         fonts: loadTestFonts(['unbounded']),

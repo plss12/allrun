@@ -19,8 +19,10 @@ must work in Expo Go until the development build of milestone 5.
   it failed.
 - **Size:** each format's canvas, 1080 px wide (1080 × 1920 for stories down to 1080 × 566):
   Instagram's own sizes, so no app rescales the image before recompressing it.
-- **Encoding (`src/core/export.ts`):** over a photo, JPEG at quality 95 (about 0.5–1 MB, no
-  visible loss; social apps recompress anyway). Without a photo, PNG with transparency.
+- **Encoding (`src/core/export.ts`):** an opaque image, JPEG at quality 95 (about 0.5–1 MB, no
+  visible loss; social apps recompress anyway). One where something shows through, PNG with
+  transparency: without a photo, or (since R3b) with a photo leaving the canvas partly empty over
+  a transparent background (`isOpaque` in `src/core/design-background.ts`).
 - **Actions:** in the design step, "Export" turns the row of tiles under the canvas into Save,
   Share and Copy, and freezes the canvas, which shows exactly what is exported. The image is
   drawn once when exporting starts, so the actions are instant.

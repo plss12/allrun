@@ -1,7 +1,7 @@
 import { exportEncoding, exportFileName, JPEG_QUALITY } from './export';
 
 describe('exportEncoding', () => {
-  it('saves a design over a photo as a high-quality JPEG', () => {
+  it('saves an opaque design as a high-quality JPEG', () => {
     expect(exportEncoding(true)).toMatchObject({
       format: 'jpeg',
       quality: JPEG_QUALITY,
@@ -11,7 +11,7 @@ describe('exportEncoding', () => {
     });
   });
 
-  it('saves a design without a photo as a PNG, which keeps its transparency', () => {
+  it('saves a design with see-through parts as a PNG, which keeps its transparency', () => {
     expect(exportEncoding(false)).toMatchObject({
       format: 'png',
       extension: 'png',

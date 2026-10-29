@@ -11,7 +11,7 @@ import {
 } from './layout-kit';
 import { availableMetrics } from './metrics';
 import { defaultSummaryMetrics } from './summary-metrics';
-import type { CanvasFormat, FontId, Layer, Template } from './template';
+import { type CanvasFormat, type FontId, type Layer, type Template, newTemplate } from './template';
 
 /**
  * Classic: elegant and airy, like a magazine caption. A thin route over the photo and, under it,
@@ -158,5 +158,5 @@ export function classicTemplate(data: TemplateData, format: CanvasFormat): Templ
     );
   }
   layers.push(logoLayer(layout.logo, 0.9));
-  return { version: 1, id: `classic-${data.mode}`, mode: data.mode, format, layers };
+  return newTemplate({ id: `classic-${data.mode}`, mode: data.mode, format, layers });
 }

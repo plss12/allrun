@@ -14,8 +14,8 @@ import {
 } from '@shopify/react-native-skia/lib/commonjs/headless';
 
 import { defaultActivityTemplate } from '@/core/default-layout';
-import { DEFAULT_FRAMING, type PhotoFraming } from '@/core/photo-framing';
-import { CANVAS_FORMATS } from '@/core/template';
+import { COVER_PLACEMENT, type PhotoPlacement } from '@/core/photo-placement';
+import { CANVAS_FORMATS, type Template } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
@@ -74,10 +74,22 @@ function redPhoto(): SkImage {
   return surface.makeImageSnapshot();
 }
 
-function render(photo: SkImage | null, framing: PhotoFraming = DEFAULT_FRAMING) {
+/** The photo's dominant color in these tests, as the editor would have found it. */
+const BLUE = '#0000FF';
+
+function render(
+  photo: SkImage | null,
+  placement: PhotoPlacement = COVER_PLACEMENT,
+  background: Template['background'] = { kind: 'auto' },
+) {
   return drawOffscreen(
     makeOffscreenSurface(width, height),
-    exportScene({ template, layerContext: layerContext(), photo, framing }),
+    exportScene({
+      template: { ...template, photo: placement, background },
+      layerContext: layerContext(),
+      photo,
+      dominant: photo === null ? null : BLUE,
+    }),
   );
 }
 
@@ -126,9 +138,9 @@ describe('exportScene', () => {
     expect(maxAlpha(image)).toBeGreaterThan(200);
   });
 
-  it('covers the whole image with the photo, also rotated', async () => {
-    for (const framing of [DEFAULT_FRAMING, { ...DEFAULT_FRAMING, rotation: 0.4, zoom: 1.2 }]) {
-      const image = await render(redPhoto(), framing);
+  it('covers the whole image with the photo, also zoomed in and turned', async () => {
+    for (const placement of [COVER_PLACEMENT, { ...COVER_PLACEMENT, rotation: 0.4, scale: 1.2 }]) {
+      const image = await render(redPhoto(), placement);
       for (const [x, y] of corners) {
         const [r, g, b, a] = pixel(image, x, y);
         expect(a).toBe(255);
@@ -136,5 +148,30 @@ describe('exportScene', () => {
         expect(g + b).toBeLessThan(20);
       }
     }
+  });
+
+  it("shows the photo's dominant color where a smaller photo leaves the canvas empty", async () => {
+    const image = await render(redPhoto(), { ...COVER_PLACEMENT, scale: 0.5 });
+    for (const [x, y] of corners) {
+      expect(pixel(image, x, y)).toEqual([0, 0, 255, 255]);
+    }
+    // The photo, half as big, still fills the middle.
+    const [r, , , a] = pixel(image, width / 2, height / 2 + 300);
+    expect([r > 240, a]).toEqual([true, 255]);
+  });
+
+  it('shows a chosen color, or nothing over a transparent background', async () => {
+    const small = { ...COVER_PLACEMENT, scale: 0.5 };
+    const white = await render(redPhoto(), small, { kind: 'color', color: '#FFFFFF' });
+    expect(pixel(white, 0, 0)).toEqual([255, 255, 255, 255]);
+    const clear = await render(redPhoto(), small, { kind: 'transparent' });
+    expect(pixel(clear, 0, 0)[3]).toBe(0);
+  });
+
+  it('places the photo where the design says, whatever its resolution', async () => {
+    // Half as big and centered on the right edge: the left part shows the background.
+    const image = await render(redPhoto(), { ...COVER_PLACEMENT, x: 1, scale: 0.5 });
+    expect(pixel(image, 0, height / 2)).toEqual([0, 0, 255, 255]);
+    expect(pixel(image, width - 1, height / 2)[0]).toBeGreaterThan(240);
   });
 });

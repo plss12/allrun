@@ -12,7 +12,7 @@ import {
   type NewLayer,
   rowPartner,
 } from '@/core/layer-catalog';
-import { CANVAS_FORMATS, type CanvasFormat, type FontId } from '@/core/template';
+import { CANVAS_FORMATS, type CanvasFormat, type FontId, newTemplate } from '@/core/template';
 
 import { layerText } from './editor-data';
 import { inParagraphArena } from './paragraph-arena';
@@ -353,7 +353,7 @@ function prepareItem(
   const pick: NewLayer = item.kind === 'text' ? { kind: 'text', content: textSample } : item;
   const layer = newLayer(pick, catalogItemKey(item), format, font);
   const [prepared] = prepareLayers(
-    { version: 1, id: 'gallery', mode: context.data.mode, format, layers: [layer] },
+    newTemplate({ id: 'gallery', mode: context.data.mode, format, layers: [layer] }),
     context,
   );
   return prepared ?? null;

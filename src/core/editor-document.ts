@@ -1,6 +1,11 @@
 import type { LayerTransform } from './layer-transform';
-import { DEFAULT_FRAMING, type PhotoFraming } from './photo-framing';
-import type { CanvasFormat, Template } from './template';
+import { COVER_PLACEMENT, type PhotoPlacement, samePlacement } from './photo-placement';
+import {
+  AUTO_BACKGROUND,
+  type CanvasFormat,
+  type DesignBackground,
+  type Template,
+} from './template';
 
 /**
  * The widgets of a design. `null` while they are the default layout, which each format lays out
@@ -16,8 +21,10 @@ export type EditorLayers = Template['layers'] | null;
  */
 export interface EditorDesign {
   readonly format: CanvasFormat;
-  /** How the photo is framed, in proportions of the photo (see `photo-framing.ts`). */
-  readonly framing: PhotoFraming;
+  /** Where the photo goes, relative to the canvas (see `photo-placement.ts`). */
+  readonly photo: PhotoPlacement;
+  /** What shows where the photo leaves the canvas empty. */
+  readonly background: DesignBackground;
   readonly layers: EditorLayers;
 }
 
@@ -27,17 +34,29 @@ export type DefaultTemplate = (format: CanvasFormat) => Template;
 /** Format the editor opens in. */
 export const INITIAL_FORMAT: CanvasFormat = 'story';
 
-/** How the editor opens: the story format, the photo centered and the default widgets. */
+/**
+ * How the editor opens: the story format, the photo covering the canvas over its dominant color,
+ * and the default widgets.
+ */
 export const INITIAL_DESIGN: EditorDesign = {
   format: INITIAL_FORMAT,
-  framing: DEFAULT_FRAMING,
+  photo: COVER_PLACEMENT,
+  background: AUTO_BACKGROUND,
   layers: null,
 };
 
-/** The design on the canvas: the default layout of its format, or the user's layers in it. */
+/**
+ * The design on the canvas: the default layout of its format, or the user's layers in it, with
+ * its photo's placement and its background.
+ */
 export function layoutTemplate(defaultTemplate: DefaultTemplate, design: EditorDesign): Template {
   const template = defaultTemplate(design.format);
-  return design.layers === null ? template : { ...template, layers: design.layers };
+  return {
+    ...template,
+    layers: design.layers ?? template.layers,
+    photo: design.photo,
+    background: design.background,
+  };
 }
 
 /**
@@ -61,6 +80,17 @@ export function setLayers(design: EditorDesign, layers: EditorLayers): EditorDes
 }
 
 /**
+ * Applies a saved design: its widgets, where its photo goes and its background (the format is the
+ * same: the designs offered are the format's).
+ */
+export function applyDesign(
+  design: EditorDesign,
+  saved: Pick<Template, 'layers' | 'photo' | 'background'>,
+): EditorDesign {
+  return { ...design, layers: saved.layers, photo: saved.photo, background: saved.background };
+}
+
+/**
  * Another format. The widgets stay where they are, in relative positions, and the user rearranges
  * them if they need to (undo brings the old format back); the default layout is laid out again
  * for the new format. Returns `design` itself for the same format.
@@ -69,9 +99,14 @@ export function setFormat(design: EditorDesign, format: CanvasFormat): EditorDes
   return format === design.format ? design : { ...design, format };
 }
 
-/** Frames the photo anew. Returns `design` itself when the framing is the same. */
-export function setFraming(design: EditorDesign, framing: PhotoFraming): EditorDesign {
-  return sameFraming(design.framing, framing) ? design : { ...design, framing };
+/** Places the photo anew. Returns `design` itself when it is already there. */
+export function setPhotoPlacement(design: EditorDesign, photo: PhotoPlacement): EditorDesign {
+  return samePlacement(design.photo, photo) ? design : { ...design, photo };
+}
+
+/** Another background. Returns `design` itself when it is the same. */
+export function setBackground(design: EditorDesign, background: DesignBackground): EditorDesign {
+  return sameBackground(design.background, background) ? design : { ...design, background };
 }
 
 /**
@@ -99,25 +134,22 @@ export function setLayerTransform(
  * is nothing to start over, so it records no undo step.
  */
 export function startOver(design: EditorDesign): EditorDesign {
-  return canStartOver(design)
-    ? { format: design.format, framing: DEFAULT_FRAMING, layers: null }
-    : design;
+  return canStartOver(design) ? { ...INITIAL_DESIGN, format: design.format } : design;
 }
 
-/** Whether starting over would change anything: the widgets or the framing were edited. */
+/** Whether starting over would change anything: the widgets, the photo or the background. */
 export function canStartOver(design: EditorDesign): boolean {
-  return design.layers !== null || !sameFraming(design.framing, DEFAULT_FRAMING);
+  return (
+    design.layers !== null ||
+    !samePlacement(design.photo, INITIAL_DESIGN.photo) ||
+    !sameBackground(design.background, INITIAL_DESIGN.background)
+  );
 }
 
 function sameTransform(a: LayerTransform, b: LayerTransform): boolean {
   return a.x === b.x && a.y === b.y && a.scale === b.scale && a.rotation === b.rotation;
 }
 
-function sameFraming(a: PhotoFraming, b: PhotoFraming): boolean {
-  return (
-    a.centerX === b.centerX &&
-    a.centerY === b.centerY &&
-    a.zoom === b.zoom &&
-    a.rotation === b.rotation
-  );
+function sameBackground(a: DesignBackground, b: DesignBackground): boolean {
+  return a.kind === b.kind && (a.kind !== 'color' || (b.kind === 'color' && a.color === b.color));
 }

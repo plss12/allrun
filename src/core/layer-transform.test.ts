@@ -175,4 +175,52 @@ describe('hitTestLayers', () => {
     // Its bottom band: from 1180 px down to its end, 1440.
     expect(hitTestLayers(boxes, { x: 540, y: 1300 }, story, 0)).toBe('frame');
   });
+
+  describe('a line, such as a route', () => {
+    // A diagonal across a 400 × 400 box, from its top-left to its bottom-right corner.
+    const route: LayerBox = {
+      ...box('route', {}, 400, 400),
+      line: { routes: [[-200, -200, 200, 200]], halfWidth: 4 },
+    };
+    const boxes = [box('under', { y: 0.45 }, 200, 100), route];
+
+    it('is grabbed on its line, within the touch reach', () => {
+      expect(hitTestLayers(boxes, { x: 540, y: 960 }, story, 44)).toBe('route');
+      // 20 px off the line, perpendicular to it: within half the touch size plus its stroke.
+      const off = 20 / Math.SQRT2;
+      expect(hitTestLayers(boxes, { x: 640 + off, y: 1060 - off }, story, 44)).toBe('route');
+    });
+
+    it('lets a touch in the empty part of its box through to what is under it', () => {
+      // The box's top-right corner, far from the diagonal: the layer under it.
+      expect(hitTestLayers(boxes, { x: 600, y: 864 }, story, 44)).toBe('under');
+      // The bottom-left corner, over nothing: the photo.
+      expect(hitTestLayers(boxes, { x: 400, y: 1120 }, story, 44)).toBeNull();
+    });
+
+    it('follows the scale of the layer, the reach staying the same on the canvas', () => {
+      const scaled = [{ ...route, transform: { ...route.transform, scale: 2 } }];
+      // The line's end, 400 px down and right once scaled to 800 × 800.
+      expect(hitTestLayers(scaled, { x: 930, y: 1350 }, story, 44)).toBe('route');
+      // 40 px off the scaled line: out of reach, as it would be unscaled.
+      const off = 40 / Math.SQRT2;
+      expect(hitTestLayers(scaled, { x: 540 + off, y: 960 - off }, story, 44)).toBeNull();
+    });
+
+    it('takes each route of several apart, without joining them', () => {
+      const two: LayerBox = {
+        ...box('routes', {}, 400, 400),
+        line: {
+          routes: [
+            [-200, -200, -200, 200],
+            [200, -200, 200, 200],
+          ],
+          halfWidth: 4,
+        },
+      };
+      expect(hitTestLayers([two], { x: 340, y: 960 }, story, 44)).toBe('routes');
+      // Between the two lines, where joining them would draw one.
+      expect(hitTestLayers([two], { x: 540, y: 1160 }, story, 44)).toBeNull();
+    });
+  });
 });

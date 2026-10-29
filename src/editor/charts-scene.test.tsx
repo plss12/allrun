@@ -12,7 +12,7 @@ import { monthRange } from '@/core/dates';
 import { newLayer } from '@/core/default-layout';
 import { activityCatalog, summaryCatalog } from '@/core/layer-catalog';
 import { summarize } from '@/core/summary';
-import type { Layer } from '@/core/template';
+import { type Layer, newTemplate } from '@/core/template';
 import { es } from '@/i18n/locales/es';
 import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
@@ -108,7 +108,7 @@ function prepareCharts(data: EditorData): PreparedLayer[] {
     newLayer(item.kind === 'text' ? { kind: 'text', content: '' } : item, `chart-${i}`, 'story'),
   );
   return scene.prepareLayers(
-    { version: 1, id: 'charts', mode: data.mode, format: 'story', layers },
+    newTemplate({ id: 'charts', mode: data.mode, format: 'story', layers }),
     {
       data,
       fonts: loadTestFonts(['barlowCondensed']),
@@ -159,7 +159,7 @@ describe('charts', () => {
       }
       const layer: Layer = { ...base, ...chart };
       const [prepared] = scene.prepareLayers(
-        { version: 1, id: 'one', mode: 'activity', format: 'story', layers: [layer] },
+        newTemplate({ id: 'one', mode: 'activity', format: 'story', layers: [layer] }),
         {
           data,
           fonts: loadTestFonts(['barlowCondensed']),
@@ -187,8 +187,7 @@ describe('charts', () => {
     expect(heightOf({ zones: 'lineAndTable' })).toBeGreaterThan(withHeader);
     // Without the athlete's zones, the line is drawn alone.
     const unzoned = scene.prepareLayers(
-      {
-        version: 1,
+      newTemplate({
         id: 'one',
         mode: 'activity',
         format: 'story',
@@ -199,7 +198,7 @@ describe('charts', () => {
             'story',
           ),
         ],
-      },
+      }),
       {
         data: { ...data, zones: null },
         fonts: loadTestFonts(['barlowCondensed']),

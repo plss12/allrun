@@ -2,7 +2,7 @@ import { activityBlocks, isAppReplica, isDataWidget } from '@/core/activity-bloc
 import type { Activity } from '@/core/activity';
 import type { ActivityDetail } from '@/core/activity-detail';
 import { newLayer } from '@/core/default-layout';
-import type { FontId, Layer } from '@/core/template';
+import { type FontId, type Layer, newTemplate } from '@/core/template';
 import type { LayerContext, PreparedLayer } from '@/editor/template-scene';
 import { es } from '@/i18n/locales/es';
 import { generateStravaDetail } from '@/sources/fixtures/detail';
@@ -111,7 +111,7 @@ export function prepareBlocks(
     };
   });
   return scene.prepareLayers(
-    { version: 1, id: 'blocks', mode: 'activity', format: 'story', layers },
+    newTemplate({ id: 'blocks', mode: 'activity', format: 'story', layers }),
     context,
   );
 }

@@ -1,4 +1,4 @@
-import type { Size } from '@/core/photo-framing';
+import type { Size } from '@/core/photo-placement';
 import type { Template } from '@/core/template';
 import { keepLayerArea } from '@/core/template-edit';
 

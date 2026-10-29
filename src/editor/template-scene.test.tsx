@@ -14,12 +14,15 @@ import {
 
 import { monthRange } from '@/core/dates';
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from '@/core/default-layout';
+import { hitTestLayers } from '@/core/layer-transform';
+import { encodePolyline } from '@/core/polyline';
 import { summarize } from '@/core/summary';
 import {
   ACTIVITY_CHART_SERIES,
   type ActivityChartSeries,
   type Layer,
   type Template,
+  newTemplate,
 } from '@/core/template';
 import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 import { makeActivity } from '@/test-utils/make-activity';
@@ -105,7 +108,8 @@ async function render(change: (layer: Layer) => Layer, id: string): Promise<SkIm
     <scene.TemplateScene
       format="story"
       layers={scene.prepareLayers(template, context)}
-      background={{ kind: 'none' }}
+      backdrop={{ kind: 'none' }}
+      photo={null}
     />,
   );
 }
@@ -223,6 +227,72 @@ function countAbove(image: SkImage, alpha: number): number {
   return count;
 }
 
+describe('a route on the diagonal', () => {
+  // About 5 km straight to the north-east, in 200 points.
+  const diagonal = encodePolyline(
+    Array.from({ length: 200 }, (_, i) => [55.67 + i * 0.0002, 12.56 + i * 0.0003] as const),
+  );
+  const route = defaultActivityTemplate(activity, 'story').layers.find(
+    (layer) => layer.kind === 'route',
+  );
+  if (route === undefined) {
+    throw new Error('The default layout has no route');
+  }
+  const prepare = () => {
+    const [prepared] = scene.prepareLayers(
+      { ...defaultActivityTemplate(activity, 'story'), layers: [route] },
+      {
+        data: {
+          mode: 'activity',
+          activity: { ...activity, routePolyline: diagonal },
+          detail: null,
+          place: null,
+          zones: null,
+        },
+        fonts: interFonts(),
+        textContext: {
+          unit: 'km',
+          locale: 'en',
+          durationUnits: TEST_DURATION_UNITS,
+          unitLabel: testUnitLabel,
+        },
+        translate: (key) => key,
+      },
+    );
+    return prepared;
+  };
+
+  it('keeps its line within its box, thinned for the hit test', () => {
+    const { width, height, line } = prepare();
+    if (line === undefined) {
+      throw new Error('A route gives the hit test its line');
+    }
+    const [points] = line.routes;
+    // Far fewer points than the route has, yet more than its two ends.
+    expect(points.length / 2).toBeGreaterThan(10);
+    expect(points.length / 2).toBeLessThan(200);
+    for (let i = 0; i < points.length; i += 2) {
+      expect(Math.abs(points[i])).toBeLessThanOrEqual(width / 2);
+      expect(Math.abs(points[i + 1])).toBeLessThanOrEqual(height / 2);
+    }
+  });
+
+  it('is grabbed on its line, and lets touches through the empty corners of its box', () => {
+    const { layer, width, height, line } = prepare();
+    const box = { id: 'route', transform: layer.transform, width, height, line };
+    const canvas = { width: 1080, height: 1920 };
+    const center = { x: layer.transform.x * 1080, y: layer.transform.y * 1920 };
+    const { scale } = layer.transform;
+    expect(hitTestLayers([box], center, canvas, 44)).toBe('route');
+    // The top-left corner of a line running to the north-east, inside its box.
+    const corner = {
+      x: center.x - (width * scale) / 2 + 10,
+      y: center.y - (height * scale) / 2 + 10,
+    };
+    expect(hitTestLayers([box], corner, canvas, 44)).toBeNull();
+  });
+});
+
 describe('TemplateScene style options', () => {
   const plain = (layer: Layer): Layer =>
     layer.kind === 'info'
@@ -288,7 +358,12 @@ describe('activity charts', () => {
       const layers = scene.prepareLayers({ ...base, layers: [plainChart(chart)] }, context);
       const image = await drawOffscreen(
         makeOffscreenSurface(1080, 1920),
-        <scene.TemplateScene format="story" layers={layers} background={{ kind: 'none' }} />,
+        <scene.TemplateScene
+          format="story"
+          layers={layers}
+          backdrop={{ kind: 'none' }}
+          photo={null}
+        />,
       );
       return { layers, pixels: countAbove(image, 128) };
     };
@@ -410,7 +485,7 @@ describe('TemplateScene bold', () => {
       <scene.TemplateScene
         format="story"
         layers={scene.prepareLayers(
-          { version: 1, id: 'bold', mode: 'activity', format: 'story', layers: [layer] },
+          newTemplate({ id: 'bold', mode: 'activity', format: 'story', layers: [layer] }),
           {
             data: { mode: 'activity', activity, detail: null, place: null, zones: null },
             fonts: loadTestFonts(['anton', 'bowlbyOneSC']),
@@ -423,7 +498,8 @@ describe('TemplateScene bold', () => {
             translate: (key) => key,
           },
         )}
-        background={{ kind: 'none' }}
+        backdrop={{ kind: 'none' }}
+        photo={null}
       />,
     );
 
@@ -489,7 +565,7 @@ describe('TemplateScene missing glyphs', () => {
       <scene.TemplateScene
         format="story"
         layers={scene.prepareLayers(
-          { version: 1, id: 'dot', mode: 'activity', format: 'story', layers: [layer] },
+          newTemplate({ id: 'dot', mode: 'activity', format: 'story', layers: [layer] }),
           {
             data: { mode: 'activity', activity, detail: null, place: null, zones: null },
             fonts: loadTestFonts(['orbitron', 'inter']),
@@ -502,7 +578,8 @@ describe('TemplateScene missing glyphs', () => {
             translate: (key) => key,
           },
         )}
-        background={{ kind: 'none' }}
+        backdrop={{ kind: 'none' }}
+        photo={null}
       />,
     );
   };

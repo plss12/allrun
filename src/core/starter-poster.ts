@@ -11,7 +11,7 @@ import {
 } from './layout-kit';
 import { availableMetrics } from './metrics';
 import { defaultSummaryMetrics, summaryHasDistance } from './summary-metrics';
-import type { CanvasFormat, FontId, Layer, Template } from './template';
+import { type CanvasFormat, type FontId, type Layer, type Template, newTemplate } from './template';
 
 /**
  * Poster: the data as the star. The main value huge in Archivo Black, the next ones under it,
@@ -233,5 +233,5 @@ export function posterTemplate(data: TemplateData, format: CanvasFormat): Templa
     );
   }
   layers.push(logoLayer(layout.logo, 1));
-  return { version: 1, id: `poster-${data.mode}`, mode: data.mode, format, layers };
+  return newTemplate({ id: `poster-${data.mode}`, mode: data.mode, format, layers });
 }

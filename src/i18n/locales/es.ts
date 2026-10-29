@@ -78,6 +78,15 @@ export const es: Translations = {
     discardTitle: '¿Descartar esta imagen?',
     discardMessage: 'Se perderán la foto y los cambios.',
     discard: 'Descartar',
+    photoTools: 'Foto y fondo',
+    fitPhoto: 'Cubrir',
+    background: 'Fondo',
+    backgrounds: {
+      auto: 'Color de la foto',
+      black: 'Negro',
+      white: 'Blanco',
+      transparent: 'Transparente',
+    },
   },
   export: {
     preparing: 'Preparando la imagen…',

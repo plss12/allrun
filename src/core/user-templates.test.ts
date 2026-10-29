@@ -82,4 +82,10 @@ describe('isSaved', () => {
     expect(isSaved(saved, { ...story, mode: 'summary' })).toBe(false);
     expect(isSaved([], story)).toBe(false);
   });
+
+  it('tells apart another photo placement or background', () => {
+    const saved = [saveDesign(story, 'mine-1', at('10:00'))];
+    expect(isSaved(saved, { ...story, photo: { ...story.photo, scale: 0.5 } })).toBe(false);
+    expect(isSaved(saved, { ...story, background: { kind: 'transparent' } })).toBe(false);
+  });
 });

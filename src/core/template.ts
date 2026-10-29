@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { MetricId } from './metrics';
+import { COVER_PLACEMENT, MAX_PHOTO_SCALE, MIN_PHOTO_SCALE } from './photo-placement';
 import { PLACE_FORMATS } from './place';
 
 /**
@@ -10,7 +11,8 @@ import { PLACE_FORMATS } from './place';
  * small enough to store as JSON and, later, to sync across devices.
  *
  * Positions are relative to the canvas (0..1), so a design exports at any resolution and survives
- * a format change.
+ * a format change. Since version 2 a design also says where the photo goes (relative to the
+ * canvas too, so it fits any photo) and what shows where the photo leaves the canvas empty.
  */
 
 /** Export size of each canvas format, in pixels. */
@@ -875,16 +877,55 @@ function withoutRetiredBlocks(layers: unknown): unknown {
   });
 }
 
-export const templateSchema = z
+/** Where the photo goes (see `photo-placement.ts`). */
+const photoPlacementSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  scale: z.number().min(MIN_PHOTO_SCALE).max(MAX_PHOTO_SCALE),
+  rotation: z.number().min(-Math.PI).max(Math.PI),
+});
+
+/**
+ * What shows where the photo leaves the canvas empty, and with no photo: the photo's dominant
+ * color (`auto`, none without a photo), a color, or nothing (the image exports transparent).
+ */
+const backgroundSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('auto') }),
+  z.object({ kind: z.literal('color'), color: colorSchema }),
+  z.object({ kind: z.literal('transparent') }),
+]);
+
+export type DesignBackground = z.infer<typeof backgroundSchema>;
+
+/** The background a design starts with: the photo's dominant color. */
+export const AUTO_BACKGROUND: DesignBackground = { kind: 'auto' };
+
+/**
+ * Templates saved before version 2 had the photo covering the canvas and nothing else to show:
+ * they read as covering, over the photo's dominant color (which no covering photo lets show).
+ * Anything else goes through as it is, for the schema to judge.
+ */
+function migrateTemplate(json: unknown): unknown {
+  if (typeof json !== 'object' || json === null || !('version' in json) || json.version !== 1) {
+    return json;
+  }
+  return { ...json, version: 2, photo: COVER_PLACEMENT, background: AUTO_BACKGROUND };
+}
+
+const templateObjectSchema = z
   .object({
-    /** Bumped on breaking changes, with a migration for stored templates. */
-    version: z.literal(1),
+    /** Bumped on breaking changes, with a migration for stored templates (`migrateTemplate`). */
+    version: z.literal(2),
     id: z.string().min(1),
     /** Optional: templates are recognised by their thumbnail (see ADR 007). */
     name: z.string().trim().min(1).max(60).optional(),
     mode: z.enum(['activity', 'summary']),
     format: z.enum(['story', 'tall', 'portrait', 'square', 'landscape']),
     layers: z.preprocess(withoutRetiredBlocks, z.array(layerSchema).max(MAX_LAYERS)),
+    photo: photoPlacementSchema,
+    background: backgroundSchema,
+    /** The design's own distance unit; absent, the device's (settings come in R3c). */
+    units: z.enum(['km', 'mi']).optional(),
   })
   .superRefine((template, context) => {
     const seen = new Set<string>();
@@ -907,7 +948,19 @@ export const templateSchema = z
     });
   });
 
+export const templateSchema = z.preprocess(migrateTemplate, templateObjectSchema);
+
 export type Template = z.infer<typeof templateSchema>;
+
+/**
+ * A new template of the current version, with its photo covering the canvas over the photo's
+ * dominant color: how a design starts.
+ */
+export function newTemplate(
+  fields: Pick<Template, 'id' | 'mode' | 'format' | 'layers'> & Pick<Partial<Template>, 'name'>,
+): Template {
+  return { version: 2, ...fields, photo: COVER_PLACEMENT, background: AUTO_BACKGROUND };
+}
 
 /**
  * Validates a stored or shared template (raw JSON).

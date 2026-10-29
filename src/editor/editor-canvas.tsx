@@ -34,7 +34,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { snapAngle } from '@/core/angles';
 import {
   hitTestLayers,
   LAYER_MARGIN,
@@ -47,14 +46,15 @@ import {
   translateLayer,
 } from '@/core/layer-transform';
 import {
-  framePhoto,
-  panFraming,
-  type PhotoFraming,
+  drawPhoto,
+  panPlacement,
+  type PhotoDrawing,
   type PhotoPlacement,
-  rotateFraming,
+  rotatePlacement,
   type Size,
-  zoomFraming,
-} from '@/core/photo-framing';
+  snapPlacement,
+  zoomPlacement,
+} from '@/core/photo-placement';
 import { CANVAS_FORMATS, type Template } from '@/core/template';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
@@ -73,9 +73,12 @@ interface EditorCanvasProps {
   readonly displayWidth: number;
   readonly template: Template;
   readonly layerContext: LayerContext;
-  /** The photo, or `null` for none: the image is transparent under the widgets. */
+  /** The photo, or `null` for none. */
   readonly photo: SkImage | null;
-  readonly framing: PhotoFraming;
+  /** Where the photo goes; the template's own, kept apart so gestures can move it live. */
+  readonly placement: PhotoPlacement;
+  /** The background's color where the photo leaves the canvas empty; `null` shows none. */
+  readonly backdrop: string | null;
   /** Id of the selected layer, or `null`. */
   readonly selectedId: string | null;
   readonly onSelect: (id: string | null) => void;
@@ -84,7 +87,7 @@ interface EditorCanvasProps {
   /** Called when a layer starts and stops being dragged, so the editor can clear the way. */
   readonly onDraggingChange: (dragging: boolean) => void;
   /** Called once per gesture on the photo, when the fingers lift. */
-  readonly onFramingChange: (framing: PhotoFraming) => void;
+  readonly onPlacementChange: (placement: PhotoPlacement) => void;
   /** Called once per gesture on a layer, when the fingers lift. */
   readonly onLayerTransform: (id: string, transform: LayerTransform) => void;
   /** Called when a layer is dropped on the trash. */
@@ -100,6 +103,8 @@ const MIN_TOUCH = 44;
 const SNAP_DISTANCE = 8;
 /** How close to straight (0°, 90°…) a layer or the photo snaps, in radians (4°). */
 const SNAP_ANGLE = (4 * Math.PI) / 180;
+/** How close to covering the canvas the photo's size snaps to it, as a share of its scale. */
+const SNAP_SCALE = 0.04;
 /** Diameter of the trash and its distance from the bottom of the canvas. */
 const TRASH_SIZE = 52;
 const TRASH_MARGIN = 20;
@@ -168,25 +173,27 @@ function playHaptic(style: ImpactFeedbackStyle): void {
  * else the photo.
  *
  * Layers snap to the canvas center lines, to its edges and to straight angles, with guides and a
- * haptic tick; dropping one on the trash that appears while dragging removes it. The photo snaps
- * to straight angles too, and always covers the canvas (see `photo-framing.ts`).
+ * haptic tick; dropping one on the trash that appears while dragging removes it. The photo moves
+ * freely (see `photo-placement.ts`) and snaps the same way, and to the size that covers the
+ * canvas; where it leaves the canvas empty, the background shows.
  *
- * During a gesture the photo framing and the moved layer's transform live in shared values
+ * During a gesture the photo's placement and the moved layer's transform live in shared values
  * updated on the UI thread: React doesn't re-render and the other layers aren't redrawn. When
- * the fingers lift, the result goes to `onFramingChange`, `onLayerTransform` or `onLayerRemove`
- * (one undo step).
+ * the fingers lift, the result goes to `onPlacementChange`, `onLayerTransform` or
+ * `onLayerRemove` (one undo step).
  */
 export function EditorCanvas({
   displayWidth,
   template,
   layerContext,
   photo,
-  framing,
+  placement,
+  backdrop,
   selectedId,
   onSelect,
   onTapPhoto,
   onDraggingChange,
-  onFramingChange,
+  onPlacementChange,
   onLayerTransform,
   onLayerRemove,
   trashLabel,
@@ -198,15 +205,17 @@ export function EditorCanvas({
   const photoSize: Size | null =
     photo === null ? null : { width: photo.width(), height: photo.height() };
   const layers = prepareLayers(template, layerContext);
-  const boxes: LayerBox[] = layers.map(({ layer, width, height, hole }) => ({
+  const boxes: LayerBox[] = layers.map(({ layer, width, height, hole, line }) => ({
     id: layer.id,
     transform: layer.transform,
     width,
     height,
     ...(hole === undefined ? {} : { hole }),
+    ...(line === undefined ? {} : { line }),
   }));
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
   const thresholds = { distance: SNAP_DISTANCE / ratio, rotation: SNAP_ANGLE };
+  const photoThresholds = { ...thresholds, scale: SNAP_SCALE };
   // The trash center, in screen points from the canvas's top-left corner.
   const trashX = displayWidth / 2;
   const trashY = displayHeight - TRASH_MARGIN - TRASH_SIZE / 2;
@@ -249,10 +258,11 @@ export function EditorCanvas({
   const target = useSharedValue(TARGET_NONE);
   const targetId = useSharedValue('');
   const touchStart = useSharedValue({ x: 0, y: 0 });
-  const liveFraming = useSharedValue(framing);
-  /** Where the fingers turned the photo; `liveFraming` has it snapped to straight angles. */
-  const rawPhotoRotation = useSharedValue(0);
+  /** Where the fingers put the photo; `livePlacement` is that, snapped. */
+  const rawPlacement = useSharedValue(placement);
+  const livePlacement = useSharedValue(placement);
   const photoStraight = useSharedValue(false);
+  const photoCover = useSharedValue(false);
   /** Where the fingers put the layer; `liveTransform` is that, snapped. */
   const rawTransform = useSharedValue<LayerTransform>(IDENTITY);
   const liveTransform = useSharedValue<LayerTransform>(IDENTITY);
@@ -263,21 +273,21 @@ export function EditorCanvas({
   /** 0 → 1 as the finger reaches the trash, animated. */
   const trashProgress = useSharedValue(0);
 
-  // Undo, redo or a new photo replace the framing from outside; never mid-gesture, where the
-  // shared value is ahead of React.
+  // Undo, redo or a new photo place it from outside; never mid-gesture, where the shared value
+  // is ahead of React.
   useEffect(() => {
     if (activeGestures.get() === 0) {
-      liveFraming.set(framing);
+      livePlacement.set(placement);
     }
-  }, [framing, liveFraming, activeGestures]);
+  }, [placement, livePlacement, activeGestures]);
 
-  const placement = useDerivedValue((): PhotoPlacement =>
+  const drawing = useDerivedValue((): PhotoDrawing =>
     photoSize === null
-      ? { x: 0, y: 0, width: canvas.width, height: canvas.height, rotation: 0 }
-      : framePhoto(photoSize, canvas, liveFraming.get()),
+      ? { x: 0, y: 0, width: 0, height: 0, rotation: 0 }
+      : drawPhoto(photoSize, canvas, livePlacement.get()),
   );
-  const livePhotoMatrix = useDerivedValue(() => photoMatrix(placement.get(), canvas));
-  const livePhotoRect = useDerivedValue(() => photoRect(placement.get()));
+  const livePhotoMatrix = useDerivedValue(() => photoMatrix(drawing.get()));
+  const livePhotoRect = useDerivedValue(() => photoRect(drawing.get()));
   const liveMatrix = useDerivedValue(() => layerMatrix(liveTransform.get(), canvas));
   // The dragged layer fades over the trash: it is about to go.
   const liveOpacity = useDerivedValue(() => draggedOpacity * (1 - 0.65 * trashProgress.get()));
@@ -288,6 +298,7 @@ export function EditorCanvas({
     snapY.set('none');
     layerStraight.set(false);
     photoStraight.set(false);
+    photoCover.set(false);
     overTrash.set(false);
     trashProgress.set(0);
   };
@@ -304,7 +315,7 @@ export function EditorCanvas({
     const box = id === null ? undefined : boxes.find((candidate) => candidate.id === id);
     if (box === undefined) {
       target.set(TARGET_PHOTO);
-      rawPhotoRotation.set(liveFraming.get().rotation);
+      rawPlacement.set(livePlacement.get());
       return;
     }
     target.set(TARGET_LAYER);
@@ -332,6 +343,29 @@ export function EditorCanvas({
     snapY.set(snap.y);
     layerStraight.set(snap.rotation);
     liveTransform.set(snap.transform);
+    if (newSnap) {
+      scheduleOnRN(playHaptic, ImpactFeedbackStyle.Light);
+    }
+  };
+
+  /** Moves the photo to `next` (unsnapped), snapping it and ticking on each new snap. */
+  const updatePhoto = (next: PhotoPlacement) => {
+    'worklet';
+    if (photoSize === null) {
+      return;
+    }
+    rawPlacement.set(next);
+    const snap = snapPlacement(next, photoSize, canvas, photoThresholds);
+    const newSnap =
+      (snap.x !== 'none' && snap.x !== snapX.get()) ||
+      (snap.y !== 'none' && snap.y !== snapY.get()) ||
+      (snap.rotation && !photoStraight.get()) ||
+      (snap.cover && !photoCover.get());
+    snapX.set(snap.x);
+    snapY.set(snap.y);
+    photoStraight.set(snap.rotation);
+    photoCover.set(snap.cover);
+    livePlacement.set(snap.placement);
     if (newSnap) {
       scheduleOnRN(playHaptic, ImpactFeedbackStyle.Light);
     }
@@ -365,7 +399,7 @@ export function EditorCanvas({
       return;
     }
     if (target.get() === TARGET_PHOTO && photoSize !== null) {
-      scheduleOnRN(onFramingChange, liveFraming.get());
+      scheduleOnRN(onPlacementChange, livePlacement.get());
     } else if (target.get() === TARGET_LAYER) {
       if (overTrash.get()) {
         scheduleOnRN(dropOnTrash, targetId.get());
@@ -394,8 +428,8 @@ export function EditorCanvas({
       if (target.get() === TARGET_LAYER) {
         updateLayer(translateLayer(rawTransform.get(), canvas, dx, dy));
         trackTrash(event.x, event.y);
-      } else if (photoSize !== null) {
-        liveFraming.set(panFraming(photoSize, canvas, liveFraming.get(), dx, dy));
+      } else {
+        updatePhoto(panPlacement(rawPlacement.get(), canvas, dx, dy));
       }
     },
     onDeactivate: endGesture,
@@ -413,9 +447,9 @@ export function EditorCanvas({
       }
       if (target.get() === TARGET_LAYER) {
         updateLayer(scaleLayer(rawTransform.get(), event.scaleChange));
-      } else if (photoSize !== null) {
-        liveFraming.set(
-          zoomFraming(photoSize, canvas, liveFraming.get(), event.scaleChange, {
+      } else {
+        updatePhoto(
+          zoomPlacement(rawPlacement.get(), canvas, event.scaleChange, {
             x: event.focalX / ratio,
             y: event.focalY / ratio,
           }),
@@ -433,14 +467,8 @@ export function EditorCanvas({
     onUpdate: (event) => {
       if (target.get() === TARGET_LAYER) {
         updateLayer(rotateLayer(rawTransform.get(), event.rotationChange));
-      } else if (photoSize !== null) {
-        rawPhotoRotation.set(rawPhotoRotation.get() + event.rotationChange);
-        const straight = snapAngle(rawPhotoRotation.get(), SNAP_ANGLE);
-        if (straight.snapped && !photoStraight.get()) {
-          scheduleOnRN(playHaptic, ImpactFeedbackStyle.Light);
-        }
-        photoStraight.set(straight.snapped);
-        liveFraming.set(rotateFraming(photoSize, canvas, liveFraming.get(), straight.angle));
+      } else {
+        updatePhoto(rotatePlacement(rawPlacement.get(), event.rotationChange));
       }
     },
     onDeactivate: endGesture,
@@ -508,10 +536,13 @@ export function EditorCanvas({
             <TemplateScene
               format={template.format}
               layers={layers}
-              background={
+              backdrop={
+                backdrop === null ? { kind: 'checker' } : { kind: 'color', color: backdrop }
+              }
+              photo={
                 photo === null
-                  ? { kind: 'transparent' }
-                  : { kind: 'photo', image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
+                  ? null
+                  : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
               }
               live={
                 draggingId === null

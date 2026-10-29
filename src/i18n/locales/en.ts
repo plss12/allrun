@@ -79,6 +79,15 @@ export const en = {
     discardTitle: 'Discard this image?',
     discardMessage: 'Your photo and changes will be lost.',
     discard: 'Discard',
+    photoTools: 'Photo and background',
+    fitPhoto: 'Cover',
+    background: 'Background',
+    backgrounds: {
+      auto: "Photo's color",
+      black: 'Black',
+      white: 'White',
+      transparent: 'Transparent',
+    },
   },
   export: {
     preparing: 'Preparing the image…',

@@ -30,8 +30,8 @@ import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { Activity } from '@/core/activity';
 import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
-import type { HitHole, LayerTransform } from '@/core/layer-transform';
-import type { PhotoPlacement, Size } from '@/core/photo-framing';
+import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
+import type { PhotoDrawing, Size } from '@/core/photo-placement';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
@@ -90,6 +90,8 @@ export interface PreparedLayer {
   readonly content: ReactElement;
   /** Its see-through part, which touches go through (see `HitHole`). */
   readonly hole?: HitHole;
+  /** The lines that alone take touches, for a layer of lines such as a route (see `HitLine`). */
+  readonly line?: HitLine;
 }
 
 /** What layers need to be filled in and measured. */
@@ -135,20 +137,28 @@ export interface DrawRect {
   readonly height: number;
 }
 
-/** Group transform that places a photo: rotated around the canvas center (see `framePhoto`). */
-export function photoMatrix(placement: PhotoPlacement, canvas: Size): Transforms3d {
+/** Group transform that places a photo: at its center, turned around it (see `drawPhoto`). */
+export function photoMatrix(drawing: PhotoDrawing): Transforms3d {
   'worklet';
-  return [
-    { translateX: canvas.width / 2 },
-    { translateY: canvas.height / 2 },
-    { rotate: placement.rotation },
-  ];
+  return [{ translateX: drawing.x }, { translateY: drawing.y }, { rotate: drawing.rotation }];
 }
 
-/** Where the photo goes inside its {@link photoMatrix} group. */
-export function photoRect(placement: PhotoPlacement): DrawRect {
+/** Where the photo goes inside its {@link photoMatrix} group: centered on it. */
+export function photoRect(drawing: PhotoDrawing): DrawRect {
   'worklet';
-  return { x: placement.x, y: placement.y, width: placement.width, height: placement.height };
+  return {
+    x: -drawing.width / 2,
+    y: -drawing.height / 2,
+    width: drawing.width,
+    height: drawing.height,
+  };
+}
+
+/** The photo of a scene: drawn in `rect` inside a group transformed by `matrix`. */
+export interface ScenePhoto {
+  readonly image: SkImage;
+  readonly matrix: Transforms3d | SharedValue<Transforms3d>;
+  readonly rect: DrawRect | SharedValue<DrawRect>;
 }
 
 /**
@@ -159,23 +169,22 @@ export interface TemplateSceneProps {
   readonly format: CanvasFormat;
   readonly layers: readonly PreparedLayer[];
   /**
-   * What goes under the layers:
-   * - `photo`: the photo, drawn in `rect` inside a group transformed by `matrix` (see
-   *   {@link photoMatrix} and {@link photoRect}); the editor passes shared values so gestures move
-   *   it without re-rendering the layers;
-   * - `transparent`: no photo, shown as the usual checkerboard of transparency (dark, so white
-   *   widgets stay readable): the image exports with nothing under the widgets;
-   * - `none`: nothing, for the transparent sticker export.
+   * What shows where the photo leaves the canvas empty (and with no photo):
+   * - `color`: the design's background;
+   * - `checker`: nothing, shown as the usual checkerboard of transparency (dark, so white widgets
+   *   stay readable), on screen;
+   * - `none`: nothing, for the transparent export.
    */
-  readonly background:
-    | {
-        readonly kind: 'photo';
-        readonly image: SkImage;
-        readonly matrix: Transforms3d | SharedValue<Transforms3d>;
-        readonly rect: DrawRect | SharedValue<DrawRect>;
-      }
-    | { readonly kind: 'transparent' }
+  readonly backdrop:
+    | { readonly kind: 'color'; readonly color: string }
+    | { readonly kind: 'checker' }
     | { readonly kind: 'none' };
+  /**
+   * The photo over the backdrop, or `null` for none (see {@link photoMatrix} and
+   * {@link photoRect}). The editor passes shared values so gestures move it without re-rendering
+   * the layers.
+   */
+  readonly photo: ScenePhoto | null;
   /**
    * The layer being moved, drawn from a shared transform so gestures don't re-render, with a
    * shared opacity (it fades over the trash).
@@ -225,28 +234,32 @@ function checkerPath(format: CanvasFormat): SkPath {
  */
 const PHOTO_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear } as const;
 
-export function TemplateScene({ format, layers, background, live = null }: TemplateSceneProps) {
+export function TemplateScene({
+  format,
+  layers,
+  backdrop,
+  photo,
+  live = null,
+}: TemplateSceneProps) {
   const canvas = CANVAS_FORMATS[format];
   const { width, height } = canvas;
   return (
     <Group>
-      {background.kind === 'transparent' ? (
+      {backdrop.kind === 'checker' ? (
         <Group clip={{ x: 0, y: 0, width, height }}>
           <Rect x={0} y={0} width={width} height={height} color={CHECKER_DARK} />
           <Path path={checkerPath(format)} color={CHECKER_LIGHT} />
         </Group>
-      ) : background.kind === 'photo' ? (
+      ) : backdrop.kind === 'color' ? (
+        <Rect x={0} y={0} width={width} height={height} color={backdrop.color} />
+      ) : null}
+      {photo === null ? null : (
         <Group clip={{ x: 0, y: 0, width, height }}>
-          <Group transform={background.matrix}>
-            <Image
-              image={background.image}
-              rect={background.rect}
-              fit="fill"
-              sampling={PHOTO_SAMPLING}
-            />
+          <Group transform={photo.matrix}>
+            <Image image={photo.image} rect={photo.rect} fit="fill" sampling={PHOTO_SAMPLING} />
           </Group>
         </Group>
-      ) : null}
+      )}
       {/* A layer's opacity fades it as a whole, drawn on its own Skia layer: a group's `opacity`
           only reaches shapes (paragraphs ignore it) and fades each shape and its shadow apart,
           letting the shadow show through. Opaque layers skip the extra layer. */}
@@ -650,8 +663,46 @@ const BACKDROP_PADDING = 0.16;
 const BACKDROP_FIT = 0.85;
 
 /**
+ * Least room between the points a route's hit line keeps, in canvas pixels: far below a finger's
+ * reach, and few enough points to hand to the gestures on every render.
+ */
+const HIT_STEP = 4;
+
+/**
+ * A route's lines for the hit test, from the layer's center as `RouteLines` draws them, thinned
+ * to points `HIT_STEP` apart (and each route's last one). Time and space O(n) for n points.
+ */
+function hitLine(
+  routes: readonly Point[][],
+  box: number,
+  boxHeight: number,
+  strokeWidth: number,
+): HitLine {
+  return {
+    routes: routes.map((route) => {
+      const kept: number[] = [];
+      route.forEach((point, i) => {
+        const x = point.x - box / 2;
+        const y = point.y - boxHeight / 2;
+        const last = kept.length - 2;
+        if (
+          kept.length === 0 ||
+          i === route.length - 1 ||
+          Math.hypot(x - kept[last], y - kept[last + 1]) >= HIT_STEP
+        ) {
+          kept.push(x, y);
+        }
+      });
+      return kept;
+    }),
+    halfWidth: strokeWidth / 2,
+  };
+}
+
+/**
  * Routes projected into a `box` × `boxHeight` box. They are centered in it, so their own extent
- * (plus the stroke) is what a finger can grab, not the whole box. `null` without any point.
+ * (plus the stroke) is their box, and only near their lines a finger grabs them: the rest of the
+ * box, empty for a route on the diagonal, lets touches through. `null` without any point.
  */
 function preparedRoutes(
   layer: Extract<Layer, { kind: 'route' | 'summaryRoutes' }>,
@@ -670,6 +721,7 @@ function preparedRoutes(
     width: Math.max(...xs) - Math.min(...xs) + layer.stroke.width,
     height: Math.max(...ys) - Math.min(...ys) + layer.stroke.width,
     content: <RouteLines routes={routes} box={box} boxHeight={boxHeight} stroke={layer.stroke} />,
+    line: hitLine(routes, box, boxHeight, layer.stroke.width),
   };
 }
 

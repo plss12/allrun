@@ -20,6 +20,7 @@ import { loadSceneBeforeAll } from '@/test-utils/scene';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
+import { newTemplate } from '@/core/template';
 
 // Draw with CanvasKit instead of the native module (see `template-scene.test.tsx`).
 jest.mock('@shopify/react-native-skia/lib/commonjs/Platform', () => ({
@@ -63,7 +64,7 @@ describe('prepareActivityBlock', () => {
     );
     expect(
       scene().prepareLayers(
-        { version: 1, id: 'blocks', mode: 'activity', format: 'story', layers: [layer] },
+        newTemplate({ id: 'blocks', mode: 'activity', format: 'story', layers: [layer] }),
         {
           data: { mode: 'activity', activity: empty, detail: null, place: null, zones: null },
           fonts: loadTestFonts(['inter']),
@@ -94,13 +95,12 @@ describe('a data widget in small letters', () => {
           throw new Error('Expected a mixed widget');
         }
         const [widget] = scene().prepareLayers(
-          {
-            version: 1,
+          newTemplate({
             id: design,
             mode: 'activity',
             format: 'story',
             layers: [{ ...layer, style: { ...layer.style, uppercase } }],
-          },
+          }),
           {
             data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },
             fonts: loadTestFonts(BLOCK_FONTS),
@@ -135,7 +135,7 @@ describe('a wrapped text', () => {
         'story',
       );
       const [prepared] = scene().prepareLayers(
-        { version: 1, id: 'chat', mode: 'activity', format: 'story', layers: [layer] },
+        newTemplate({ id: 'chat', mode: 'activity', format: 'story', layers: [layer] }),
         {
           data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },
           fonts: loadTestFonts(['inter']),

@@ -6,7 +6,7 @@
  * @jest-environment node
  */
 import { newLayer } from '@/core/default-layout';
-import { CANVAS_FORMATS, type CanvasFormat } from '@/core/template';
+import { CANVAS_FORMATS, type CanvasFormat, newTemplate } from '@/core/template';
 import { RUN, testBlocksRestyled, translate } from '@/test-utils/activity-blocks';
 import { loadSceneBeforeAll } from '@/test-utils/scene';
 import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
@@ -43,7 +43,7 @@ describe('the camera', () => {
         format,
       );
       const [camera] = scene().prepareLayers(
-        { version: 1, id: 'camera', mode: 'activity', format, layers: [layer] },
+        newTemplate({ id: 'camera', mode: 'activity', format, layers: [layer] }),
         {
           data: { mode: 'activity', activity: RUN, detail: null, place: null, zones: null },
           fonts: loadTestFonts(['inter']),

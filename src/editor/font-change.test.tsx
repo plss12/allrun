@@ -7,7 +7,7 @@ import CanvasKitInit from 'canvaskit-wasm/bin/full/canvaskit';
 
 import { newLayer } from '@/core/default-layout';
 import { setBlockOptions, setTextStyle } from '@/core/layer-style';
-import type { FontId, Template } from '@/core/template';
+import { type FontId, type Template, newTemplate } from '@/core/template';
 import { es } from '@/i18n/locales/es';
 import { makeActivity } from '@/test-utils/make-activity';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
@@ -89,13 +89,12 @@ describe('keepingArea', () => {
               'story',
             )
           : newLayer({ kind, metric: 'distance' }, 'widget', 'story');
-      const base: Template = {
-        version: 1,
+      const base: Template = newTemplate({
         id: 't',
         mode: 'activity',
         format: 'story',
         layers: [layer],
-      };
+      });
       const restyle = (font: FontId) => (template: Template) =>
         kind === 'activityBlock'
           ? setBlockOptions(template, 'widget', { font })
@@ -114,13 +113,12 @@ describe('keepingArea', () => {
 
   it('changes nothing when the font is the same', () => {
     const layer = newLayer({ kind: 'metric', metric: 'distance' }, 'widget', 'story');
-    const base: Template = {
-      version: 1,
+    const base: Template = newTemplate({
       id: 't',
       mode: 'activity',
       format: 'story',
       layers: [layer],
-    };
+    });
     const same = (template: Template) => template;
     expect(fontChange.keepingArea(same, 'widget', context())(base)).toBe(base);
   });

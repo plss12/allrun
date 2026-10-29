@@ -91,6 +91,7 @@ export function RoundButton({
  */
 export function PillButton({
   icon,
+  iconSize = 22,
   label,
   showLabel = false,
   onPress,
@@ -100,6 +101,7 @@ export function PillButton({
   minWidth,
 }: {
   readonly icon: SymbolViewProps['name'];
+  readonly iconSize?: number;
   readonly label: string;
   /** Whether the word shows next to the icon (it is always read to screen readers). */
   readonly showLabel?: boolean;
@@ -131,7 +133,7 @@ export function PillButton({
         opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
       })}
     >
-      <SymbolView name={icon} size={22} weight="semibold" tintColor={ink} />
+      <SymbolView name={icon} size={iconSize} weight="semibold" tintColor={ink} />
       {showLabel ? (
         <Text
           numberOfLines={1}
