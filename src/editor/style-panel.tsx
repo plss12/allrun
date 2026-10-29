@@ -40,8 +40,6 @@ import { hasBold, isCapsOnly, PREVIEW_FAMILIES, usePreviewFonts } from './fonts'
 /** A style edit of the template, applied by the editor as one undo step. */
 export type StyleChange = (template: Template) => Template;
 
-type Tab = 'color' | 'font' | 'format' | 'width' | 'opacity' | 'tone';
-
 type TextLayer = Extract<Layer, { kind: 'metric' | 'summaryMetric' | 'info' | 'text' }>;
 type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
 /** A period's chart or an activity's: they share how their texts look. */
@@ -49,59 +47,74 @@ type AnyChartLayer = Extract<Layer, { kind: 'summaryChart' | 'activityChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
 type BlockLayer = Extract<Layer, { kind: 'activityBlock' | 'summaryBlock' }>;
 
-function isTextLayer(layer: Layer): layer is TextLayer {
-  return (
-    layer.kind === 'metric' ||
-    layer.kind === 'summaryMetric' ||
-    layer.kind === 'info' ||
-    layer.kind === 'text'
-  );
-}
+/** A tool of the widget column that opens a panel: its letters (or a route's line), or its color. */
+export type StyleTool = 'lettering' | 'color';
+
+/** What goes behind a text. */
+type Backdrop = NonNullable<TextStyle['backdrop']>;
 
 /**
- * Tabs of the panel for a layer: only its look. What it shows and how (a time's notation, a
- * chart's average, a route's line…) is a variant of its own in the gallery: to change it, the
- * user replaces the widget.
+ * The tools of the widget column a layer has: only its look. What it shows and how (a time's
+ * notation, a chart's average, a route's line…) is a variant of its own in the gallery: to change
+ * it, the user replaces the widget.
  */
-function tabsFor(layer: Layer): readonly Tab[] {
+export interface WidgetTools {
+  /** "Aa": its font and format; a route's line width instead; nothing for the others. */
+  readonly lettering: 'text' | 'line' | null;
+  /**
+   * What the color button opens: the colors and the opacity; the logo's tones (only the brand's
+   * colors) and the opacity; or, for a replica of an app, which keeps the app's look, only the
+   * opacity.
+   */
+  readonly color: 'colors' | 'tones' | 'opacity';
+  /**
+   * What goes behind its text, and how to change it, when it can have one: in the color panel,
+   * under the opacity.
+   */
+  readonly backdrop: {
+    readonly value: Backdrop;
+    readonly change: (backdrop: Backdrop) => StyleChange;
+  } | null;
+}
+
+export function widgetTools(layer: Layer): WidgetTools {
   switch (layer.kind) {
-    case 'metric':
-    case 'summaryMetric':
-    case 'info':
-    case 'text':
-      return ['color', 'font', 'format', 'opacity'];
     case 'route':
     case 'summaryRoutes':
-      return ['color', 'width', 'opacity'];
-    case 'summaryChart':
-    case 'activityChart':
-      return ['color', 'font', 'format', 'opacity'];
-    case 'summaryBlock':
-      return isSummaryReplica(layer.block.design)
-        ? ['opacity']
-        : ['color', 'font', 'format', 'opacity'];
-    case 'activityBlock':
-      // A replica of an app keeps the app's look: only how see-through it is can change.
-      return isAppReplica(layer.block.design)
-        ? ['opacity']
-        : ['color', 'font', 'format', 'opacity'];
+      return { lettering: 'line', color: 'colors', backdrop: null };
     case 'logo':
-      return ['tone', 'opacity'];
+      return { lettering: null, color: 'tones', backdrop: null };
+    case 'activityBlock':
+    case 'summaryBlock': {
+      const replica =
+        layer.kind === 'activityBlock'
+          ? isAppReplica(layer.block.design)
+          : isSummaryReplica(layer.block.design);
+      return replica
+        ? { lettering: null, color: 'opacity', backdrop: null }
+        : { lettering: 'text', color: 'colors', backdrop: backdropOf(layer) };
+    }
+    default:
+      return { lettering: 'text', color: 'colors', backdrop: backdropOf(layer) };
   }
 }
 
-/**
- * Heights of the panel's rows: the tabs and the options (with the color dots). With their gap
- * they add up to {@link STYLE_PANEL_HEIGHT}, the space of the editor's formats, so the canvas
- * keeps its size when the panel opens.
- */
-const TAB_HEIGHT = 36;
+/** A layer's backdrop and how to change it, when it can have one. */
+function backdropOf(layer: TextLayer | AnyChartLayer | BlockLayer): WidgetTools['backdrop'] {
+  const { format, change } = formatOf(layer);
+  return format.backdrop === undefined
+    ? null
+    : { value: format.backdrop, change: (backdrop) => change({ backdrop }) };
+}
+
+/** Height of a row of options (with the color dots). */
 const OPTIONS_HEIGHT = 50;
 const ROW_GAP = 6;
-export const STYLE_PANEL_HEIGHT = TAB_HEIGHT + ROW_GAP + OPTIONS_HEIGHT;
 
 interface StylePanelProps {
   readonly layer: Layer;
+  /** The column's tool whose options show. */
+  readonly tool: StyleTool;
   readonly locale: string;
   readonly onChange: (change: StyleChange) => void;
   /** How the layer is drawn, to keep its size when its font changes (see `keepingArea`). */
@@ -109,51 +122,62 @@ interface StylePanelProps {
 }
 
 /**
- * Style options of the selected layer, one tab at a time, in the space of the editor's formats
- * (the editor's main button turns into "Done" meanwhile). Every tap is one undo step.
+ * The options of a tool of the widget column, in rows: the fonts over the format (or a route's
+ * line widths), or the colors (or the logo's tones) over the opacity and the text's backdrop.
+ * Every tap is one undo step.
  */
-export function StylePanel({ layer, locale, onChange, layerContext }: StylePanelProps) {
-  const { t } = useTranslation();
-  const tabs = tabsFor(layer);
-  const [chosen, setChosen] = useState<Tab>(tabs[0] ?? 'opacity');
-  const tab = tabs.includes(chosen) ? chosen : tabs[0];
+export function StylePanel({ layer, tool, locale, onChange, layerContext }: StylePanelProps) {
+  const tools = widgetTools(layer);
+  const opacity = <OpacityRow key="opacity" layer={layer} locale={locale} onChange={onChange} />;
+  const rows = ((): ReactNode[] => {
+    if (tool === 'color') {
+      switch (tools.color) {
+        case 'colors':
+          return [
+            <ColorPager key="colors" layer={layer} onChange={onChange} />,
+            opacity,
+            ...(tools.backdrop === null
+              ? []
+              : [<BackdropRow key="backdrop" backdrop={tools.backdrop} onChange={onChange} />]),
+          ];
+        case 'tones':
+          return layer.kind === 'logo'
+            ? [<LogoRow key="tones" layer={layer} onChange={onChange} />, opacity]
+            : [opacity];
+        case 'opacity':
+          return [opacity];
+      }
+    }
+    if (layer.kind === 'route' || layer.kind === 'summaryRoutes') {
+      return [<LineRow key="line" layer={layer} onChange={onChange} />];
+    }
+    if (tools.lettering !== 'text' || layer.kind === 'logo') {
+      return [];
+    }
+    const { format, change } = formatOf(layer);
+    return [
+      // Another font keeps the room the widget takes, not its letters' size.
+      <FontRow
+        key="font"
+        font={format.font}
+        onPick={(font) => onChange(keepingArea(change({ font }), layer.id, layerContext))}
+      />,
+      <FormatRow key="format" format={format} onPatch={(patch) => onChange(change(patch))}>
+        <WidgetOptions layer={layer} onChange={onChange} />
+      </FormatRow>,
+    ];
+  })();
   return (
     // Rows of fixed height: a row that shrank would let the next one cover it.
-    <View style={{ height: STYLE_PANEL_HEIGHT, gap: ROW_GAP }}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        accessibilityRole="tablist"
-        style={{ height: TAB_HEIGHT, flexGrow: 0, flexShrink: 0 }}
-        contentContainerStyle={{
-          gap: 6,
-          flexGrow: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        {tabs.map((option) => (
-          <Chip
-            key={option}
-            role="tab"
-            compact
-            label={t(`style.${option}`)}
-            selected={option === tab}
-            onPress={() => setChosen(option)}
-          />
-        ))}
-      </ScrollView>
-      <View style={{ height: OPTIONS_HEIGHT, flexShrink: 0, justifyContent: 'center' }}>
-        {tab === undefined ? null : (
-          <TabContent
-            tab={tab}
-            layer={layer}
-            locale={locale}
-            onChange={onChange}
-            layerContext={layerContext}
-          />
-        )}
-      </View>
+    <View style={{ gap: ROW_GAP }}>
+      {rows.map((row, index) => (
+        <View
+          key={index}
+          style={{ height: OPTIONS_HEIGHT, flexShrink: 0, justifyContent: 'center' }}
+        >
+          {row}
+        </View>
+      ))}
     </View>
   );
 }
@@ -178,9 +202,10 @@ interface Format {
 }
 
 /**
- * Bold, italic, uppercase and an alignment button that cycles left, center and right, when they apply:
- * free text has no uppercase (the user types the capitals they want). After them, `children`:
- * the widget's own options of what it shows and how.
+ * Bold, italic, uppercase, an alignment button that cycles left, center and right, and the letter
+ * spacing, when they apply: free text has no uppercase (the user types the capitals they want).
+ * The backdrop goes with the colors. After them, `children`: the widget's own options of what it
+ * shows and how.
  */
 function FormatRow({
   format,
@@ -192,7 +217,7 @@ function FormatRow({
   readonly children?: ReactNode;
 }) {
   const { t } = useTranslation();
-  const { font, bold, italic, uppercase, align, backdrop, letterSpacing } = format;
+  const { font, bold, italic, uppercase, align, letterSpacing } = format;
   return (
     <Row>
       <IconToggle
@@ -229,15 +254,6 @@ function FormatRow({
           }
         />
       )}
-      {backdrop === undefined ? null : (
-        <IconToggle
-          icon={{ ios: 'character.textbox', android: 'format_color_fill' }}
-          label={t('style.backdrop')}
-          value={t(`style.backdrops.${backdrop}`)}
-          selected={backdrop !== 'none'}
-          onPress={() => onPatch({ backdrop: nextOf(BACKDROPS, backdrop) })}
-        />
-      )}
       {letterSpacing === undefined ? null : (
         // Like the alignment button: it shows the current spacing and cycles on each tap.
         <IconToggle
@@ -248,12 +264,7 @@ function FormatRow({
           onPress={() => onPatch({ letterSpacing: nextOf(LETTER_SPACINGS, letterSpacing) })}
         />
       )}
-      {children === undefined ? null : (
-        <>
-          <Divider />
-          {children}
-        </>
-      )}
+      {children}
     </Row>
   );
 }
@@ -311,74 +322,39 @@ function formatOf(layer: TextLayer | AnyChartLayer | BlockLayer): {
   };
 }
 
-function TabContent({
-  tab,
+/** A widget's own options of what it shows, after its format, with a line before them. */
+function WidgetOptions({
   layer,
-  locale,
   onChange,
-  layerContext,
 }: {
-  readonly tab: Tab;
-  readonly layer: Layer;
-  readonly locale: string;
+  readonly layer: TextLayer | AnyChartLayer | BlockLayer;
   readonly onChange: (change: StyleChange) => void;
-  readonly layerContext: LayerContext;
 }) {
   const { t } = useTranslation();
-  switch (tab) {
-    case 'color':
-      return <ColorPager layer={layer} onChange={onChange} />;
-    case 'font':
-    case 'format': {
-      if (
-        !isTextLayer(layer) &&
-        layer.kind !== 'summaryChart' &&
-        layer.kind !== 'activityChart' &&
-        layer.kind !== 'activityBlock' &&
-        layer.kind !== 'summaryBlock'
-      ) {
-        return null;
-      }
-      const { format, change } = formatOf(layer);
-      return tab === 'font' ? (
-        // Another font keeps the room the widget takes, not its letters' size.
-        <FontRow
-          font={format.font}
-          onPick={(font) => onChange(keepingArea(change({ font }), layer.id, layerContext))}
-        />
-      ) : (
-        <FormatRow format={format} onPatch={(patch) => onChange(change(patch))}>
-          {layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (
-            <DataOptions layer={layer} onChange={onChange} />
-          ) : layer.kind === 'summaryChart' ? (
-            <Chip
-              label={t('style.axisLabels')}
-              selected={layer.axisLabels}
-              onPress={() =>
-                onChange((template) => setAxisLabels(template, layer.id, !layer.axisLabels))
-              }
-            />
-          ) : layer.kind === 'activityBlock' || layer.kind === 'summaryBlock' ? (
-            <Chip
-              label={t('style.logo')}
-              selected={layer.logo}
-              onPress={() =>
-                onChange((template) => setBlockOptions(template, layer.id, { logo: !layer.logo }))
-              }
-            />
-          ) : undefined}
-        </FormatRow>
-      );
-    }
-    case 'width':
-      return layer.kind === 'route' || layer.kind === 'summaryRoutes' ? (
-        <LineRow layer={layer} onChange={onChange} />
-      ) : null;
-    case 'opacity':
-      return <OpacityRow layer={layer} locale={locale} onChange={onChange} />;
-    case 'tone':
-      return layer.kind === 'logo' ? <LogoRow layer={layer} onChange={onChange} /> : null;
-  }
+  const options =
+    layer.kind === 'metric' || layer.kind === 'summaryMetric' ? (
+      <DataOptions layer={layer} onChange={onChange} />
+    ) : layer.kind === 'summaryChart' ? (
+      <Chip
+        label={t('style.axisLabels')}
+        selected={layer.axisLabels}
+        onPress={() => onChange((template) => setAxisLabels(template, layer.id, !layer.axisLabels))}
+      />
+    ) : layer.kind === 'activityBlock' || layer.kind === 'summaryBlock' ? (
+      <Chip
+        label={t('style.logo')}
+        selected={layer.logo}
+        onPress={() =>
+          onChange((template) => setBlockOptions(template, layer.id, { logo: !layer.logo }))
+        }
+      />
+    ) : null;
+  return options === null ? null : (
+    <>
+      <Divider />
+      {options}
+    </>
+  );
 }
 
 /** Largest swatch; touches reach 44 pt through a small slop. Smaller when seven don't fit. */
@@ -609,6 +585,40 @@ function LogoRow({
   );
 }
 
+/** What goes behind a text: nothing, a translucent band or a solid one, after its icon. */
+function BackdropRow({
+  backdrop,
+  onChange,
+}: {
+  readonly backdrop: NonNullable<WidgetTools['backdrop']>;
+  readonly onChange: (change: StyleChange) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Row>
+      <View
+        accessible
+        accessibilityLabel={t('style.backdrop')}
+        style={{ width: 28, alignItems: 'center' }}
+      >
+        <SymbolView
+          name={{ ios: 'character.textbox', android: 'format_color_fill' }}
+          size={20}
+          tintColor={colors.secondaryLabel}
+        />
+      </View>
+      {BACKDROPS.map((option) => (
+        <Chip
+          key={option}
+          label={t(`style.backdrops.${option}`)}
+          selected={backdrop.value === option}
+          onPress={() => onChange(backdrop.change(option))}
+        />
+      ))}
+    </Row>
+  );
+}
+
 function OpacityRow({
   layer,
   locale,
@@ -663,26 +673,20 @@ function Chip({
   label,
   selected,
   onPress,
-  role = 'button',
-  compact = false,
   fontFamily,
 }: {
   readonly label: string;
   readonly selected: boolean;
   readonly onPress: () => void;
-  readonly role?: 'button' | 'tab';
-  /** Shorter, for the tab bar; the touch target still reaches 44 pt. */
-  readonly compact?: boolean;
   readonly fontFamily?: string;
 }) {
   return (
     <Pressable
-      accessibilityRole={role}
+      accessibilityRole="button"
       accessibilityState={{ selected }}
-      hitSlop={compact ? 4 : undefined}
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: compact ? 36 : 44,
+        minHeight: 44,
         paddingHorizontal: 14,
         borderRadius: 999,
         justifyContent: 'center',

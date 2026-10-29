@@ -7,6 +7,13 @@ import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
@@ -43,7 +50,8 @@ import {
   summaryCatalog,
 } from '@/core/layer-catalog';
 import { backgroundColor } from '@/core/design-background';
-import { COVER_PLACEMENT, samePlacement } from '@/core/photo-placement';
+import { LAYER_MARGIN, layerVerticalReach, liftToClear } from '@/core/layer-transform';
+import { COVER_PLACEMENT, samePlacement, type Size } from '@/core/photo-placement';
 import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { startOf } from '@/core/place';
 import { SPORT_FAMILIES } from '@/core/sports';
@@ -72,7 +80,7 @@ import { ActionTile } from '@/editor/action-tile';
 import { BackgroundPicker } from '@/editor/background-picker';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
-import { EditorTopBar, TOP_BAR_GAP } from '@/editor/editor-top-bar';
+import { EditorTopBar } from '@/editor/editor-top-bar';
 import { ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
 import type { ExportDesign } from '@/editor/export-scene';
@@ -94,10 +102,10 @@ import {
   ROUND_BUTTON_SIZE,
   RoundButton,
 } from '@/editor/round-button';
-import { SelectionBar } from '@/editor/selection-bar';
-import { StylePanel } from '@/editor/style-panel';
+import { StylePanel, widgetTools } from '@/editor/style-panel';
 import { TemplateSheet } from '@/editor/template-sheet';
 import { useExport } from '@/editor/use-export';
+import { type ColumnTool, WidgetColumn } from '@/editor/widget-column';
 import { floatingSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
@@ -141,8 +149,14 @@ const EDGE = 12;
 const MAIN_BUTTON_HEIGHT = 44;
 /** Where the right column starts, under the top right buttons, from the safe area's top. */
 const BELOW_TOP_BAR = EDGE + ROUND_BUTTON_SIZE + 12;
-/** Where a dock on top starts: under the left column (close, undo, redo, Start over). */
-const BELOW_LEFT_COLUMN = EDGE + 4 * ROUND_BUTTON_SIZE + 3 * TOP_BAR_GAP + 12;
+/** The room left between a widget being edited and the panel of its options, in points. */
+const PANEL_GAP = 16;
+/** How the canvas rises over the panel of a widget's options, and settles back. */
+const LIFT_TIMING = {
+  duration: 250,
+  easing: Easing.out(Easing.cubic),
+  reduceMotion: ReduceMotion.System,
+} as const;
 /** The bottom row: the photo, "+", "Aa" and export. */
 const BOTTOM_BUTTON_SIZE = 52;
 /**
@@ -285,14 +299,28 @@ function EditorWorkspace({
   const [dragging, setDragging] = useState(false);
   const userTemplates = useUserTemplates();
   /**
-   * Whether the style panel replaces the selected layer's actions. It closes when nothing is
-   * selected; a tap on another layer switches the panel to it.
+   * The widget column's tool open (its size slider, or a panel of its options) and its "…" menu.
+   * They close when nothing is selected; a tap on another widget switches the tool to it.
    */
-  const [styling, setStyling] = useState(false);
-  const styled = styling ? selected : null;
-  if (styling && styled === null) {
-    setStyling(false);
+  const [tool, setTool] = useState<ColumnTool | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  if (selected === null && (tool !== null || moreOpen)) {
+    setTool(null);
+    setMoreOpen(false);
   }
+  /** The widget whose options show in the dock, and which, if its tool applies to it. */
+  const styled =
+    selected !== null &&
+    (tool === 'color' || (tool === 'lettering' && widgetTools(selected).lettering !== null))
+      ? { layer: selected, tool }
+      : null;
+  /** The selected widget's content size, before scaling, as the canvas measures it. */
+  const [selectedSize, setSelectedSize] = useState<Size | null>(null);
+  /** The dock's height, as laid out: where its top edge is. */
+  const [dockHeight, setDockHeight] = useState(0);
+  /** The selected widget's scale while the size slider is dragged, drawn by the canvas. */
+  const liveScale = useSharedValue(1);
+  const [resizing, setResizing] = useState(false);
   /** The widget whose verse, quote or phrase is being chosen again from its list. */
   const [choosingId, setChoosingId] = useState<string | null>(null);
   const choosing = template.layers.find((layer) => layer.id === choosingId);
@@ -492,7 +520,7 @@ function EditorWorkspace({
 
   /** Opens the keyboard to type a text. */
   const startTyping = (draft: TextDraft) => {
-    setStyling(false);
+    setTool(null);
     setPhotoTools(false);
     setTextDraft(draft);
   };
@@ -536,9 +564,10 @@ function EditorWorkspace({
     setSelectedId(copyId);
   };
 
-  /** Selects a layer (`null`: none); the photo's actions give way to it. */
+  /** Selects a layer (`null`: none); the photo's actions and the "…" menu give way to it. */
   const selectLayer = (id: string | null) => {
     setSelectedId(id);
+    setMoreOpen(false);
     if (id !== null) {
       setPhotoTools(false);
     }
@@ -643,18 +672,38 @@ function EditorWorkspace({
   });
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
-  /** What the dock shows, if anything: the export, the selected widget's tools, the photo's. */
-  const dock: 'export' | 'style' | 'selection' | 'photo' | null = exporting
+  /**
+   * What the dock shows, if anything: the export, the options of a tool of the widget column, the
+   * photo's tools.
+   */
+  const dock: 'export' | 'style' | 'photo' | null = exporting
     ? 'export'
     : styled !== null
       ? 'style'
-      : selected !== null
-        ? 'selection'
-        : photoTools
-          ? 'photo'
-          : null;
-  // A widget in the lower half gets its tools on top, out of its way.
-  const dockOnTop = selected !== null && selected.transform.y > 0.5 && !exporting;
+      : photoTools && selected === null
+        ? 'photo'
+        : null;
+  // The panel of a widget's options is always at the bottom. If it would cover the widget, the
+  // whole canvas rises just enough for the widget to show over it, on its own part of the photo
+  // (judging a color or a backdrop against another part would mislead), and settles back when
+  // the panel closes. Not an edit: the design doesn't change.
+  const lift =
+    dock === 'style' && selected !== null && selectedSize !== null && dockHeight > 0 && area
+      ? (() => {
+          const ratio = displayWidth / size.width;
+          const reach = layerVerticalReach(selected.transform, selectedSize, size, LAYER_MARGIN);
+          return liftToClear(
+            { top: canvasTop + reach.top * ratio, bottom: canvasTop + reach.bottom * ratio },
+            area.height - EDGE / 2 - dockHeight,
+            PANEL_GAP,
+          );
+        })()
+      : 0;
+  const liftY = useSharedValue(0);
+  useEffect(() => {
+    liftY.set(withTiming(-lift, LIFT_TIMING));
+  }, [lift, liftY]);
+  const liftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: liftY.get() }] }));
   /** The controls step aside while a widget is dragged or a text is typed. */
   const controlsShown = !dragging && !typing;
 
@@ -723,9 +772,9 @@ function EditorWorkspace({
         }}
       >
         {displayWidth > 0 ? (
-          <View
+          <Animated.View
             pointerEvents={exporting ? 'none' : 'auto'}
-            style={{ borderRadius: 12, borderCurve: 'continuous', overflow: 'hidden' }}
+            style={[{ borderRadius: 12, borderCurve: 'continuous', overflow: 'hidden' }, liftStyle]}
           >
             <EditorCanvas
               displayWidth={displayWidth}
@@ -735,8 +784,11 @@ function EditorWorkspace({
               placement={design.photo}
               backdrop={backgroundColor(design.background, dominant)}
               selectedId={typing ? null : selectedId}
+              resizing={resizing}
+              liveScale={liveScale}
               onSelect={selectLayer}
               onTapSelected={tapSelected}
+              onSelectedSizeChange={setSelectedSize}
               onTapPhoto={tapPhoto}
               onDraggingChange={setDragging}
               onPlacementChange={(placement) =>
@@ -768,16 +820,19 @@ function EditorWorkspace({
                 />
               </View>
             ) : null}
-          </View>
+          </Animated.View>
         ) : null}
       </View>
 
-      {formatsOpen ? (
-        // A tap anywhere else closes the formats' panel, as with any menu.
+      {formatsOpen || moreOpen ? (
+        // A tap anywhere else closes the formats' panel or the "…" menu, as with any menu.
         <Pressable
           accessible={false}
           importantForAccessibility="no"
-          onPress={() => setFormatsOpen(false)}
+          onPress={() => {
+            setFormatsOpen(false);
+            setMoreOpen(false);
+          }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
       ) : null}
@@ -795,9 +850,9 @@ function EditorWorkspace({
         </View>
       ) : null}
       {/* Hidden rather than unmounted, so it stays folded or open as the user left it and its
-          sport's icon doesn't load again. */}
+          sport's icon doesn't load again. The selected widget's column takes its place. */}
       <KeptMounted
-        hidden={!controlsShown || dock !== null}
+        hidden={!controlsShown || dock !== null || selected !== null}
         style={{ position: 'absolute', top: insets.top + EDGE, right: EDGE }}
       >
         <EditorSideMenu
@@ -816,6 +871,42 @@ function EditorWorkspace({
           sport={data.mode === 'activity' ? sportIcon(data.activity) : null}
         />
       </KeptMounted>
+      {controlsShown && !exporting && selected !== null ? (
+        <View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', top: insets.top + EDGE, right: EDGE }}
+        >
+          <WidgetColumn
+            layer={selected}
+            tool={tool}
+            onToolChange={setTool}
+            moreOpen={moreOpen}
+            onMoreOpenChange={setMoreOpen}
+            actions={{
+              onEdit: editLayerOf(selected),
+              onDuplicate: () => duplicateSelected(selected.id),
+              onBringToFront: () => edit((current) => moveLayer(current, selected.id, 'front')),
+              onSendToBack: () => edit((current) => moveLayer(current, selected.id, 'back')),
+              onRemove: () => {
+                edit((current) => removeLayer(current, selected.id));
+                setSelectedId(null);
+              },
+              canDuplicate: canAddLayer(template),
+              canBringToFront: canMoveLayer(template, selected.id, 'front'),
+              canSendToBack: canMoveLayer(template, selected.id, 'back'),
+            }}
+            liveScale={liveScale}
+            onResizeStart={() => setResizing(true)}
+            onResize={(scale) => {
+              // The new size and the end of the live drawing in one update: no stale frame.
+              edit((current) =>
+                setLayerTransform(current, selected.id, { ...selected.transform, scale }),
+              );
+              setResizing(false);
+            }}
+          />
+        </View>
+      ) : null}
       {controlsShown && dock === null ? (
         // What to add on the left; exporting, the step that finishes the image, on the right.
         <View
@@ -876,13 +967,12 @@ function EditorWorkspace({
       ) : null}
       {controlsShown && dock !== null ? (
         <View
+          onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}
           style={{
             position: 'absolute',
             left: EDGE / 2,
             right: EDGE / 2,
-            ...(dockOnTop
-              ? { top: insets.top + BELOW_LEFT_COLUMN }
-              : { bottom: insets.bottom + EDGE / 2 }),
+            bottom: insets.bottom + EDGE / 2,
           }}
         >
           <Dock
@@ -890,35 +980,19 @@ function EditorWorkspace({
               dock === 'export'
                 ? exporter.stop
                 : dock === 'style'
-                  ? () => setStyling(false)
-                  : dock === 'selection'
-                    ? () => setSelectedId(null)
-                    : () => setPhotoTools(false)
+                  ? () => setTool(null)
+                  : () => setPhotoTools(false)
             }
           >
             {dock === 'export' ? (
               <ExportBar state={exporter.state} onRetry={startExport} />
             ) : styled !== null ? (
               <StylePanel
-                layer={styled}
+                layer={styled.layer}
+                tool={styled.tool}
                 locale={locale}
                 onChange={edit}
                 layerContext={layerContext}
-              />
-            ) : selected !== null ? (
-              <SelectionBar
-                onEdit={editLayerOf(selected)}
-                onStyle={() => setStyling(true)}
-                onDuplicate={() => duplicateSelected(selected.id)}
-                onBringToFront={() => edit((current) => moveLayer(current, selected.id, 'front'))}
-                onSendToBack={() => edit((current) => moveLayer(current, selected.id, 'back'))}
-                onRemove={() => {
-                  edit((current) => removeLayer(current, selected.id));
-                  setSelectedId(null);
-                }}
-                canDuplicate={canAddLayer(template)}
-                canBringToFront={canMoveLayer(template, selected.id, 'front')}
-                canSendToBack={canMoveLayer(template, selected.id, 'back')}
               />
             ) : (
               <>
@@ -981,8 +1055,8 @@ function readDominant(image: SkImage): string | null {
 }
 
 /**
- * A floating panel over the canvas with a set of tools and "Done" under them, which goes one
- * step back (from the style panel to the widget's actions, from those to no selection).
+ * A floating panel over the canvas with a set of tools and "Done" under them, which closes it
+ * (the widget stays selected).
  */
 function Dock({ children, onDone }: { readonly children: ReactNode; readonly onDone: () => void }) {
   const { t } = useTranslation();

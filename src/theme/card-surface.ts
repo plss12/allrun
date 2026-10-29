@@ -36,13 +36,25 @@ const SELECTED_GRADIENT = 'linear-gradient(180deg, #4A4A52 0%, #2F2F34 100%)';
  * filter): the cards' dark grey lit from above, with their faint edge, so it stands out from the
  * black background and from any photo, and the app keeps one look. No shadow: it floats over
  * photos, where one would only muddy them.
+ *
+ * The edge is an inset shadow over the gradient, not a border: the gradient isn't painted under
+ * a border, so a see-through one showed what is behind (black, or the photo), darker than the
+ * gradient's lit top, and small round buttons looked cut off at the top. It takes no room either.
  */
 export function floatingSurface(radius: number, selected = false): ViewStyle {
   return {
     borderRadius: radius,
     borderCurve: 'continuous',
     experimental_backgroundImage: selected ? SELECTED_GRADIENT : CARD_GRADIENT,
-    borderWidth: CARD_BORDER,
-    borderColor: CARD_EDGE,
+    boxShadow: `inset 0 0 0 1px ${CARD_EDGE}`,
   };
+}
+
+/**
+ * The floating surface of something round, `height` tall: a round button, a pill, the size
+ * slider. Its ends are circular: iOS's continuous corners don't draw a full round, and the
+ * gradient and the edge parted at the top, which looked cut off.
+ */
+export function roundSurface(height: number, selected = false): ViewStyle {
+  return { ...floatingSurface(height / 2, selected), borderCurve: 'circular' };
 }

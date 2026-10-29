@@ -1,11 +1,15 @@
 import {
   hitTestLayers,
   type LayerBox,
+  layerVerticalReach,
+  liftToClear,
   type LayerTransform,
   MAX_LAYER_SCALE,
   MIN_LAYER_SCALE,
   rotateLayer,
   scaleLayer,
+  scaleOfSlider,
+  sliderOfScale,
   snapLayer,
   translateLayer,
 } from './layer-transform';
@@ -40,6 +44,74 @@ describe('scaleLayer', () => {
   it('ignores factors that are not positive', () => {
     expect(scaleLayer(centered, 0)).toBe(centered);
     expect(scaleLayer(centered, NaN)).toBe(centered);
+  });
+});
+
+describe('sliderOfScale and scaleOfSlider', () => {
+  it('spans the scale limits, with scale 1 in the middle', () => {
+    expect(sliderOfScale(MIN_LAYER_SCALE)).toBe(0);
+    expect(sliderOfScale(MAX_LAYER_SCALE)).toBeCloseTo(1);
+    expect(sliderOfScale(1)).toBeCloseTo(0.5);
+    expect(scaleOfSlider(0)).toBeCloseTo(MIN_LAYER_SCALE);
+    expect(scaleOfSlider(1)).toBeCloseTo(MAX_LAYER_SCALE);
+  });
+
+  it('multiplies the size by the same factor along the slider', () => {
+    expect(scaleOfSlider(0.75) / scaleOfSlider(0.5)).toBeCloseTo(
+      scaleOfSlider(0.5) / scaleOfSlider(0.25),
+    );
+  });
+
+  it('goes back and forth', () => {
+    for (const scale of [0.1, 0.37, 1, 2.5, 10]) {
+      expect(scaleOfSlider(sliderOfScale(scale))).toBeCloseTo(scale);
+    }
+  });
+
+  it('stays within the limits', () => {
+    expect(sliderOfScale(0.01)).toBe(0);
+    expect(sliderOfScale(50)).toBe(1);
+    expect(scaleOfSlider(-1)).toBeCloseTo(MIN_LAYER_SCALE);
+    expect(scaleOfSlider(2)).toBeCloseTo(MAX_LAYER_SCALE);
+  });
+});
+
+describe('layerVerticalReach', () => {
+  it('reaches half the scaled height plus the margin from the center', () => {
+    const reach = layerVerticalReach(
+      { x: 0.5, y: 0.75, scale: 2, rotation: 0 },
+      { width: 300, height: 100 },
+      story,
+      24,
+    );
+    expect(reach.top).toBeCloseTo(1440 - 100 - 24);
+    expect(reach.bottom).toBeCloseTo(1440 + 100 + 24);
+  });
+
+  it('turned a quarter, reaches as far as the width', () => {
+    const reach = layerVerticalReach(
+      { ...centered, rotation: Math.PI / 2 },
+      { width: 300, height: 100 },
+      story,
+      0,
+    );
+    expect(reach.bottom - reach.top).toBeCloseTo(300);
+  });
+});
+
+describe('liftToClear', () => {
+  it('lifts nothing when the layer is above the panel', () => {
+    expect(liftToClear({ top: 100, bottom: 400 }, 500, 16)).toBe(0);
+    expect(liftToClear({ top: 100, bottom: 484 }, 500, 16)).toBe(0);
+  });
+
+  it('lifts just enough to clear the panel, with the gap', () => {
+    expect(liftToClear({ top: 500, bottom: 700 }, 600, 16)).toBe(116);
+  });
+
+  it("never lifts the layer's top off the screen", () => {
+    expect(liftToClear({ top: 50, bottom: 700 }, 400, 16)).toBe(50);
+    expect(liftToClear({ top: -20, bottom: 700 }, 400, 16)).toBe(0);
   });
 });
 

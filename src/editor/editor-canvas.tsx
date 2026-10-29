@@ -26,6 +26,7 @@ import Animated, {
   FadeOut,
   interpolateColor,
   ReduceMotion,
+  type SharedValue,
   useAnimatedStyle,
   useDerivedValue,
   useReducedMotion,
@@ -81,9 +82,20 @@ interface EditorCanvasProps {
   readonly backdrop: string | null;
   /** Id of the selected layer, or `null`. */
   readonly selectedId: string | null;
+  /**
+   * Whether the size slider is being dragged: the selected layer is drawn at `liveScale`
+   * meanwhile, without a render per frame.
+   */
+  readonly resizing: boolean;
+  readonly liveScale: SharedValue<number>;
   readonly onSelect: (id: string | null) => void;
   /** Called on a tap on the layer already selected: a text or a verse is edited. */
   readonly onTapSelected: (id: string) => void;
+  /**
+   * Called with the selected layer's content size, before scaling, when it changes (`null`: none
+   * selected), so the editor knows how far down it reaches.
+   */
+  readonly onSelectedSizeChange: (size: Size | null) => void;
   /** Called on a tap that hits no layer: on the photo, or on the empty canvas. */
   readonly onTapPhoto: () => void;
   /** Called when a layer starts and stops being dragged, so the editor can clear the way. */
@@ -192,8 +204,11 @@ export function EditorCanvas({
   placement,
   backdrop,
   selectedId,
+  resizing,
+  liveScale,
   onSelect,
   onTapSelected,
+  onSelectedSizeChange,
   onTapPhoto,
   onDraggingChange,
   onPlacementChange,
@@ -217,6 +232,13 @@ export function EditorCanvas({
     ...(line === undefined ? {} : { line }),
   }));
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
+  const selectedWidth = selected?.width ?? 0;
+  const selectedHeight = selected?.height ?? 0;
+  useEffect(() => {
+    onSelectedSizeChange(
+      selectedId === null ? null : { width: selectedWidth, height: selectedHeight },
+    );
+  }, [selectedId, selectedWidth, selectedHeight, onSelectedSizeChange]);
   const thresholds = { distance: SNAP_DISTANCE / ratio, rotation: SNAP_ANGLE };
   const photoThresholds = { ...thresholds, scale: SNAP_SCALE };
   // The trash center, in screen points from the canvas's top-left corner.
@@ -506,15 +528,32 @@ export function EditorCanvas({
   const liveFrameRect = useDerivedValue(() =>
     frameRect(liveTransform.get(), dragged?.width ?? 0, dragged?.height ?? 0, frameInset),
   );
+  // The selected layer at the size slider's scale, while it is dragged.
+  const selectedTransform = selected?.transform ?? IDENTITY;
+  const resizedTransform = useDerivedValue((): LayerTransform => ({
+    ...selectedTransform,
+    scale: liveScale.get(),
+  }));
+  const resizedMatrix = useDerivedValue(() => layerMatrix(resizedTransform.get(), canvas));
+  const selectedOpacity = layers.find(({ layer }) => layer.id === selectedId)?.layer.opacity ?? 1;
+  const resizedOpacity = useDerivedValue(() => selectedOpacity);
+  const resizedFrameMatrix = useDerivedValue(() => frameMatrix(resizedTransform.get(), canvas));
+  const resizedFrameRect = useDerivedValue(() =>
+    frameRect(resizedTransform.get(), selectedWidth, selectedHeight, frameInset),
+  );
+  const resized = resizing && draggingId === null ? selected : null;
+
   const frame =
     selected === null
       ? null
       : selected.id === draggingId
         ? { matrix: liveFrameMatrix, rect: liveFrameRect }
-        : {
-            matrix: frameMatrix(selected.transform, canvas),
-            rect: frameRect(selected.transform, selected.width, selected.height, frameInset),
-          };
+        : selected === resized
+          ? { matrix: resizedFrameMatrix, rect: resizedFrameRect }
+          : {
+              matrix: frameMatrix(selected.transform, canvas),
+              rect: frameRect(selected.transform, selected.width, selected.height, frameInset),
+            };
 
   // Snap guides: a vertical line at the left edge, center or right edge, a horizontal one at the
   // top, center or bottom; hidden while not snapped.
@@ -553,9 +592,11 @@ export function EditorCanvas({
                   : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
               }
               live={
-                draggingId === null
-                  ? null
-                  : { id: draggingId, matrix: liveMatrix, opacity: liveOpacity }
+                draggingId !== null
+                  ? { id: draggingId, matrix: liveMatrix, opacity: liveOpacity }
+                  : resized !== null
+                    ? { id: resized.id, matrix: resizedMatrix, opacity: resizedOpacity }
+                    : null
               }
             />
             <Line

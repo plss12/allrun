@@ -2,7 +2,7 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import { Pressable, Text, View, type ViewStyle } from 'react-native';
 
-import { floatingSurface } from '@/theme/card-surface';
+import { roundSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
 export const FLOATING_INK = '#FFFFFF';
@@ -64,12 +64,15 @@ export function RoundButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled, ...(selected === undefined ? {} : { expanded: selected }) }}
+      accessibilityState={{
+        disabled,
+        ...(selected === undefined ? {} : { expanded: selected }),
+      }}
       disabled={disabled}
       hitSlop={4}
       onPress={onPress}
       style={({ pressed }) => ({
-        ...floatingSurface(size / 2, selected === true),
+        ...roundSurface(size, selected === true),
         width: size,
         height: size,
         alignItems: 'center',
@@ -121,8 +124,8 @@ export function PillButton({
       onPress={onPress}
       style={({ pressed }) => ({
         ...(accent
-          ? { ...ACCENT_SURFACE, borderRadius: height / 2, borderCurve: 'continuous' }
-          : floatingSurface(height / 2)),
+          ? { ...ACCENT_SURFACE, borderRadius: height / 2, borderCurve: 'circular' }
+          : roundSurface(height)),
         height,
         minWidth: minWidth ?? height,
         paddingHorizontal: showLabel ? 20 : 0,

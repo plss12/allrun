@@ -65,6 +65,23 @@ export function scaleLayer(transform: LayerTransform, factor: number): LayerTran
   };
 }
 
+/**
+ * Where a scale sits on the size slider, from 0 (the smallest) to 1 (the largest), on a
+ * logarithmic scale: each stretch of the slider multiplies the size by the same factor, so small
+ * sizes are as easy to set as large ones. Time and space O(1).
+ */
+export function sliderOfScale(scale: number): number {
+  'worklet';
+  const range = Math.log(MAX_LAYER_SCALE / MIN_LAYER_SCALE);
+  return clamp(Math.log(scale / MIN_LAYER_SCALE) / range, 0, 1);
+}
+
+/** The scale at a point of the size slider (see {@link sliderOfScale}). Time and space O(1). */
+export function scaleOfSlider(position: number): number {
+  'worklet';
+  return MIN_LAYER_SCALE * (MAX_LAYER_SCALE / MIN_LAYER_SCALE) ** clamp(position, 0, 1);
+}
+
 /** Rotates a layer clockwise by `radians` around its center. Time and space O(1). */
 export function rotateLayer(transform: LayerTransform, radians: number): LayerTransform {
   'worklet';
@@ -75,6 +92,40 @@ export function rotateLayer(transform: LayerTransform, radians: number): LayerTr
 export interface SnapThresholds {
   readonly distance: number;
   readonly rotation: number;
+}
+
+/**
+ * How far up and down a layer's frame reaches on the canvas, in canvas pixels from its top: its
+ * center plus or minus the height of its rotated content, scaled, and `margin` (as its selection
+ * frame and edge snapping see it). `size` is its content before scaling. Time and space O(1).
+ */
+export function layerVerticalReach(
+  transform: LayerTransform,
+  size: Size,
+  canvas: Size,
+  margin: number,
+): { readonly top: number; readonly bottom: number } {
+  const cos = Math.abs(Math.cos(transform.rotation));
+  const sin = Math.abs(Math.sin(transform.rotation));
+  const half = ((size.width * sin + size.height * cos) * transform.scale) / 2 + margin;
+  const center = transform.y * canvas.height;
+  return { top: center - half, bottom: center + half };
+}
+
+/**
+ * How far to lift the canvas (≥ 0) so that a layer reaching from `top` to `bottom` clears a
+ * panel whose top edge is at `panelTop`, with `gap` between them; 0 when it already does. It
+ * never lifts the layer's top above 0, where the screen ends: a layer taller than the room above
+ * the panel keeps its top in view. All in the same units and from the same origin (the editor
+ * uses screen points from the top of the safe area). Time and space O(1).
+ */
+export function liftToClear(
+  reach: { readonly top: number; readonly bottom: number },
+  panelTop: number,
+  gap: number,
+): number {
+  const needed = reach.bottom + gap - panelTop;
+  return Math.max(0, Math.min(needed, reach.top));
 }
 
 /**
