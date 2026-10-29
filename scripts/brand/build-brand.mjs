@@ -1,10 +1,11 @@
-// Builds the brand variants and app assets from the AllRun logo geometry.
+// Builds every brand file and app asset from the AllRun logo geometry.
 //
-// The source of truth is the original design in docs/marca (Pedro Luis Soto Santos, 2026). The
-// monogram is rebuilt here from the same coordinates so new variants (fewer lanes, horizontal
-// lockup, one-color versions with transparent lane lines) stay pixel-identical to it.
+// This script is the source of truth of the brand (Pedro Luis Soto Santos, 2026): it holds the
+// coordinates of the original design and draws every version from them. The logo has three lanes
+// only (ADR 010): the original's four ran together at small sizes, and keeping both invited using
+// the wrong one, so its files were removed (they stay in git's history).
 //
-// Usage: npm run brand   (writes docs/marca/generated, assets/images and the app geometry)
+// Usage: npm run brand   (writes docs/marca, assets/images and the app geometry)
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -13,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DOCS_OUT = join(ROOT, 'docs', 'marca', 'generated');
+const DOCS_OUT = join(ROOT, 'docs', 'marca');
 const APP_OUT = join(ROOT, 'assets', 'images');
 
 const COLORS = {
@@ -55,24 +56,21 @@ const band = (outer, inner) =>
     `L${edgeX(CY + inner)},${CY + inner}Z`,
   ].join(' ');
 
-// The lanes fill the radii 95..215. The original has 4 lanes of 24 with gaps of 8; the reduced
-// version has 3 lanes of 32 with gaps of 12, so the lines survive at small sizes.
-const LANE_SETS = {
-  full: { count: 4, lane: 24, gap: 8 },
-  simple: { count: 3, lane: 32, gap: 12 },
-};
+// The lanes fill the radii 95..215: 3 lanes of 32 with gaps of 12, so the lines between them
+// survive at small sizes (the original design had 4 lanes of 24 with gaps of 8; ADR 010).
+const LANES = { count: 3, lane: 32, gap: 12 };
 
-function lanes({ count, lane, gap }) {
+function lanes() {
   const result = [];
-  for (let i = 0; i < count; i++) {
-    const outer = 215 - i * (lane + gap);
-    result.push({ outer, inner: outer - lane });
+  for (let i = 0; i < LANES.count; i++) {
+    const outer = 215 - i * (LANES.lane + LANES.gap);
+    result.push({ outer, inner: outer - LANES.lane });
   }
   return result;
 }
 
-function gaps(set) {
-  const all = lanes(set);
+function gaps() {
+  const all = lanes();
   return all.slice(1).map((current, i) => ({ outer: all[i].inner, inner: current.outer }));
 }
 
@@ -83,25 +81,24 @@ function gaps(set) {
  * - `mono`: everything in one color, lane lines cut out (transparent), for the white and black
  *   versions over photos and for monochrome icons.
  */
-function mark(laneSet, style, id) {
-  const set = LANE_SETS[laneSet];
+function mark(style, id) {
   if (style.mono !== undefined) {
     const maskId = `lanes-${id}`;
     return `
       <mask id="${maskId}" maskUnits="userSpaceOnUse" x="-10" y="-10" width="${MARK_WIDTH + 20}" height="${MARK_HEIGHT + 20}">
         <rect x="-10" y="-10" width="${MARK_WIDTH + 20}" height="${MARK_HEIGHT + 20}" fill="#fff"/>
-        ${gaps(set)
+        ${gaps()
           .map((g) => `<path fill="#000" d="${band(g.outer, g.inner)}"/>`)
           .join('\n        ')}
       </mask>
       <g mask="url(#${maskId})" fill="${style.mono}">
         <path d="${LEFT_LEG}"/><path d="${STEM}"/><path d="${RIGHT_LEG}"/>
-        ${lanes(set)
+        ${lanes()
           .map((l) => `<path d="${band(l.outer, l.inner)}"/>`)
           .join('\n        ')}
       </g>`;
   }
-  const all = lanes(set);
+  const all = lanes();
   return `
       <g fill="${style.stem}"><path d="${LEFT_LEG}"/><path d="${STEM}"/><path d="${RIGHT_LEG}"/></g>
       <path fill="${style.line}" d="${band(all[0].outer - 1, all.at(-1).inner + 1)}"/>
@@ -140,11 +137,11 @@ const svg = (width, height, body, background) =>
 const PAD = 40;
 
 /** Monogram alone with a small margin. */
-const markSvg = (laneSet, style, id) =>
+const markSvg = (style, id) =>
   svg(
     MARK_WIDTH + 2 * PAD,
     MARK_HEIGHT + 2 * PAD,
-    `<g transform="translate(${PAD} ${PAD})">${mark(laneSet, style, id)}</g>`,
+    `<g transform="translate(${PAD} ${PAD})">${mark(style, id)}</g>`,
   );
 
 /** Wordmark alone. */
@@ -159,7 +156,7 @@ const wordmarkSvg = (style) =>
  * Horizontal lockup: monogram on the left, wordmark on the right, vertically centered. The
  * wordmark is sized to 42% of the monogram height, like a cap height next to a symbol.
  */
-function horizontalSvg(laneSet, markStyle, wordStyle, id) {
+function horizontalSvg(markStyle, wordStyle, id) {
   const wordScale = (MARK_HEIGHT * 0.42) / WORD_HEIGHT;
   const gap = MARK_HEIGHT * 0.16;
   const width = MARK_WIDTH + gap + WORD_WIDTH * wordScale;
@@ -168,24 +165,40 @@ function horizontalSvg(laneSet, markStyle, wordStyle, id) {
     width + 2 * PAD,
     MARK_HEIGHT + 2 * PAD,
     `<g transform="translate(${PAD} ${PAD})">
-    ${mark(laneSet, markStyle, id)}
+    ${mark(markStyle, id)}
     <g transform="translate(${MARK_WIDTH + gap} ${wordY}) scale(${wordScale}) translate(${-WORD_MIN_X} ${-WORD_TOP})">${wordmark(wordStyle)}</g>
   </g>`,
   );
 }
 
 /**
+ * Stacked lockup, as the original logo: the monogram over the wordmark, both as wide. Its
+ * measures are the original's.
+ */
+const STACKED = { width: 956.97, height: 956.09, wordX: 17.82, wordY: 873.68, wordScale: 0.96325 };
+
+const stackedSvg = (markStyle, wordStyle, id) =>
+  svg(
+    STACKED.width,
+    STACKED.height,
+    `<g transform="translate(${PAD} ${PAD})">
+    ${mark(markStyle, id)}
+    <g transform="translate(${STACKED.wordX} ${STACKED.wordY}) scale(${STACKED.wordScale})">${wordmark(wordStyle)}</g>
+  </g>`,
+  );
+
+/**
  * Square icon: the monogram centered on a background, filling `fill` of the width. `null`
  * background gives a transparent canvas (Android adaptive foreground, splash image).
  */
-function iconSvg(laneSet, style, background, fill, id, size = 1024) {
+function iconSvg(style, background, fill, id, size = 1024) {
   const scale = (size * fill) / MARK_WIDTH;
   const x = (size - MARK_WIDTH * scale) / 2;
   const y = (size - MARK_HEIGHT * scale) / 2;
   return svg(
     size,
     size,
-    `<g transform="translate(${x} ${y}) scale(${scale})">${mark(laneSet, style, id)}</g>`,
+    `<g transform="translate(${x} ${y}) scale(${scale})">${mark(style, id)}</g>`,
     background,
   );
 }
@@ -227,37 +240,29 @@ function emit(name, svgText, { dir = DOCS_OUT, pngWidth = 2048, svgFile = true }
   write(join(dir, `${name}.png`), png(svgText, pngWidth));
 }
 
-// Brand variants (docs/marca/generated), SVG + PNG.
+// Brand files (docs/marca), SVG + PNG: the monogram, the wordmark, and the logo stacked and
+// horizontal, in color, white and black (and on dark), and the icon.
 for (const tone of ['color', 'white', 'black']) {
-  emit(`allrun-mark-simple-${tone}`, markSvg('simple', MARK[tone], `ms-${tone}`));
-  emit(`allrun-mark-${tone}`, markSvg('full', MARK[tone], `mf-${tone}`));
+  emit(`allrun-mark-${tone}`, markSvg(MARK[tone], `m-${tone}`));
   emit(`allrun-wordmark-${tone}`, wordmarkSvg(WORD[tone]));
-  emit(
-    `allrun-logo-horizontal-${tone}`,
-    horizontalSvg('full', MARK[tone], WORD[tone], `hf-${tone}`),
-  );
-  emit(
-    `allrun-logo-horizontal-simple-${tone}`,
-    horizontalSvg('simple', MARK[tone], WORD[tone], `hs-${tone}`),
-  );
+  emit(`allrun-logo-stacked-${tone}`, stackedSvg(MARK[tone], WORD[tone], `s-${tone}`));
+  emit(`allrun-logo-horizontal-${tone}`, horizontalSvg(MARK[tone], WORD[tone], `h-${tone}`));
 }
-emit(
-  `allrun-logo-horizontal-simple-on-dark`,
-  horizontalSvg('simple', MARK.onDark, WORD.onDark, 'hd'),
-);
+emit('allrun-logo-horizontal-on-dark', horizontalSvg(MARK.onDark, WORD.onDark, 'hd'));
 
-// App icons. The reduced monogram keeps the lane lines visible at the small sizes iOS and
-// Android use in settings, search and notifications.
+// App icons. Three lanes keep their lines visible at the small sizes iOS and Android use in
+// settings, search and notifications.
 const ICON_FILL = 0.72;
-const iconLight = iconSvg('simple', MARK.color, COLORS.chalk, ICON_FILL, 'il');
+const iconLight = iconSvg(MARK.color, COLORS.chalk, ICON_FILL, 'il');
+emit('allrun-icon', iconLight, { pngWidth: 1024 });
 emit('icon', iconLight, { dir: APP_OUT, pngWidth: 1024, svgFile: false });
-emit('icon-ios-dark', iconSvg('simple', MARK.onDark, COLORS.nightInk, ICON_FILL, 'id'), {
+emit('icon-ios-dark', iconSvg(MARK.onDark, COLORS.nightInk, ICON_FILL, 'id'), {
   dir: APP_OUT,
   pngWidth: 1024,
   svgFile: false,
 });
 // Tinted icons are grayscale; iOS applies the user's tint over them.
-emit('icon-ios-tinted', iconSvg('simple', MARK.white, COLORS.black, ICON_FILL, 'it'), {
+emit('icon-ios-tinted', iconSvg(MARK.white, COLORS.black, ICON_FILL, 'it'), {
   dir: APP_OUT,
   pngWidth: 1024,
   svgFile: false,
@@ -265,27 +270,27 @@ emit('icon-ios-tinted', iconSvg('simple', MARK.white, COLORS.black, ICON_FILL, '
 // Android adaptive icons are cropped to a circle of 66/108 of the canvas: the monogram's
 // diagonal must fit in it, which a 56% width does with some air.
 const ADAPTIVE_FILL = 0.56;
-emit('android-icon-foreground', iconSvg('simple', MARK.color, null, ADAPTIVE_FILL, 'af'), {
+emit('android-icon-foreground', iconSvg(MARK.color, null, ADAPTIVE_FILL, 'af'), {
   dir: APP_OUT,
   pngWidth: 1024,
   svgFile: false,
 });
-emit('android-icon-monochrome', iconSvg('simple', MARK.white, null, ADAPTIVE_FILL, 'am'), {
+emit('android-icon-monochrome', iconSvg(MARK.white, null, ADAPTIVE_FILL, 'am'), {
   dir: APP_OUT,
   pngWidth: 1024,
   svgFile: false,
 });
-emit('splash-icon', iconSvg('simple', MARK.color, null, 0.9, 'sl'), {
+emit('splash-icon', iconSvg(MARK.color, null, 0.9, 'sl'), {
   dir: APP_OUT,
   pngWidth: 1024,
   svgFile: false,
 });
-emit('splash-icon-dark', iconSvg('simple', MARK.onBlack, null, 0.9, 'sd'), {
+emit('splash-icon-dark', iconSvg(MARK.onBlack, null, 0.9, 'sd'), {
   dir: APP_OUT,
   pngWidth: 1024,
   svgFile: false,
 });
-emit('favicon', iconSvg('simple', MARK.color, COLORS.chalk, 0.8, 'fv', 48), {
+emit('favicon', iconSvg(MARK.color, COLORS.chalk, 0.8, 'fv', 48), {
   dir: APP_OUT,
   pngWidth: 48,
   svgFile: false,
@@ -293,15 +298,15 @@ emit('favicon', iconSvg('simple', MARK.color, COLORS.chalk, 0.8, 'fv', 48), {
 
 // Vector geometry for the app: the editor draws the watermarks with Skia from these paths, so
 // they stay sharp at any size and export resolution (no raster logo to scale).
-const simpleLanes = lanes(LANE_SETS.simple);
+const markLanes = lanes();
 const geometry = {
   mark: {
     width: MARK_WIDTH,
     height: MARK_HEIGHT,
     stems: [LEFT_LEG, STEM, RIGHT_LEG].join(' '),
-    lanes: simpleLanes.map((l) => band(l.outer, l.inner)),
-    gaps: gaps(LANE_SETS.simple).map((g) => band(g.outer, g.inner)),
-    lines: band(simpleLanes[0].outer - 1, simpleLanes.at(-1).inner + 1),
+    lanes: markLanes.map((l) => band(l.outer, l.inner)),
+    gaps: gaps().map((g) => band(g.outer, g.inner)),
+    lines: band(markLanes[0].outer - 1, markLanes.at(-1).inner + 1),
   },
   wordmark: {
     minX: WORD_MIN_X,
@@ -316,10 +321,10 @@ const geometry = {
 write(
   join(ROOT, 'src', 'editor', 'brand', 'geometry.generated.ts'),
   `// Generated by scripts/brand/build-brand.mjs (npm run brand). Do not edit by hand.
-// Monogram (reduced 3-lane version) and wordmark of the AllRun logo, as SVG path data.
+// Monogram (three lanes, ADR 010) and wordmark of the AllRun logo, as SVG path data.
 
 export const BRAND_GEOMETRY = ${JSON.stringify(geometry, null, 2)} as const;
 `,
 );
 
-console.log('Brand assets written to docs/marca/generated, assets/images and src/editor/brand');
+console.log('Brand assets written to docs/marca, assets/images and src/editor/brand');
