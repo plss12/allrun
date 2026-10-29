@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dimensions,
+  type HostInstance,
   Keyboard,
   type KeyboardEvent,
   Platform,
@@ -74,7 +75,7 @@ export function TypingOverlay({ layer, origin, onChangeText, onDone }: TypingOve
   const reducedMotion = useReducedMotion();
   const previews = usePreviewFonts();
   const [closing, setClosing] = useState(false);
-  const root = useRef<View>(null);
+  const root = useRef<HostInstance>(null);
   const { style } = layer;
   const editScale = Math.min(Math.max(origin.scale, MIN_SCALE), MAX_SCALE);
   const startScale = origin.scale / editScale;

@@ -3,10 +3,7 @@ import {
   launchImageLibraryAsync,
   UIImagePickerPreferredAssetRepresentationMode,
 } from 'expo-image-picker';
-import { Stack, useLocalSearchParams } from 'expo-router';
-// TODO(SDK 58): import usePreventRemove from 'expo-router', which exports it from SDK 58 on. In
-// SDK 57 it already ships, and the native stack honours it, but only under this internal path.
-import { usePreventRemove } from 'expo-router/build/react-navigation/core';
+import { Stack, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';

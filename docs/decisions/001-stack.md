@@ -11,7 +11,7 @@ calendar). The developer works on Windows with an iPhone and no Mac.
 
 ## Decision
 
-- **App:** React Native + Expo (SDK 57, see below) + TypeScript `strict`, with Expo Router. iOS
+- **App:** React Native + Expo (SDK 58, see below) + TypeScript `strict`, with Expo Router. iOS
   and Android ship at the same time from one codebase.
 - **Editor:** `@shopify/react-native-skia` for the canvas, with `react-native-gesture-handler` and
   `react-native-reanimated` for gestures. Skia renders on the GPU, draws route traces and charts,
@@ -40,15 +40,20 @@ calendar). The developer works on Windows with an iPhone and no Mac.
 
 The project started on SDK 58 (released 2026-10-15), but the App Store Expo Go only supports up
 to SDK 57, and Expo said the SDK 58 build would follow "within a few weeks". Since development
-relies on Expo Go on an iPhone, we moved to SDK 57 on 2026-10-16. Upgrade to SDK 58 once the App
-Store Expo Go supports it (`expo-upgrade` skill). Notes for that upgrade:
+relies on Expo Go on an iPhone, we moved to SDK 57 on 2026-10-16, and back to SDK 58 on
+2026-10-29, when the App Store Expo Go stopped opening SDK 57 projects. Notes from that upgrade:
 
-- SDK 58's `jest-expo` requires Jest 30, while Expo's versions API still lists Jest 29.7; follow
-  the unit-testing guide and exclude `jest` and `@types/jest` from `expo.install.exclude`.
-- `react-native-gesture-handler` jumps from 2.x to 3.x.
-- The editor's design step imports `usePreventRemove` from an internal path
-  (`expo-router/build/react-navigation/core`): SDK 57 ships it but only exports it publicly from
-  SDK 58. Import it from `expo-router` instead (`TODO(SDK 58)` in `src/app/editor.tsx`).
+- Expo's versions API now lists Jest 30 for SDK 58's `jest-expo`, so no `expo.install.exclude`
+  was needed.
+- `npx expo install --fix` failed with `ERESOLVE` on optional peers (`react-native-windows` of
+  the date picker, `expo-symbols` of Expo Router): npm 11.19 can't move them inside an existing
+  lockfile. Writing the expected versions into `package.json` and installing from scratch (no
+  `node_modules`, no lockfile) resolved them.
+- React Native 0.88 types its components as functions: a ref holds a `HostInstance` (or a
+  `ScrollViewInstance`), not the component (`useRef<View>` no longer type-checks).
+- `usePreventRemove` is imported from `expo-router`, which exports it from SDK 58 on.
+- `react-native-gesture-handler` 3 keeps the `Gesture` builder API the editor uses, but marks it
+  deprecated in favour of hooks (`usePanGesture`…). Migrating the editor's gestures is pending.
 
 Alternatives discarded: a development build or `eas go` (both require the paid Apple Developer
 account before it is otherwise needed), or pausing device testing for weeks.

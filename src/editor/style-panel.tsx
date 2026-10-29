@@ -1,7 +1,7 @@
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, type ScrollViewInstance, Text, View } from 'react-native';
 
 import {
   colorPageOf,
@@ -397,7 +397,7 @@ function ColorPager({
   const current = layerColor(layer)?.toUpperCase() ?? null;
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState(() => colorPageOf(current));
-  const pager = useRef<ScrollView>(null);
+  const pager = useRef<ScrollViewInstance>(null);
   const swatch = Math.min(SWATCH, width / COLORS_PER_PAGE);
   const goTo = (index: number, animated: boolean) => {
     pager.current?.scrollTo({ x: index * width, animated });
