@@ -1,61 +1,57 @@
 import { Color } from 'expo-router';
 import { Platform } from 'react-native';
 
-/** Native semantic colors: they follow light and dark mode and accessibility settings. */
+/**
+ * iOS's dark mode colors as plain strings: the app is always dark (ADR 009). Android uses them
+ * as they are, rather than its dynamic colors, which follow each phone's wallpaper: Skia (the
+ * sports' icons) can't take a platform color, so with plain strings what it draws matches the
+ * text next to it, and the app looks the same on every phone.
+ */
+const dark = {
+  label: '#FFFFFF',
+  secondaryLabel: 'rgba(235, 235, 245, 0.6)',
+  tertiaryLabel: 'rgba(235, 235, 245, 0.3)',
+  separator: 'rgba(84, 84, 88, 0.6)',
+  systemBackground: '#000000',
+  secondarySystemBackground: '#1C1C1E',
+  tertiarySystemBackground: '#2C2C2E',
+  systemRed: '#FF453A',
+} as const;
+
+/**
+ * The app's colors: iOS's semantic ones, which also follow its accessibility settings (Increase
+ * Contrast), and the same values, fixed, elsewhere.
+ */
 export const colors = {
-  label: Platform.select({
-    ios: Color.ios.label,
-    android: Color.android.dynamic.onSurface,
-    default: '#000000',
-  }),
-  secondaryLabel: Platform.select({
-    ios: Color.ios.secondaryLabel,
-    android: Color.android.dynamic.onSurfaceVariant,
-    default: '#3c3c43',
-  }),
-  tertiaryLabel: Platform.select({
-    ios: Color.ios.tertiaryLabel,
-    android: Color.android.dynamic.outline,
-    default: '#48484a',
-  }),
-  separator: Platform.select({
-    ios: Color.ios.separator,
-    android: Color.android.dynamic.outlineVariant,
-    default: '#c6c6c8',
-  }),
+  label: Platform.select({ ios: Color.ios.label, default: dark.label }),
+  secondaryLabel: Platform.select({ ios: Color.ios.secondaryLabel, default: dark.secondaryLabel }),
+  tertiaryLabel: Platform.select({ ios: Color.ios.tertiaryLabel, default: dark.tertiaryLabel }),
+  separator: Platform.select({ ios: Color.ios.separator, default: dark.separator }),
   systemBackground: Platform.select({
     ios: Color.ios.systemBackground,
-    android: Color.android.dynamic.surface,
-    default: '#ffffff',
+    default: dark.systemBackground,
   }),
   secondarySystemBackground: Platform.select({
     ios: Color.ios.secondarySystemBackground,
-    android: Color.android.dynamic.surfaceVariant,
-    default: '#f2f2f7',
+    default: dark.secondarySystemBackground,
   }),
   /** Controls laid on a `secondarySystemBackground` card. */
   tertiarySystemBackground: Platform.select({
     ios: Color.ios.tertiarySystemBackground,
-    android: Color.android.dynamic.surfaceContainerHighest,
-    default: '#2c2c2e',
+    default: dark.tertiarySystemBackground,
   }),
   // Brand: Track Red. White text on it has a 4.7:1 contrast (WCAG AA for text and buttons).
   tint: '#C94A2E',
   onTint: '#ffffff',
-  error: Platform.select({
-    ios: Color.ios.systemRed,
-    android: Color.android.dynamic.error,
-    default: '#ff3b30',
-  }),
+  error: Platform.select({ ios: Color.ios.systemRed, default: dark.systemRed }),
 };
 
 /**
- * The labels' colors of iOS's dark mode as plain strings, for what Skia draws on screen (the
- * sports' icons): Skia can't take the platform's semantic colors, and the app is always dark
- * (ADR 009). Android's dynamic colors may differ slightly.
+ * The labels' colors as plain strings, for what Skia draws on screen (the sports' icons): the
+ * same as `colors`' labels on Android, and as iOS's in dark mode without Increase Contrast.
  */
 export const darkLabelInk = {
-  primary: '#FFFFFF',
-  secondary: 'rgba(235, 235, 245, 0.6)',
-  tertiary: 'rgba(235, 235, 245, 0.3)',
+  primary: dark.label,
+  secondary: dark.secondaryLabel,
+  tertiary: dark.tertiaryLabel,
 } as const;
