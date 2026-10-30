@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { FRAME_COLORS } from '@/core/image-layer';
 import { scaleOfSlider, sliderOfScale } from '@/core/layer-transform';
 import { layerColor } from '@/core/layer-style';
 import type { Layer } from '@/core/template';
@@ -163,9 +164,16 @@ const LOGO_TONE_INK = {
   color: BRAND_GEOMETRY.colors.trackRed,
 } as const;
 
-/** The color the color button shows: the widget's, or the logo's tone. */
+/** The color the color button shows: the widget's, the logo's tone or a picture's frame. */
 function swatchOf(layer: Layer): string {
-  return layer.kind === 'logo' ? LOGO_TONE_INK[layer.tone] : (layerColor(layer) ?? FLOATING_INK);
+  if (layer.kind === 'logo') {
+    return LOGO_TONE_INK[layer.tone];
+  }
+  if (layer.kind === 'image') {
+    // Without a frame, the ring alone.
+    return layer.frame === 'none' ? 'transparent' : FRAME_COLORS[layer.frame];
+  }
+  return layerColor(layer) ?? FLOATING_INK;
 }
 
 /** A dot of the widget's color, ringed so that white and black both show on the button. */

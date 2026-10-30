@@ -1,6 +1,6 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
-import { defaultActivityTemplate } from './default-layout';
+import { defaultActivityTemplate, newLayer } from './default-layout';
 import {
   applyDesign,
   setLanguage,
@@ -21,7 +21,7 @@ import {
 import { commit, createHistory, undo } from './history';
 import { COVER_PLACEMENT } from './photo-placement';
 import { parseTemplate } from './template';
-import { removeLayer } from './template-edit';
+import { addLayer, removeLayer } from './template-edit';
 
 const activity = makeActivity();
 const defaultTemplate: DefaultTemplate = (format) => defaultActivityTemplate(activity, format);
@@ -77,7 +77,7 @@ describe('editLayers', () => {
 
 describe('setLayers, setFormat, setPhotoPlacement and setBackground', () => {
   it('return the same design when nothing changes, so no undo step is recorded', () => {
-    expect(setLayers(INITIAL_DESIGN, null)).toBe(INITIAL_DESIGN);
+    expect(setLayers(INITIAL_DESIGN, null, defaultTemplate)).toBe(INITIAL_DESIGN);
     expect(setFormat(INITIAL_DESIGN, 'story')).toBe(INITIAL_DESIGN);
     expect(setPhotoPlacement(INITIAL_DESIGN, { ...COVER_PLACEMENT })).toBe(INITIAL_DESIGN);
     expect(setBackground(INITIAL_DESIGN, { kind: 'auto' })).toBe(INITIAL_DESIGN);
@@ -91,7 +91,10 @@ describe('setLayers, setFormat, setPhotoPlacement and setBackground', () => {
 
   it('change only their part of the design', () => {
     const layers = defaultTemplate('story').layers.slice(1);
-    expect(setLayers(INITIAL_DESIGN, layers)).toEqual({ ...INITIAL_DESIGN, layers });
+    expect(setLayers(INITIAL_DESIGN, layers, defaultTemplate)).toEqual({
+      ...INITIAL_DESIGN,
+      layers,
+    });
     expect(setFormat(INITIAL_DESIGN, 'landscape')).toEqual({
       ...INITIAL_DESIGN,
       format: 'landscape',
@@ -105,7 +108,9 @@ describe('applyDesign', () => {
   it("takes a saved design's widgets, photo placement and background, keeping the format", () => {
     const layers = defaultTemplate('square').layers.slice(2);
     const square = setFormat(INITIAL_DESIGN, 'square');
-    expect(applyDesign(square, { layers, photo: framed, background: night })).toEqual({
+    expect(
+      applyDesign(square, { layers, photo: framed, background: night }, defaultTemplate),
+    ).toEqual({
       format: 'square',
       photo: framed,
       background: night,
@@ -117,16 +122,40 @@ describe('applyDesign', () => {
 
   it("takes its unit and language too, and the device's and app's when it has none", () => {
     const layers = defaultTemplate('story').layers;
-    const own = applyDesign(INITIAL_DESIGN, {
-      layers,
-      photo: framed,
-      background: night,
-      units: 'mi',
-      language: 'en',
-    });
+    const own = applyDesign(
+      INITIAL_DESIGN,
+      { layers, photo: framed, background: night, units: 'mi', language: 'en' },
+      defaultTemplate,
+    );
     expect([own.units, own.language]).toEqual(['mi', 'en']);
-    const plain = applyDesign(own, { layers, photo: framed, background: night });
+    const plain = applyDesign(own, { layers, photo: framed, background: night }, defaultTemplate);
     expect([plain.units, plain.language]).toEqual([null, null]);
+  });
+});
+
+describe("the user's pictures", () => {
+  const picture = newLayer({ kind: 'image', image: 'picked-1', frame: 'light' }, 'image', 'story');
+  const withPicture = editLayers(INITIAL_DESIGN, defaultTemplate, (current) =>
+    addLayer(current, picture),
+  );
+
+  it('stay on top when another design is applied, as they are never saved with one', () => {
+    const layers = defaultTemplate('story').layers.slice(2);
+    const applied = applyDesign(
+      withPicture,
+      { layers, photo: framed, background: night },
+      defaultTemplate,
+    );
+    expect(applied.layers).toEqual([...layers, picture]);
+  });
+
+  it("stay over the format's default widgets when those are chosen", () => {
+    const own = setLayers(withPicture, [], defaultTemplate);
+    expect(own.layers).toEqual([picture]);
+    expect(setLayers(own, null, defaultTemplate).layers).toEqual([
+      ...defaultTemplate('story').layers,
+      picture,
+    ]);
   });
 });
 

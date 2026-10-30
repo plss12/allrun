@@ -13,9 +13,10 @@ import {
   type SkImage,
 } from '@shopify/react-native-skia/lib/commonjs/headless';
 
-import { defaultActivityTemplate } from '@/core/default-layout';
+import { defaultActivityTemplate, newLayer } from '@/core/default-layout';
+import { imageBox } from '@/core/image-layer';
 import { COVER_PLACEMENT, type PhotoPlacement } from '@/core/photo-placement';
-import { CANVAS_FORMATS, type Template } from '@/core/template';
+import { CANVAS_FORMATS, type ImageFrame, type Template } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
@@ -173,5 +174,52 @@ describe('exportScene', () => {
     const image = await render(redPhoto(), { ...COVER_PLACEMENT, x: 1, scale: 0.5 });
     expect(pixel(image, 0, height / 2)).toEqual([0, 0, 255, 255]);
     expect(pixel(image, width - 1, height / 2)[0]).toBeGreaterThan(240);
+  });
+});
+
+describe("the user's pictures", () => {
+  /** The red picture (400 × 300) in a frame, in the middle of a gray canvas. */
+  async function renderPicture(frame: ImageFrame) {
+    const picture = redPhoto();
+    const layer = newLayer({ kind: 'image', image: 'picture-1', frame }, 'image', 'story');
+    return drawOffscreen(
+      makeOffscreenSurface(width, height),
+      exportScene({
+        template: {
+          ...template,
+          layers: [{ ...layer, transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 } }],
+          background: { kind: 'color', color: '#808080' },
+        },
+        layerContext: {
+          ...layerContext(),
+          images: new Map([['picture-1', { size: { width: 400, height: 300 }, image: picture }]]),
+        },
+        photo: null,
+        dominant: null,
+      }),
+    );
+  }
+
+  it('draws the picture in its frame, an even edge of white or black', async () => {
+    const box = imageBox({ width: 400, height: 300 }, 'light');
+    const edge = (box.width - box.picture.width) / 2;
+    const frameX = Math.round(width / 2 + box.picture.x - edge / 2);
+    const light = await renderPicture('light');
+    expect(pixel(light, width / 2, height / 2)).toEqual([255, 0, 0, 255]);
+    expect(pixel(light, frameX, height / 2)).toEqual([255, 255, 255, 255]);
+    const dark = await renderPicture('dark');
+    expect(pixel(dark, frameX, height / 2)).toEqual([0, 0, 0, 255]);
+  });
+
+  it('draws it alone without a frame', async () => {
+    const box = imageBox({ width: 400, height: 300 }, 'none');
+    const image = await renderPicture('none');
+    expect(pixel(image, Math.round(width / 2 + box.picture.x + 2), height / 2)).toEqual([
+      255, 0, 0, 255,
+    ]);
+    // Just outside it, the background, but for its soft shadow.
+    expect(pixel(image, Math.round(width / 2 - box.width / 2 - 40), height / 2)).toEqual([
+      128, 128, 128, 255,
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import type { Layer, LayerKind, Template } from './template';
+import type { ImageFrame, Layer, LayerKind, Template } from './template';
 
 /**
  * The look of each layer, as the style panel edits it: color, opacity, text style, data labels,
@@ -67,7 +67,14 @@ const DATA_KINDS = ['metric', 'summaryMetric'] as const;
 const LINE_KINDS = ['route', 'summaryRoutes'] as const;
 const CHART_KINDS = ['summaryChart', 'activityChart'] as const;
 const BLOCK_KINDS = ['activityBlock', 'summaryBlock'] as const;
-const ALL_KINDS = [...TEXT_KINDS, ...LINE_KINDS, ...CHART_KINDS, ...BLOCK_KINDS, 'logo'] as const;
+const ALL_KINDS = [
+  ...TEXT_KINDS,
+  ...LINE_KINDS,
+  ...CHART_KINDS,
+  ...BLOCK_KINDS,
+  'logo',
+  'image',
+] as const;
 
 function isKind<K extends LayerKind>(layer: Layer, kinds: readonly K[]): layer is LayerOf<K> {
   return (kinds as readonly LayerKind[]).includes(layer.kind);
@@ -108,7 +115,10 @@ function editLayer<K extends LayerKind>(
   return { ...template, layers };
 }
 
-/** The color a layer is drawn with, or `null` for the logo, which has tones instead. */
+/**
+ * The color a layer is drawn with, or `null` for the logo, which has tones instead, and a picture,
+ * which has frames.
+ */
 export function layerColor(layer: Layer): string | null {
   switch (layer.kind) {
     case 'metric':
@@ -125,6 +135,7 @@ export function layerColor(layer: Layer): string | null {
     case 'activityChart':
       return layer.color;
     case 'logo':
+    case 'image':
       return null;
   }
 }
@@ -270,6 +281,13 @@ export function setLogoOptions(
 ): Template {
   return editLayer(template, id, ['logo'], 'logo options', (layer) =>
     unchanged(layer, patch) ? layer : { ...layer, ...patch },
+  );
+}
+
+/** Frames a picture of the user's (see `IMAGE_FRAMES`), or takes its frame away. */
+export function setImageFrame(template: Template, id: string, frame: ImageFrame): Template {
+  return editLayer(template, id, ['image'], 'frame', (layer) =>
+    layer.frame === frame ? layer : { ...layer, frame },
   );
 }
 

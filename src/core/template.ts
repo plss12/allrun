@@ -197,6 +197,14 @@ export const HEART_RATE_ZONE_VIEWS = ['line', 'lineAndTable', 'table'] as const;
 
 export type HeartRateZoneView = (typeof HEART_RATE_ZONE_VIEWS)[number];
 
+/**
+ * The frame around a picture of the user's (an image layer): none, light (white) or dark (black),
+ * as the light and dark replicas of the phone's apps.
+ */
+export const IMAGE_FRAMES = ['none', 'light', 'dark'] as const;
+
+export type ImageFrame = (typeof IMAGE_FRAMES)[number];
+
 /** How a route's line is drawn. */
 export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 
@@ -825,6 +833,16 @@ export const layerSchema = z.discriminatedUnion('kind', [
     /** The AllRun name at the foot of the block, in its color, as the activities' widgets. */
     logo: z.boolean(),
     style: blockStyleSchema,
+  }),
+  z.object({
+    ...layerBase,
+    kind: z.literal('image'),
+    /**
+     * Which of the pictures the user picked in the editor it shows, by their key there; empty, the
+     * gallery's sample (see `SAMPLE_IMAGE`). Designs never keep pictures (see `saveDesign`).
+     */
+    image: z.string(),
+    frame: z.enum(IMAGE_FRAMES),
   }),
   z.object({
     ...layerBase,

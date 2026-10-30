@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { withoutImages } from './image-layer';
 import { type CanvasFormat, type Template, type TemplateMode, templateSchema } from './template';
 
 /**
@@ -31,9 +32,12 @@ export function parseSavedTemplate(json: unknown): SavedTemplate {
   return result.data;
 }
 
-/** The design on the canvas, ready to store as a template of its own. */
+/**
+ * The design on the canvas, ready to store as a template of its own: without the user's pictures,
+ * which belong to this image, not to the design (see `image-layer.ts`).
+ */
 export function saveDesign(design: Template, id: string, savedAt: string): SavedTemplate {
-  return { savedAt, template: { ...design, id } };
+  return { savedAt, template: { ...design, id, layers: withoutImages(design.layers) } };
 }
 
 /**
@@ -51,16 +55,17 @@ export function templatesFor(
 }
 
 /**
- * Whether `design` is already saved: one of `saved` has its format, mode, widgets, photo
- * placement and background, whatever its id. Saving it again would only add a second identical
+ * Whether `design` is already saved: one of `saved` has its format, mode, widgets (but the
+ * pictures, which are never saved), photo placement and background, whatever its id. Saving it again would only add a second identical
  * thumbnail. Time O(n · s) for n templates of size s.
  */
 export function isSaved(saved: readonly SavedTemplate[], design: Template): boolean {
+  const layers = withoutImages(design.layers);
   return saved.some(
     ({ template }) =>
       template.format === design.format &&
       template.mode === design.mode &&
-      sameJson(template.layers, design.layers) &&
+      sameJson(template.layers, layers) &&
       sameJson(template.photo, design.photo) &&
       sameJson(template.background, design.background),
   );

@@ -29,6 +29,11 @@ export const GALLERY_GAP = 10;
 
 /** Room at the bottom of a tile with several variants, for the dots of its pages. */
 export const GALLERY_DOTS_HEIGHT = 14;
+/**
+ * Room a picture's sample photo leaves over its dots for the hint ("Tap to choose", over the dots
+ * as in a verse's tile), which would cover it.
+ */
+export const GALLERY_HINT_HEIGHT = 18;
 
 /** Room inside a tile around its widget, as a fraction of the tile. */
 const TILE_INSET = 0.08;
@@ -45,10 +50,19 @@ const FILLS_PAGE: ReadonlySet<CatalogItem['kind']> = new Set([
   'info',
   'activityChart',
   'summaryChart',
+  'image',
 ]);
 
 /** Height of a tile over its width, by how many tiles share a row. */
 const TILE_RATIO = { 1: 0.5, 2: 0.6 } as const;
+
+/**
+ * Whether a tile is of the user's pictures, whose row is as tall as square tiles: a photo needs
+ * the room, and in a row of the usual height it was too small to tell (the user's pick).
+ */
+function isPicture(widget: CatalogWidget): boolean {
+  return widget.variants[0].kind === 'image';
+}
 
 /**
  * Sections whose rows grow taller for tall widgets (a route over the data), up to square tiles
@@ -177,9 +191,11 @@ export function gallerySections(
         open = [];
       }
     };
+    /** The height a tile of `widget` is first measured at. */
+    const heightOf = (widget: CatalogWidget) => (grows || isPicture(widget) ? tallest : height);
     const tiles = section.widgets.flatMap((widget) => {
       const wide = columns > 1 && spansRow(widget);
-      const tile = measure(widget, wide ? full : width, grows ? tallest : height);
+      const tile = measure(widget, wide ? full : width, heightOf(widget));
       return tile === null ? [] : [{ tile, wide }];
     });
     // The creative tiles go by themes: each theme starts a row, so a tile only shares one with
@@ -214,13 +230,14 @@ export function gallerySections(
     if (themed) {
       groups = settleAlone(groups, width, (widget) => {
         const source = section.widgets.find((candidate) => candidate.key === widget.key);
-        const wide = source === undefined ? null : measure(source, full, height);
+        const wide = source === undefined ? null : measure(source, full, heightOf(source));
         return wide === null ? null : { width: full, tiles: [wide] };
       });
     }
     const rows = groups.map(({ width: rowWidth, tiles }): GalleryRow => {
       if (!grows) {
-        return { width: rowWidth, height, widgets: tiles };
+        const pictures = tiles.some((tile) => tile.pages[0].item.kind === 'image');
+        return { width: rowWidth, height: pictures ? tallest : height, widgets: tiles };
       }
       // As tall as its tallest widget needs, between the usual tiles and square ones.
       const needed = Math.max(...tiles.map(neededHeight));
@@ -249,8 +266,8 @@ interface TileGroup {
 
 /**
  * The creative rows of `groups` with their tiles left alone, each at the end of its theme,
- * settled: a wildcard alone (see `isCreativeWildcard`) goes up beside the first other tile alone,
- * one of a theme before a wildcard; a tile still alone takes the whole row (`wide`, or as it is
+ * settled: a wildcard alone (see `isCreativeWildcard`) goes up beside the first other tile alone
+ * before it, or else beside another wildcard; a tile still alone takes the whole row (`wide`, or as it is
  * when it can't be made wide). Rows are `width` wide when of tiles side by side. Time O(r²) for r
  * rows, a few.
  */
@@ -269,7 +286,10 @@ function settleAlone(
     const others = settled
       .map((other, j) => ({ other, j }))
       .filter(({ other, j }) => j !== i && alone(other));
-    const slot = others.find(({ other }) => !isCreativeWildcard(other.tiles[0].key)) ?? others[0];
+    // Up, never down: a tile alone after it (the user's pictures, last) keeps its own row.
+    const slot =
+      others.find(({ other, j }) => j < i && !isCreativeWildcard(other.tiles[0].key)) ??
+      others.find(({ other }) => isCreativeWildcard(other.tiles[0].key));
     if (slot !== undefined) {
       settled[slot.j] = { width, tiles: [slot.other.tiles[0], group.tiles[0]] };
       settled.splice(i, 1);
@@ -312,8 +332,10 @@ function measureWidget(
   if (measured.length === 0) {
     return null;
   }
-  // Several variants leave room for their dots under the widget.
-  const room = measured.length > 1 ? height - GALLERY_DOTS_HEIGHT : height;
+  // Several variants leave room for their dots under the widget, and a picture for its hint too.
+  const room =
+    (measured.length > 1 ? height - GALLERY_DOTS_HEIGHT : height) -
+    (isPicture(widget) ? GALLERY_HINT_HEIGHT : 0);
   const fill = (prepared: PreparedLayer) =>
     Math.min(
       (width * (1 - 2 * TILE_INSET)) / prepared.width,

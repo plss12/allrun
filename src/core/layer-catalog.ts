@@ -2,6 +2,7 @@ import type { Activity } from './activity';
 import { activityBlocks, blockTile, isDataWidget } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
 import { bucketCount, chartBucketOptions } from './periods';
+import { SAMPLE_IMAGE } from './image-layer';
 import { PLACE_FORMATS } from './place';
 import type { BucketSize, PeriodSummary } from './summary';
 import { isSummaryDataWidget, summaryBlocks } from './summary-block';
@@ -10,6 +11,7 @@ import {
   type ActivityChartSeries,
   DATE_FORMATS,
   HEART_RATE_ZONE_VIEWS,
+  IMAGE_FRAMES,
   type Layer,
   type LayerKind,
   PERIOD_FORMATS,
@@ -72,7 +74,8 @@ export type CatalogItem =
       Pick<LayerOf<'logo'>, 'kind' | 'brand' | 'variant'> & Partial<Pick<LayerOf<'logo'>, 'tone'>>
     >
   | Readonly<Pick<LayerOf<'activityBlock'>, 'kind' | 'block'>>
-  | Readonly<Pick<LayerOf<'summaryBlock'>, 'kind' | 'block'>>;
+  | Readonly<Pick<LayerOf<'summaryBlock'>, 'kind' | 'block'>>
+  | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame'>>;
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
 export type NewLayer =
@@ -114,6 +117,7 @@ const CREATIVE_THEMES: Readonly<
     ],
     [['block-laps', 'block-grandPrix'], ['block-splits']],
     [['block-receipt', 'block-nutrition'], ['block-boardingPass']],
+    [['image']],
   ],
   summary: [
     [
@@ -130,6 +134,7 @@ const CREATIVE_THEMES: Readonly<
       ['summaryBlock-periodReceipt', 'summaryBlock-periodNutrition'],
       ['summaryBlock-periodBoardingPass', 'summaryBlock-periodMetro'],
     ],
+    [['image']],
   ],
 };
 
@@ -218,6 +223,7 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'text':
     case 'route':
     case 'summaryRoutes':
+    case 'image':
       return item.kind;
   }
 }
@@ -296,6 +302,9 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           'verse' in item.block ? item.block.verse : undefined,
           'quote' in item.block ? item.block.quote : undefined,
         ];
+      case 'image':
+        // As is, the default.
+        return [item.frame === 'none' ? undefined : item.frame];
       case 'text':
         return [];
     }
@@ -361,6 +370,15 @@ const tileEntries = (section: CatalogSectionId, items: readonly CatalogItem[]): 
  * found it redundant); templates that use it still read.
  */
 const OFFERED_DATE_FORMATS = DATE_FORMATS.filter((format) => format !== 'weekdayTime');
+
+/**
+ * A picture of the user's, chosen when its tile is tapped: as is, in a light frame and in a dark
+ * one (also chosen later with its color button).
+ */
+const IMAGE_ENTRIES: readonly Entry[] = tileEntries(
+  'creative',
+  IMAGE_FRAMES.map((frame) => ({ kind: 'image', image: SAMPLE_IMAGE, frame })),
+);
 
 /** Route lines, solid, solid with a glow, dashed and dotted. */
 function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {
@@ -542,6 +560,7 @@ export function activityCatalog(
     ...charts.flatMap((series) =>
       chartEntries(series, activity.averageHeartRate !== null, withZones),
     ),
+    ...IMAGE_ENTRIES,
     ...BRAND,
   ]);
 }
@@ -575,6 +594,7 @@ export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): 
       })),
     ),
     ...periodChartEntries(summary, autoBucket),
+    ...IMAGE_ENTRIES,
     ...BRAND,
   ]);
 }

@@ -30,6 +30,7 @@ import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { Activity } from '@/core/activity';
 import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
+import { FRAME_COLORS, type ImageBox, imageBox, SAMPLE_PICTURE } from '@/core/image-layer';
 import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
 import type { PhotoDrawing, Size } from '@/core/photo-placement';
 import { decodePolyline } from '@/core/polyline';
@@ -94,9 +95,20 @@ export interface PreparedLayer {
   readonly line?: HitLine;
 }
 
+/**
+ * A picture of the user's, by its key (see `image-layer.ts`): its size, known when it is picked,
+ * and the picture once decoded (`null` while it loads).
+ */
+export interface LayerImage {
+  readonly size: Size;
+  readonly image: SkImage | null;
+}
+
 /** What layers need to be filled in and measured. */
 export interface LayerContext {
   readonly data: EditorData;
+  /** The user's pictures, by key; none in the gallery, which shows a sample instead. */
+  readonly images?: ReadonlyMap<string, LayerImage>;
   readonly fonts: SkTypefaceFontProvider;
   readonly textContext: TextContext;
   /** Translates a label; `values` fill its placeholders, such as the chart title's unit. */
@@ -300,7 +312,7 @@ export function TemplateScene({
 /** Fills in and measures one layer, or `null` when it has nothing to show for this data. */
 function prepareLayer(
   layer: Layer,
-  { data, fonts, textContext, translate }: LayerContext,
+  { data, fonts, textContext, translate, images }: LayerContext,
   canvas: Size,
 ): PreparedLayer | null {
   const canvasWidth = canvas.width;
@@ -620,6 +632,23 @@ function prepareLayer(
       const block = prepareSummaryBlock(layer, data, { fonts, textContext, translate });
       return block === null ? null : { layer, ...block };
     }
+    case 'image': {
+      // A picture not known yet (the gallery's sample before it is decoded) shows as loading.
+      const picked = images?.get(layer.image);
+      const box = imageBox(picked?.size ?? SAMPLE_PICTURE, layer.frame);
+      return {
+        layer,
+        width: box.width,
+        height: box.height,
+        content: (
+          <PictureWidget
+            box={box}
+            frame={layer.frame === 'none' ? null : FRAME_COLORS[layer.frame]}
+            picture={picked?.image ?? null}
+          />
+        ),
+      };
+    }
     case 'logo': {
       const { width, height } = watermarkLayout(layer.variant);
       return {
@@ -630,6 +659,50 @@ function prepareLayer(
       };
     }
   }
+}
+
+/** Shown in a picture while it is decoded: a neutral gray, as a photo app's empty cell. */
+const LOADING_PICTURE = '#3A3A3C';
+
+/**
+ * A picture of the user's in its frame, lifted off the photo by a shadow. `picture` is the
+ * decoded image, `null` while it loads.
+ */
+function PictureWidget({
+  box,
+  frame,
+  picture,
+}: {
+  readonly box: ImageBox;
+  readonly frame: string | null;
+  readonly picture: SkImage | null;
+}) {
+  const rect = box.picture;
+  return (
+    <Group
+      layer={
+        <Paint>
+          <DropShadow />
+        </Paint>
+      }
+    >
+      {frame === null ? null : (
+        <Rect
+          x={-box.width / 2}
+          y={-box.height / 2}
+          width={box.width}
+          height={box.height}
+          color={frame}
+        />
+      )}
+      {picture === null ? (
+        <Rect {...rect} color={LOADING_PICTURE} />
+      ) : (
+        // Its proportions are the picture's: it fills its place without cropping.
+        <Image image={picture} rect={rect} fit="fill" sampling={PHOTO_SAMPLING} />
+      )}
+    </Group>
+  );
 }
 
 function preparedParagraph(layer: Layer, paragraph: SkParagraph): PreparedLayer {

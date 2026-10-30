@@ -47,3 +47,7 @@ distribute it. The AllRun name and logo are not licensed; all rights reserved.
 The sport icons drawn into images are [Material Symbols](https://fonts.google.com/icons) by Google,
 under the [Apache License 2.0](https://github.com/google/material-design-icons/blob/master/LICENSE)
 (`npm run icons` regenerates them).
+
+The sample photo of the photo widget (`assets/images/sample-picture.jpg`, cropped and resized) is
+from [Pexels](https://www.pexels.com/photo/33874841/), under the
+[Pexels License](https://www.pexels.com/license/).

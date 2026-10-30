@@ -1,8 +1,4 @@
 import { type SkImage, useImage } from '@shopify/react-native-skia';
-import {
-  launchImageLibraryAsync,
-  UIImagePickerPreferredAssetRepresentationMode,
-} from 'expo-image-picker';
 import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -66,9 +62,11 @@ import {
   CANVAS_FORMATS,
   type DesignBackground,
   type DesignLanguage,
+  type ImageFrame,
   type Layer,
   type Template,
 } from '@/core/template';
+import { canAddImage, isImageLayer, MAX_IMAGES, setLayerImage } from '@/core/image-layer';
 import {
   addLayer,
   canAddLayer,
@@ -109,6 +107,8 @@ import { Notice, useNotice } from '@/editor/notice';
 import { disposeLater } from '@/editor/paragraph-arena';
 import { photoDominantColor } from '@/editor/photo-color';
 import type { PickedPhoto } from '@/editor/photo-plan';
+import { pickFromLibrary } from '@/editor/pick-photo';
+import { usePictures } from '@/editor/use-pictures';
 import { preparePhoto } from '@/editor/prepare-photo';
 import {
   FLOATING_INK,
@@ -358,8 +358,23 @@ function EditorWorkspace({
   /** Free text being typed, committed as one undo step on "Done". */
   const [textDraft, setTextDraft] = useState<TextDraft | null>(null);
   const typing = textDraft !== null;
+  /**
+   * The user's pictures on the canvas (image layers). One that can't be opened leaves the design,
+   * as one undo step.
+   */
+  const pictures = usePictures(
+    template.layers.filter(isImageLayer).map((layer) => layer.image),
+    (key) => {
+      notice.show(t('editor.photoError'));
+      edit((current) => ({
+        ...current,
+        layers: current.layers.filter((layer) => !isImageLayer(layer) || layer.image !== key),
+      }));
+    },
+  );
   const layerContext: LayerContext = {
     data,
+    images: pictures.images,
     fonts,
     textContext: {
       unit,
@@ -545,8 +560,42 @@ function EditorWorkspace({
     closeEyedropper();
   };
 
+  /**
+   * Picks a photo from the library and passes its key to `onPicked` (nothing if the user cancels).
+   */
+  const pickPicture = (onPicked: (key: string) => void) => {
+    void (async () => {
+      try {
+        const key = await pictures.pick();
+        if (key !== null) {
+          onPicked(key);
+        }
+      } catch (error) {
+        logError('Could not open the photo library', error);
+        notice.show(t('editor.photoError'));
+      }
+    })();
+  };
+
+  /**
+   * Adds a picture of the user's in `frame`, picked from the library, on top of the others and
+   * selected; a design takes up to `MAX_IMAGES`.
+   */
+  const addPicture = (frame: ImageFrame) => {
+    setSheetOpen(false);
+    if (!canAddImage(template)) {
+      notice.show(t('editor.maxImages', { max: String(MAX_IMAGES) }));
+      return;
+    }
+    pickPicture((image) => addLayerNow({ kind: 'image', image, frame }));
+  };
+
+  /** Shows another picture in the image layer `id`, as one undo step. */
+  const changePicture = (id: string) =>
+    pickPicture((image) => edit((current) => setLayerImage(current, id, image)));
+
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
-  const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' }>) => {
+  const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' | 'image' }>) => {
     // The place needs the permission first (Android): asked now, the widget is added once named.
     if (
       ((item.kind === 'info' && item.field === 'activityPlace') ||
@@ -586,8 +635,8 @@ function EditorWorkspace({
   ) => {
     change((current) =>
       choice.kind === 'design'
-        ? applyDesign(current, choice.template)
-        : setLayers(current, choice.layers),
+        ? applyDesign(current, choice.template, defaultTemplate)
+        : setLayers(current, choice.layers, defaultTemplate),
     );
     setSelectedId(null);
     setTemplatesOpen(false);
@@ -627,6 +676,9 @@ function EditorWorkspace({
   const editLayerOf = (layer: Layer): (() => void) | undefined => {
     if (layer.kind === 'text') {
       return () => startTyping(editTextDraft(layer));
+    }
+    if (layer.kind === 'image') {
+      return () => changePicture(layer.id);
     }
     return chosenWordsOf(layer) === null ? undefined : () => setChoosingId(layer.id);
   };
@@ -692,15 +744,8 @@ function EditorWorkspace({
   const pickPhoto = async () => {
     setPhotoTools(false);
     try {
-      const result = await launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        // Keep the original file (HEIC included); preparePhoto re-encodes it once if needed,
-        // instead of the picker transcoding every photo.
-        preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Current,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        const picked = result.assets[0];
+      const picked = await pickFromLibrary();
+      if (picked !== null) {
         const id = nextPhotoId;
         setNextPhotoId(id + 1);
         setPhoto({ id, picked, editorUri: null, editorReencoded: false, exportUri: null });
@@ -836,6 +881,7 @@ function EditorWorkspace({
         language={language}
         onAdd={addNewLayer}
         onAddText={addText}
+        onAddImage={addPicture}
         onClose={() => setSheetOpen(false)}
       />
       <TemplateSheet
@@ -964,7 +1010,7 @@ function EditorWorkspace({
         style={{ position: 'absolute', top: insets.top + EDGE, right: EDGE }}
       >
         <EditorSideMenu
-          onAddImage={comingSoon}
+          onAddImage={() => addPicture('none')}
           onDepth={comingSoon}
           format={design.format}
           formatsOpen={formatsOpen}
@@ -1005,7 +1051,8 @@ function EditorWorkspace({
                 edit((current) => removeLayer(current, selected.id));
                 setSelectedId(null);
               },
-              canDuplicate: canAddLayer(template),
+              canDuplicate:
+                canAddLayer(template) && (!isImageLayer(selected) || canAddImage(template)),
               canBringToFront: canMoveLayer(template, selected.id, 'front'),
               canSendToBack: canMoveLayer(template, selected.id, 'back'),
             }}

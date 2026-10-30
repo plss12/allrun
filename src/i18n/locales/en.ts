@@ -74,6 +74,7 @@ export const en = {
     addImage: 'Add image',
     depth: 'Depth effect',
     comingSoon: 'Coming soon',
+    maxImages: 'A design takes up to {{max}} photos',
     collages: 'Collages',
     designs: 'Designs',
     ratio: 'Ratio',
@@ -120,6 +121,7 @@ export const en = {
     activityPlace: 'Place',
     periodName: 'Period',
     text: 'Your own text',
+    image: 'Your photo',
     route: 'Route',
     summaryRoutes: 'Routes of the period',
     summaryChart: 'Bar chart',
@@ -685,6 +687,11 @@ export const en = {
       light: 'Light',
       dark: 'Dark',
       color: 'Color',
+    },
+    frames: {
+      none: 'No frame',
+      light: 'Light',
+      dark: 'Dark',
     },
   },
   gallery: {

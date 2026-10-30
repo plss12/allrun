@@ -1,7 +1,8 @@
 import { makeActivity } from '@/test-utils/make-activity';
 import { makeSummary } from '@/test-utils/make-summary';
 
-import { defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
+import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
+import { addLayer } from './template-edit';
 import {
   isSaved,
   parseSavedTemplate,
@@ -20,6 +21,14 @@ describe('saveDesign', () => {
   it('keeps the design as it is under a new id', () => {
     const saved = saveDesign(story, 'mine-1', at('10:00'));
     expect(saved).toEqual({ savedAt: at('10:00'), template: { ...story, id: 'mine-1' } });
+  });
+
+  it("leaves out the user's pictures, which belong to the image, not to the design", () => {
+    const picture = newLayer({ kind: 'image', image: 'picked-1', frame: 'none' }, 'image', 'story');
+    const withPicture = addLayer(story, picture);
+    const saved = saveDesign(withPicture, 'mine-1', at('10:00'));
+    expect(saved.template.layers).toEqual(story.layers);
+    expect(isSaved([saved], withPicture)).toBe(true);
   });
 
   it('round-trips through JSON and validation', () => {

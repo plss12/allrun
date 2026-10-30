@@ -325,6 +325,14 @@ export function newLayer(
         transform: centered(layout.logo.scale),
         opacity: 0.95,
       };
+    case 'image':
+      // As big in every format as in a story, next to the other widgets.
+      return {
+        ...item,
+        id,
+        transform: centered(layout.scale / LAYOUTS.story.scale),
+        opacity: 1,
+      };
     case 'activityBlock':
       // Blocks are designed for a story, and shrink with the other widgets in smaller formats,
       // but the camera, which is as big as the canvas. Each comes in the font that suits it, not
@@ -390,6 +398,7 @@ function textFont(layer: Layer): FontId | null {
     case 'route':
     case 'summaryRoutes':
     case 'logo':
+    case 'image':
       return null;
   }
 }

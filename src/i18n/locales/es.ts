@@ -73,6 +73,7 @@ export const es: Translations = {
     addImage: 'Añadir imagen',
     depth: 'Efecto de profundidad',
     comingSoon: 'Llegará pronto',
+    maxImages: 'Un diseño admite hasta {{max}} fotos',
     collages: 'Collages',
     designs: 'Diseños',
     ratio: 'Proporción',
@@ -119,6 +120,7 @@ export const es: Translations = {
     activityPlace: 'Lugar',
     periodName: 'Periodo',
     text: 'Texto propio',
+    image: 'Tu foto',
     route: 'Ruta',
     summaryRoutes: 'Rutas del periodo',
     summaryChart: 'Gráfico de barras',
@@ -667,6 +669,11 @@ export const es: Translations = {
       light: 'Claro',
       dark: 'Oscuro',
       color: 'Color',
+    },
+    frames: {
+      none: 'Sin marco',
+      light: 'Claro',
+      dark: 'Oscuro',
     },
   },
   gallery: {

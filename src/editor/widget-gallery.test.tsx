@@ -197,6 +197,8 @@ describe('gallerySections', () => {
     const plain = activityRows(false, false);
     expect(plain).toContainEqual(['block-verified', 'block-camera']);
     expect(plain).toContainEqual(['block-boardingPass']);
+    // The user's pictures go last, alone: a wildcard goes up beside a tile, never down.
+    expect(plain.at(-1)).toEqual(['image']);
     // With it, the camera is left alone at the end of the apps: the pass goes up beside it.
     expect(activityRows(true, false)).toContainEqual(['block-camera', 'block-boardingPass']);
     // With its splits, the camera has its note, and the splits are left alone among the races.
@@ -327,6 +329,21 @@ describe('gallerySections', () => {
       expect(row.height).toBeLessThanOrEqual(row.width);
     }
     expect(heightOf('block-bigRoute')).toBeGreaterThan(base);
+  });
+
+  it("gives the user's pictures a row as tall as square tiles, the photo over its hint", () => {
+    const creative = activitySections().find((section) => section.id === 'creative');
+    const row = (creative?.rows ?? []).find((candidate) =>
+      candidate.widgets.some((widget) => widget.key === 'image'),
+    );
+    const full = SCREEN - 2 * gallery.GALLERY_PADDING;
+    const half = Math.floor((full - gallery.GALLERY_GAP) / 2);
+    expect(row?.height).toBe(half);
+    // Room for the dots and the hint over them, under the sample photo.
+    const room = half - gallery.GALLERY_DOTS_HEIGHT - gallery.GALLERY_HINT_HEIGHT;
+    for (const page of row?.widgets[0].pages ?? []) {
+      expect(page.prepared.height * page.scale).toBeLessThanOrEqual(room);
+    }
   });
 
   it('lays the name and the monogram side by side, and both together under them, as wide', () => {

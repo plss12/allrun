@@ -13,8 +13,9 @@ import {
   View,
 } from 'react-native';
 
+import { SAMPLE_IMAGE } from '@/core/image-layer';
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
-import type { CanvasFormat, DesignLanguage, FontId } from '@/core/template';
+import type { CanvasFormat, DesignLanguage, FontId, ImageFrame } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
@@ -25,6 +26,7 @@ import { SheetFrame } from './sheet-frame';
 import type { LayerContext } from './template-scene';
 import {
   GALLERY_DOTS_HEIGHT,
+  GALLERY_HINT_HEIGHT,
   GALLERY_GAP,
   GALLERY_PADDING,
   type GalleryPage,
@@ -42,10 +44,12 @@ interface LayerSheetProps {
   readonly format: CanvasFormat;
   readonly font: FontId;
   readonly layerContext: LayerContext;
-  /** Adds a widget; free text goes through `onAddText` instead. */
-  readonly onAdd: (item: Exclude<NewLayer, { kind: 'text' }>) => void;
+  /** Adds a widget; free text and pictures go through `onAddText` and `onAddImage` instead. */
+  readonly onAdd: (item: Exclude<NewLayer, { kind: 'text' | 'image' }>) => void;
   /** Starts typing a new free text, straight on the canvas, once the sheet has closed. */
   readonly onAddText: () => void;
+  /** Opens the photo library for a picture in `frame`, once the sheet has closed. */
+  readonly onAddImage: (frame: ImageFrame) => void;
   readonly onClose: () => void;
 }
 
@@ -89,7 +93,7 @@ function choiceOf(item: CatalogItem): Choice | null {
 function chosenLayer(
   kind: Choice['kind'],
   block: ChoiceBlock,
-): Exclude<NewLayer, { kind: 'text' }> {
+): Exclude<NewLayer, { kind: 'text' | 'image' }> {
   return kind === 'summaryBlock' && block.design !== 'chat'
     ? { kind, block }
     : { kind: 'activityBlock', block };
@@ -168,6 +172,7 @@ export function LayerSheet({
   language,
   onAdd,
   onAddText,
+  onAddImage,
   onClose,
 }: LayerSheetProps) {
   const { t } = useTranslation();
@@ -177,15 +182,15 @@ export function LayerSheet({
     setChoosing(null);
     onClose();
   };
-  // iOS opens no keyboard while a sheet is on screen: free text starts once it has slid away.
-  // Android has no dismiss callback, and no such limit.
-  const textPending = useRef(false);
-  const addText = () => {
+  // iOS opens no keyboard nor the photo library while a sheet is on screen: free text and
+  // pictures start once it has slid away. Android has no dismiss callback, and no such limit.
+  const pending = useRef<(() => void) | null>(null);
+  const afterClosing = (start: () => void) => {
     close();
     if (Platform.OS === 'ios') {
-      textPending.current = true;
+      pending.current = start;
     } else {
-      onAddText();
+      start();
     }
   };
   const textSample = t('gallery.textSample');
@@ -198,6 +203,8 @@ export function LayerSheet({
       font,
       layerContext.textContext.unit,
       layerContext.textContext.locale,
+      // The sample picture, once decoded.
+      layerContext.images?.get(SAMPLE_IMAGE)?.image == null ? '' : 'sample',
       window.width,
       textSample,
     ].join('|'),
@@ -215,10 +222,9 @@ export function LayerSheet({
       // Android's back button leaves a list for the gallery first.
       onRequestClose={() => (choosing === null ? close() : setChoosing(null))}
       onDismiss={() => {
-        if (textPending.current) {
-          textPending.current = false;
-          onAddText();
-        }
+        const start = pending.current;
+        pending.current = null;
+        start?.();
       }}
     >
       {choosing !== null ? (
@@ -269,15 +275,23 @@ export function LayerSheet({
                     width={row.width}
                     height={row.height}
                     label={(page) => pageLabel(page, layerContext, (key) => t(key))}
-                    hint={choiceOf(widget.pages[0].item) === null ? undefined : t('gallery.choose')}
+                    hint={
+                      choiceOf(widget.pages[0].item) === null &&
+                      widget.pages[0].item.kind !== 'image'
+                        ? undefined
+                        : t('gallery.choose')
+                    }
                     onPress={(page) => {
-                      const choice = choiceOf(page.item);
+                      const { item } = page;
+                      const choice = choiceOf(item);
                       if (choice !== null) {
                         setChoosing(choice);
-                      } else if (page.item.kind === 'text') {
-                        addText();
+                      } else if (item.kind === 'text') {
+                        afterClosing(onAddText);
+                      } else if (item.kind === 'image') {
+                        afterClosing(() => onAddImage(item.frame));
                       } else {
-                        onAdd(page.item);
+                        onAdd(item);
                       }
                     }}
                   />
@@ -351,6 +365,8 @@ function pageLabel(
         ];
       case 'logo':
         return [t('widgets.allrunLogo'), t(`gallery.variants.${item.variant}`)];
+      case 'image':
+        return [t('widgets.image'), t(`style.frames.${item.frame}`)];
       case 'activityBlock': {
         const { block } = item;
         const name: string = t(`widgets.blocks.${block.design}`);
@@ -436,6 +452,16 @@ function WidgetTile({
   // Pages as wide as the inside of the card's edge, which is what the pager pages by.
   const pageWidth = width - 2 * CARD_BORDER;
   const pageHeight = height - 2 * CARD_BORDER;
+  /**
+   * A picture's sample photo leaves room for its hint over the dots, which would cover it (see
+   * `GALLERY_HINT_HEIGHT`); other widgets sit as high as in the tiles next to them, the hint going
+   * where the dots would, or over them without taking room.
+   */
+  const canvasHeight = widget.pages.some(({ item }) => item.kind === 'image')
+    ? pageHeight - GALLERY_DOTS_HEIGHT - GALLERY_HINT_HEIGHT
+    : several || hint !== undefined
+      ? pageHeight - GALLERY_DOTS_HEIGHT
+      : pageHeight;
   return (
     <View
       style={{
@@ -475,15 +501,7 @@ function WidgetTile({
               // Only the page shown and those beside it, which a swipe brings in, have a canvas:
               // each one holds GPU memory, and a gallery has over a hundred pages.
               Math.abs(i - shown) <= 1 ? (
-                <PageCanvas
-                  page={page}
-                  width={pageWidth}
-                  height={
-                    // The hint goes where the dots would, or over them without taking room: the
-                    // widget sits as high as in the tiles next to it.
-                    several || hint !== undefined ? pageHeight - GALLERY_DOTS_HEIGHT : pageHeight
-                  }
-                />
+                <PageCanvas page={page} width={pageWidth} height={canvasHeight} />
               ) : null
             }
           </Pressable>

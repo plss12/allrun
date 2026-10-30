@@ -1,3 +1,4 @@
+import { isImageLayer, withoutImages } from './image-layer';
 import type { LayerTransform } from './layer-transform';
 import { COVER_PLACEMENT, type PhotoPlacement, samePlacement } from './photo-placement';
 import {
@@ -84,23 +85,49 @@ export function editLayers(
   return edited === template ? design : { ...design, layers: edited.layers };
 }
 
-/** Replaces the widgets (with a template's, or `null` for the default ones). */
-export function setLayers(design: EditorDesign, layers: EditorLayers): EditorDesign {
-  return layers === design.layers ? design : { ...design, layers };
+/**
+ * Replaces the widgets (with a template's, or `null` for the default ones), but the user's
+ * pictures, which stay on top: designs have none (see `keepingImages`).
+ */
+export function setLayers(
+  design: EditorDesign,
+  layers: EditorLayers,
+  defaultTemplate: DefaultTemplate,
+): EditorDesign {
+  const next = keepingImages(design, layers, defaultTemplate);
+  return next === design.layers ? design : { ...design, layers: next };
 }
 
 /**
- * Applies a saved design: its widgets, where its photo goes, its background, and its unit and
- * language (the device's and the app's when it has none; the format is the same: the designs
- * offered are the format's).
+ * `layers` with the pictures of `design` over them. Designs never keep pictures, which belong to
+ * the image being made, so choosing another design keeps the user's. With pictures, the default
+ * widgets (`null`) become the format's default layout, under them. Time O(n) for n layers.
+ */
+function keepingImages(
+  design: EditorDesign,
+  layers: EditorLayers,
+  defaultTemplate: DefaultTemplate,
+): EditorLayers {
+  const images = (design.layers ?? []).filter(isImageLayer);
+  if (images.length === 0) {
+    return layers;
+  }
+  return [...withoutImages(layers ?? defaultTemplate(design.format).layers), ...images];
+}
+
+/**
+ * Applies a saved design: its widgets (the user's pictures stay on top, see `keepingImages`),
+ * where its photo goes, its background, and its unit and language (the device's and the app's
+ * when it has none; the format is the same: the designs offered are the format's).
  */
 export function applyDesign(
   design: EditorDesign,
   saved: Pick<Template, 'layers' | 'photo' | 'background' | 'units' | 'language'>,
+  defaultTemplate: DefaultTemplate,
 ): EditorDesign {
   return {
     ...design,
-    layers: saved.layers,
+    layers: keepingImages(design, saved.layers, defaultTemplate),
     photo: saved.photo,
     background: saved.background,
     units: saved.units ?? null,

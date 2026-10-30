@@ -11,6 +11,7 @@ import {
   setBlockOptions,
   setChartOptions,
   setDataLabels,
+  setImageFrame,
   setLayerColor,
   setLogoOptions,
   setStrokeWidth,
@@ -21,6 +22,7 @@ import {
 import {
   BACKDROPS,
   FONT_IDS,
+  IMAGE_FRAMES,
   isCapsOnly,
   type FontId,
   LETTER_SPACINGS,
@@ -45,6 +47,7 @@ type LineLayer = Extract<Layer, { kind: 'route' | 'summaryRoutes' }>;
 /** A period's chart or an activity's: they share how their texts look. */
 type AnyChartLayer = Extract<Layer, { kind: 'summaryChart' | 'activityChart' }>;
 type LogoLayer = Extract<Layer, { kind: 'logo' }>;
+type ImageLayer = Extract<Layer, { kind: 'image' }>;
 type BlockLayer = Extract<Layer, { kind: 'activityBlock' | 'summaryBlock' }>;
 
 /** A tool of the widget column that opens a panel: its letters (or a route's line), or its color. */
@@ -63,10 +66,10 @@ export interface WidgetTools {
   readonly lettering: 'text' | 'line' | null;
   /**
    * What the color button opens: the colors and the opacity; the logo's tones (only the brand's
-   * colors) and the opacity; or, for a replica of an app, which keeps the app's look, only the
-   * opacity.
+   * colors) and the opacity; a picture's frames and the opacity; or, for a replica of an app,
+   * which keeps the app's look, only the opacity.
    */
-  readonly color: 'colors' | 'tones' | 'opacity';
+  readonly color: 'colors' | 'tones' | 'frames' | 'opacity';
   /**
    * What goes behind its text, and how to change it, when it can have one: in the color panel,
    * under the opacity.
@@ -84,6 +87,8 @@ export function widgetTools(layer: Layer): WidgetTools {
       return { lettering: 'line', color: 'colors', backdrop: null };
     case 'logo':
       return { lettering: null, color: 'tones', backdrop: null };
+    case 'image':
+      return { lettering: null, color: 'frames', backdrop: null };
     case 'activityBlock':
     case 'summaryBlock': {
       const replica =
@@ -176,6 +181,10 @@ export function StylePanel({
           return layer.kind === 'logo'
             ? [<LogoRow key="tones" layer={layer} onChange={onChange} />, opacity]
             : [opacity];
+        case 'frames':
+          return layer.kind === 'image'
+            ? [<FrameRow key="frames" layer={layer} onChange={onChange} />, opacity]
+            : [opacity];
         case 'opacity':
           return [opacity];
       }
@@ -183,7 +192,7 @@ export function StylePanel({
     if (layer.kind === 'route' || layer.kind === 'summaryRoutes') {
       return [<LineRow key="line" layer={layer} onChange={onChange} />];
     }
-    if (tools.lettering !== 'text' || layer.kind === 'logo') {
+    if (tools.lettering !== 'text' || layer.kind === 'logo' || layer.kind === 'image') {
       return [];
     }
     const { format, change } = formatOf(layer);
@@ -502,6 +511,29 @@ function LogoRow({
           label={t(`style.tones.${tone}`)}
           selected={layer.tone === tone}
           onPress={() => onChange((template) => setLogoOptions(template, layer.id, { tone }))}
+        />
+      ))}
+    </Row>
+  );
+}
+
+/** A picture's frame: none, light or dark (the brand's Chalk and Night Ink). */
+function FrameRow({
+  layer,
+  onChange,
+}: {
+  readonly layer: ImageLayer;
+  readonly onChange: (change: StyleChange) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Row>
+      {IMAGE_FRAMES.map((frame) => (
+        <Chip
+          key={frame}
+          label={t(`style.frames.${frame}`)}
+          selected={layer.frame === frame}
+          onPress={() => onChange((template) => setImageFrame(template, layer.id, frame))}
         />
       ))}
     </Row>

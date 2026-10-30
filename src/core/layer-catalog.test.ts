@@ -125,7 +125,7 @@ describe('activityCatalog', () => {
   });
 
   it('follows with the creative widgets by theme, alike designs in one tile', () => {
-    // Words, the phone's apps and things of paper.
+    // Words, the phone's apps, things of paper and the user's pictures.
     expect(tileKeys(trail, 'creative')).toEqual([
       'block-quote',
       'block-verse',
@@ -140,7 +140,10 @@ describe('activityCatalog', () => {
       'block-receipt',
       'block-nutrition',
       'block-boardingPass',
+      'image',
     ]);
+    // A picture of the user's, as is and then in each frame; chosen when the tile is tapped.
+    expect(variantKeys(trail, 'image')).toEqual(['image', 'image-light', 'image-dark']);
     // The quote and the verse with their first phrase: the others are chosen from a list.
     expect(variantKeys(trail, 'block-quote')).toEqual(['block-quote-kipchoge']);
     expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
@@ -163,7 +166,7 @@ describe('activityCatalog', () => {
     // camera; then the bars and the ladder together and the race on TV apart; the laps' two, with
     // its laps.
     const withSplits = activityCatalog(makeActivity(), ['splits']);
-    expect(tileKeys(withSplits, 'creative').slice(-7)).toEqual([
+    expect(tileKeys(withSplits, 'creative').slice(-8)).toEqual([
       'block-camera',
       'block-notes',
       'block-grandPrix',
@@ -171,6 +174,7 @@ describe('activityCatalog', () => {
       'block-receipt',
       'block-nutrition',
       'block-boardingPass',
+      'image',
     ]);
     expect(variantKeys(withSplits, 'block-splits')).toEqual([
       'block-splits-splitBars',
@@ -418,6 +422,7 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodNutrition',
       'summaryBlock-periodBoardingPass',
       'summaryBlock-periodMetro',
+      'image',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',
