@@ -39,7 +39,8 @@ const DATA_GAP = 12;
 /**
  * An activity in the gallery, as wide as the screen: its day and sport on top, its route (trimmed
  * at both ends, as in the images) or, without one, its sport's icon, filling the card, and its
- * three main data over it at the bottom left, where a map will lie under them (ADR 009).
+ * three main data over it at the bottom left, where a map will lie under them (ADR 009). A tap
+ * opens the editor with it, or does what `onPress` says (the editor choosing another activity).
  */
 export function ActivityCard({
   activity,
@@ -47,12 +48,15 @@ export function ActivityCard({
   today,
   unit,
   locale,
+  onPress = () =>
+    router.push({ pathname: '/editor', params: { mode: 'activity', activityId: activity.id } }),
 }: {
   readonly activity: Activity;
   readonly width: number;
   readonly today: LocalDate;
   readonly unit: DistanceUnit;
   readonly locale: string;
+  readonly onPress?: () => void;
 }) {
   const { t } = useTranslation();
   const height = Math.round(width * ASPECT);
@@ -83,9 +87,7 @@ export function ActivityCard({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={[day, t(`modalities.${activity.sportModality}`), ...data].join(', ')}
-      onPress={() =>
-        router.push({ pathname: '/editor', params: { mode: 'activity', activityId: activity.id } })
-      }
+      onPress={onPress}
       style={({ pressed }) => ({
         ...cardSurface(20),
         width,

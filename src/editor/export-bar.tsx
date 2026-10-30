@@ -15,16 +15,19 @@ import type { ExportState } from './use-export';
 const DONE_MS = 2000;
 
 /**
- * What to do with the exported image, in the row under the canvas: save it to the photo library,
- * share it, or copy it (how a transparent sticker reaches an Instagram story). While the image is
- * being prepared the row says so; if that failed, it offers to try again.
+ * What to do with the exported image, in the row under the canvas, in this order (the user's): post
+ * it as an Instagram story (`onStory`, coming soon: ADR 009), share it, save it to the photo
+ * library, or copy it (how a transparent sticker reaches a story meanwhile). While the image is being prepared the row says
+ * so; if that failed, it offers to try again.
  */
 export function ExportBar({
   state,
   onRetry,
+  onStory,
 }: {
   readonly state: ExportState;
   readonly onRetry: () => void;
+  readonly onStory: () => void;
 }) {
   const { t } = useTranslation();
   /** An action is running: the others wait. */
@@ -121,6 +124,13 @@ export function ExportBar({
 
   return (
     <View style={{ flexDirection: 'row', gap: 6 }}>
+      <ActionTile icon="instagram" label={t('export.story')} onPress={onStory} disabled={working} />
+      <ActionTile
+        icon={{ ios: 'square.and.arrow.up', android: 'share' }}
+        label={t('export.share')}
+        onPress={() => void share()}
+        disabled={working}
+      />
       <ActionTile
         icon={
           done === 'saved'
@@ -129,12 +139,6 @@ export function ExportBar({
         }
         label={done === 'saved' ? t('export.saved') : t('export.save')}
         onPress={() => void save()}
-        disabled={working}
-      />
-      <ActionTile
-        icon={{ ios: 'square.and.arrow.up', android: 'share' }}
-        label={t('export.share')}
-        onPress={() => void share()}
         disabled={working}
       />
       <ActionTile

@@ -2,12 +2,10 @@
 
 Date: 2026-10-18
 
-Status: partly superseded by ADR 009 as the redesign is built. Since R3a the editor is one
-full-screen step, and undo covers the whole design (format, photo placement, background and
-widgets); a format change keeps the widgets. Since R3b the photo moves freely and may leave the
-canvas partly empty, over a background. "Two steps on one canvas", "Undo, redo and Start over",
-"Controls and header" and the photo always covering the canvas (in "Gestures") describe the
-editor before that.
+Status: partly superseded by ADR 011 (the one-step editor of the redesign, ADR 009): "Two steps
+on one canvas", "Undo, redo and Start over", "Controls and header", the photo always covering the
+canvas (in "Gestures") and the style options (in "Style") describe the editor before it. The
+gestures, adding widgets from the gallery and typing over the photo still hold.
 
 ## Context
 

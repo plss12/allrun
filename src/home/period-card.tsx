@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native
 
 import type { Activity } from '@/core/activity';
 import type { DateRange, LocalDate } from '@/core/dates';
+import type { SportFamily } from '@/core/sports';
 import {
   bucketForPeriod,
   customRangeLimits,
@@ -39,10 +40,33 @@ const PAGE_HEIGHT = 262;
 const CHART_HEIGHT = 140;
 const PADDING = 16;
 
+/** A period and its sports, as a page of a period's card offers it. */
+export interface PeriodChoice {
+  readonly kind: PeriodKind;
+  readonly range: DateRange;
+  /** The sports summed up; empty for all of them. */
+  readonly families: readonly SportFamily[];
+}
+
+/** Opens the editor with a period and its sports. */
+function openEditor({ kind, range, families }: PeriodChoice): void {
+  router.push({
+    pathname: '/editor',
+    params: {
+      mode: 'summary',
+      kind,
+      start: range.start,
+      end: range.end,
+      families: families.join(','),
+    },
+  });
+}
+
 /**
  * A period's summary on the home screen: this week, month or year (stepping back with the
  * arrows) or a custom range, scrolling sideways through all sports and then each one done in
- * it. A page opens the editor with that period and sport.
+ * it. A page opens the editor with that period and sport, or does what `onChoose` says (the
+ * editor choosing another period).
  */
 export function PeriodCard({
   kind,
@@ -50,12 +74,14 @@ export function PeriodCard({
   today,
   unit,
   locale,
+  onChoose = openEditor,
 }: {
   readonly kind: PeriodKind;
   readonly width: number;
   readonly today: LocalDate;
   readonly unit: DistanceUnit;
   readonly locale: string;
+  readonly onChoose?: (choice: PeriodChoice) => void;
 }) {
   const { t } = useTranslation();
   const source = useActivitySource();
@@ -83,7 +109,10 @@ export function PeriodCard({
     >
       {kind === 'custom' ? (
         <View style={{ padding: PADDING, paddingBottom: 0, gap: 12 }}>
-          <Text style={{ color: colors.label, fontSize: 17, fontWeight: '700' }}>
+          {/* Centered, as the other periods' names between their arrows. */}
+          <Text
+            style={{ color: colors.label, fontSize: 17, fontWeight: '700', textAlign: 'center' }}
+          >
             {t('home.periods.custom')}
           </Text>
           <DateRangeField
@@ -153,6 +182,7 @@ export function PeriodCard({
           onPage={setPage}
           unit={unit}
           locale={locale}
+          onChoose={onChoose}
         />
       )}
     </View>
@@ -168,6 +198,7 @@ function Pages({
   onPage,
   unit,
   locale,
+  onChoose,
 }: {
   readonly kind: PeriodKind;
   readonly range: DateRange;
@@ -177,6 +208,7 @@ function Pages({
   readonly onPage: (page: number) => void;
   readonly unit: DistanceUnit;
   readonly locale: string;
+  readonly onChoose: (choice: PeriodChoice) => void;
 }) {
   const pages = summaryPages(activities, range);
   return (
@@ -208,6 +240,7 @@ function Pages({
             width={width}
             unit={unit}
             locale={locale}
+            onChoose={onChoose}
           />
         )}
       />
@@ -243,6 +276,7 @@ function SportPage({
   width,
   unit,
   locale,
+  onChoose,
 }: {
   readonly kind: PeriodKind;
   readonly range: DateRange;
@@ -251,6 +285,7 @@ function SportPage({
   readonly width: number;
   readonly unit: DistanceUnit;
   readonly locale: string;
+  readonly onChoose: (choice: PeriodChoice) => void;
 }) {
   const { t } = useTranslation();
   const filter = sport === 'all' ? {} : { families: [sport] };
@@ -268,18 +303,7 @@ function SportPage({
       accessibilityRole="button"
       accessibilityLabel={name}
       disabled={empty}
-      onPress={() =>
-        router.push({
-          pathname: '/editor',
-          params: {
-            mode: 'summary',
-            kind,
-            start: range.start,
-            end: range.end,
-            families: sport === 'all' ? '' : sport,
-          },
-        })
-      }
+      onPress={() => onChoose({ kind, range, families: sport === 'all' ? [] : [sport] })}
       style={({ pressed }) => ({
         width,
         height: PAGE_HEIGHT,

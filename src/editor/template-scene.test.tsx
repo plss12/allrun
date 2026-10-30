@@ -128,6 +128,29 @@ function maxAlpha(image: SkImage): number {
 }
 
 describe('prepareLayers', () => {
+  it('leaves out, without removing them, the widgets the data has nothing for', () => {
+    // A design made with a run with its route, filled with a session without one (switching the
+    // activity keeps the design): the route hides, and comes back with an activity that has one.
+    const template = defaultActivityTemplate(activity, 'story');
+    expect(template.layers.some((layer) => layer.kind === 'route')).toBe(true);
+    const context = (shown: typeof activity): LayerContext => ({
+      data: { mode: 'activity', activity: shown, detail: null, place: null, zones: null },
+      fonts: interFonts(),
+      textContext: {
+        unit: 'km',
+        locale: 'en',
+        durationUnits: TEST_DURATION_UNITS,
+        unitLabel: testUnitLabel,
+      },
+      translate: (key) => key,
+    });
+    const indoors = { ...activity, routePolyline: null };
+    const kinds = (shown: typeof activity) =>
+      scene.prepareLayers(template, context(shown)).map(({ layer }) => layer.kind);
+    expect(kinds(indoors)).not.toContain('route');
+    expect(kinds(activity)).toContain('route');
+  });
+
   it('shrinks a long text to its maximum width on one line instead of wrapping it', () => {
     const template = defaultActivityTemplate(activity, 'story');
     const name = template.layers.find((layer) => layer.id === 'name');

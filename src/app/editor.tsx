@@ -14,6 +14,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
+import type { Activity } from '@/core/activity';
 import { sportIcon } from '@/core/activity-block';
 import { availableActivityCharts } from '@/core/activity-charts';
 import { customRange } from '@/core/dates';
@@ -84,12 +85,14 @@ import {
   type TextDraft,
 } from '@/core/text-draft';
 import { useActivitySource } from '@/data/activity-source';
+import type { ActivitySource } from '@/sources/activity-source';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
 import { ColorMenu } from '@/editor/color-menu';
 import { Eyedropper } from '@/editor/eyedropper';
 import { snapshotDesign } from '@/editor/eyedropper-snapshot';
 import { EditorCanvas } from '@/editor/editor-canvas';
+import { DataSheet } from '@/editor/data-sheet';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar } from '@/editor/editor-top-bar';
 import { ExportBar } from '@/editor/export-bar';
@@ -194,45 +197,62 @@ export default function Editor() {
   return <EditorScreen params={params.data} />;
 }
 
-function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema> }) {
+/** What the editor shows: one activity, or a period of some sports (see `paramsSchema`). */
+type EditorRequest = z.infer<typeof paramsSchema>;
+
+/**
+ * Loads what the editor fills its design with.
+ *
+ * @throws ActivityNotFoundError for an activity that isn't there; the source's errors otherwise.
+ */
+async function loadEditorData(source: ActivitySource, params: EditorRequest): Promise<EditorData> {
+  if (params.mode === 'activity') {
+    // The charts' data comes along; without it the editor still works, just without charts.
+    const [activity, detail, zones] = await Promise.all([
+      source.getActivity(params.activityId),
+      source.getActivityDetail(params.activityId).catch((error: unknown) => {
+        logError('Could not load the activity detail for its charts', error);
+        return null;
+      }),
+      // Without them the heart rate chart just has no zones.
+      source.getHeartRateZones().catch((error: unknown) => {
+        logError('Could not load the heart rate zones', error);
+        return null;
+      }),
+    ]);
+    if (activity === null) {
+      throw new ActivityNotFoundError(`No activity with id ${params.activityId}`);
+    }
+    // Its place is named once the editor is open: it doesn't hold up the loading.
+    return { mode: 'activity', activity, detail, place: null, zones };
+  }
+  const range = customRange(params.start, params.end);
+  const activities = await source.listInRange(range);
+  const filter = params.families.length === 0 ? {} : { families: params.families };
+  const selected = selectActivities(activities, range, filter);
+  return {
+    mode: 'summary',
+    kind: params.kind,
+    summary: summarize(selected, range),
+    activities: selected,
+    bucketSize: bucketForPeriod(params.kind, range),
+    families: params.families,
+    current: isCurrentPeriod(params.kind, range, todayLocal()),
+  };
+}
+
+function EditorScreen({ params }: { readonly params: EditorRequest }) {
   const { t } = useTranslation();
   const source = useActivitySource();
   const fonts = useEditorFonts();
-  const data = useAsync(async (): Promise<EditorData> => {
-    if (params.mode === 'activity') {
-      // The charts' data comes along; without it the editor still works, just without charts.
-      const [activity, detail, zones] = await Promise.all([
-        source.getActivity(params.activityId),
-        source.getActivityDetail(params.activityId).catch((error: unknown) => {
-          logError('Could not load the activity detail for its charts', error);
-          return null;
-        }),
-        // Without them the heart rate chart just has no zones.
-        source.getHeartRateZones().catch((error: unknown) => {
-          logError('Could not load the heart rate zones', error);
-          return null;
-        }),
-      ]);
-      if (activity === null) {
-        throw new ActivityNotFoundError(`No activity with id ${params.activityId}`);
-      }
-      // Its place is named once the editor is open: it doesn't hold up the loading.
-      return { mode: 'activity', activity, detail, place: null, zones };
-    }
-    const range = customRange(params.start, params.end);
-    const activities = await source.listInRange(range);
-    const filter = params.families.length === 0 ? {} : { families: params.families };
-    const selected = selectActivities(activities, range, filter);
-    return {
-      mode: 'summary',
-      kind: params.kind,
-      summary: summarize(selected, range),
-      activities: selected,
-      bucketSize: bucketForPeriod(params.kind, range),
-      families: params.families,
-      current: isCurrentPeriod(params.kind, range, todayLocal()),
-    };
-  }, JSON.stringify(params));
+  const data = useAsync(() => loadEditorData(source, params), JSON.stringify(params));
+  /**
+   * Another activity or period chosen in the editor, which keeps the design: loaded without
+   * leaving the workspace, which shows the data it had meanwhile.
+   */
+  const [switched, setSwitched] = useState<EditorData | null>(null);
+  const switchTo = async (request: EditorRequest) =>
+    setSwitched(await loadEditorData(source, request));
 
   if (data.status === 'loading' || fonts === null) {
     return <LoadingView />;
@@ -244,7 +264,7 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
       <ErrorView message={t('editor.error')} onRetry={data.retry} />
     );
   }
-  return <EditorWorkspace data={data.data} fonts={fonts} />;
+  return <EditorWorkspace data={switched ?? data.data} fonts={fonts} onSwitch={switchTo} />;
 }
 
 /**
@@ -257,9 +277,12 @@ function EditorScreen({ params }: { readonly params: z.infer<typeof paramsSchema
 function EditorWorkspace({
   data: loaded,
   fonts,
+  onSwitch,
 }: {
   readonly data: EditorData;
   readonly fonts: NonNullable<ReturnType<typeof useEditorFonts>>;
+  /** Fills the design with another activity or period; rejects if it can't be loaded. */
+  readonly onSwitch: (request: EditorRequest) => Promise<void>;
 }) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -277,9 +300,22 @@ function EditorWorkspace({
         : Promise.resolve(UNKNOWN_PLACE),
     loaded.mode === 'activity' ? loaded.activity.id : 'summary',
   );
-  const [askedPlace, setAskedPlace] = useState<PlaceLookup | null>(null);
+  /** The place named once asked for, of the activity it was asked for (the design may switch). */
+  const [askedPlace, setAskedPlace] = useState<{
+    readonly id: string;
+    readonly lookup: PlaceLookup;
+  } | null>(null);
   const placeLookup =
-    askedPlace ?? (lookedUpPlace.status === 'success' ? lookedUpPlace.data : UNKNOWN_PLACE);
+    loaded.mode === 'activity' && askedPlace?.id === loaded.activity.id
+      ? askedPlace.lookup
+      : lookedUpPlace.status === 'success'
+        ? lookedUpPlace.data
+        : UNKNOWN_PLACE;
+  const askPlace = (activity: Activity) =>
+    lookUpPlace(startOf(activity), true).then((lookup) => {
+      setAskedPlace({ id: activity.id, lookup });
+      return lookup;
+    });
   const data: EditorData =
     loaded.mode === 'activity' && placeLookup.status === 'known'
       ? { ...loaded, place: placeLookup.place }
@@ -432,6 +468,26 @@ function EditorWorkspace({
       photo: photo === null ? null : await loadPhoto(await exportCopyOf(photo)),
       dominant,
     }));
+  };
+
+  /** Whether the sheet to choose another activity or period shows, and one is being loaded. */
+  const [dataOpen, setDataOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  /**
+   * Fills the design with another activity or period (ADR 011): the design stays as it is, and
+   * the widgets without data for it hide until data that has it comes back. Not an undo step: as
+   * the photo, the data is what the design is made of, not part of it.
+   */
+  const switchData = (request: EditorRequest) => {
+    setDataOpen(false);
+    setSelectedId(null);
+    setSwitching(true);
+    onSwitch(request)
+      .catch((error: unknown) => {
+        logError('Could not load the chosen activity or period', error);
+        notice.show(t('editor.switchError'));
+      })
+      .finally(() => setSwitching(false));
   };
 
   /** Says that a planned button's feature is on its way (ADR 009: every button shows already). */
@@ -596,10 +652,7 @@ function EditorWorkspace({
       placeLookup.status === 'needsPermission' &&
       data.mode === 'activity'
     ) {
-      void lookUpPlace(startOf(data.activity), true).then((result) => {
-        setAskedPlace(result);
-        pick();
-      });
+      void askPlace(data.activity).then(() => pick());
       return;
     }
     pick();
@@ -618,8 +671,7 @@ function EditorWorkspace({
       placeLookup.status === 'needsPermission' &&
       data.mode === 'activity'
     ) {
-      void lookUpPlace(startOf(data.activity), true).then((result) => {
-        setAskedPlace(result);
+      void askPlace(data.activity).then((result) => {
         if (result.status === 'known') {
           addLayerNow(item);
         } else {
@@ -899,6 +951,25 @@ function EditorWorkspace({
         onAddImage={addPicture}
         onClose={() => setSheetOpen(false)}
       />
+      <DataSheet
+        visible={dataOpen}
+        mode={data.mode}
+        onChooseActivity={(activityId) =>
+          data.mode === 'activity' && activityId === data.activity.id
+            ? setDataOpen(false)
+            : switchData({ mode: 'activity', activityId })
+        }
+        onChoosePeriod={({ kind, range, families }) =>
+          switchData({
+            mode: 'summary',
+            kind,
+            start: range.start,
+            end: range.end,
+            families: [...families],
+          })
+        }
+        onClose={() => setDataOpen(false)}
+      />
       <TemplateSheet
         visible={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
@@ -959,7 +1030,7 @@ function EditorWorkspace({
             {eyedropper === null ? null : (
               <Eyedropper image={eyedropper.image} displayWidth={displayWidth} onPick={pickColor} />
             )}
-            {photo !== null && canvasImage === null ? (
+            {switching || (photo !== null && canvasImage === null) ? (
               <View
                 pointerEvents="none"
                 style={{
@@ -975,7 +1046,7 @@ function EditorWorkspace({
                 <ActivityIndicator
                   size="large"
                   color="#FFFFFF"
-                  accessibilityLabel={t('editor.loadingPhoto')}
+                  accessibilityLabel={t(switching ? 'common.loading' : 'editor.loadingPhoto')}
                 />
               </View>
             ) : null}
@@ -1036,7 +1107,7 @@ function EditorWorkspace({
             setFormatsOpen(false);
             setTemplatesOpen(true);
           }}
-          onActivity={comingSoon}
+          onActivity={() => setDataOpen(true)}
           sport={data.mode === 'activity' ? sportIcon(data.activity) : null}
           units={unit}
           onToggleUnits={() => change((current) => setUnits(current, unit === 'km' ? 'mi' : 'km'))}
@@ -1163,7 +1234,7 @@ function EditorWorkspace({
             }
           >
             {dock === 'export' ? (
-              <ExportBar state={exporter.state} onRetry={startExport} />
+              <ExportBar state={exporter.state} onRetry={startExport} onStory={comingSoon} />
             ) : styled !== null ? (
               <StylePanel
                 layer={styled.layer}

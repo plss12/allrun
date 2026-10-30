@@ -2,7 +2,8 @@
 
 Date: 2026-10-18
 
-Status: built in milestone 3d.
+Status: built in milestone 3d; where templates are chosen and what the user's ones keep changed
+with ADR 011.
 
 ## Context
 
