@@ -30,7 +30,16 @@ import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { Activity } from '@/core/activity';
 import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
-import { FRAME_COLORS, type ImageBox, imageBox, SAMPLE_PICTURE } from '@/core/image-layer';
+import {
+  CAPTION_INK,
+  FRAME_COLORS,
+  type ImageBox,
+  imageBox,
+  type InstantBox,
+  instantBox,
+  instantFrame,
+  SAMPLE_PICTURE,
+} from '@/core/image-layer';
 import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
 import type { PhotoDrawing, Size } from '@/core/photo-placement';
 import { decodePolyline } from '@/core/polyline';
@@ -76,7 +85,8 @@ import {
   softBackdrop,
   textShadows,
 } from './scene-text';
-import { finishParagraph } from './paragraph-arena';
+import { type CaptionText, instantCaption } from './instant-caption';
+import { discardParagraph, finishParagraph } from './paragraph-arena';
 
 /**
  * A layer filled with data and measured, ready to draw. Its content is centered on (0, 0); the
@@ -635,6 +645,30 @@ function prepareLayer(
     case 'image': {
       // A picture not known yet (the gallery's sample before it is decoded) shows as loading.
       const picked = images?.get(layer.image);
+      if (layer.caption !== undefined) {
+        const box = instantBox();
+        const frame = instantFrame(layer.frame);
+        const caption = captionParagraphs(
+          fonts,
+          instantCaption(layer.caption, data, textContext, translate),
+          box.caption,
+          CAPTION_INK[frame],
+          textContext.locale,
+        );
+        return {
+          layer,
+          width: box.width,
+          height: box.height,
+          content: (
+            <InstantWidget
+              box={box}
+              frame={FRAME_COLORS[frame]}
+              picture={picked?.image ?? null}
+              caption={caption}
+            />
+          ),
+        };
+      }
       const box = imageBox(picked?.size ?? SAMPLE_PICTURE, layer.frame);
       return {
         layer,
@@ -703,6 +737,165 @@ function PictureWidget({
       )}
     </Group>
   );
+}
+
+/**
+ * An instant photo: a Polaroid's frame with the picture cut square in it and its caption under
+ * it, lifted off the photo by a shadow.
+ */
+function InstantWidget({
+  box,
+  frame,
+  picture,
+  caption,
+}: {
+  readonly box: InstantBox;
+  readonly frame: string;
+  readonly picture: SkImage | null;
+  readonly caption: readonly PlacedParagraph[];
+}) {
+  const rect = box.picture;
+  return (
+    <Group
+      layer={
+        <Paint>
+          <DropShadow />
+        </Paint>
+      }
+    >
+      <Rect
+        x={-box.width / 2}
+        y={-box.height / 2}
+        width={box.width}
+        height={box.height}
+        color={frame}
+      />
+      {picture === null ? (
+        <Rect {...rect} color={LOADING_PICTURE} />
+      ) : (
+        // Cut square around its middle, as an instant camera frames it.
+        <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
+      )}
+      {caption.map(({ paragraph, x, y }, i) => (
+        <Paragraph
+          key={i}
+          paragraph={paragraph}
+          x={x}
+          y={y}
+          width={Math.ceil(paragraph.getLongestLine()) + 1}
+        />
+      ))}
+    </Group>
+  );
+}
+
+/** A paragraph and where it goes. */
+interface PlacedParagraph {
+  readonly paragraph: SkParagraph;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * How an instant photo's caption is written, by hand: its letters' size and line height, the room
+ * between its columns (a share of the size), how much of the band its lines may take, and the
+ * least a centered line shrinks to before its shorter version is written instead.
+ */
+const CAPTION = {
+  size: 50,
+  lineHeight: 1.05,
+  gap: 1,
+  width: 0.94,
+  height: 0.8,
+  minFit: 0.7,
+} as const;
+
+/**
+ * An instant photo's caption laid out in the band `band` under its picture, in Permanent Marker
+ * capitals and `color`, as on a Polaroid written by hand. One column is centered, each line
+ * shrinking on its own when it doesn't fit (a long place, not its distance), the first written
+ * shorter instead (see `CaptionText`) when it would shrink below `CAPTION.minFit`. Two columns go
+ * at the sides, the first left-aligned and the second right-aligned, and shrink together. Time
+ * O(l) for l lines, each laid out at most three times.
+ */
+function captionParagraphs(
+  fonts: SkTypefaceFontProvider,
+  caption: CaptionText,
+  band: DrawRect,
+  color: string,
+  locale: string,
+): PlacedParagraph[] {
+  const layOut = (lines: readonly string[], align: 'left' | 'center' | 'right', size: number) => {
+    const builder = Skia.ParagraphBuilder.Make({ textAlign: ALIGN[align] }, fonts);
+    builder.pushStyle({
+      color: Skia.Color(color),
+      fontFamilies: fontFamiliesOf('permanentMarker'),
+      fontSize: size,
+      heightMultiplier: CAPTION.lineHeight,
+    });
+    builder.addText(lines.map((line) => line.toLocaleUpperCase(locale)).join('\n'));
+    builder.pop();
+    const paragraph = finishParagraph(builder);
+    paragraph.layout(NO_WRAP_WIDTH);
+    paragraph.layout(Math.ceil(paragraph.getLongestLine()) + 1);
+    return paragraph;
+  };
+  const maxWidth = band.width * CAPTION.width;
+  const maxHeight = band.height * CAPTION.height;
+  const placeAt = (paragraphs: readonly SkParagraph[], x: (width: number, i: number) => number) => {
+    const height = paragraphs.reduce((sum, paragraph) => sum + paragraph.getHeight(), 0);
+    let y = band.y + (band.height - height) / 2;
+    return paragraphs.map((paragraph, i) => {
+      const placed = { paragraph, x: x(Math.ceil(paragraph.getLongestLine()) + 1, i), y };
+      y += paragraph.getHeight();
+      return placed;
+    });
+  };
+  const { columns, shorterFirst } = caption;
+  if (columns.length === 1) {
+    /** A line as big as it fits, up to `size`; `null` when it would shrink below `minFit`. */
+    const fitted = (text: string, size: number, shorten: boolean): SkParagraph | null => {
+      const paragraph = layOut([text], 'center', size);
+      const fit = maxWidth / paragraph.getLongestLine();
+      if (fit >= 1) {
+        return paragraph;
+      }
+      discardParagraph(paragraph);
+      return shorten && fit < CAPTION.minFit ? null : layOut([text], 'center', size * fit);
+    };
+    // A line is `lineHeight` times its size tall: all of them fit the band's height.
+    const lineSize = Math.min(CAPTION.size, maxHeight / (columns[0].length * CAPTION.lineHeight));
+    const lines = columns[0].map(
+      (text, i) =>
+        (i === 0 && shorterFirst !== undefined ? fitted(text, lineSize, true) : null) ??
+        fitted(i === 0 && shorterFirst !== undefined ? shorterFirst : text, lineSize, false) ??
+        layOut([text], 'center', lineSize),
+    );
+    return placeAt(lines, (width) => -width / 2);
+  }
+  const room = (paragraphs: readonly SkParagraph[], size: number) => ({
+    width:
+      paragraphs.reduce((sum, paragraph) => sum + paragraph.getLongestLine(), 0) +
+      size * CAPTION.gap * (paragraphs.length - 1),
+    height: Math.max(...paragraphs.map((paragraph) => paragraph.getHeight())),
+  });
+  const aligned = (size: number) =>
+    columns.map((lines, i) => layOut(lines, i === 0 ? 'left' : 'right', size));
+  let size: number = CAPTION.size;
+  let paragraphs = aligned(size);
+  const taken = room(paragraphs, size);
+  const fit = Math.min(1, maxWidth / taken.width, maxHeight / taken.height);
+  if (fit < 1) {
+    paragraphs.forEach(discardParagraph);
+    size *= fit;
+    paragraphs = aligned(size);
+  }
+  const inset = (band.width - maxWidth) / 2;
+  return paragraphs.map((paragraph, i) => {
+    const width = Math.ceil(paragraph.getLongestLine()) + 1;
+    const x = i === 0 ? band.x + inset : band.x + band.width - inset - width;
+    return { paragraph, x, y: band.y + (band.height - paragraph.getHeight()) / 2 };
+  });
 }
 
 function preparedParagraph(layer: Layer, paragraph: SkParagraph): PreparedLayer {

@@ -62,7 +62,6 @@ import {
   CANVAS_FORMATS,
   type DesignBackground,
   type DesignLanguage,
-  type ImageFrame,
   type Layer,
   type Template,
 } from '@/core/template';
@@ -102,7 +101,7 @@ import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { useEditorFonts } from '@/editor/fonts';
 import { ChoiceSheet } from '@/editor/choice-list';
-import { LayerSheet } from '@/editor/layer-sheet';
+import { LayerSheet, type PictureLook } from '@/editor/layer-sheet';
 import { Notice, useNotice } from '@/editor/notice';
 import { disposeLater } from '@/editor/paragraph-arena';
 import { photoDominantColor } from '@/editor/photo-color';
@@ -578,16 +577,32 @@ function EditorWorkspace({
   };
 
   /**
-   * Adds a picture of the user's in `frame`, picked from the library, on top of the others and
-   * selected; a design takes up to `MAX_IMAGES`.
+   * Adds a picture of the user's in its frame (an instant photo with its caption), picked from
+   * the library, on top of the others and selected; a design takes up to `MAX_IMAGES`. An instant
+   * photo of where it was asks first to name the place (Android), and writes the date without it.
    */
-  const addPicture = (frame: ImageFrame) => {
+  const addPicture = ({ frame, caption }: PictureLook) => {
     setSheetOpen(false);
     if (!canAddImage(template)) {
       notice.show(t('editor.maxImages', { max: String(MAX_IMAGES) }));
       return;
     }
-    pickPicture((image) => addLayerNow({ kind: 'image', image, frame }));
+    const pick = () =>
+      pickPicture((image) =>
+        addLayerNow({ kind: 'image', image, frame, ...(caption === undefined ? {} : { caption }) }),
+      );
+    if (
+      caption === 'place' &&
+      placeLookup.status === 'needsPermission' &&
+      data.mode === 'activity'
+    ) {
+      void lookUpPlace(startOf(data.activity), true).then((result) => {
+        setAskedPlace(result);
+        pick();
+      });
+      return;
+    }
+    pick();
   };
 
   /** Shows another picture in the image layer `id`, as one undo step. */
@@ -1010,7 +1025,7 @@ function EditorWorkspace({
         style={{ position: 'absolute', top: insets.top + EDGE, right: EDGE }}
       >
         <EditorSideMenu
-          onAddImage={() => addPicture('none')}
+          onAddImage={() => addPicture({ frame: 'none' })}
           onDepth={comingSoon}
           format={design.format}
           formatsOpen={formatsOpen}

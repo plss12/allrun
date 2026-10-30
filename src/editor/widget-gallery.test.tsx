@@ -197,8 +197,9 @@ describe('gallerySections', () => {
     const plain = activityRows(false, false);
     expect(plain).toContainEqual(['block-verified', 'block-camera']);
     expect(plain).toContainEqual(['block-boardingPass']);
-    // The user's pictures go last, alone: a wildcard goes up beside a tile, never down.
-    expect(plain.at(-1)).toEqual(['image']);
+    // The user's pictures go last, the photo and the instant photo together: a wildcard goes up
+    // beside a tile, never down.
+    expect(plain.at(-1)).toEqual(['image', 'image-instant']);
     // With it, the camera is left alone at the end of the apps: the pass goes up beside it.
     expect(activityRows(true, false)).toContainEqual(['block-camera', 'block-boardingPass']);
     // With its splits, the camera has its note, and the splits are left alone among the races.

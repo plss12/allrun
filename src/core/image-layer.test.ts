@@ -7,6 +7,9 @@ import {
   IMAGE_SIDE,
   imageBox,
   imageCount,
+  INSTANT,
+  instantBox,
+  instantFrame,
   MAX_IMAGES,
   setLayerImage,
   withoutImages,
@@ -51,6 +54,26 @@ describe('imageBox', () => {
     expect(framed.height - framed.picture.height).toBeCloseTo(2 * edge);
     // Centered on (0, 0).
     expect(framed.picture.x).toBeCloseTo(-framed.picture.width / 2);
+  });
+});
+
+describe('instantBox', () => {
+  it("is a Polaroid: a square picture, an even edge, and the caption's band under it", () => {
+    const box = instantBox();
+    expect(box.height).toBeCloseTo(IMAGE_SIDE);
+    const edge = box.width * INSTANT.edge;
+    expect(box.picture.width).toBeCloseTo(box.picture.height);
+    expect(box.picture.width).toBeCloseTo(box.width - 2 * edge);
+    expect(box.picture.y).toBeCloseTo(-box.height / 2 + edge);
+    expect(box.caption.y).toBeCloseTo(box.picture.y + box.picture.height);
+    expect(box.caption.y + box.caption.height).toBeCloseTo(box.height / 2);
+    // About a Polaroid's 88 × 107 mm.
+    expect(box.width / box.height).toBeCloseTo(88 / 107, 1);
+  });
+
+  it('always has a frame', () => {
+    expect(instantFrame('none')).toBe('light');
+    expect(instantFrame('dark')).toBe('dark');
   });
 });
 

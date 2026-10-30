@@ -97,6 +97,14 @@ export function formatShortBucketName(range: DateRange, size: BucketSize, locale
   }
 }
 
+/**
+ * A range of days, short and without its year: "12–18 Oct", "28 Sep – 4 Oct" (with the years when
+ * they differ).
+ */
+export function formatShortRange(range: DateRange, locale: string): string {
+  return formatDayRange(range, locale, 'short');
+}
+
 /** Short date for lists, e.g. "Oct 15". */
 export function formatShortDate(date: LocalDate, locale: string): string {
   return new Intl.DateTimeFormat(locale, {

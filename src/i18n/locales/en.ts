@@ -122,6 +122,7 @@ export const en = {
     periodName: 'Period',
     text: 'Your own text',
     image: 'Your photo',
+    instant: 'Instant photo',
     route: 'Route',
     summaryRoutes: 'Routes of the period',
     summaryChart: 'Bar chart',
@@ -740,6 +741,10 @@ export const en = {
       wordmark: 'Name',
       mark: 'Monogram',
       lockup: 'Both',
+    },
+    captions: {
+      place: 'Place and distance',
+      data: 'Date and data',
     },
     blockLayouts: {
       sports: 'By sport',

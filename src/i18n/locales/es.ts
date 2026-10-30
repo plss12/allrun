@@ -121,6 +121,7 @@ export const es: Translations = {
     periodName: 'Periodo',
     text: 'Texto propio',
     image: 'Tu foto',
+    instant: 'Foto instantánea',
     route: 'Ruta',
     summaryRoutes: 'Rutas del periodo',
     summaryChart: 'Gráfico de barras',
@@ -721,6 +722,10 @@ export const es: Translations = {
       wordmark: 'Nombre',
       mark: 'Monograma',
       lockup: 'Ambos',
+    },
+    captions: {
+      place: 'Lugar y distancia',
+      data: 'Fecha y datos',
     },
     blockLayouts: {
       sports: 'Por deporte',

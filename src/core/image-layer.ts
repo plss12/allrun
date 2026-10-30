@@ -59,14 +59,59 @@ export function withoutImages(layers: readonly Layer[]): Layer[] {
   return layers.filter((layer) => !isImageLayer(layer));
 }
 
+/** A rectangle inside a widget centered on (0, 0). */
+export type BoxRect = { readonly x: number; readonly y: number } & Size;
+
 /** Where a picture goes inside its widget, centered on (0, 0), as the widget's size. */
 export interface ImageBox {
   /** The widget, frame included. */
   readonly width: number;
   readonly height: number;
   /** The picture inside the frame. */
-  readonly picture: { readonly x: number; readonly y: number } & Size;
+  readonly picture: BoxRect;
 }
+
+/** An instant photo's widget: its square picture and the band under it for its caption. */
+export interface InstantBox extends ImageBox {
+  readonly caption: BoxRect;
+}
+
+/**
+ * Proportions of an instant photo, as a Polaroid's (88 × 107 mm, a 79 mm square picture): its edge
+ * at the sides and the top, and the band under the picture, as fractions of its width.
+ */
+export const INSTANT = { edge: 0.05, band: 0.27 } as const;
+
+/**
+ * The widget of an instant photo: as a Polaroid, its longest side `IMAGE_SIDE` long, a square
+ * picture with an even edge at its sides and top, and the band of its caption under it. Time and
+ * space O(1).
+ */
+export function instantBox(): InstantBox {
+  // Its height is its width × (1 − edge + band): the edge at the top and the square picture.
+  const width = IMAGE_SIDE / (1 - INSTANT.edge + INSTANT.band);
+  const edge = width * INSTANT.edge;
+  const side = width - 2 * edge;
+  const height = IMAGE_SIDE;
+  const top = -height / 2;
+  return {
+    width,
+    height,
+    picture: { x: -side / 2, y: top + edge, width: side, height: side },
+    caption: { x: -side / 2, y: top + edge + side, width: side, height: width * INSTANT.band },
+  };
+}
+
+/** The frame of an instant photo: light, or dark when chosen, never none. */
+export function instantFrame(frame: ImageFrame): Exclude<ImageFrame, 'none'> {
+  return frame === 'dark' ? 'dark' : 'light';
+}
+
+/** The ink of a caption on a frame: black on white, white on black. */
+export const CAPTION_INK: Readonly<Record<Exclude<ImageFrame, 'none'>, string>> = {
+  light: '#000000',
+  dark: '#FFFFFF',
+};
 
 /**
  * The widget of a picture of `size` (any unit: only its proportions count), with its longest side

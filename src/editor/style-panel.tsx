@@ -517,7 +517,7 @@ function LogoRow({
   );
 }
 
-/** A picture's frame: none, light or dark (the brand's Chalk and Night Ink). */
+/** A picture's frame: none, light or dark; an instant photo's, light or dark. */
 function FrameRow({
   layer,
   onChange,
@@ -528,14 +528,16 @@ function FrameRow({
   const { t } = useTranslation();
   return (
     <Row>
-      {IMAGE_FRAMES.map((frame) => (
-        <Chip
-          key={frame}
-          label={t(`style.frames.${frame}`)}
-          selected={layer.frame === frame}
-          onPress={() => onChange((template) => setImageFrame(template, layer.id, frame))}
-        />
-      ))}
+      {IMAGE_FRAMES.filter((frame) => layer.caption === undefined || frame !== 'none').map(
+        (frame) => (
+          <Chip
+            key={frame}
+            label={t(`style.frames.${frame}`)}
+            selected={layer.frame === frame}
+            onPress={() => onChange((template) => setImageFrame(template, layer.id, frame))}
+          />
+        ),
+      )}
     </Row>
   );
 }

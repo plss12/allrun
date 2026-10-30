@@ -15,7 +15,7 @@ import {
 
 import { SAMPLE_IMAGE } from '@/core/image-layer';
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
-import type { CanvasFormat, DesignLanguage, FontId, ImageFrame } from '@/core/template';
+import type { CanvasFormat, DesignLanguage, FontId, Layer } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 
@@ -35,6 +35,9 @@ import {
   type BuiltGallery,
 } from './widget-gallery';
 
+/** How a picture added from the gallery looks: its frame, and an instant photo's caption. */
+export type PictureLook = Pick<Extract<Layer, { kind: 'image' }>, 'frame' | 'caption'>;
+
 interface LayerSheetProps {
   readonly visible: boolean;
   readonly catalog: readonly CatalogSection[];
@@ -48,8 +51,11 @@ interface LayerSheetProps {
   readonly onAdd: (item: Exclude<NewLayer, { kind: 'text' | 'image' }>) => void;
   /** Starts typing a new free text, straight on the canvas, once the sheet has closed. */
   readonly onAddText: () => void;
-  /** Opens the photo library for a picture in `frame`, once the sheet has closed. */
-  readonly onAddImage: (frame: ImageFrame) => void;
+  /**
+   * Opens the photo library for a picture in `frame`, or an instant photo with `caption`, once
+   * the sheet has closed.
+   */
+  readonly onAddImage: (look: PictureLook) => void;
   readonly onClose: () => void;
 }
 
@@ -289,7 +295,7 @@ export function LayerSheet({
                       } else if (item.kind === 'text') {
                         afterClosing(onAddText);
                       } else if (item.kind === 'image') {
-                        afterClosing(() => onAddImage(item.frame));
+                        afterClosing(() => onAddImage(item));
                       } else {
                         onAdd(item);
                       }
@@ -366,7 +372,9 @@ function pageLabel(
       case 'logo':
         return [t('widgets.allrunLogo'), t(`gallery.variants.${item.variant}`)];
       case 'image':
-        return [t('widgets.image'), t(`style.frames.${item.frame}`)];
+        return item.caption === undefined
+          ? [t('widgets.image'), t(`style.frames.${item.frame}`)]
+          : [t('widgets.instant'), t(`gallery.captions.${item.caption}`)];
       case 'activityBlock': {
         const { block } = item;
         const name: string = t(`widgets.blocks.${block.design}`);

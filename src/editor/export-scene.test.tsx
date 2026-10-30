@@ -14,7 +14,7 @@ import {
 } from '@shopify/react-native-skia/lib/commonjs/headless';
 
 import { defaultActivityTemplate, newLayer } from '@/core/default-layout';
-import { imageBox } from '@/core/image-layer';
+import { imageBox, instantBox } from '@/core/image-layer';
 import { COVER_PLACEMENT, type PhotoPlacement } from '@/core/photo-placement';
 import { CANVAS_FORMATS, type ImageFrame, type Template } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
@@ -221,5 +221,43 @@ describe("the user's pictures", () => {
     expect(pixel(image, Math.round(width / 2 - box.width / 2 - 40), height / 2)).toEqual([
       128, 128, 128, 255,
     ]);
+  });
+});
+
+describe('an instant photo', () => {
+  it('cuts the picture square in a Polaroid frame, with the band of its caption under it', async () => {
+    const picture = redPhoto();
+    const layer = newLayer(
+      { kind: 'image', image: 'picture-1', frame: 'light', caption: 'place' },
+      'instant',
+      'story',
+    );
+    const image = await drawOffscreen(
+      makeOffscreenSurface(width, height),
+      exportScene({
+        template: {
+          ...template,
+          layers: [{ ...layer, transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 } }],
+          background: { kind: 'color', color: '#808080' },
+        },
+        layerContext: {
+          ...layerContext(),
+          images: new Map([['picture-1', { size: { width: 400, height: 300 }, image: picture }]]),
+        },
+        photo: null,
+        dominant: null,
+      }),
+    );
+    const box = instantBox();
+    const at = (x: number, y: number) =>
+      pixel(image, Math.round(width / 2 + x), Math.round(height / 2 + y));
+    // The wide picture fills its square, cut at its sides.
+    const middle = box.picture.y + box.picture.height / 2;
+    expect(at(box.picture.x + 3, middle)).toEqual([255, 0, 0, 255]);
+    expect(at(box.picture.x + box.picture.width - 3, middle)).toEqual([255, 0, 0, 255]);
+    // White around it, the band under it included (no fonts here: no caption drawn).
+    expect(at(box.picture.x - 5, middle)).toEqual([255, 255, 255, 255]);
+    expect(at(0, box.caption.y + box.caption.height / 2)).toEqual([255, 255, 255, 255]);
+    expect(at(0, box.picture.y - 5)).toEqual([255, 255, 255, 255]);
   });
 });

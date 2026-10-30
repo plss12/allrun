@@ -12,6 +12,7 @@ import {
   DATE_FORMATS,
   HEART_RATE_ZONE_VIEWS,
   IMAGE_FRAMES,
+  INSTANT_CAPTIONS,
   type Layer,
   type LayerKind,
   PERIOD_FORMATS,
@@ -75,7 +76,7 @@ export type CatalogItem =
     >
   | Readonly<Pick<LayerOf<'activityBlock'>, 'kind' | 'block'>>
   | Readonly<Pick<LayerOf<'summaryBlock'>, 'kind' | 'block'>>
-  | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame'>>;
+  | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame' | 'caption'>>;
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
 export type NewLayer =
@@ -117,7 +118,7 @@ const CREATIVE_THEMES: Readonly<
     ],
     [['block-laps', 'block-grandPrix'], ['block-splits']],
     [['block-receipt', 'block-nutrition'], ['block-boardingPass']],
-    [['image']],
+    [['image', 'image-instant']],
   ],
   summary: [
     [
@@ -134,7 +135,7 @@ const CREATIVE_THEMES: Readonly<
       ['summaryBlock-periodReceipt', 'summaryBlock-periodNutrition'],
       ['summaryBlock-periodBoardingPass', 'summaryBlock-periodMetro'],
     ],
-    [['image']],
+    [['image', 'image-instant']],
   ],
 };
 
@@ -220,10 +221,12 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
       return `block-${blockTile(item.block)}`;
     case 'summaryBlock':
       return `summaryBlock-${item.block.design}`;
+    case 'image':
+      // The instant photos, a tile of their own.
+      return item.caption === undefined ? 'image' : 'image-instant';
     case 'text':
     case 'route':
     case 'summaryRoutes':
-    case 'image':
       return item.kind;
   }
 }
@@ -303,8 +306,10 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           'quote' in item.block ? item.block.quote : undefined,
         ];
       case 'image':
-        // As is, the default.
-        return [item.frame === 'none' ? undefined : item.frame];
+        // As is, the default; an instant photo by its caption, where and how far the default.
+        return item.caption === undefined
+          ? [item.frame === 'none' ? undefined : item.frame]
+          : [item.caption === 'place' ? undefined : item.caption];
       case 'text':
         return [];
     }
@@ -373,12 +378,24 @@ const OFFERED_DATE_FORMATS = DATE_FORMATS.filter((format) => format !== 'weekday
 
 /**
  * A picture of the user's, chosen when its tile is tapped: as is, in a light frame and in a dark
- * one (also chosen later with its color button).
+ * one (also chosen later with its color button); and an instant photo of it, a Polaroid, with
+ * each caption (its frame dark with its color button).
  */
-const IMAGE_ENTRIES: readonly Entry[] = tileEntries(
-  'creative',
-  IMAGE_FRAMES.map((frame) => ({ kind: 'image', image: SAMPLE_IMAGE, frame })),
-);
+const IMAGE_ENTRIES: readonly Entry[] = [
+  ...tileEntries(
+    'creative',
+    IMAGE_FRAMES.map((frame) => ({ kind: 'image', image: SAMPLE_IMAGE, frame })),
+  ),
+  ...tileEntries(
+    'creative',
+    INSTANT_CAPTIONS.map((caption) => ({
+      kind: 'image',
+      image: SAMPLE_IMAGE,
+      frame: 'light',
+      caption,
+    })),
+  ),
+];
 
 /** Route lines, solid, solid with a glow, dashed and dotted. */
 function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {

@@ -205,6 +205,16 @@ export const IMAGE_FRAMES = ['none', 'light', 'dark'] as const;
 
 export type ImageFrame = (typeof IMAGE_FRAMES)[number];
 
+/**
+ * What an instant photo (a Polaroid) writes under its picture, by hand: where and how far
+ * (`place`: "Andújar, Jaén" over "14,5 kilómetros"), or when and the main data (`data`: the date
+ * and the start time at the left, two data at the right). A period writes its name or its dates,
+ * and its totals.
+ */
+export const INSTANT_CAPTIONS = ['place', 'data'] as const;
+
+export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
+
 /** How a route's line is drawn. */
 export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 
@@ -843,6 +853,12 @@ export const layerSchema = z.discriminatedUnion('kind', [
      */
     image: z.string(),
     frame: z.enum(IMAGE_FRAMES),
+    /**
+     * An instant photo's caption (see `INSTANT_CAPTIONS`): the picture, cut square, in a Polaroid's
+     * frame with its caption under it. Absent, a picture as it is. A Polaroid always has a frame:
+     * `none` reads as `light`.
+     */
+    caption: z.enum(INSTANT_CAPTIONS).optional(),
   }),
   z.object({
     ...layerBase,

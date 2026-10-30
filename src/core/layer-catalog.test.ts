@@ -141,9 +141,12 @@ describe('activityCatalog', () => {
       'block-nutrition',
       'block-boardingPass',
       'image',
+      'image-instant',
     ]);
     // A picture of the user's, as is and then in each frame; chosen when the tile is tapped.
     expect(variantKeys(trail, 'image')).toEqual(['image', 'image-light', 'image-dark']);
+    // And an instant photo of it, with each caption.
+    expect(variantKeys(trail, 'image-instant')).toEqual(['image-instant', 'image-instant-data']);
     // The quote and the verse with their first phrase: the others are chosen from a list.
     expect(variantKeys(trail, 'block-quote')).toEqual(['block-quote-kipchoge']);
     expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
@@ -166,7 +169,7 @@ describe('activityCatalog', () => {
     // camera; then the bars and the ladder together and the race on TV apart; the laps' two, with
     // its laps.
     const withSplits = activityCatalog(makeActivity(), ['splits']);
-    expect(tileKeys(withSplits, 'creative').slice(-8)).toEqual([
+    expect(tileKeys(withSplits, 'creative').slice(-9, -1)).toEqual([
       'block-camera',
       'block-notes',
       'block-grandPrix',
@@ -423,6 +426,7 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodBoardingPass',
       'summaryBlock-periodMetro',
       'image',
+      'image-instant',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',
