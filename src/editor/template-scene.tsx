@@ -195,13 +195,17 @@ export type SceneCell =
   /** Without a photo: nothing in the image, a sign to fill it on the canvas when `hint`. */
   | { readonly kind: 'empty'; readonly clip: DrawRect; readonly hint: boolean };
 
-/** The photos of a collage in a scene, and the bars of its frame, if it has one. */
+/** The photos of a collage in a scene. */
 export interface SceneCollage {
   readonly cells: readonly SceneCell[];
-  readonly bars: readonly DrawRect[];
-  readonly barColor: string;
   /** The cell being edited, on the canvas: the others dim, so it stands out; `null` for none. */
   readonly activeCell: number | null;
+}
+
+/** The frame around a design's photos, in a scene. */
+export interface SceneFrame {
+  readonly bars: readonly DrawRect[];
+  readonly color: string;
 }
 
 /** Over the cells that aren't being edited. Under the frame and the widgets, which stay as they are. */
@@ -291,6 +295,8 @@ export interface TemplateSceneProps {
   readonly photo: ScenePhoto | null;
   /** The photos of a collage over the backdrop, instead of `photo`. */
   readonly collage?: SceneCollage | null;
+  /** The frame over the photos, under the widgets. */
+  readonly frame?: SceneFrame | null;
   /**
    * The layer being moved, drawn from a shared transform so gestures don't re-render, with a
    * shared opacity (it fades over the trash).
@@ -346,6 +352,7 @@ export function TemplateScene({
   backdrop,
   photo,
   collage = null,
+  frame = null,
   live = null,
 }: TemplateSceneProps) {
   const canvas = CANVAS_FORMATS[format];
@@ -387,11 +394,11 @@ export function TemplateScene({
                   <Rect key={index} {...cell.clip} color={DIMMED_CELL} />
                 ),
               )}
-          {collage.bars.map((bar, index) => (
-            <Rect key={index} {...bar} color={collage.barColor} />
-          ))}
         </Group>
       )}
+      {frame === null
+        ? null
+        : frame.bars.map((bar, index) => <Rect key={index} {...bar} color={frame.color} />)}
       {/* A layer's opacity fades it as a whole, drawn on its own Skia layer: a group's `opacity`
           only reaches shapes (paragraphs ignore it) and fades each shape and its shadow apart,
           letting the shadow show through. Opaque layers skip the extra layer. */}

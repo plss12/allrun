@@ -3,7 +3,7 @@ import { Canvas, Group, type SkImage } from '@shopify/react-native-skia';
 import { backgroundColor } from '@/core/design-background';
 import { CANVAS_FORMATS, type Template } from '@/core/template';
 
-import { scenePhoto } from './export-scene';
+import { sceneFrame, scenePhoto } from './export-scene';
 import { type LayerContext, prepareLayers, TemplateScene } from './template-scene';
 
 /**
@@ -38,6 +38,7 @@ export function TemplateThumbnail({
           layers={prepareLayers(template, layerContext)}
           backdrop={color === null ? { kind: 'checker' } : { kind: 'color', color }}
           photo={photo === null ? null : scenePhoto(template, photo)}
+          frame={sceneFrame(template)}
         />
       </Group>
     </Canvas>

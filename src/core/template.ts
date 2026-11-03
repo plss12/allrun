@@ -867,13 +867,12 @@ export type CollageLayout = (typeof COLLAGE_LAYOUTS)[number];
 export const MAX_COLLAGE_PHOTOS = 6;
 
 /**
- * A design with several photos: how they are laid out, the frame over the edges of its cells (as a
- * picture's, see `IMAGE_FRAMES`) and where each photo goes in its cell. It keeps a placement for
- * every photo, also those its layout doesn't show, which come back with a layout that does.
+ * A design with several photos: how they are laid out and where each goes in its cell. It keeps a
+ * placement for every photo, also those its layout doesn't show, which come back with a layout that
+ * does.
  */
 const collageSchema = z.object({
   layout: z.enum(COLLAGE_LAYOUTS),
-  frame: z.enum(IMAGE_FRAMES),
   placements: z.array(photoPlacementSchema).length(MAX_COLLAGE_PHOTOS),
 });
 
@@ -902,10 +901,19 @@ export const AUTO_BACKGROUND: DesignBackground = { kind: 'auto' };
  * Anything else goes through as it is, for the schema to judge.
  */
 function migrateTemplate(json: unknown): unknown {
-  if (typeof json !== 'object' || json === null || !('version' in json) || json.version !== 1) {
+  if (typeof json !== 'object' || json === null || !('version' in json)) {
     return json;
   }
-  return { ...json, version: 2, photo: COVER_PLACEMENT, background: AUTO_BACKGROUND };
+  if (json.version === 1) {
+    return { ...json, version: 2, photo: COVER_PLACEMENT, background: AUTO_BACKGROUND };
+  }
+  // The frame used to be the collage's, before a single photo had one too.
+  if ('collage' in json && typeof json.collage === 'object' && json.collage !== null) {
+    if ('frame' in json.collage && !('frame' in json)) {
+      return { ...json, frame: json.collage.frame };
+    }
+  }
+  return json;
 }
 
 /**
@@ -928,6 +936,11 @@ const templateObjectSchema = z
     photo: photoPlacementSchema,
     /** Its photos in a collage, over `photo`, which applies to a single one; absent, a single one. */
     collage: collageSchema.optional(),
+    /**
+     * The frame around its photos, and between them in a collage (as a picture's, see
+     * `IMAGE_FRAMES`); absent, none.
+     */
+    frame: z.enum(IMAGE_FRAMES).optional(),
     background: backgroundSchema,
     /** The design's own distance unit; absent, the device's. */
     units: z.enum(['km', 'mi']).optional(),

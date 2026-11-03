@@ -13,6 +13,7 @@ import {
   prepareLayers,
   type SceneCell,
   type SceneCollage,
+  type SceneFrame,
   type ScenePhoto,
   TemplateScene,
 } from './template-scene';
@@ -43,12 +44,23 @@ export function scenePhoto(template: Template, photo: SkImage): ScenePhoto {
 /** The photo of a collage's cell: decoded, still loading, or none. */
 export type CellPhoto = SkImage | 'loading' | null;
 
-/** The colors of a collage's frame: pure, as a picture's. */
+/** The colors of a design's frame: pure, as a picture's. */
 const FRAME_COLORS = { light: '#FFFFFF', dark: '#000000' } as const;
 
+/** The frame of a design in a scene, around its photos; `null` without one. */
+export function sceneFrame(template: Template): SceneFrame | null {
+  const { frame = 'none', collage, format } = template;
+  return frame === 'none'
+    ? null
+    : {
+        bars: collageFrameBars(collage?.layout ?? null, CANVAS_FORMATS[format]),
+        color: FRAME_COLORS[frame],
+      };
+}
+
 /**
- * The photos of a design's collage in a scene, placed as it says, each at any resolution of it, and
- * the bars of its frame; `null` for a design with one photo.
+ * The photos of a design's collage in a scene, placed as it says, each at any resolution of it;
+ * `null` for a design with one photo.
  *
  * @param hints - Whether empty cells show the sign to fill them, on the canvas.
  * @param activeCell - The cell being edited, on the canvas, which the others dim to set apart.
@@ -84,14 +96,7 @@ export function sceneCollage(
       photo: { image: photo, matrix: photoMatrix(drawing), rect: photoRect(drawing) },
     };
   });
-  return collage.frame === 'none'
-    ? { cells, bars: [], barColor: FRAME_COLORS.light, activeCell }
-    : {
-        cells,
-        bars: collageFrameBars(collage.layout, canvas),
-        barColor: FRAME_COLORS[collage.frame],
-        activeCell,
-      };
+  return { cells, activeCell };
 }
 
 /**
@@ -115,6 +120,7 @@ export function exportScene({
       backdrop={color === null ? { kind: 'none' } : { kind: 'color', color }}
       photo={photo === null || template.collage !== undefined ? null : scenePhoto(template, photo)}
       collage={sceneCollage(template, cells, false)}
+      frame={sceneFrame(template)}
     />
   );
 }

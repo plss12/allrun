@@ -38,8 +38,8 @@ import {
   setLanguage,
   setLayerTransform,
   setCellPlacement,
-  setCollageFrame,
   setCollageLayout,
+  setFrame,
   setPhotoPlacement,
   setUnits,
   startOver,
@@ -96,7 +96,7 @@ import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar } from '@/editor/editor-top-bar';
 import { ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
-import { type CellPhoto, type ExportDesign, sceneCollage } from '@/editor/export-scene';
+import { type CellPhoto, type ExportDesign, sceneCollage, sceneFrame } from '@/editor/export-scene';
 import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
 import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
@@ -1106,6 +1106,7 @@ function EditorWorkspace({
                 // Only while its tools act on it: the background is the whole design's.
                 photoTools && !backgroundMenu && canvasCells[toolsCell] !== null ? toolsCell : null,
               )}
+              frame={sceneFrame(shownTemplate)}
               onCellGrab={setToolsCell}
               onCellPlacementChange={(cell, placement) =>
                 change((current) => setCellPlacement(current, cell, placement))
@@ -1381,20 +1382,18 @@ function EditorWorkspace({
               <>
                 {/* Removing first, on its own at the left (user's choice), then change, cover and the
                     background. */}
-                {design.collage === null ? null : (
-                  <View style={{ height: 50, justifyContent: 'center' }}>
-                    <Row>
-                      {IMAGE_FRAMES.map((frame) => (
-                        <Chip
-                          key={frame}
-                          label={t(`editor.collageFrames.${frame}`)}
-                          selected={design.collage?.frame === frame}
-                          onPress={() => change((current) => setCollageFrame(current, frame))}
-                        />
-                      ))}
-                    </Row>
-                  </View>
-                )}
+                <View style={{ height: 50, justifyContent: 'center' }}>
+                  <Row>
+                    {IMAGE_FRAMES.map((frame) => (
+                      <Chip
+                        key={frame}
+                        label={t(`editor.collageFrames.${frame}`)}
+                        selected={design.frame === frame}
+                        onPress={() => change((current) => setFrame(current, frame))}
+                      />
+                    ))}
+                  </Row>
+                </View>
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   <ActionTile
                     icon={{ ios: 'trash', android: 'delete' }}

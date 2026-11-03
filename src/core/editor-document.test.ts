@@ -18,7 +18,7 @@ import {
   setPhotoPlacement,
   startOver,
   setCellPlacement,
-  setCollageFrame,
+  setFrame,
   setCollageLayout,
 } from './editor-document';
 import { commit, createHistory, undo } from './history';
@@ -117,6 +117,7 @@ describe('applyDesign', () => {
       format: 'square',
       photo: framed,
       collage: null,
+      frame: 'none',
       background: night,
       layers,
       units: null,
@@ -273,7 +274,6 @@ describe('a collage in the design', () => {
   it('lays the photos out, as one step, and back to one photo', () => {
     const collage = setCollageLayout(INITIAL_DESIGN, 'four');
     expect(collage.collage?.layout).toBe('four');
-    expect(collage.collage?.frame).toBe('none');
     expect(setCollageLayout(collage, null).collage).toBeNull();
   });
 
@@ -281,20 +281,49 @@ describe('a collage in the design', () => {
     expect(setCollageLayout(INITIAL_DESIGN, null)).toBe(INITIAL_DESIGN);
     const collage = setCollageLayout(INITIAL_DESIGN, 'two');
     expect(setCollageLayout(collage, 'two')).toBe(collage);
-    expect(setCollageFrame(collage, 'none')).toBe(collage);
+    expect(setFrame(collage, 'none')).toBe(collage);
     expect(setCellPlacement(collage, 1, COVER_PLACEMENT)).toBe(collage);
   });
 
-  it('has nothing to frame or place in a single photo', () => {
-    expect(setCollageFrame(INITIAL_DESIGN, 'light')).toBe(INITIAL_DESIGN);
+  it('has no cell to place in a single photo', () => {
     expect(setCellPlacement(INITIAL_DESIGN, 1, moved)).toBe(INITIAL_DESIGN);
   });
 
+  it('frames a single photo too, and keeps it on going to a collage and back', () => {
+    const framedPhoto = setFrame(INITIAL_DESIGN, 'light');
+    expect(framedPhoto.frame).toBe('light');
+    const collage = setCollageLayout(framedPhoto, 'four');
+    expect(collage.frame).toBe('light');
+    expect(setCollageLayout(collage, null).frame).toBe('light');
+  });
+
+  it('counts its frame for starting over, which takes it away', () => {
+    const framedPhoto = setFrame(INITIAL_DESIGN, 'dark');
+    expect(canStartOver(framedPhoto)).toBe(true);
+    expect(startOver(framedPhoto).frame).toBe('none');
+  });
+
+  it('takes the frame into the template only when it has one, and back from a saved one', () => {
+    const defaults = (format: Parameters<typeof defaultActivityTemplate>[1]) =>
+      defaultActivityTemplate(makeActivity(), format);
+    expect(layoutTemplate(defaults, INITIAL_DESIGN)).not.toHaveProperty('frame');
+    const saved = layoutTemplate(defaults, setFrame(INITIAL_DESIGN, 'dark'));
+    expect(saved.frame).toBe('dark');
+    expect(applyDesign(INITIAL_DESIGN, saved, defaults).frame).toBe('dark');
+    expect(
+      applyDesign(
+        setFrame(INITIAL_DESIGN, 'dark'),
+        layoutTemplate(defaults, INITIAL_DESIGN),
+        defaults,
+      ).frame,
+    ).toBe('none');
+  });
+
   it('keeps the frame and where each photo was, on changing layouts', () => {
-    const framed = setCollageFrame(setCollageLayout(INITIAL_DESIGN, 'six'), 'dark');
+    const framed = setFrame(setCollageLayout(INITIAL_DESIGN, 'six'), 'dark');
     const placed = setCellPlacement(framed, 5, moved);
     const fewer = setCollageLayout(placed, 'two');
-    expect(fewer.collage?.frame).toBe('dark');
+    expect(fewer.frame).toBe('dark');
     expect(setCollageLayout(fewer, 'six').collage?.placements[5]).toEqual(moved);
   });
 

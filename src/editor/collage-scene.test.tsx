@@ -14,7 +14,7 @@ import {
 import { COLLAGE_FRAME_WIDTH, newCollage } from '@/core/collage';
 import { defaultActivityTemplate } from '@/core/default-layout';
 import { COVER_PLACEMENT } from '@/core/photo-placement';
-import { CANVAS_FORMATS, type Collage, type Template } from '@/core/template';
+import { CANVAS_FORMATS, type Collage, type ImageFrame, type Template } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
 import { loadSceneBeforeAll } from '@/test-utils/scene';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
@@ -44,11 +44,12 @@ const WHITE = [255, 255, 255, 255];
 const BLACK = [0, 0, 0, 255];
 const CLEAR = [0, 0, 0, 0];
 
-function template(collage: Collage): Template {
+function template(collage: Collage | undefined, frame: ImageFrame = 'none'): Template {
   return {
     ...defaultActivityTemplate(activity, 'story'),
     layers: [],
-    collage,
+    ...(collage === undefined ? {} : { collage }),
+    frame,
     background: { kind: 'transparent' },
   };
 }
@@ -88,12 +89,16 @@ function pixelsOf(image: SkImage) {
   };
 }
 
-const render = async (collage: Collage, cells: readonly (SkImage | null)[]) =>
+const render = async (
+  collage: Collage,
+  cells: readonly (SkImage | null)[],
+  frame: ImageFrame = 'none',
+) =>
   pixelsOf(
     await drawOffscreen(
       makeOffscreenSurface(width, height),
       exporting().exportScene({
-        template: template(collage),
+        template: template(collage, frame),
         layerContext: layerContext(),
         photo: null,
         cells,
@@ -140,8 +145,7 @@ describe('a collage in an image', () => {
     ['light', WHITE],
     ['dark', BLACK],
   ] as const)('draws a %s frame around and between the cells', async (frame, color) => {
-    const collage = { ...newCollage('two'), frame };
-    const at = await render(collage, [photo('#FF0000'), photo('#0000FF')]);
+    const at = await render(newCollage('two'), [photo('#FF0000'), photo('#0000FF')], frame);
     const w = COLLAGE_FRAME_WIDTH;
     // Around the canvas.
     expect(at(1, height / 4)).toEqual(color);
@@ -166,10 +170,39 @@ describe('a collage in an image', () => {
   });
 });
 
+describe('the frame of a single photo, in the image', () => {
+  beforeAll(() => {
+    scene();
+  });
+
+  it.each([
+    ['light', WHITE],
+    ['dark', BLACK],
+  ] as const)('goes around it in %s, leaving the rest of the photo clear', async (frame, color) => {
+    const at = pixelsOf(
+      await drawOffscreen(
+        makeOffscreenSurface(width, height),
+        exporting().exportScene({
+          template: template(undefined, frame),
+          layerContext: layerContext(),
+          photo: photo('#FF0000'),
+          dominant: null,
+        }),
+      ),
+    );
+    expect(at(1, height / 2)).toEqual(color);
+    expect(at(width - 2, height / 2)).toEqual(color);
+    expect(at(width / 2, 1)).toEqual(color);
+    expect(at(width / 2, height - 2)).toEqual(color);
+    expect(at(COLLAGE_FRAME_WIDTH + 2, height / 2)).toEqual(RED);
+    expect(at(width / 2, height / 2)).toEqual(RED);
+  });
+});
+
 describe('the cell being edited, on the canvas', () => {
-  const drawn = async (activeCell: number | null, collage: Collage = newCollage('two')) => {
+  const drawn = async (activeCell: number | null, frame: ImageFrame = 'none') => {
     const { TemplateScene } = scene();
-    const design = template(collage);
+    const design = template(newCollage('two'), frame);
     return pixelsOf(
       await drawOffscreen(
         makeOffscreenSurface(width, height),
@@ -184,6 +217,7 @@ describe('the cell being edited, on the canvas', () => {
             true,
             activeCell,
           )}
+          frame={exporting().sceneFrame(design)}
         />,
       ),
     );
@@ -204,7 +238,7 @@ describe('the cell being edited, on the canvas', () => {
   });
 
   it('leaves the frame as it is, over the dimmed photos', async () => {
-    const at = await drawn(0, { ...newCollage('two'), frame: 'light' });
+    const at = await drawn(0, 'light');
     expect(at(1, (3 * height) / 4)).toEqual(WHITE);
   });
 });
@@ -234,8 +268,8 @@ describe('sceneCollage', () => {
     expect(exporting().sceneCollage(design, [], true, 2)?.activeCell).toBe(2);
   });
 
-  it('has no bars without a frame', () => {
-    const design = template(newCollage('four'));
-    expect(exporting().sceneCollage(design, [], false)?.bars).toEqual([]);
+  it('has no frame without one', () => {
+    expect(exporting().sceneFrame(template(newCollage('four')))).toBeNull();
+    expect(exporting().sceneFrame(template(undefined))).toBeNull();
   });
 });

@@ -59,11 +59,10 @@ export { COLLAGE_LAYOUTS };
 /** The cells of a layout, in the order photos fill them. */
 export const collageCells = (layout: CollageLayout): readonly CollageCell[] => CELLS[layout];
 
-/** A new collage of `layout`: each photo centered, covering its cell, without a frame. */
+/** A new collage of `layout`: each photo centered, covering its cell. */
 export function newCollage(layout: CollageLayout): Collage {
   return {
     layout,
-    frame: 'none',
     placements: Array.from({ length: MAX_COLLAGE_PHOTOS }, () => COVER_PLACEMENT),
   };
 }
@@ -113,20 +112,27 @@ export function drawInCell(photo: Size, rect: CanvasRect, placement: PhotoPlacem
   return { ...drawing, x: rect.x + drawing.x, y: rect.y + drawing.y };
 }
 
-/** Width of a collage's frame, in canvas pixels. */
+/** The whole canvas, as the only cell of a design with one photo. */
+export const WHOLE_CANVAS: CollageCell = { x: 0, y: 0, width: 1, height: 1 };
+
+/** Width of a design's frame, in canvas pixels. */
 export const COLLAGE_FRAME_WIDTH = 16;
 
 /** How close to the canvas's edge a cell's edge counts as on it (fractions add up unevenly). */
 const ON_EDGE = 1e-6;
 
 /**
- * The bars of a collage's frame, in canvas pixels, all as wide: around the canvas, and between
- * cells, half on each. So the frame is even on every side and every layout, and covers only the
+ * The bars of a design's frame, in canvas pixels, all as wide: around the canvas, and in a collage
+ * (`layout`; `null` for one photo) between cells, half on each. So the frame is even on every side
+ * and every layout, and covers only the
  * edges of the photos. Time O(c) for c cells.
  */
-export function collageFrameBars(layout: CollageLayout, canvas: Size): readonly CanvasRect[] {
+export function collageFrameBars(
+  layout: CollageLayout | null,
+  canvas: Size,
+): readonly CanvasRect[] {
   const half = COLLAGE_FRAME_WIDTH / 2;
-  return CELLS[layout].flatMap((cell) => {
+  return (layout === null ? [WHOLE_CANVAS] : CELLS[layout]).flatMap((cell) => {
     const rect = cellRect(cell, canvas);
     const left = cell.x < ON_EDGE ? COLLAGE_FRAME_WIDTH : half;
     const top = cell.y < ON_EDGE ? COLLAGE_FRAME_WIDTH : half;

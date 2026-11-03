@@ -71,6 +71,7 @@ import {
   photoRect,
   prepareLayers,
   type SceneCollage,
+  type SceneFrame,
   TemplateScene,
 } from './template-scene';
 
@@ -83,6 +84,8 @@ interface EditorCanvasProps {
   readonly photo: SkImage | null;
   /** The photos of a collage, drawn instead of `photo`, which is then `null`. */
   readonly collage: SceneCollage | null;
+  /** The frame around the photos. */
+  readonly frame: SceneFrame | null;
   /** A photo of a collage was taken by the fingers: the tools, if open, go to its cell. */
   readonly onCellGrab: (cell: number) => void;
   /** Called once per gesture on a photo of a collage, when the fingers lift. */
@@ -220,6 +223,7 @@ export function EditorCanvas({
   layerContext,
   photo,
   collage,
+  frame,
   onCellGrab,
   onCellPlacementChange,
   placement,
@@ -666,7 +670,7 @@ export function EditorCanvas({
     adjusting === 'background' ? adjustedOpacity.get() : backgroundOpacity,
   );
 
-  const frame =
+  const selectionFrame =
     selected === null
       ? null
       : selected.id === draggingId
@@ -727,6 +731,7 @@ export function EditorCanvas({
                   ? null
                   : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
               }
+              frame={frame}
               collage={
                 collage === null || movingCell === null
                   ? collage
@@ -769,17 +774,17 @@ export function EditorCanvas({
               strokeWidth={guideStroke}
               opacity={horizontalOpacity}
             />
-            {frame === null ? null : (
-              <Group transform={frame.matrix}>
+            {selectionFrame === null ? null : (
+              <Group transform={selectionFrame.matrix}>
                 {/* A dark edge under the white line keeps the frame visible on light photos. */}
                 <RoundedRect
-                  rect={frame.rect}
+                  rect={selectionFrame.rect}
                   style="stroke"
                   strokeWidth={frameStroke}
                   color="rgba(0, 0, 0, 0.35)"
                 />
                 <RoundedRect
-                  rect={frame.rect}
+                  rect={selectionFrame.rect}
                   style="stroke"
                   strokeWidth={1.5 * hairline}
                   color="#FFFFFF"

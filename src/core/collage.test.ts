@@ -124,6 +124,24 @@ describe('collageFrameBars', () => {
   });
 });
 
+describe('the frame of a single photo', () => {
+  const bars = collageFrameBars(null, canvas);
+
+  it('goes only around the canvas', () => {
+    const w = COLLAGE_FRAME_WIDTH;
+    const inside = (x: number, y: number) =>
+      bars.some(
+        (bar) => x >= bar.x && x < bar.x + bar.width && y >= bar.y && y < bar.y + bar.height,
+      );
+    expect(inside(1, canvas.height / 2)).toBe(true);
+    expect(inside(canvas.width - 1, canvas.height / 2)).toBe(true);
+    expect(inside(canvas.width / 2, 1)).toBe(true);
+    expect(inside(canvas.width / 2, canvas.height - 1)).toBe(true);
+    expect(inside(w + 1, canvas.height / 2)).toBe(false);
+    expect(inside(canvas.width / 2, canvas.height / 2)).toBe(false);
+  });
+});
+
 describe('collageCovers', () => {
   const photo = { width: 2000, height: 2000 };
 
@@ -154,6 +172,24 @@ describe('a collage in a design', () => {
 
   it('is optional: a design saved before them still reads', () => {
     expect(parseTemplate(base).collage).toBeUndefined();
+  });
+
+  it('gives its old frame to the design, which has it now', () => {
+    const old = { ...base, collage: { ...newCollage('two'), frame: 'dark' } };
+    const read = parseTemplate(old);
+    expect(read.frame).toBe('dark');
+    expect(read.collage).toEqual(newCollage('two'));
+  });
+
+  it('keeps the frame of the design over that old one', () => {
+    const both = { ...base, frame: 'light', collage: { ...newCollage('two'), frame: 'dark' } };
+    expect(parseTemplate(both).frame).toBe('light');
+  });
+
+  it('reads a design without a frame as having none', () => {
+    expect(parseTemplate(base).frame).toBeUndefined();
+    expect(parseTemplate({ ...base, frame: 'light' }).frame).toBe('light');
+    expect(() => parseTemplate({ ...base, frame: 'gold' })).toThrow();
   });
 
   it('refuses a layout it does not know, and a wrong number of placements', () => {

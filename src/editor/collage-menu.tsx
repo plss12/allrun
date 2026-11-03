@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
-import { type CollageCell, collageCells } from '@/core/collage';
+import { type CollageCell, collageCells, WHOLE_CANVAS } from '@/core/collage';
 import type { CollageLayout } from '@/core/template';
 import { floatingSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
@@ -28,8 +28,6 @@ const SHAPE = { width: 18, height: 28, line: 1.5, radius: 4 } as const;
 const UNCHOSEN_TILE = 'rgba(255, 255, 255, 0.1)';
 const UNCHOSEN_INK = 'rgba(255, 255, 255, 0.75)';
 const CHOSEN_TILE = '#FFFFFF';
-
-const ONE_PHOTO: readonly CollageCell[] = [{ x: 0, y: 0, width: 1, height: 1 }];
 
 /** The ways to lay the photos out, as the panel shows them, by their number of photos. */
 const OPTIONS: readonly (CollageLayout | null)[] = [null, 'two', 'three', 'four', 'six', 'oneTwo'];
@@ -150,7 +148,7 @@ export function CollageMenu({
       {OPTIONS.map((layout) => (
         <LayoutTile
           key={layout ?? 'one'}
-          cells={layout === null ? ONE_PHOTO : collageCells(layout)}
+          cells={layout === null ? [WHOLE_CANVAS] : collageCells(layout)}
           label={t(`editor.collageLayouts.${layout ?? 'one'}`)}
           chosen={current === layout}
           onPress={() => onPick(layout)}

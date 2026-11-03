@@ -9,6 +9,7 @@ import {
   type CollageLayout,
   type DesignBackground,
   type DesignLanguage,
+  type ImageFrame,
   type Template,
 } from './template';
 import type { DistanceUnit } from './units';
@@ -31,6 +32,8 @@ export interface EditorDesign {
   readonly photo: PhotoPlacement;
   /** The photos in a collage (see `collage.ts`), or `null` for one photo, as `photo` says. */
   readonly collage: Collage | null;
+  /** The frame around its photos, one or several. */
+  readonly frame: ImageFrame;
   /** What shows where the photo leaves the canvas empty. */
   readonly background: DesignBackground;
   readonly layers: EditorLayers;
@@ -54,6 +57,7 @@ export const INITIAL_DESIGN: EditorDesign = {
   format: INITIAL_FORMAT,
   photo: COVER_PLACEMENT,
   collage: null,
+  frame: 'none',
   background: AUTO_BACKGROUND,
   layers: null,
   units: null,
@@ -71,6 +75,7 @@ export function layoutTemplate(defaultTemplate: DefaultTemplate, design: EditorD
     layers: design.layers ?? template.layers,
     photo: design.photo,
     ...(design.collage === null ? {} : { collage: design.collage }),
+    ...(design.frame === 'none' ? {} : { frame: design.frame }),
     background: design.background,
     ...(design.units === null ? {} : { units: design.units }),
     ...(design.language === null ? {} : { language: design.language }),
@@ -129,7 +134,10 @@ function keepingImages(
  */
 export function applyDesign(
   design: EditorDesign,
-  saved: Pick<Template, 'layers' | 'photo' | 'collage' | 'background' | 'units' | 'language'>,
+  saved: Pick<
+    Template,
+    'layers' | 'photo' | 'collage' | 'frame' | 'background' | 'units' | 'language'
+  >,
   defaultTemplate: DefaultTemplate,
 ): EditorDesign {
   return {
@@ -137,6 +145,7 @@ export function applyDesign(
     layers: keepingImages(design, saved.layers, defaultTemplate),
     photo: saved.photo,
     collage: saved.collage ?? null,
+    frame: saved.frame ?? 'none',
     background: saved.background,
     units: saved.units ?? null,
     language: saved.language ?? null,
@@ -174,9 +183,8 @@ export function setPhotoPlacement(design: EditorDesign, photo: PhotoPlacement): 
 }
 
 /**
- * Lays the photos out another way (`null`: one photo). Each keeps where it was in its cell and the
- * frame stays, so changing layouts and coming back loses nothing. Returns `design` itself when it
- * is the same.
+ * Lays the photos out another way (`null`: one photo). Each keeps where it was in its cell, so
+ * changing layouts and coming back loses nothing. Returns `design` itself when it is the same.
  */
 export function setCollageLayout(design: EditorDesign, layout: CollageLayout | null): EditorDesign {
   if ((design.collage?.layout ?? null) === layout) {
@@ -188,11 +196,9 @@ export function setCollageLayout(design: EditorDesign, layout: CollageLayout | n
   return { ...design, collage: { ...(design.collage ?? newCollage(layout)), layout } };
 }
 
-/** Another frame for the collage. Returns `design` itself without one, or when it is the same. */
-export function setCollageFrame(design: EditorDesign, frame: Collage['frame']): EditorDesign {
-  return design.collage === null || design.collage.frame === frame
-    ? design
-    : { ...design, collage: { ...design.collage, frame } };
+/** Another frame around the photos. Returns `design` itself when it is the same. */
+export function setFrame(design: EditorDesign, frame: ImageFrame): EditorDesign {
+  return design.frame === frame ? design : { ...design, frame };
 }
 
 /** Places the photo of a collage's cell anew. Returns `design` itself when it is already there. */
@@ -249,6 +255,7 @@ export function canStartOver(design: EditorDesign): boolean {
     design.units !== null ||
     design.language !== null ||
     design.collage !== null ||
+    design.frame !== INITIAL_DESIGN.frame ||
     !samePlacement(design.photo, INITIAL_DESIGN.photo) ||
     !sameBackground(design.background, INITIAL_DESIGN.background)
   );
