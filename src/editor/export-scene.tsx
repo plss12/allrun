@@ -1,6 +1,7 @@
 import type { SkImage } from '@shopify/react-native-skia';
 import type { ReactElement } from 'react';
 
+import { cellRect, collageCells, collageFrameBars, drawInCell } from '@/core/collage';
 import { backgroundColor } from '@/core/design-background';
 import { drawPhoto } from '@/core/photo-placement';
 import { CANVAS_FORMATS, type Template } from '@/core/template';
@@ -10,6 +11,8 @@ import {
   photoMatrix,
   photoRect,
   prepareLayers,
+  type SceneCell,
+  type SceneCollage,
   type ScenePhoto,
   TemplateScene,
 } from './template-scene';
@@ -21,6 +24,8 @@ export interface ExportDesign {
   readonly layerContext: LayerContext;
   /** The full-quality copy of the photo, or `null` for none. */
   readonly photo: SkImage | null;
+  /** In a collage, the photo of each cell, or `null` for an empty one. */
+  readonly cells?: readonly (SkImage | null)[];
   /** The photo's dominant color, for the `auto` background; `null` without a photo. */
   readonly dominant: string | null;
 }
@@ -35,6 +40,60 @@ export function scenePhoto(template: Template, photo: SkImage): ScenePhoto {
   return { image: photo, matrix: photoMatrix(drawing), rect: photoRect(drawing) };
 }
 
+/** The photo of a collage's cell: decoded, still loading, or none. */
+export type CellPhoto = SkImage | 'loading' | null;
+
+/** The colors of a collage's frame: pure, as a picture's. */
+const FRAME_COLORS = { light: '#FFFFFF', dark: '#000000' } as const;
+
+/**
+ * The photos of a design's collage in a scene, placed as it says, each at any resolution of it, and
+ * the bars of its frame; `null` for a design with one photo.
+ *
+ * @param hints - Whether empty cells show the sign to fill them, on the canvas.
+ * @param activeCell - The cell being edited, on the canvas, which the others dim to set apart.
+ */
+export function sceneCollage(
+  template: Template,
+  photos: readonly CellPhoto[],
+  hints: boolean,
+  activeCell: number | null = null,
+): SceneCollage | null {
+  const { collage } = template;
+  if (collage === undefined) {
+    return null;
+  }
+  const canvas = CANVAS_FORMATS[template.format];
+  const cells = collageCells(collage.layout).map((cell, index): SceneCell => {
+    const clip = cellRect(cell, canvas);
+    const photo = photos[index] ?? null;
+    if (photo === null) {
+      return { kind: 'empty', clip, hint: hints };
+    }
+    if (photo === 'loading') {
+      return { kind: 'loading', clip };
+    }
+    const drawing = drawInCell(
+      { width: photo.width(), height: photo.height() },
+      clip,
+      collage.placements[index],
+    );
+    return {
+      kind: 'photo',
+      clip,
+      photo: { image: photo, matrix: photoMatrix(drawing), rect: photoRect(drawing) },
+    };
+  });
+  return collage.frame === 'none'
+    ? { cells, bars: [], barColor: FRAME_COLORS.light, activeCell }
+    : {
+        cells,
+        bars: collageFrameBars(collage.layout, canvas),
+        barColor: FRAME_COLORS[collage.frame],
+        activeCell,
+      };
+}
+
 /**
  * The scene of a design at its export size: the same scene as the editor's canvas, which already
  * works in export pixels, with the photo where the design puts it, over its background (or
@@ -45,6 +104,7 @@ export function exportScene({
   template,
   layerContext,
   photo,
+  cells = [],
   dominant,
 }: ExportDesign): ReactElement {
   const color = backgroundColor(template.background, dominant);
@@ -53,7 +113,8 @@ export function exportScene({
       format={template.format}
       layers={prepareLayers(template, layerContext)}
       backdrop={color === null ? { kind: 'none' } : { kind: 'color', color }}
-      photo={photo === null ? null : scenePhoto(template, photo)}
+      photo={photo === null || template.collage !== undefined ? null : scenePhoto(template, photo)}
+      collage={sceneCollage(template, cells, false)}
     />
   );
 }

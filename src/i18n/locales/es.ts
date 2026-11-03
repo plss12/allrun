@@ -114,6 +114,19 @@ export const es: Translations = {
     choosePeriod: 'Elegir periodo',
     switchError: 'No se ha podido cargar. Inténtalo de nuevo.',
     collages: 'Collages',
+    collageLayouts: {
+      one: 'Una foto',
+      two: 'Dos fotos en filas',
+      three: 'Tres fotos en filas',
+      oneTwo: 'Una foto arriba y dos abajo',
+      four: 'Cuatro fotos',
+      six: 'Seis fotos',
+    },
+    collageFrames: {
+      none: 'Sin bordes',
+      light: 'Blanco',
+      dark: 'Negro',
+    },
     designs: 'Diseños',
     ratio: 'Proporción',
     activity: 'Actividad',
@@ -124,7 +137,7 @@ export const es: Translations = {
     discardMessage: 'Se perderán la foto y los cambios.',
     discard: 'Descartar',
     photoTools: 'Foto y fondo',
-    fitPhoto: 'Cubrir',
+    resetPhoto: 'Restablecer',
     background: 'Fondo',
     backgrounds: {
       auto: 'Color de la foto',

@@ -1,6 +1,7 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
 import { defaultActivityTemplate } from './default-layout';
+import { newCollage } from './collage';
 import { backgroundColor, isOpaque } from './design-background';
 import type { Template } from './template';
 
@@ -57,5 +58,31 @@ describe('isOpaque', () => {
   it('is see-through without a photo, over the auto or no background: a sticker', () => {
     expect(isOpaque(design, null, null)).toBe(false);
     expect(isOpaque(withBackground({ kind: 'transparent' }), null, null)).toBe(false);
+  });
+});
+
+describe('isOpaque in a collage', () => {
+  const photo = { width: 2000, height: 2000 };
+  const design: Template = {
+    ...defaultActivityTemplate(makeActivity(), 'story'),
+    collage: newCollage('two'),
+    background: { kind: 'transparent' },
+  };
+
+  it('is opaque when its photos cover their cells', () => {
+    expect(isOpaque(design, null, null, [photo, photo])).toBe(true);
+  });
+
+  it('is not with an empty cell over no background', () => {
+    expect(isOpaque(design, null, null, [photo, null])).toBe(false);
+  });
+
+  it('is with an empty cell over an opaque background', () => {
+    const colored: Template = { ...design, background: { kind: 'color', color: '#112233' } };
+    expect(isOpaque(colored, null, null, [photo, null])).toBe(true);
+  });
+
+  it('goes by its cells and not by the single photo', () => {
+    expect(isOpaque(design, photo, null, [])).toBe(false);
   });
 });

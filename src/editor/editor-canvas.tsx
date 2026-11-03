@@ -47,7 +47,9 @@ import {
   snapLayer,
   translateLayer,
 } from '@/core/layer-transform';
+import { drawInCell } from '@/core/collage';
 import {
+  COVER_PLACEMENT,
   drawPhoto,
   panPlacement,
   type PhotoDrawing,
@@ -62,11 +64,13 @@ import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 
 import {
+  type DrawRect,
   type LayerContext,
   layerMatrix,
   photoMatrix,
   photoRect,
   prepareLayers,
+  type SceneCollage,
   TemplateScene,
 } from './template-scene';
 
@@ -77,6 +81,12 @@ interface EditorCanvasProps {
   readonly layerContext: LayerContext;
   /** The photo, or `null` for none. */
   readonly photo: SkImage | null;
+  /** The photos of a collage, drawn instead of `photo`, which is then `null`. */
+  readonly collage: SceneCollage | null;
+  /** A photo of a collage was taken by the fingers: the tools, if open, go to its cell. */
+  readonly onCellGrab: (cell: number) => void;
+  /** Called once per gesture on a photo of a collage, when the fingers lift. */
+  readonly onCellPlacementChange: (cell: number, placement: PhotoPlacement) => void;
   /** Where the photo goes; the template's own, kept apart so gestures can move it live. */
   readonly placement: PhotoPlacement;
   /** The background's color where the photo leaves the canvas empty; `null` shows none. */
@@ -99,8 +109,11 @@ interface EditorCanvasProps {
    * selected), so the editor knows how far down it reaches.
    */
   readonly onSelectedSizeChange: (size: Size | null) => void;
-  /** Called on a tap that hits no layer: on the photo, or on the empty canvas. */
-  readonly onTapPhoto: () => void;
+  /**
+   * Called on a tap that hits no layer, on the photo or on the empty canvas, with where it was, as
+   * fractions of the canvas.
+   */
+  readonly onTapPhoto: (at: { readonly x: number; readonly y: number }) => void;
   /** Called when a layer starts and stops being dragged, so the editor can clear the way. */
   readonly onDraggingChange: (dragging: boolean) => void;
   /** Called once per gesture on the photo, when the fingers lift. */
@@ -131,6 +144,8 @@ const TRASH_REACH = 44;
 /** What the current gesture moves: decided when it starts, kept until every finger lifts. */
 const TARGET_NONE = 0;
 const TARGET_PHOTO = 1;
+/** A photo of a collage, in its cell. */
+const TARGET_CELL = 3;
 const TARGET_LAYER = 2;
 
 /** Track Red, as a plain string the UI thread can use. */
@@ -204,6 +219,9 @@ export function EditorCanvas({
   template,
   layerContext,
   photo,
+  collage,
+  onCellGrab,
+  onCellPlacementChange,
   placement,
   backdrop,
   selectedId,
@@ -278,14 +296,40 @@ export function EditorCanvas({
    * A tap selects the layer under it, or taps it if it already is; elsewhere, it is a tap on the
    * photo.
    */
-  const tapAt = (id: string | null) => {
+  const tapAt = (id: string | null, at: { readonly x: number; readonly y: number }) => {
     if (id === null) {
-      onTapPhoto();
+      onTapPhoto({ x: at.x / canvas.width, y: at.y / canvas.height });
     } else if (id === selectedId) {
       onTapSelected(id);
     } else {
       onSelect(id);
     }
+  };
+
+  /**
+   * The cells of a collage as gestures need them: where each is, and the size and placement of its
+   * photo. Plain numbers: they go to the UI thread with the gesture, the images stay here.
+   */
+  const cellTargets = (collage?.cells ?? []).map((cell, index) => ({
+    clip: cell.clip,
+    size:
+      cell.kind === 'photo'
+        ? { width: cell.photo.image.width(), height: cell.photo.image.height() }
+        : null,
+    placement: template.collage?.placements[index] ?? COVER_PLACEMENT,
+  }));
+  /**
+   * The cell under the fingers, its photo drawn from the shared placement until the gesture ends;
+   * as with a layer, the end is one React update with the commit, so no stale frame shows.
+   */
+  const [movingCell, setMovingCell] = useState<number | null>(null);
+  const startCellMove = (cell: number) => {
+    setMovingCell(cell);
+    onCellGrab(cell);
+  };
+  const finishCellMove = (cell: number, moved: PhotoPlacement) => {
+    onCellPlacementChange(cell, moved);
+    setMovingCell(null);
   };
 
   const activeGestures = useSharedValue(0);
@@ -297,6 +341,13 @@ export function EditorCanvas({
   const livePlacement = useSharedValue(placement);
   const photoStraight = useSharedValue(false);
   const photoCover = useSharedValue(false);
+  /** The same for the photo of the cell being moved, and where it is and how big. */
+  const rawCellPlacement = useSharedValue(COVER_PLACEMENT);
+  const liveCellPlacement = useSharedValue(COVER_PLACEMENT);
+  const movingIndex = useSharedValue(0);
+  const movingBox = useSharedValue<{ readonly size: Size; readonly rect: DrawRect } | null>(null);
+  /** What the snap guides run along: the canvas, or the cell being moved. */
+  const guideBox = useSharedValue<DrawRect>({ x: 0, y: 0, ...canvas });
   /** Where the fingers put the layer; `liveTransform` is that, snapped. */
   const rawTransform = useSharedValue<LayerTransform>(IDENTITY);
   const liveTransform = useSharedValue<LayerTransform>(IDENTITY);
@@ -322,6 +373,14 @@ export function EditorCanvas({
   );
   const livePhotoMatrix = useDerivedValue(() => photoMatrix(drawing.get()));
   const livePhotoRect = useDerivedValue(() => photoRect(drawing.get()));
+  const cellDrawing = useDerivedValue((): PhotoDrawing => {
+    const box = movingBox.get();
+    return box === null
+      ? { x: 0, y: 0, width: 0, height: 0, rotation: 0 }
+      : drawInCell(box.size, box.rect, liveCellPlacement.get());
+  });
+  const liveCellMatrix = useDerivedValue(() => photoMatrix(cellDrawing.get()));
+  const liveCellRect = useDerivedValue(() => photoRect(cellDrawing.get()));
   const liveMatrix = useDerivedValue(() => layerMatrix(liveTransform.get(), canvas));
   // The dragged layer fades over the trash: it is about to go.
   const liveOpacity = useDerivedValue(() => draggedOpacity * (1 - 0.65 * trashProgress.get()));
@@ -347,7 +406,26 @@ export function EditorCanvas({
     resetSnaps();
     const id = hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio);
     const box = id === null ? undefined : boxes.find((candidate) => candidate.id === id);
+    guideBox.set({ x: 0, y: 0, ...canvas });
     if (box === undefined) {
+      const index = cellTargets.findIndex(
+        ({ clip }) =>
+          point.x >= clip.x &&
+          point.x < clip.x + clip.width &&
+          point.y >= clip.y &&
+          point.y < clip.y + clip.height,
+      );
+      const cell = index < 0 ? undefined : cellTargets[index];
+      if (cell !== undefined && cell.size !== null) {
+        target.set(TARGET_CELL);
+        movingIndex.set(index);
+        movingBox.set({ size: cell.size, rect: cell.clip });
+        guideBox.set(cell.clip);
+        rawCellPlacement.set(cell.placement);
+        liveCellPlacement.set(cell.placement);
+        scheduleOnRN(startCellMove, index);
+        return;
+      }
       target.set(TARGET_PHOTO);
       rawPlacement.set(livePlacement.get());
       return;
@@ -382,14 +460,10 @@ export function EditorCanvas({
     }
   };
 
-  /** Moves the photo to `next` (unsnapped), snapping it and ticking on each new snap. */
-  const updatePhoto = (next: PhotoPlacement) => {
+  /** `next` (unsnapped) for a photo of size `size` on `area`, snapped, ticking on each new snap. */
+  const snapMoved = (next: PhotoPlacement, size: Size, area: Size): PhotoPlacement => {
     'worklet';
-    if (photoSize === null) {
-      return;
-    }
-    rawPlacement.set(next);
-    const snap = snapPlacement(next, photoSize, canvas, photoThresholds);
+    const snap = snapPlacement(next, size, area, photoThresholds);
     const newSnap =
       (snap.x !== 'none' && snap.x !== snapX.get()) ||
       (snap.y !== 'none' && snap.y !== snapY.get()) ||
@@ -399,10 +473,31 @@ export function EditorCanvas({
     snapY.set(snap.y);
     photoStraight.set(snap.rotation);
     photoCover.set(snap.cover);
-    livePlacement.set(snap.placement);
     if (newSnap) {
       scheduleOnRN(playHaptic, ImpactFeedbackStyle.Light);
     }
+    return snap.placement;
+  };
+
+  /** Moves the photo to `next` (unsnapped). */
+  const updatePhoto = (next: PhotoPlacement) => {
+    'worklet';
+    if (photoSize === null) {
+      return;
+    }
+    rawPlacement.set(next);
+    livePlacement.set(snapMoved(next, photoSize, canvas));
+  };
+
+  /** Moves the photo of the cell being moved to `next` (unsnapped), inside its cell. */
+  const updateCell = (next: PhotoPlacement) => {
+    'worklet';
+    const box = movingBox.get();
+    if (box === null) {
+      return;
+    }
+    rawCellPlacement.set(next);
+    liveCellPlacement.set(snapMoved(next, box.size, box.rect));
   };
 
   /** Tracks whether the finger (screen points) is over the trash, ticking when it gets there. */
@@ -432,7 +527,9 @@ export function EditorCanvas({
     if (remaining > 0) {
       return;
     }
-    if (target.get() === TARGET_PHOTO && photoSize !== null) {
+    if (target.get() === TARGET_CELL) {
+      scheduleOnRN(finishCellMove, movingIndex.get(), liveCellPlacement.get());
+    } else if (target.get() === TARGET_PHOTO && photoSize !== null) {
       scheduleOnRN(onPlacementChange, livePlacement.get());
     } else if (target.get() === TARGET_LAYER) {
       if (overTrash.get()) {
@@ -462,6 +559,8 @@ export function EditorCanvas({
       if (target.get() === TARGET_LAYER) {
         updateLayer(translateLayer(rawTransform.get(), canvas, dx, dy));
         trackTrash(event.x, event.y);
+      } else if (target.get() === TARGET_CELL) {
+        updateCell(panPlacement(rawCellPlacement.get(), guideBox.get(), dx, dy));
       } else {
         updatePhoto(panPlacement(rawPlacement.get(), canvas, dx, dy));
       }
@@ -481,6 +580,14 @@ export function EditorCanvas({
       }
       if (target.get() === TARGET_LAYER) {
         updateLayer(scaleLayer(rawTransform.get(), event.scaleChange));
+      } else if (target.get() === TARGET_CELL) {
+        const box = guideBox.get();
+        updateCell(
+          zoomPlacement(rawCellPlacement.get(), box, event.scaleChange, {
+            x: event.focalX / ratio - box.x,
+            y: event.focalY / ratio - box.y,
+          }),
+        );
       } else {
         updatePhoto(
           zoomPlacement(rawPlacement.get(), canvas, event.scaleChange, {
@@ -501,6 +608,8 @@ export function EditorCanvas({
     onUpdate: (event) => {
       if (target.get() === TARGET_LAYER) {
         updateLayer(rotateLayer(rawTransform.get(), event.rotationChange));
+      } else if (target.get() === TARGET_CELL) {
+        updateCell(rotatePlacement(rawCellPlacement.get(), event.rotationChange));
       } else {
         updatePhoto(rotatePlacement(rawPlacement.get(), event.rotationChange));
       }
@@ -512,7 +621,7 @@ export function EditorCanvas({
     onDeactivate: (event) => {
       if (!event.canceled) {
         const point = { x: event.x / ratio, y: event.y / ratio };
-        scheduleOnRN(tapAt, hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio));
+        scheduleOnRN(tapAt, hitTestLayers(boxes, point, canvas, MIN_TOUCH / ratio), point);
       }
     },
   });
@@ -571,17 +680,23 @@ export function EditorCanvas({
 
   // Snap guides: a vertical line at the left edge, center or right edge, a horizontal one at the
   // top, center or bottom; hidden while not snapped.
-  const verticalGuideX = useDerivedValue(() =>
-    guidePosition(snapX.get(), canvas.width, guideStroke / 2),
+  const verticalGuideX = useDerivedValue(
+    () => guideBox.get().x + guidePosition(snapX.get(), guideBox.get().width, guideStroke / 2),
   );
-  const verticalP1 = useDerivedValue(() => ({ x: verticalGuideX.get(), y: 0 }));
-  const verticalP2 = useDerivedValue(() => ({ x: verticalGuideX.get(), y: canvas.height }));
+  const verticalP1 = useDerivedValue(() => ({ x: verticalGuideX.get(), y: guideBox.get().y }));
+  const verticalP2 = useDerivedValue(() => ({
+    x: verticalGuideX.get(),
+    y: guideBox.get().y + guideBox.get().height,
+  }));
   const verticalOpacity = useDerivedValue(() => (snapX.get() === 'none' ? 0 : 1));
-  const horizontalGuideY = useDerivedValue(() =>
-    guidePosition(snapY.get(), canvas.height, guideStroke / 2),
+  const horizontalGuideY = useDerivedValue(
+    () => guideBox.get().y + guidePosition(snapY.get(), guideBox.get().height, guideStroke / 2),
   );
-  const horizontalP1 = useDerivedValue(() => ({ x: 0, y: horizontalGuideY.get() }));
-  const horizontalP2 = useDerivedValue(() => ({ x: canvas.width, y: horizontalGuideY.get() }));
+  const horizontalP1 = useDerivedValue(() => ({ x: guideBox.get().x, y: horizontalGuideY.get() }));
+  const horizontalP2 = useDerivedValue(() => ({
+    x: guideBox.get().x + guideBox.get().width,
+    y: horizontalGuideY.get(),
+  }));
   const horizontalOpacity = useDerivedValue(() => (snapY.get() === 'none' ? 0 : 1));
 
   const trashStyle = useAnimatedStyle(() => ({
@@ -611,6 +726,26 @@ export function EditorCanvas({
                 photo === null
                   ? null
                   : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
+              }
+              collage={
+                collage === null || movingCell === null
+                  ? collage
+                  : {
+                      ...collage,
+                      // The photo under the fingers, drawn from the shared placement.
+                      cells: collage.cells.map((cell, index) =>
+                        index === movingCell && cell.kind === 'photo'
+                          ? {
+                              ...cell,
+                              photo: {
+                                image: cell.photo.image,
+                                matrix: liveCellMatrix,
+                                rect: liveCellRect,
+                              },
+                            }
+                          : cell,
+                      ),
+                    }
               }
               live={
                 draggingId !== null

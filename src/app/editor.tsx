@@ -37,6 +37,9 @@ import {
   setLayers,
   setLanguage,
   setLayerTransform,
+  setCellPlacement,
+  setCollageFrame,
+  setCollageLayout,
   setPhotoPlacement,
   setUnits,
   startOver,
@@ -44,6 +47,7 @@ import {
 import { canRedo, canUndo, commit, createHistory, redo, undo } from '@/core/history';
 import { catalogItemKey, type NewLayer } from '@/core/layer-catalog';
 import { splitOpacity, withOpacity } from '@/core/color-menu';
+import { cellAt, collageCells } from '@/core/collage';
 import { backgroundColor } from '@/core/design-background';
 import { LAYER_MARGIN, layerVerticalReach, liftToClear } from '@/core/layer-transform';
 import { COVER_PLACEMENT, samePlacement, type Size } from '@/core/photo-placement';
@@ -52,9 +56,12 @@ import { setLayerColor, setLayerOpacity } from '@/core/layer-style';
 import {
   type CanvasFormat,
   CANVAS_FORMATS,
+  type CollageLayout,
   type DesignBackground,
   type DesignLanguage,
+  IMAGE_FRAMES,
   type Layer,
+  MAX_COLLAGE_PHOTOS,
   type Template,
 } from '@/core/template';
 import { canAddImage, isImageLayer, MAX_IMAGES, setLayerImage } from '@/core/image-layer';
@@ -89,7 +96,7 @@ import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar } from '@/editor/editor-top-bar';
 import { ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
-import type { ExportDesign } from '@/editor/export-scene';
+import { type CellPhoto, type ExportDesign, sceneCollage } from '@/editor/export-scene';
 import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
 import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
@@ -113,7 +120,7 @@ import {
   ROUND_BUTTON_SIZE,
   RoundButton,
 } from '@/editor/round-button';
-import { StylePanel, widgetTools } from '@/editor/style-panel';
+import { Chip, Row, StylePanel, widgetTools } from '@/editor/style-panel';
 import { TemplateSheet } from '@/editor/template-sheet';
 import { useExport } from '@/editor/use-export';
 import { type ColumnTool, WidgetColumn } from '@/editor/widget-column';
@@ -138,6 +145,12 @@ interface EditorPhoto {
   /** Full-quality copy for exporting; `null` until prepared in the background. */
   readonly exportUri: string | null;
 }
+
+/** A collage's cells after the first, all empty. */
+const NO_CELL_PICTURES: readonly (string | null)[] = Array.from(
+  { length: MAX_COLLAGE_PHOTOS - 1 },
+  () => null,
+);
 
 /** Room between the screen's safe area and the floating controls, in points. */
 const EDGE = 12;
@@ -294,6 +307,15 @@ function EditorWorkspace({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [formatsOpen, setFormatsOpen] = useState(false);
+  const [collagesOpen, setCollagesOpen] = useState(false);
+  /**
+   * The photos of a collage's cells after the first, which is the editor's photo, by their keys in
+   * `pictures`. As the photo, they aren't in the design: undo never swaps them. They stay when the
+   * layout shows fewer, and come back with one that shows them.
+   */
+  const [cellPictures, setCellPictures] = useState<readonly (string | null)[]>(NO_CELL_PICTURES);
+  /** The cell the photo's tools act on, in a collage. */
+  const [toolsCell, setToolsCell] = useState(0);
   /** Whether the photo's actions show, after a tap on it. */
   const [photoTools, setPhotoTools] = useState(false);
   /** A widget is being dragged: the controls step aside, as in a story editor. */
@@ -343,10 +365,20 @@ function EditorWorkspace({
    * as one undo step.
    */
   const photoPicker = usePhotoPicker();
+  const cellCount = design.collage === null ? 0 : collageCells(design.collage.layout).length;
+  const shownCellPictures = cellPictures.slice(0, Math.max(0, cellCount - 1));
+  // Undo can leave the tools on a cell the layout no longer has.
+  if (toolsCell > 0 && toolsCell >= cellCount) {
+    setToolsCell(0);
+  }
   const pictures = usePictures(
-    template.layers.filter(isImageLayer).map((layer) => layer.image),
+    [
+      ...template.layers.filter(isImageLayer).map((layer) => layer.image),
+      ...shownCellPictures.filter((key) => key !== null),
+    ],
     (key) => {
       notice.show(t('editor.photoError'));
+      setCellPictures((current) => current.map((cell) => (cell === key ? null : cell)));
       edit((current) => ({
         ...current,
         layers: current.layers.filter((layer) => !isImageLayer(layer) || layer.image !== key),
@@ -409,6 +441,16 @@ function EditorWorkspace({
    */
   const exporter = useExport();
   const exporting = exporter.state.status !== 'idle';
+  /** The photo of each cell for the image: the full-quality copy of the first. */
+  const exportCells = async (): Promise<readonly (SkImage | null)[]> => {
+    if (design.collage === null) {
+      return [];
+    }
+    return [
+      photo === null ? null : await loadPhoto(await exportCopyOf(photo)),
+      ...shownCellPictures.map((key) => (key === null ? null : cellImage(key))),
+    ];
+  };
   const startExport = () => {
     setSelectedId(null);
     setPhotoTools(false);
@@ -416,7 +458,12 @@ function EditorWorkspace({
     exporter.start(async (): Promise<ExportDesign> => ({
       template,
       layerContext,
-      photo: photo === null ? null : await loadPhoto(await exportCopyOf(photo)),
+      // In a collage, the photo goes among its cells.
+      photo:
+        photo === null || design.collage !== null
+          ? null
+          : await loadPhoto(await exportCopyOf(photo)),
+      cells: await exportCells(),
       dominant,
     }));
   };
@@ -530,7 +577,22 @@ function EditorWorkspace({
    * The photo's dominant color, the `auto` background: read once per photo from the editor copy
    * (a reduced copy of it, see `photo-color.ts`), and used for the export too, so both match.
    */
-  const dominant = canvasImage === null ? null : readDominant(canvasImage);
+  /** A cell's picture, once decoded. */
+  const cellImage = (key: string): SkImage | null => pictures.images.get(key)?.image ?? null;
+  const firstCellImage = shownCellPictures
+    .map((key) => (key === null ? null : cellImage(key)))
+    .find((image) => image !== null);
+  // The first photo of the design gives the color: the photo, or in a collage without it, the next.
+  const dominantSource = canvasImage ?? firstCellImage ?? null;
+  const dominant = dominantSource === null ? null : readDominant(dominantSource);
+  /** The photos of the cells on the canvas, decoded or on their way. */
+  const canvasCells: readonly CellPhoto[] =
+    design.collage === null
+      ? []
+      : [
+          photo === null ? null : (canvasImage ?? 'loading'),
+          ...shownCellPictures.map((key) => (key === null ? null : (cellImage(key) ?? 'loading'))),
+        ];
 
   /**
    * The eyedropper, while it is open: a snapshot of the design, taken once when it opens, and what
@@ -547,6 +609,7 @@ function EditorWorkspace({
           template,
           layerContext,
           photo: canvasImage,
+          cells: canvasCells.map((cell) => (cell === 'loading' ? null : cell)),
           dominant,
         });
         setEyedropper({ target, image });
@@ -752,11 +815,22 @@ function EditorWorkspace({
    * A tap on the photo first lets go of the selected widget; then it shows the photo's tools and
    * the background, also without a photo (a sticker over a color).
    */
-  const tapPhoto = () => {
+  const tapPhoto = (at: { readonly x: number; readonly y: number }) => {
     if (selectedId !== null) {
       setSelectedId(null);
-    } else {
+    } else if (design.collage === null) {
       setPhotoTools((shown) => !shown);
+    } else {
+      const cell = cellAt(design.collage.layout, at.x, at.y);
+      if (canvasCells[cell] === null) {
+        // Empty: straight to its photo.
+        setPhotoTools(false);
+        chooseCellPhoto(cell);
+      } else {
+        // Another cell's photo moves the tools to it; the same one's closes them.
+        setPhotoTools(!photoTools || cell !== toolsCell);
+        setToolsCell(cell);
+      }
     }
   };
 
@@ -791,7 +865,9 @@ function EditorWorkspace({
         exportUri: null,
       });
       // A new photo starts centered and covering the canvas (user's choice), as one undo step.
-      change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
+      change((current) =>
+        setCellPlacement(setPhotoPlacement(current, COVER_PLACEMENT), 0, COVER_PLACEMENT),
+      );
       void loadChosenPhoto(id, libraryId);
     }
   };
@@ -804,6 +880,50 @@ function EditorWorkspace({
     setPhoto(null);
     setPhotoTools(false);
     change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
+  };
+
+  /** Shows `key` in a cell after the first, centered and covering it. */
+  const setCellPicture = (cell: number, key: string | null) => {
+    setCellPictures((current) => current.map((old, i) => (i === cell - 1 ? key : old)));
+    change((current) => setCellPlacement(current, cell, COVER_PLACEMENT));
+  };
+
+  /** Lets the user choose the photo of a cell. The first is the editor's photo. */
+  const chooseCellPhoto = (cell: number) => {
+    setPhotoTools(false);
+    if (cell === 0) {
+      void pickPhoto();
+      return;
+    }
+    void (async () => {
+      try {
+        const key = await pictures.pick('cell');
+        if (key !== null) {
+          setCellPicture(cell, key);
+        }
+      } catch (error) {
+        logError('Could not read the photo for a cell', error);
+        notice.show(t('editor.photoError'));
+      }
+    })();
+  };
+
+  /** Empties a cell: it goes back to its sign, and to the background in the image. */
+  const removeCellPhoto = (cell: number) => {
+    setPhotoTools(false);
+    if (cell === 0) {
+      setPhoto(null);
+      change((current) => setCellPlacement(current, 0, COVER_PLACEMENT));
+    } else {
+      setCellPicture(cell, null);
+    }
+  };
+
+  /** Lays the photos out as `layout` says, as one undo step. */
+  const pickCollage = (layout: CollageLayout | null) => {
+    setPhotoTools(false);
+    setToolsCell(0);
+    change((current) => setCollageLayout(current, layout));
   };
 
   // Leaving with edits asks first: the design is not kept. The photo alone doesn't count: it was
@@ -978,7 +1098,18 @@ function EditorWorkspace({
               displayWidth={displayWidth}
               template={shownTemplate}
               layerContext={layerContext}
-              photo={canvasImage}
+              photo={design.collage === null ? canvasImage : null}
+              collage={sceneCollage(
+                shownTemplate,
+                canvasCells,
+                true,
+                // Only while its tools act on it: the background is the whole design's.
+                photoTools && !backgroundMenu && canvasCells[toolsCell] !== null ? toolsCell : null,
+              )}
+              onCellGrab={setToolsCell}
+              onCellPlacementChange={(cell, placement) =>
+                change((current) => setCellPlacement(current, cell, placement))
+              }
               placement={design.photo}
               backdrop={backgroundColor(design.background, dominant)}
               selectedId={typing ? null : selectedId}
@@ -1026,13 +1157,14 @@ function EditorWorkspace({
         ) : null}
       </View>
 
-      {formatsOpen || moreOpen ? (
+      {formatsOpen || collagesOpen || moreOpen ? (
         // A tap anywhere else closes the formats' panel or the "…" menu, as with any menu.
         <Pressable
           accessible={false}
           importantForAccessibility="no"
           onPress={() => {
             setFormatsOpen(false);
+            setCollagesOpen(false);
             setMoreOpen(false);
           }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -1074,7 +1206,10 @@ function EditorWorkspace({
           formatsOpen={formatsOpen}
           onFormatsOpenChange={setFormatsOpen}
           onPickFormat={chooseFormat}
-          onCollages={comingSoon}
+          collage={design.collage?.layout ?? null}
+          collagesOpen={collagesOpen}
+          onCollagesOpenChange={setCollagesOpen}
+          onPickCollage={pickCollage}
           onDesigns={() => {
             setFormatsOpen(false);
             setTemplatesOpen(true);
@@ -1146,8 +1281,14 @@ function EditorWorkspace({
                 the canvas, where it kept widgets from being moved. */}
             <RoundButton
               icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
-              label={t(photo === null ? 'editor.choosePhoto' : 'editor.photoTools')}
-              onPress={photo === null ? () => void pickPhoto() : openPhotoTools}
+              label={t(
+                photo === null && design.collage === null
+                  ? 'editor.choosePhoto'
+                  : 'editor.photoTools',
+              )}
+              onPress={
+                photo === null && design.collage === null ? () => void pickPhoto() : openPhotoTools
+              }
               size={BOTTOM_BUTTON_SIZE}
             />
             <PillButton
@@ -1240,24 +1381,59 @@ function EditorWorkspace({
               <>
                 {/* Removing first, on its own at the left (user's choice), then change, cover and the
                     background. */}
+                {design.collage === null ? null : (
+                  <View style={{ height: 50, justifyContent: 'center' }}>
+                    <Row>
+                      {IMAGE_FRAMES.map((frame) => (
+                        <Chip
+                          key={frame}
+                          label={t(`editor.collageFrames.${frame}`)}
+                          selected={design.collage?.frame === frame}
+                          onPress={() => change((current) => setCollageFrame(current, frame))}
+                        />
+                      ))}
+                    </Row>
+                  </View>
+                )}
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   <ActionTile
                     icon={{ ios: 'trash', android: 'delete' }}
                     label={t('editor.removePhoto')}
-                    onPress={removePhoto}
-                    disabled={photo === null}
+                    onPress={
+                      design.collage === null ? removePhoto : () => removeCellPhoto(toolsCell)
+                    }
+                    disabled={
+                      design.collage === null ? photo === null : canvasCells[toolsCell] === null
+                    }
                     destructive
                   />
                   <ActionTile
                     icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
-                    label={t(photo === null ? 'editor.choosePhoto' : 'editor.changePhoto')}
-                    onPress={() => void pickPhoto()}
+                    label={t(
+                      (design.collage === null ? photo === null : canvasCells[toolsCell] === null)
+                        ? 'editor.choosePhoto'
+                        : 'editor.changePhoto',
+                    )}
+                    onPress={() =>
+                      design.collage === null ? void pickPhoto() : chooseCellPhoto(toolsCell)
+                    }
                   />
                   <ActionTile
-                    icon={{ ios: 'arrow.up.left.and.arrow.down.right', android: 'fit_screen' }}
-                    label={t('editor.fitPhoto')}
-                    onPress={() => change((current) => setPhotoPlacement(current, COVER_PLACEMENT))}
-                    disabled={photo === null || samePlacement(design.photo, COVER_PLACEMENT)}
+                    icon={{ ios: 'arrow.counterclockwise', android: 'restart_alt' }}
+                    label={t('editor.resetPhoto')}
+                    onPress={() =>
+                      change((current) =>
+                        design.collage === null
+                          ? setPhotoPlacement(current, COVER_PLACEMENT)
+                          : setCellPlacement(current, toolsCell, COVER_PLACEMENT),
+                      )
+                    }
+                    disabled={
+                      design.collage === null
+                        ? photo === null || samePlacement(design.photo, COVER_PLACEMENT)
+                        : canvasCells[toolsCell] === null ||
+                          samePlacement(design.collage.placements[toolsCell], COVER_PLACEMENT)
+                    }
                   />
                   <ActionTile
                     icon={{ ios: 'paintbrush.fill', android: 'format_paint' }}

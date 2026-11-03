@@ -586,7 +586,7 @@ function Divider() {
   );
 }
 
-function Row({ children }: { readonly children: ReactNode }) {
+export function Row({ children }: { readonly children: ReactNode }) {
   return (
     <ScrollView
       horizontal
@@ -603,7 +603,7 @@ function Row({ children }: { readonly children: ReactNode }) {
   );
 }
 
-function Chip({
+export function Chip({
   label,
   selected,
   onPress,

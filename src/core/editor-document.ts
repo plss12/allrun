@@ -1,9 +1,12 @@
+import { newCollage, withCellPlacement } from './collage';
 import { isImageLayer, withoutImages } from './image-layer';
 import type { LayerTransform } from './layer-transform';
 import { COVER_PLACEMENT, type PhotoPlacement, samePlacement } from './photo-placement';
 import {
   AUTO_BACKGROUND,
   type CanvasFormat,
+  type Collage,
+  type CollageLayout,
   type DesignBackground,
   type DesignLanguage,
   type Template,
@@ -26,6 +29,8 @@ export interface EditorDesign {
   readonly format: CanvasFormat;
   /** Where the photo goes, relative to the canvas (see `photo-placement.ts`). */
   readonly photo: PhotoPlacement;
+  /** The photos in a collage (see `collage.ts`), or `null` for one photo, as `photo` says. */
+  readonly collage: Collage | null;
   /** What shows where the photo leaves the canvas empty. */
   readonly background: DesignBackground;
   readonly layers: EditorLayers;
@@ -48,6 +53,7 @@ export const INITIAL_FORMAT: CanvasFormat = 'story';
 export const INITIAL_DESIGN: EditorDesign = {
   format: INITIAL_FORMAT,
   photo: COVER_PLACEMENT,
+  collage: null,
   background: AUTO_BACKGROUND,
   layers: null,
   units: null,
@@ -64,6 +70,7 @@ export function layoutTemplate(defaultTemplate: DefaultTemplate, design: EditorD
     ...template,
     layers: design.layers ?? template.layers,
     photo: design.photo,
+    ...(design.collage === null ? {} : { collage: design.collage }),
     background: design.background,
     ...(design.units === null ? {} : { units: design.units }),
     ...(design.language === null ? {} : { language: design.language }),
@@ -122,13 +129,14 @@ function keepingImages(
  */
 export function applyDesign(
   design: EditorDesign,
-  saved: Pick<Template, 'layers' | 'photo' | 'background' | 'units' | 'language'>,
+  saved: Pick<Template, 'layers' | 'photo' | 'collage' | 'background' | 'units' | 'language'>,
   defaultTemplate: DefaultTemplate,
 ): EditorDesign {
   return {
     ...design,
     layers: keepingImages(design, saved.layers, defaultTemplate),
     photo: saved.photo,
+    collage: saved.collage ?? null,
     background: saved.background,
     units: saved.units ?? null,
     language: saved.language ?? null,
@@ -163,6 +171,39 @@ export function setFormat(design: EditorDesign, format: CanvasFormat): EditorDes
 /** Places the photo anew. Returns `design` itself when it is already there. */
 export function setPhotoPlacement(design: EditorDesign, photo: PhotoPlacement): EditorDesign {
   return samePlacement(design.photo, photo) ? design : { ...design, photo };
+}
+
+/**
+ * Lays the photos out another way (`null`: one photo). Each keeps where it was in its cell and the
+ * frame stays, so changing layouts and coming back loses nothing. Returns `design` itself when it
+ * is the same.
+ */
+export function setCollageLayout(design: EditorDesign, layout: CollageLayout | null): EditorDesign {
+  if ((design.collage?.layout ?? null) === layout) {
+    return design;
+  }
+  if (layout === null) {
+    return { ...design, collage: null };
+  }
+  return { ...design, collage: { ...(design.collage ?? newCollage(layout)), layout } };
+}
+
+/** Another frame for the collage. Returns `design` itself without one, or when it is the same. */
+export function setCollageFrame(design: EditorDesign, frame: Collage['frame']): EditorDesign {
+  return design.collage === null || design.collage.frame === frame
+    ? design
+    : { ...design, collage: { ...design.collage, frame } };
+}
+
+/** Places the photo of a collage's cell anew. Returns `design` itself when it is already there. */
+export function setCellPlacement(
+  design: EditorDesign,
+  index: number,
+  placement: PhotoPlacement,
+): EditorDesign {
+  return design.collage === null || samePlacement(design.collage.placements[index], placement)
+    ? design
+    : { ...design, collage: withCellPlacement(design.collage, index, placement) };
 }
 
 /** Another background. Returns `design` itself when it is the same. */
@@ -207,6 +248,7 @@ export function canStartOver(design: EditorDesign): boolean {
     design.layers !== null ||
     design.units !== null ||
     design.language !== null ||
+    design.collage !== null ||
     !samePlacement(design.photo, INITIAL_DESIGN.photo) ||
     !sameBackground(design.background, INITIAL_DESIGN.background)
   );

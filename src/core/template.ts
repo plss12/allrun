@@ -860,6 +860,25 @@ const photoPlacementSchema = z.object({
   rotation: z.number().min(-Math.PI).max(Math.PI),
 });
 
+/** The ways a collage splits the canvas (see `collage.ts`): by how its cells go. */
+export const COLLAGE_LAYOUTS = ['two', 'three', 'oneTwo', 'four', 'six'] as const;
+export type CollageLayout = (typeof COLLAGE_LAYOUTS)[number];
+/** Photos a collage keeps a place for: the most any layout shows. */
+export const MAX_COLLAGE_PHOTOS = 6;
+
+/**
+ * A design with several photos: how they are laid out, the frame over the edges of its cells (as a
+ * picture's, see `IMAGE_FRAMES`) and where each photo goes in its cell. It keeps a placement for
+ * every photo, also those its layout doesn't show, which come back with a layout that does.
+ */
+const collageSchema = z.object({
+  layout: z.enum(COLLAGE_LAYOUTS),
+  frame: z.enum(IMAGE_FRAMES),
+  placements: z.array(photoPlacementSchema).length(MAX_COLLAGE_PHOTOS),
+});
+
+export type Collage = z.infer<typeof collageSchema>;
+
 /**
  * What shows where the photo leaves the canvas empty, and with no photo: the photo's dominant
  * color (`auto`, none without a photo), a color, or nothing (the image exports transparent).
@@ -907,6 +926,8 @@ const templateObjectSchema = z
     format: z.enum(['story', 'tall', 'portrait', 'square', 'landscape']),
     layers: z.preprocess(withoutRetiredBlocks, z.array(layerSchema).max(MAX_LAYERS)),
     photo: photoPlacementSchema,
+    /** Its photos in a collage, over `photo`, which applies to a single one; absent, a single one. */
+    collage: collageSchema.optional(),
     background: backgroundSchema,
     /** The design's own distance unit; absent, the device's. */
     units: z.enum(['km', 'mi']).optional(),

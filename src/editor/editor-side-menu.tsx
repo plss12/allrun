@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import type { CanvasFormat, DesignLanguage } from '@/core/template';
+import type { CanvasFormat, CollageLayout, DesignLanguage } from '@/core/template';
 import type { DistanceUnit } from '@/core/units';
 import { SportGlyph, type SportIconName } from '@/ui/sport-glyph';
 
+import { CollageMenu } from './collage-menu';
 import { TOP_BAR_GAP } from './editor-top-bar';
 import { FormatMenu } from './format-menu';
 import { FLOATING_INK, KeptMounted, ROUND_BUTTON_SIZE, RoundButton } from './round-button';
@@ -23,7 +24,11 @@ interface EditorSideMenuProps {
   readonly onPickFormat: (format: CanvasFormat) => void;
   readonly onAddImage: () => void;
   readonly onDepth: () => void;
-  readonly onCollages: () => void;
+  /** The collage's layout, `null` for one photo; whether their panel is open, as the formats'. */
+  readonly collage: CollageLayout | null;
+  readonly collagesOpen: boolean;
+  readonly onCollagesOpenChange: (open: boolean) => void;
+  readonly onPickCollage: (layout: CollageLayout | null) => void;
   readonly onDesigns: () => void;
   readonly onActivity: () => void;
   /** The Activity button's icon: the activity's sport, or `null` for a period's calendar. */
@@ -57,7 +62,10 @@ export function EditorSideMenu({
   onPickFormat,
   onAddImage,
   onDepth,
-  onCollages,
+  collage,
+  collagesOpen,
+  onCollagesOpenChange,
+  onPickCollage,
   onDesigns,
   onActivity,
   sport,
@@ -77,10 +85,11 @@ export function EditorSideMenu({
     const timer = setTimeout(() => setLabels(false), LABELS_MS);
     return () => clearTimeout(timer);
   }, [labels]);
-  const showLabels = labels && open && !formatsOpen;
+  const showLabels = labels && open && !formatsOpen && !collagesOpen;
 
   const toggle = () => {
     onFormatsOpenChange(false);
+    onCollagesOpenChange(false);
     setLabels(!open);
     setOpen(!open);
   };
@@ -113,10 +122,19 @@ export function EditorSideMenu({
       </View>
       <KeptMounted hidden={!open} style={{ alignItems: 'flex-end', gap: TOP_BAR_GAP }}>
         <Item label={t('editor.collages')} showLabel={showLabels}>
+          {collagesOpen && open ? (
+            <View style={{ position: 'absolute', top: 0, right: ROUND_BUTTON_SIZE + TOP_BAR_GAP }}>
+              <CollageMenu layout={collage} onPick={onPickCollage} />
+            </View>
+          ) : null}
           <RoundButton
             icon={{ ios: 'rectangle.split.2x2', android: 'auto_awesome_mosaic' }}
             label={t('editor.collages')}
-            onPress={onCollages}
+            onPress={() => {
+              onFormatsOpenChange(false);
+              onCollagesOpenChange(!collagesOpen);
+            }}
+            selected={collagesOpen}
           />
         </Item>
         <Item label={t('editor.designs')} showLabel={showLabels}>
@@ -134,7 +152,10 @@ export function EditorSideMenu({
           ) : null}
           <RoundButton
             label={`${t('editor.ratio')}, ${t(`formats.${format}`)}`}
-            onPress={() => onFormatsOpenChange(!formatsOpen)}
+            onPress={() => {
+              onCollagesOpenChange(false);
+              onFormatsOpenChange(!formatsOpen);
+            }}
             selected={formatsOpen}
           >
             <ButtonText>{t(`formatRatios.${format}`)}</ButtonText>

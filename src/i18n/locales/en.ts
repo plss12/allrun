@@ -115,6 +115,19 @@ export const en = {
     choosePeriod: 'Choose a period',
     switchError: "Couldn't load it. Try again.",
     collages: 'Collages',
+    collageLayouts: {
+      one: 'One photo',
+      two: 'Two photos in rows',
+      three: 'Three photos in rows',
+      oneTwo: 'One photo on top of two',
+      four: 'Four photos',
+      six: 'Six photos',
+    },
+    collageFrames: {
+      none: 'No borders',
+      light: 'White',
+      dark: 'Black',
+    },
     designs: 'Designs',
     ratio: 'Ratio',
     activity: 'Activity',
@@ -125,7 +138,7 @@ export const en = {
     discardMessage: 'Your photo and changes will be lost.',
     discard: 'Discard',
     photoTools: 'Photo and background',
-    fitPhoto: 'Cover',
+    resetPhoto: 'Reset',
     background: 'Background',
     backgrounds: {
       auto: "Photo's color",

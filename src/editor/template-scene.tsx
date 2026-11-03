@@ -188,6 +188,76 @@ export interface ScenePhoto {
   readonly rect: DrawRect | SharedValue<DrawRect>;
 }
 
+/** A cell of a collage in a scene: its photo clipped to it, loading, or empty. */
+export type SceneCell =
+  | { readonly kind: 'photo'; readonly clip: DrawRect; readonly photo: ScenePhoto }
+  | { readonly kind: 'loading'; readonly clip: DrawRect }
+  /** Without a photo: nothing in the image, a sign to fill it on the canvas when `hint`. */
+  | { readonly kind: 'empty'; readonly clip: DrawRect; readonly hint: boolean };
+
+/** The photos of a collage in a scene, and the bars of its frame, if it has one. */
+export interface SceneCollage {
+  readonly cells: readonly SceneCell[];
+  readonly bars: readonly DrawRect[];
+  readonly barColor: string;
+  /** The cell being edited, on the canvas: the others dim, so it stands out; `null` for none. */
+  readonly activeCell: number | null;
+}
+
+/** Over the cells that aren't being edited. Under the frame and the widgets, which stay as they are. */
+const DIMMED_CELL = 'rgba(0, 0, 0, 0.6)';
+/** A photo's cell while its copy is prepared: as a picture's while it is decoded. */
+const LOADING_CELL = '#3A3A3C';
+/** The sign on an empty cell, on the canvas: a plus on a dark circle, in canvas pixels. */
+const EMPTY_HINT = { radius: 56, length: 52, thickness: 7 } as const;
+
+/** One cell of a collage. */
+function CollageCellScene({ cell }: { readonly cell: SceneCell }) {
+  const { clip } = cell;
+  if (cell.kind === 'photo') {
+    return (
+      <Group clip={clip}>
+        <Group transform={cell.photo.matrix}>
+          <Image
+            image={cell.photo.image}
+            rect={cell.photo.rect}
+            fit="fill"
+            sampling={PHOTO_SAMPLING}
+          />
+        </Group>
+      </Group>
+    );
+  }
+  if (cell.kind === 'loading') {
+    return <Rect {...clip} color={LOADING_CELL} />;
+  }
+  if (!cell.hint) {
+    return null;
+  }
+  const cx = clip.x + clip.width / 2;
+  const cy = clip.y + clip.height / 2;
+  const { radius, length, thickness } = EMPTY_HINT;
+  return (
+    <Group>
+      <Circle cx={cx} cy={cy} r={radius} color="rgba(0, 0, 0, 0.45)" />
+      <Rect
+        x={cx - length / 2}
+        y={cy - thickness / 2}
+        width={length}
+        height={thickness}
+        color="#FFFFFF"
+      />
+      <Rect
+        x={cx - thickness / 2}
+        y={cy - length / 2}
+        width={thickness}
+        height={length}
+        color="#FFFFFF"
+      />
+    </Group>
+  );
+}
+
 /**
  * Draws prepared layers over the background at the export size (1080 px wide). The editor scales
  * it to the screen; exporting renders it off-screen at full size, so both always match.
@@ -219,6 +289,8 @@ export interface TemplateSceneProps {
    * the layers.
    */
   readonly photo: ScenePhoto | null;
+  /** The photos of a collage over the backdrop, instead of `photo`. */
+  readonly collage?: SceneCollage | null;
   /**
    * The layer being moved, drawn from a shared transform so gestures don't re-render, with a
    * shared opacity (it fades over the trash).
@@ -273,6 +345,7 @@ export function TemplateScene({
   layers,
   backdrop,
   photo,
+  collage = null,
   live = null,
 }: TemplateSceneProps) {
   const canvas = CANVAS_FORMATS[format];
@@ -300,6 +373,23 @@ export function TemplateScene({
           <Group transform={photo.matrix}>
             <Image image={photo.image} rect={photo.rect} fit="fill" sampling={PHOTO_SAMPLING} />
           </Group>
+        </Group>
+      )}
+      {collage === null ? null : (
+        <Group>
+          {collage.cells.map((cell, index) => (
+            <CollageCellScene key={index} cell={cell} />
+          ))}
+          {collage.activeCell === null
+            ? null
+            : collage.cells.map((cell, index) =>
+                index === collage.activeCell ? null : (
+                  <Rect key={index} {...cell.clip} color={DIMMED_CELL} />
+                ),
+              )}
+          {collage.bars.map((bar, index) => (
+            <Rect key={index} {...bar} color={collage.barColor} />
+          ))}
         </Group>
       )}
       {/* A layer's opacity fades it as a whole, drawn on its own Skia layer: a group's `opacity`

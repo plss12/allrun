@@ -43,12 +43,15 @@ export function useExport() {
     void (async () => {
       try {
         const resolved = await design();
-        const { photo } = resolved;
+        const { photo, cells = [] } = resolved;
         const encoding = exportEncoding(
           isOpaque(
             resolved.template,
             photo === null ? null : { width: photo.width(), height: photo.height() },
             resolved.dominant,
+            cells.map((cell) =>
+              cell === null ? null : { width: cell.width(), height: cell.height() },
+            ),
           ),
         );
         const image = await renderDesign(resolved);

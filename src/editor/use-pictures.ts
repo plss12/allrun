@@ -7,12 +7,14 @@ import { logError } from '@/ui/log';
 
 import { disposeLater } from './paragraph-arena';
 import type { PickedPhoto } from './photo-plan';
-import { preparePhoto } from './prepare-photo';
+import { type PhotoCopy, preparePhoto } from './prepare-photo';
 import type { LayerImage } from './template-scene';
 
 /** A picture the user picked for an image layer, and its copy once prepared. */
 interface Picture {
   readonly picked: PickedPhoto;
+  /** Which copy of it is kept. */
+  readonly copy: PhotoCopy;
   /** The copy Skia decodes, `null` while it is prepared. */
   readonly uri: string | null;
   /** Whether the copy was re-encoded after the picked file failed to decode. */
@@ -41,12 +43,12 @@ export function usePictures(
    */
   readonly images: ReadonlyMap<string, LayerImage>;
   /**
-   * Lets the user choose a photo: the new picture's key, its copy prepared in the background, or
-   * `null` if the user cancelled.
+   * Lets the user choose a photo: the new picture's key, its copy (the editor's by default)
+   * prepared in the background, or `null` if the user cancelled.
    *
    * @throws Error when the photo can't be read.
    */
-  readonly pick: () => Promise<string | null>;
+  readonly pick: (copy?: PhotoCopy) => Promise<string | null>;
 } {
   const [pictures, setPictures] = useState<ReadonlyMap<string, Picture>>(new Map());
   // Decoded as the editor opens, so the gallery has it (88 KB, 720 × 720 px).
@@ -68,16 +70,16 @@ export function usePictures(
       return picture === undefined ? current : new Map(current).set(key, { ...picture, ...change });
     });
 
-  const prepare = async (key: string, picked: PickedPhoto, force: boolean) => {
+  const prepare = async (key: string, picked: PickedPhoto, copy: PhotoCopy, force: boolean) => {
     try {
-      update(key, { uri: await preparePhoto(picked, 'editor', force), reencoded: force });
+      update(key, { uri: await preparePhoto(picked, copy, force), reencoded: force });
     } catch (error) {
       logError('Could not prepare a picture', error);
       onFail(key);
     }
   };
 
-  const pick = async (): Promise<string | null> => {
+  const pick = async (copy: PhotoCopy = 'editor'): Promise<string | null> => {
     const id = await choose();
     if (id === null) {
       return null;
@@ -85,8 +87,10 @@ export function usePictures(
     const picked = await pickedPhoto(id);
     const key = `picture-${nextKey.current}`;
     nextKey.current += 1;
-    setPictures((current) => new Map(current).set(key, { picked, uri: null, reencoded: false }));
-    void prepare(key, picked, false);
+    setPictures((current) =>
+      new Map(current).set(key, { picked, copy, uri: null, reencoded: false }),
+    );
+    void prepare(key, picked, copy, false);
     return key;
   };
 
@@ -100,7 +104,7 @@ export function usePictures(
       if (picture?.uri == null || decoded.has(key) || decoding.current.has(key)) {
         continue;
       }
-      const { uri, picked, reencoded } = picture;
+      const { uri, picked, copy, reencoded } = picture;
       decoding.current.add(key);
       void (async () => {
         try {
@@ -122,7 +126,7 @@ export function usePictures(
             // Skia could not decode the file as picked: re-encode it once and try again.
             logError('Could not decode a picture, re-encoding it', error);
             update(key, { uri: null });
-            void prepare(key, picked, true);
+            void prepare(key, picked, copy, true);
           }
         } finally {
           decoding.current.delete(key);
