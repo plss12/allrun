@@ -2,11 +2,11 @@ import { Skia, type SkImage, useImage } from '@shopify/react-native-skia';
 import { useEffect, useRef, useState } from 'react';
 
 import { SAMPLE_IMAGE, SAMPLE_PICTURE } from '@/core/image-layer';
+import { pickedPhoto } from '@/data/photo-library';
 import { logError } from '@/ui/log';
 
 import { disposeLater } from './paragraph-arena';
 import type { PickedPhoto } from './photo-plan';
-import { pickFromLibrary } from './pick-photo';
 import { preparePhoto } from './prepare-photo';
 import type { LayerImage } from './template-scene';
 
@@ -28,10 +28,12 @@ interface Picture {
  *
  * @param inUse - Keys of the pictures the design shows.
  * @param onFail - Called when a picture can't be prepared or decoded, even re-encoded.
+ * @param choose - Lets the user choose a photo: its library id, or `null` if they cancel.
  */
 export function usePictures(
   inUse: readonly string[],
   onFail: (key: string) => void,
+  choose: () => Promise<string | null>,
 ): {
   /**
    * The pictures in use, for the layers to draw (see `LayerContext`), and the gallery's sample
@@ -39,10 +41,10 @@ export function usePictures(
    */
   readonly images: ReadonlyMap<string, LayerImage>;
   /**
-   * Opens the photo library: the new picture's key, its copy prepared in the background, or
+   * Lets the user choose a photo: the new picture's key, its copy prepared in the background, or
    * `null` if the user cancelled.
    *
-   * @throws Error when the library can't be opened.
+   * @throws Error when the photo can't be read.
    */
   readonly pick: () => Promise<string | null>;
 } {
@@ -76,10 +78,11 @@ export function usePictures(
   };
 
   const pick = async (): Promise<string | null> => {
-    const picked = await pickFromLibrary();
-    if (picked === null) {
+    const id = await choose();
+    if (id === null) {
       return null;
     }
+    const picked = await pickedPhoto(id);
     const key = `picture-${nextKey.current}`;
     nextKey.current += 1;
     setPictures((current) => new Map(current).set(key, { picked, uri: null, reencoded: false }));

@@ -70,7 +70,7 @@ type SummaryBlock = Extract<NewLayer, { kind: 'summaryBlock' }>['block'];
  * (or one of the user's), as the version tapped (a dark or a light message), of an activity or of
  * a period.
  */
-type Choice =
+export type Choice =
   | {
       readonly kind: 'activityBlock';
       readonly block: Extract<Block, { design: 'verse' | 'quote' | 'chat' }>;
@@ -82,7 +82,7 @@ type Choice =
 type ChoiceBlock = Choice['block'];
 
 /** The list a gallery item is chosen from, if it is. */
-function choiceOf(item: CatalogItem): Choice | null {
+export function choiceOf(item: CatalogItem): Choice | null {
   if (
     item.kind === 'activityBlock' &&
     (item.block.design === 'verse' || item.block.design === 'quote' || item.block.design === 'chat')
@@ -99,7 +99,7 @@ function choiceOf(item: CatalogItem): Choice | null {
 }
 
 /** The widget a choice from the list adds: of the same kind as the one tapped. */
-function chosenLayer(
+export function chosenLayer(
   kind: Choice['kind'],
   block: ChoiceBlock,
 ): Exclude<NewLayer, { kind: 'text' | 'image' }> {
@@ -112,7 +112,7 @@ function chosenLayer(
  * What a gallery shows of its data, as a key: the same activity or period with the same detail
  * and place, or the same totals and sports, draws the same gallery.
  */
-function galleryDataKey(data: LayerContext['data']): string {
+export function galleryDataKey(data: LayerContext['data']): string {
   return data.mode === 'activity'
     ? [
         data.activity.id,
@@ -136,7 +136,7 @@ function galleryDataKey(data: LayerContext['data']): string {
  * one replaced, or the one shown when it closes, is freed once the screen stops drawing it (see
  * `disposeLater`), so opening it again and again doesn't pile them up.
  */
-function useGallery(
+export function useGallery(
   open: boolean,
   key: string,
   build: () => BuiltGallery,
@@ -253,64 +253,93 @@ export function LayerSheet({
         </SheetFrame>
       ) : (
         <SheetFrame title={t('editor.addLayer')} closeLabel={t('editor.close')} onClose={close}>
-          <SectionList
-            sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
-            keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
-            stickySectionHeadersEnabled={false}
-            initialNumToRender={8}
-            // Rows two screens away are let go: each tile draws on a canvas of its own.
-            windowSize={5}
-            contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
-            renderSectionHeader={({ section }) => (
-              <Text
-                accessibilityRole="header"
-                style={{
-                  color: colors.secondaryLabel,
-                  fontSize: 13,
-                  fontWeight: '600',
-                  paddingTop: 16,
-                  paddingBottom: 8,
-                }}
-              >
-                {t(`widgets.sections.${section.id}`).toLocaleUpperCase()}
-              </Text>
-            )}
-            renderItem={({ item: row }) => (
-              <View style={{ flexDirection: 'row', gap: GALLERY_GAP, marginBottom: GALLERY_GAP }}>
-                {row.widgets.map((widget) => (
-                  <WidgetTile
-                    key={widget.key}
-                    widget={widget}
-                    width={row.width}
-                    height={row.height}
-                    label={(page) => pageLabel(page, layerContext, (key) => t(key))}
-                    hint={
-                      choiceOf(widget.pages[0].item) === null &&
-                      widget.pages[0].item.kind !== 'image'
-                        ? undefined
-                        : t('gallery.choose')
-                    }
-                    onPress={(page) => {
-                      const { item } = page;
-                      const choice = choiceOf(item);
-                      if (choice !== null) {
-                        setChoosing(choice);
-                      } else if (item.kind === 'text') {
-                        afterClosing(onAddText);
-                      } else if (item.kind === 'image') {
-                        afterClosing(() => onAddImage(item));
-                      } else {
-                        onAdd(item);
-                      }
-                    }}
-                  />
-                ))}
-              </View>
-            )}
+          <WidgetGalleryList
+            sections={sections}
+            layerContext={layerContext}
+            onPress={(page) => {
+              const { item } = page;
+              const choice = choiceOf(item);
+              if (choice !== null) {
+                setChoosing(choice);
+              } else if (item.kind === 'text') {
+                afterClosing(onAddText);
+              } else if (item.kind === 'image') {
+                afterClosing(() => onAddImage(item));
+              } else {
+                onAdd(item);
+              }
+            }}
           />
         </SheetFrame>
       )}
     </Modal>
+  );
+}
+
+/**
+ * The gallery's sections as a list of rows of tiles, a tile scrolling sideways through its
+ * variants. A tap does `onPress` with the variant shown, and a long press `onLongPress`, which a
+ * screen reader offers as an action named `longPressLabel`.
+ */
+export function WidgetGalleryList({
+  sections,
+  layerContext,
+  onPress,
+  onLongPress,
+  longPressLabel,
+}: {
+  readonly sections: BuiltGallery['sections'];
+  readonly layerContext: LayerContext;
+  readonly onPress: (page: GalleryPage) => void;
+  readonly onLongPress?: (page: GalleryPage) => void;
+  readonly longPressLabel?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <SectionList
+      sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
+      keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
+      stickySectionHeadersEnabled={false}
+      initialNumToRender={8}
+      // Rows two screens away are let go: each tile draws on a canvas of its own.
+      windowSize={5}
+      contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
+      renderSectionHeader={({ section }) => (
+        <Text
+          accessibilityRole="header"
+          style={{
+            color: colors.secondaryLabel,
+            fontSize: 13,
+            fontWeight: '600',
+            paddingTop: 16,
+            paddingBottom: 8,
+          }}
+        >
+          {t(`widgets.sections.${section.id}`).toLocaleUpperCase()}
+        </Text>
+      )}
+      renderItem={({ item: row }) => (
+        <View style={{ flexDirection: 'row', gap: GALLERY_GAP, marginBottom: GALLERY_GAP }}>
+          {row.widgets.map((widget) => (
+            <WidgetTile
+              key={widget.key}
+              widget={widget}
+              width={row.width}
+              height={row.height}
+              label={(page) => pageLabel(page, layerContext, (key) => t(key))}
+              hint={
+                choiceOf(widget.pages[0].item) === null && widget.pages[0].item.kind !== 'image'
+                  ? undefined
+                  : t('gallery.choose')
+              }
+              onPress={onPress}
+              onLongPress={onLongPress}
+              longPressLabel={longPressLabel}
+            />
+          ))}
+        </View>
+      )}
+    />
   );
 }
 
@@ -454,6 +483,8 @@ function WidgetTile({
   label,
   hint,
   onPress,
+  onLongPress,
+  longPressLabel,
 }: {
   readonly widget: GalleryWidget;
   readonly width: number;
@@ -461,6 +492,8 @@ function WidgetTile({
   readonly label: (page: GalleryPage) => string;
   readonly hint?: string;
   readonly onPress: (page: GalleryPage) => void;
+  readonly onLongPress?: (page: GalleryPage) => void;
+  readonly longPressLabel?: string;
 }) {
   const { t } = useTranslation();
   const [shown, setShown] = useState(0);
@@ -507,6 +540,11 @@ function WidgetTile({
             accessibilityElementsHidden={i !== shown}
             importantForAccessibility={i === shown ? 'auto' : 'no-hide-descendants'}
             onPress={() => onPress(page)}
+            onLongPress={onLongPress === undefined ? undefined : () => onLongPress(page)}
+            accessibilityActions={
+              longPressLabel === undefined ? undefined : [{ name: 'save', label: longPressLabel }]
+            }
+            onAccessibilityAction={onLongPress === undefined ? undefined : () => onLongPress(page)}
             style={({ pressed }) => ({
               width: pageWidth,
               height: pageHeight,

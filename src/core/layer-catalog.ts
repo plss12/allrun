@@ -539,6 +539,26 @@ function sections(entries: readonly Entry[]): CatalogSection[] {
  * its place when it can be named (`withPlace`); and the logo. Time O(m + c) for
  * the m metrics of the sport and c charts.
  */
+/** The sections of the gallery a sticker comes from: what has data on it. */
+const STICKER_SECTIONS: ReadonlySet<CatalogSectionId> = new Set(['data', 'creative', 'charts']);
+
+/**
+ * The widgets offered as stickers (ADR 009): those with the data on them, without the user's
+ * pictures, which would need a photo. Time O(w) for w widgets.
+ */
+export function stickerCatalog(catalog: readonly CatalogSection[]): CatalogSection[] {
+  return catalog.flatMap((section) =>
+    STICKER_SECTIONS.has(section.id)
+      ? [
+          {
+            ...section,
+            widgets: section.widgets.filter((widget) => widget.variants[0].kind !== 'image'),
+          },
+        ]
+      : [],
+  );
+}
+
 export function activityCatalog(
   activity: Activity,
   charts: readonly ActivityChartSeries[] = [],

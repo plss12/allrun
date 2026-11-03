@@ -72,6 +72,8 @@ export default function RootLayout() {
                   headerLeft: () => <BrandMark height={22} />,
                 }}
               />
+              {/* What to make with the activity or period: it titles itself with its tabs. */}
+              <Stack.Screen name="select" options={{ title: '' }} />
               {/* The editor is full screen, with its own floating controls (ADR 009); it rises
                   as a modal and closes with its own button, which asks before losing edits. */}
               <Stack.Screen

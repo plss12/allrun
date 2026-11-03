@@ -1,6 +1,6 @@
 import { type SkImage, useImage } from '@shopify/react-native-skia';
 import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import Animated, {
@@ -16,12 +16,11 @@ import { z } from 'zod';
 
 import type { Activity } from '@/core/activity';
 import { sportIcon } from '@/core/activity-block';
-import { availableActivityCharts } from '@/core/activity-charts';
-import { customRange } from '@/core/dates';
 import {
   defaultActivityTemplate,
   defaultSummaryTemplate,
   designFont,
+  emptyLayout,
   newLayer,
 } from '@/core/default-layout';
 import {
@@ -43,20 +42,12 @@ import {
   startOver,
 } from '@/core/editor-document';
 import { canRedo, canUndo, commit, createHistory, redo, undo } from '@/core/history';
-import {
-  activityCatalog,
-  catalogItemKey,
-  type NewLayer,
-  summaryCatalog,
-} from '@/core/layer-catalog';
+import { catalogItemKey, type NewLayer } from '@/core/layer-catalog';
 import { splitOpacity, withOpacity } from '@/core/color-menu';
 import { backgroundColor } from '@/core/design-background';
 import { LAYER_MARGIN, layerVerticalReach, liftToClear } from '@/core/layer-transform';
 import { COVER_PLACEMENT, samePlacement, type Size } from '@/core/photo-placement';
-import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { startOf } from '@/core/place';
-import { SPORT_FAMILIES } from '@/core/sports';
-import { selectActivities, summarize } from '@/core/summary';
 import { setLayerColor, setLayerOpacity } from '@/core/layer-style';
 import {
   type CanvasFormat,
@@ -85,7 +76,7 @@ import {
   type TextDraft,
 } from '@/core/text-draft';
 import { useActivitySource } from '@/data/activity-source';
-import type { ActivitySource } from '@/sources/activity-source';
+import { pickedPhoto } from '@/data/photo-library';
 import { usePhrases } from '@/data/phrases';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
@@ -103,14 +94,16 @@ import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-looku
 import type { EditorData } from '@/editor/editor-data';
 import type { LayerContext } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
+import { Dock } from '@/editor/dock';
+import { editorParamsSchema, type EditorRequest } from '@/editor/editor-params';
 import { useEditorFonts } from '@/editor/fonts';
+import { ActivityNotFoundError, catalogFor, loadEditorData } from '@/editor/load-editor-data';
 import { ChoiceSheet } from '@/editor/choice-list';
 import { LayerSheet, type PictureLook } from '@/editor/layer-sheet';
 import { Notice, useNotice } from '@/editor/notice';
 import { disposeLater } from '@/editor/paragraph-arena';
 import { photoDominantColor } from '@/editor/photo-color';
 import type { PickedPhoto } from '@/editor/photo-plan';
-import { pickFromLibrary } from '@/editor/pick-photo';
 import { usePictures } from '@/editor/use-pictures';
 import { preparePhoto } from '@/editor/prepare-photo';
 import {
@@ -124,36 +117,20 @@ import { StylePanel, widgetTools } from '@/editor/style-panel';
 import { TemplateSheet } from '@/editor/template-sheet';
 import { useExport } from '@/editor/use-export';
 import { type ColumnTool, WidgetColumn } from '@/editor/widget-column';
-import { floatingSurface } from '@/theme/card-surface';
-import { colors } from '@/theme/colors';
+import { usePhotoPicker } from '@/photos/use-photo-picker';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
 import { ErrorView, LoadingView } from '@/ui/state-views';
-import { todayLocal } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
-
-/** Route params, validated: they can come from a deep link, not only from our own screens. */
-const paramsSchema = z.discriminatedUnion('mode', [
-  z.object({ mode: z.literal('activity'), activityId: z.string().min(1) }),
-  z.object({
-    mode: z.literal('summary'),
-    kind: z.enum(['week', 'month', 'year', 'custom']),
-    start: z.iso.date(),
-    end: z.iso.date(),
-    families: z
-      .string()
-      .transform((value) => (value === '' ? [] : value.split(',')))
-      .pipe(z.array(z.enum(SPORT_FAMILIES))),
-  }),
-]);
-
-class ActivityNotFoundError extends Error {}
 
 /** The chosen photo and its two copies (see `photo-plan.ts`). */
 interface EditorPhoto {
   /** Increases with every pick, so a slow preparation of a replaced photo is ignored. */
   readonly id: number;
-  readonly picked: PickedPhoto;
+  /** Its id in the library, which gives its file. */
+  readonly libraryId: string;
+  /** Its file; `null` while it is read (a photo only in iCloud is downloaded first). */
+  readonly picked: PickedPhoto | null;
   /** Editor copy Skia draws on screen; `null` while it is being prepared. */
   readonly editorUri: string | null;
   /** Whether the editor copy was re-encoded (a failed decode of the original retries once). */
@@ -164,7 +141,6 @@ interface EditorPhoto {
 
 /** Room between the screen's safe area and the floating controls, in points. */
 const EDGE = 12;
-const MAIN_BUTTON_HEIGHT = 44;
 /** Where the right column starts, under the top right buttons, from the safe area's top. */
 const BELOW_TOP_BAR = EDGE + ROUND_BUTTON_SIZE + 12;
 /** The room left between a widget being edited and the panel of its options, in points. */
@@ -185,7 +161,7 @@ const ADD_BUTTON_WIDTH = 84;
 
 export default function Editor() {
   const { t } = useTranslation();
-  const params = paramsSchema.safeParse(useLocalSearchParams());
+  const params = editorParamsSchema.safeParse(useLocalSearchParams());
   const paramsError = params.success ? null : z.prettifyError(params.error);
   useEffect(() => {
     if (paramsError !== null) {
@@ -196,50 +172,6 @@ export default function Editor() {
     return <ErrorView message={t('editor.error')} />;
   }
   return <EditorScreen params={params.data} />;
-}
-
-/** What the editor shows: one activity, or a period of some sports (see `paramsSchema`). */
-type EditorRequest = z.infer<typeof paramsSchema>;
-
-/**
- * Loads what the editor fills its design with.
- *
- * @throws ActivityNotFoundError for an activity that isn't there; the source's errors otherwise.
- */
-async function loadEditorData(source: ActivitySource, params: EditorRequest): Promise<EditorData> {
-  if (params.mode === 'activity') {
-    // The charts' data comes along; without it the editor still works, just without charts.
-    const [activity, detail, zones] = await Promise.all([
-      source.getActivity(params.activityId),
-      source.getActivityDetail(params.activityId).catch((error: unknown) => {
-        logError('Could not load the activity detail for its charts', error);
-        return null;
-      }),
-      // Without them the heart rate chart just has no zones.
-      source.getHeartRateZones().catch((error: unknown) => {
-        logError('Could not load the heart rate zones', error);
-        return null;
-      }),
-    ]);
-    if (activity === null) {
-      throw new ActivityNotFoundError(`No activity with id ${params.activityId}`);
-    }
-    // Its place is named once the editor is open: it doesn't hold up the loading.
-    return { mode: 'activity', activity, detail, place: null, zones };
-  }
-  const range = customRange(params.start, params.end);
-  const activities = await source.listInRange(range);
-  const filter = params.families.length === 0 ? {} : { families: params.families };
-  const selected = selectActivities(activities, range, filter);
-  return {
-    mode: 'summary',
-    kind: params.kind,
-    summary: summarize(selected, range),
-    activities: selected,
-    bucketSize: bucketForPeriod(params.kind, range),
-    families: params.families,
-    current: isCurrentPeriod(params.kind, range, todayLocal()),
-  };
 }
 
 function EditorScreen({ params }: { readonly params: EditorRequest }) {
@@ -265,7 +197,14 @@ function EditorScreen({ params }: { readonly params: EditorRequest }) {
       <ErrorView message={t('editor.error')} onRetry={data.retry} />
     );
   }
-  return <EditorWorkspace data={switched ?? data.data} fonts={fonts} onSwitch={switchTo} />;
+  return (
+    <EditorWorkspace
+      data={switched ?? data.data}
+      fonts={fonts}
+      onSwitch={switchTo}
+      initialPhoto={params.photo ?? null}
+    />
+  );
 }
 
 /**
@@ -279,11 +218,14 @@ function EditorWorkspace({
   data: loaded,
   fonts,
   onSwitch,
+  initialPhoto,
 }: {
   readonly data: EditorData;
   readonly fonts: NonNullable<ReturnType<typeof useEditorFonts>>;
   /** Fills the design with another activity or period; rejects if it can't be loaded. */
   readonly onSwitch: (request: EditorRequest) => Promise<void>;
+  /** The photo chosen before opening, by its library id, if one was. */
+  readonly initialPhoto: string | null;
 }) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -322,9 +264,11 @@ function EditorWorkspace({
       ? { ...loaded, place: placeLookup.place }
       : loaded;
   const defaultTemplate: DefaultTemplate = (format) =>
-    data.mode === 'activity'
-      ? defaultActivityTemplate(data.activity, format)
-      : defaultSummaryTemplate(data.summary, format);
+    emptyLayout(
+      data.mode === 'activity'
+        ? defaultActivityTemplate(data.activity, format)
+        : defaultSummaryTemplate(data.summary, format),
+    );
   /**
    * The whole design, format, photo placement and background included, one undo step per gesture
    * or change.
@@ -398,6 +342,7 @@ function EditorWorkspace({
    * The user's pictures on the canvas (image layers). One that can't be opened leaves the design,
    * as one undo step.
    */
+  const photoPicker = usePhotoPicker();
   const pictures = usePictures(
     template.layers.filter(isImageLayer).map((layer) => layer.image),
     (key) => {
@@ -407,6 +352,7 @@ function EditorWorkspace({
         layers: current.layers.filter((layer) => !isImageLayer(layer) || layer.image !== key),
       }));
     },
+    photoPicker.pick,
   );
   const phrases = usePhrases();
   const layerContext: LayerContext = {
@@ -440,17 +386,19 @@ function EditorWorkspace({
       : previewTextDraft(template, textDraft).layers.find(
           (layer) => layer.id === textDraft.layerId,
         );
-  const catalog =
-    data.mode === 'activity'
-      ? activityCatalog(
-          data.activity,
-          data.detail === null ? [] : availableActivityCharts(data.detail, unit),
-          placeLookup.status !== 'unknown',
-          data.zones !== null,
-          data.detail !== null && data.detail.laps.length > 1,
-        )
-      : summaryCatalog(data.summary, data.bucketSize);
-  const [photo, setPhoto] = useState<EditorPhoto | null>(null);
+  const catalog = catalogFor(data, unit, placeLookup.status !== 'unknown');
+  const [photo, setPhoto] = useState<EditorPhoto | null>(
+    initialPhoto === null
+      ? null
+      : {
+          id: 0,
+          libraryId: initialPhoto,
+          picked: null,
+          editorUri: null,
+          editorReencoded: false,
+          exportUri: null,
+        },
+  );
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const [nextPhotoId, setNextPhotoId] = useState(1);
   /** The full-quality copy being prepared in the background, to wait for it when exporting. */
@@ -544,11 +492,28 @@ function EditorWorkspace({
         logError('Retrying the export copy of the photo', error);
       }
     }
-    return preparePhoto(current.picked, 'export');
+    return preparePhoto(current.picked ?? (await pickedPhoto(current.libraryId)), 'export');
   };
 
+  /** Reads the file of a photo just chosen, and prepares its copies. */
+  const loadChosenPhoto = (id: number, libraryId: string) =>
+    pickedPhoto(libraryId)
+      .then((picked) => {
+        updatePhoto(id, { picked });
+        return preparePhotoCopies(id, picked, false);
+      })
+      .catch((error: unknown) => failPhoto(id, 'Could not read the chosen photo', error));
+  // The photo chosen before opening, once.
+  useEffect(() => {
+    if (initialPhoto !== null) {
+      void loadChosenPhoto(0, initialPhoto);
+    }
+    // Only as the editor opens: it never changes after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const canvasImage = useImage(photo?.editorUri, (error) => {
-    if (photo === null) {
+    if (photo?.picked == null) {
       return;
     }
     if (!photo.editorReencoded) {
@@ -813,19 +778,21 @@ function EditorWorkspace({
 
   const pickPhoto = async () => {
     setPhotoTools(false);
-    try {
-      const picked = await pickFromLibrary();
-      if (picked !== null) {
-        const id = nextPhotoId;
-        setNextPhotoId(id + 1);
-        setPhoto({ id, picked, editorUri: null, editorReencoded: false, exportUri: null });
-        // A new photo starts centered and covering the canvas (user's choice), as one undo step.
-        change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
-        void preparePhotoCopies(id, picked, false);
-      }
-    } catch (error) {
-      logError('Could not open the photo library', error);
-      notice.show(t('editor.photoError'));
+    const libraryId = await photoPicker.pick();
+    if (libraryId !== null) {
+      const id = nextPhotoId;
+      setNextPhotoId(id + 1);
+      setPhoto({
+        id,
+        libraryId,
+        picked: null,
+        editorUri: null,
+        editorReencoded: false,
+        exportUri: null,
+      });
+      // A new photo starts centered and covering the canvas (user's choice), as one undo step.
+      change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
+      void loadChosenPhoto(id, libraryId);
     }
   };
 
@@ -839,9 +806,10 @@ function EditorWorkspace({
     change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
   };
 
-  // Leaving with a photo or edits asks first: the design is not kept. Going back while exporting
+  // Leaving with edits asks first: the design is not kept. The photo alone doesn't count: it was
+  // chosen on the screen under this one, and stays in the library. Going back while exporting
   // leaves the export, while typing commits the text, and with the eyedropper open closes it.
-  const unsaved = photo !== null || canUndo(history);
+  const unsaved = canUndo(history);
   /**
    * Whether the user confirmed leaving: prevention stops and the blocked action is repeated
    * (expo-router's `repeat`; dispatching it again while still prevented did nothing).
@@ -927,6 +895,7 @@ function EditorWorkspace({
         }}
         onClose={() => setChoosingId(null)}
       />
+      {photoPicker.sheet}
       <LayerSheet
         visible={sheetOpen}
         catalog={catalog}
@@ -1418,32 +1387,3 @@ function autoOpacity(background: DesignBackground): number {
  * A floating panel over the canvas with a set of tools and "Done" under them, which closes it
  * (the widget stays selected).
  */
-function Dock({ children, onDone }: { readonly children: ReactNode; readonly onDone: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <View style={{ ...floatingSurface(24), padding: 10, gap: 10 }}>
-      {children}
-      <Pressable
-        accessibilityRole="button"
-        onPress={onDone}
-        style={({ pressed }) => ({
-          height: MAIN_BUTTON_HEIGHT,
-          backgroundColor: colors.tint,
-          borderRadius: 14,
-          borderCurve: 'continuous',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.8 : 1,
-        })}
-      >
-        <Text
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
-          style={{ color: colors.onTint, fontSize: 17, fontWeight: '700' }}
-        >
-          {t('editor.done')}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}

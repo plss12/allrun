@@ -177,7 +177,7 @@ function swatchOf(layer: Layer): string {
 }
 
 /** A dot of the widget's color, ringed so that white and black both show on the button. */
-function Swatch({ color }: { readonly color: string }) {
+export function Swatch({ color }: { readonly color: string }) {
   return (
     <View
       style={{

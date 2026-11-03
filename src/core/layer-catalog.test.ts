@@ -4,6 +4,7 @@ import { makeSummary } from '@/test-utils/make-summary';
 import { monthRange, weekRange } from './dates';
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
 import {
+  stickerCatalog,
   activityCatalog,
   type CatalogItem,
   type CatalogSection,
@@ -608,5 +609,24 @@ describe('creativeTheme and rowPartner', () => {
     expect(isCreativeWildcard('block-boardingPass')).toBe(true);
     expect(isCreativeWildcard('summaryBlock-periodMetro')).toBe(true);
     expect(isCreativeWildcard('block-camera')).toBe(false);
+  });
+});
+
+describe('stickerCatalog', () => {
+  const sections = stickerCatalog(activityCatalog(makeActivity()));
+
+  it('keeps what has the data on it', () => {
+    expect(sections.map((section) => section.id)).toEqual(['data', 'creative']);
+  });
+
+  it('leaves out the pictures, which would need a photo', () => {
+    const items = sections.flatMap((section) => section.widgets.flatMap((w) => w.variants));
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((item) => item.kind !== 'image')).toBe(true);
+  });
+
+  it('keeps the charts, when there are some', () => {
+    const withCharts = stickerCatalog(activityCatalog(makeActivity(), ['pace']));
+    expect(withCharts.map((section) => section.id)).toContain('charts');
   });
 });

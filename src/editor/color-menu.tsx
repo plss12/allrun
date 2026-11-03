@@ -58,10 +58,12 @@ interface ColorMenuProps {
   /** The color chosen (`#RRGGBB`), or `null` when it has none of its own (auto, transparent). */
   readonly color: string | null;
   readonly onColor: (hex: string) => void;
-  readonly opacity: OpacityControl;
+  /** The opacity bar; without one, the menu only chooses the color. */
+  readonly opacity?: OpacityControl;
   /** Swatches before the brand's, such as the background's auto and transparent. */
   readonly specials?: readonly SpecialSwatch[];
-  readonly onEyedropper: () => void;
+  /** Takes a color from the design; without a design to take it from, there is no eyedropper. */
+  readonly onEyedropper?: () => void;
   /** Rows under the favorites, such as a text's backdrop. */
   readonly children?: ReactNode;
 }
@@ -86,17 +88,21 @@ export function ColorMenu({
   return (
     <View style={{ gap: 12 }}>
       <ColorGrid chosen={chosen} onColor={onColor} />
-      <OpacityBar control={opacity} color={opacity.color ?? chosen ?? FLOATING_INK} />
+      {opacity === undefined ? null : (
+        <OpacityBar control={opacity} color={opacity.color ?? chosen ?? FLOATING_INK} />
+      )}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: SWATCH_GAP, alignItems: 'center' }}
       >
-        <RoundIcon
-          icon={{ ios: 'eyedropper', android: 'colorize' }}
-          label={t('colorMenu.eyedropper')}
-          onPress={onEyedropper}
-        />
+        {onEyedropper === undefined ? null : (
+          <RoundIcon
+            icon={{ ios: 'eyedropper', android: 'colorize' }}
+            label={t('colorMenu.eyedropper')}
+            onPress={onEyedropper}
+          />
+        )}
         {specials.map((special) => (
           <Swatch
             key={special.key}

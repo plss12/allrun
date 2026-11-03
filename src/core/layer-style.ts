@@ -1,4 +1,6 @@
-import type { ImageFrame, Layer, LayerKind, Template } from './template';
+import { isAppReplica } from './activity-block';
+import { isSummaryReplica } from './summary-block';
+import type { FontId, ImageFrame, Layer, LayerKind, Template } from './template';
 
 /**
  * The look of each layer, as the style panel edits it: color, opacity, text style, data labels,
@@ -174,6 +176,45 @@ export function setLayerColor(template: Template, id: string, color: string): Te
       }
     },
   );
+}
+
+/** The font and color all the stickers are drawn in; `null`, the one each widget has. */
+export interface StickerLook {
+  readonly font: FontId | null;
+  readonly color: string | null;
+}
+
+/**
+ * `layer` in `look`, in what it can change: a replica of an app keeps the app's look, a line has no
+ * font, and the logo and a picture keep theirs.
+ */
+export function withStickerLook(layer: Layer, { font, color }: StickerLook): Layer {
+  const fontOf = font === null ? {} : { font };
+  const colorOf = color === null ? {} : { color };
+  switch (layer.kind) {
+    case 'metric':
+    case 'summaryMetric':
+    case 'info':
+    case 'text':
+      return { ...layer, style: { ...layer.style, ...fontOf, ...colorOf } };
+    case 'activityBlock':
+      return isAppReplica(layer.block.design)
+        ? layer
+        : { ...layer, style: { ...layer.style, ...fontOf, ...colorOf } };
+    case 'summaryBlock':
+      return isSummaryReplica(layer.block.design)
+        ? layer
+        : { ...layer, style: { ...layer.style, ...fontOf, ...colorOf } };
+    case 'route':
+    case 'summaryRoutes':
+      return { ...layer, stroke: { ...layer.stroke, ...colorOf } };
+    case 'summaryChart':
+    case 'activityChart':
+      return { ...layer, ...fontOf, ...colorOf };
+    case 'logo':
+    case 'image':
+      return layer;
+  }
 }
 
 /**

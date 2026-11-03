@@ -38,13 +38,16 @@ export function useNotice(): EditorNotice {
   };
 }
 
-/** The notice as a pill, centered at `top`; nothing while there is none. */
+/**
+ * The notice as a pill, centered at `top`, or larger in the middle of what holds it when something
+ * was done that shows nowhere else; nothing while there is none.
+ */
 export function Notice({
   message,
   top,
 }: {
   readonly message: string | null;
-  readonly top: number;
+  readonly top?: number;
 }) {
   if (message === null) {
     return null;
@@ -55,10 +58,29 @@ export function Notice({
       exiting={FadeOut.duration(200)}
       pointerEvents="none"
       // Clear of the columns of buttons on either side.
-      style={{ position: 'absolute', top, left: 72, right: 72, alignItems: 'center' }}
+      style={{
+        position: 'absolute',
+        left: 72,
+        right: 72,
+        alignItems: 'center',
+        ...(top === undefined ? { top: 0, bottom: 0, justifyContent: 'center' } : { top }),
+      }}
     >
-      <View style={{ ...floatingSurface(18), paddingHorizontal: 16, paddingVertical: 10 }}>
-        <Text style={{ color: FLOATING_INK, fontSize: 15, fontWeight: '600', textAlign: 'center' }}>
+      <View
+        style={{
+          ...floatingSurface(18),
+          paddingHorizontal: top === undefined ? 24 : 16,
+          paddingVertical: top === undefined ? 14 : 10,
+        }}
+      >
+        <Text
+          style={{
+            color: FLOATING_INK,
+            fontSize: top === undefined ? 20 : 15,
+            fontWeight: '600',
+            textAlign: 'center',
+          }}
+        >
           {message}
         </Text>
       </View>

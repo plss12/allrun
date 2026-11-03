@@ -16,6 +16,32 @@ export interface ExportEncoding {
   readonly uti: 'public.jpeg' | 'public.png';
 }
 
+/** Room around a sticker for its shadow, in the widget's own pixels. */
+export const STICKER_ROOM = 24;
+/** How much bigger than on the canvas a sticker is drawn: it may be pasted large. */
+const STICKER_SCALE = 2;
+/** Longest side of a sticker, in pixels: a tall widget doesn't take much memory to draw. */
+export const STICKER_MAX_SIDE = 2160;
+
+/**
+ * The image of a sticker for a widget `width` × `height` (cut to it, with room for its shadow): its
+ * size in pixels, and the scale the widget is drawn at. Time and space O(1).
+ */
+export function stickerPlan(
+  width: number,
+  height: number,
+): { readonly width: number; readonly height: number; readonly scale: number } {
+  const scale = Math.min(
+    STICKER_SCALE,
+    STICKER_MAX_SIDE / (Math.max(width, height) + 2 * STICKER_ROOM),
+  );
+  return {
+    width: Math.ceil((width + 2 * STICKER_ROOM) * scale),
+    height: Math.ceil((height + 2 * STICKER_ROOM) * scale),
+    scale,
+  };
+}
+
 /** JPEG quality of designs with a photo. */
 export const JPEG_QUALITY = 95;
 

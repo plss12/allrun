@@ -1,10 +1,30 @@
-import { EDITOR_MAX_SIDE, EXPORT_MAX_SIDE, planPhoto } from './photo-plan';
+import { EDITOR_MAX_SIDE, EXPORT_MAX_SIDE, mimeTypeOf, planPhoto } from './photo-plan';
 
 const photo = (mimeType: string | null, width = 1536, height = 2048) => ({
   uri: 'file:///photo',
   width,
   height,
   mimeType,
+});
+
+describe('mimeTypeOf', () => {
+  it('reads what Skia decodes, and what it has to re-encode', () => {
+    expect(mimeTypeOf('file:///a/IMG_1.JPG')).toBe('image/jpeg');
+    expect(mimeTypeOf('file:///a/FullSizeRender.jpeg')).toBe('image/jpeg');
+    expect(mimeTypeOf('file:///a/b.png')).toBe('image/png');
+    expect(mimeTypeOf('file:///a/b.webp')).toBe('image/webp');
+    expect(mimeTypeOf('file:///a/IMG_2.HEIC')).toBe('image/heic');
+    expect(mimeTypeOf('file:///a/b.heif')).toBe('image/heif');
+  });
+
+  it('ignores what follows the file name', () => {
+    expect(mimeTypeOf('file:///a/b.png?version=2#x')).toBe('image/png');
+  });
+
+  it('knows nothing of other files, or of none', () => {
+    expect(mimeTypeOf('file:///a/b.gif')).toBeNull();
+    expect(mimeTypeOf('ph://ABC/L0/001')).toBeNull();
+  });
 });
 
 describe('planPhoto', () => {

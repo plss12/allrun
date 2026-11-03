@@ -108,6 +108,15 @@ const metricsRow = (layout: FormatLayout, count: number) =>
 const logo = (layout: FormatLayout): Layer => logoLayer(layout.logo);
 
 /**
+ * What a design starts with when the user chose their own photo (ADR 009): nothing but the
+ * watermark, also removable; the widgets are added with "+".
+ */
+export const emptyLayout = (template: Template): Template => ({
+  ...template,
+  layers: template.layers.filter((layer) => layer.kind === 'logo'),
+});
+
+/**
  * Default composition for one activity: name and date, the route, the three most relevant
  * metrics of its sport and the AllRun logo.
  */

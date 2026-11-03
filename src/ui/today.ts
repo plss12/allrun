@@ -10,6 +10,16 @@ export function toLocalDate(date: Date): LocalDate {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/**
+ * The local day of a moment in milliseconds since the epoch, or `null` when it isn't a day a
+ * `LocalDate` can write (a wrong date from outside the app).
+ */
+export function dayOfMoment(milliseconds: number): LocalDate | null {
+  const date = new Date(milliseconds);
+  const year = date.getFullYear();
+  return year >= 1000 && year <= 9999 ? toLocalDate(date) : null;
+}
+
 /** Midnight of a local date in the device time zone, as the native date picker reads it. */
 export function fromLocalDate(date: LocalDate): Date {
   const [year, month, day] = date.split('-').map(Number);

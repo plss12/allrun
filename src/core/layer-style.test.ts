@@ -3,6 +3,7 @@ import { makeSummary } from '@/test-utils/make-summary';
 
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
 import {
+  withStickerLook,
   castsShadow,
   contrastingInk,
   layerColor,
@@ -247,5 +248,52 @@ describe('setBlockOptions', () => {
     expect(setBlockOptions(withBlock, 'block', { bold: false, logo: false })).toBe(withBlock);
     expect(setBlockOptions(withBlock, 'block', { italic: true })).toBe(withBlock);
     expect(() => setBlockOptions(withBlock, 'name', { logo: true })).toThrow(/block options/);
+  });
+});
+
+describe('withStickerLook', () => {
+  const look = { font: 'anton', color: '#112233' } as const;
+  const newOne = (item: Parameters<typeof newLayer>[0]): Layer =>
+    newLayer(item, 'x', 'story', 'inter');
+
+  it('changes the font and the color of a text', () => {
+    expect(withStickerLook(newOne({ kind: 'metric', metric: 'distance' }), look)).toMatchObject({
+      style: { font: 'anton', color: '#112233' },
+    });
+  });
+
+  it('changes those of a widget of its own lettering', () => {
+    const block = newOne({ kind: 'activityBlock', block: { design: 'quote', quote: 'kipchoge' } });
+    expect(withStickerLook(block, look)).toMatchObject({
+      style: { font: 'anton', color: '#112233' },
+    });
+  });
+
+  it('leaves a replica of an app as it is', () => {
+    const chat = newOne({
+      kind: 'activityBlock',
+      block: { design: 'chat', layout: 'dark', phrase: 'zombieMode' },
+    });
+    expect(withStickerLook(chat, look)).toBe(chat);
+  });
+
+  it('gives a line only its color', () => {
+    const route = newOne({ kind: 'route' });
+    const styled = withStickerLook(route, look);
+    expect(styled).toMatchObject({ stroke: { color: '#112233' } });
+    expect(styled).not.toHaveProperty('font');
+  });
+
+  it('leaves the logo as it is', () => {
+    const logo = newOne({ kind: 'logo', brand: 'allrun', variant: 'wordmark' });
+    expect(withStickerLook(logo, look)).toBe(logo);
+  });
+
+  it('keeps what the look leaves empty', () => {
+    const metric = newOne({ kind: 'metric', metric: 'distance' });
+    expect(withStickerLook(metric, { font: null, color: null })).toEqual(metric);
+    expect(withStickerLook(metric, { font: null, color: '#112233' })).toMatchObject({
+      style: { color: '#112233', font: 'inter' },
+    });
   });
 });

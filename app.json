@@ -47,6 +47,7 @@
       [
         "expo-media-library",
         {
+          "photosPermission": "AllRun shows your photos so you can put your data on them.",
           "savePhotosPermission": "AllRun saves the images you create to your photos.",
           "granularPermissions": ["photo"]
         }

@@ -401,11 +401,12 @@ function WidgetOptions({
 }
 
 /** The bundled fonts, each named by its style and written in itself. */
-function FontRow({
+export function FontRow({
   font: current,
   onPick,
 }: {
-  readonly font: FontId;
+  /** The one marked; `null` for none. */
+  readonly font: FontId | null;
   readonly onPick: (font: FontId) => void;
 }) {
   const { t } = useTranslation();

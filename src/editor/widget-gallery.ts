@@ -14,7 +14,13 @@ import {
 } from '@/core/layer-catalog';
 import { listedPhrases, type PhraseKind } from '@/core/phrases';
 import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
-import { CANVAS_FORMATS, type CanvasFormat, type FontId, newTemplate } from '@/core/template';
+import {
+  CANVAS_FORMATS,
+  type CanvasFormat,
+  type FontId,
+  type Layer,
+  newTemplate,
+} from '@/core/template';
 import { CARD_BORDER } from '@/theme/card-surface';
 import { todayLocal } from '@/ui/today';
 
@@ -131,6 +137,11 @@ export interface GallerySection {
   readonly rows: readonly GalleryRow[];
 }
 
+/** How a gallery draws its widgets; `restyle` gives them all a look (the stickers'). */
+export interface GalleryContext extends LayerContext {
+  readonly restyle?: (layer: Layer) => Layer;
+}
+
 /**
  * The catalog as rows of tiles for a screen `screenWidth` points wide, each variant drawn as it
  * would be added to a design of `format` in `font`. Variants writing the same text as an earlier
@@ -150,7 +161,7 @@ export function buildGallery(
   catalog: readonly CatalogSection[],
   format: CanvasFormat,
   font: FontId,
-  context: LayerContext,
+  context: GalleryContext,
   screenWidth: number,
   textSample: string,
 ): BuiltGallery {
@@ -174,7 +185,7 @@ export function gallerySections(
   catalog: readonly CatalogSection[],
   format: CanvasFormat,
   font: FontId,
-  context: LayerContext,
+  context: GalleryContext,
   screenWidth: number,
   textSample: string,
 ): GallerySection[] {
@@ -376,7 +387,7 @@ function measureTile(
   size: { width: number; height: number; capWidth: number },
   format: CanvasFormat,
   font: FontId,
-  context: LayerContext,
+  context: GalleryContext,
   textSample: string,
 ): GalleryWidget | null {
   const kind = chosenFrom(widget.variants[0]);
@@ -414,7 +425,7 @@ function measureWidget(
   { width, height, capWidth }: { width: number; height: number; capWidth: number },
   format: CanvasFormat,
   font: FontId,
-  context: LayerContext,
+  context: GalleryContext,
   textSample: string,
 ): GalleryWidget | null {
   const canvasWidth = CANVAS_FORMATS[format].width;
@@ -471,15 +482,17 @@ function measureWidget(
 }
 
 /** The layer an item adds, filled with the data and measured; `null` if it has nothing to show. */
-function prepareItem(
+/** An item of the catalog, filled in and measured, or `null` with nothing to show. */
+export function prepareItem(
   item: CatalogItem,
   format: CanvasFormat,
   font: FontId,
-  context: LayerContext,
+  context: GalleryContext,
   textSample: string,
 ): PreparedLayer | null {
   const pick: NewLayer = item.kind === 'text' ? { kind: 'text', content: textSample } : item;
-  const layer = newLayer(pick, catalogItemKey(item), format, font);
+  const added = newLayer(pick, catalogItemKey(item), format, font);
+  const layer = context.restyle?.(added) ?? added;
   const [prepared] = prepareLayers(
     newTemplate({ id: 'gallery', mode: context.data.mode, format, layers: [layer] }),
     context,

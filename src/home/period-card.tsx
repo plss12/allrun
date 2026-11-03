@@ -48,16 +48,17 @@ export interface PeriodChoice {
   readonly families: readonly SportFamily[];
 }
 
-/** Opens the editor with a period and its sports. */
-function openEditor({ kind, range, families }: PeriodChoice): void {
+/** Goes on to choose what to make with a period and its sports, named by `line`. */
+function openSelection({ kind, range, families }: PeriodChoice, line: string): void {
   router.push({
-    pathname: '/editor',
+    pathname: '/select',
     params: {
       mode: 'summary',
       kind,
       start: range.start,
       end: range.end,
       families: families.join(','),
+      line,
     },
   });
 }
@@ -65,8 +66,8 @@ function openEditor({ kind, range, families }: PeriodChoice): void {
 /**
  * A period's summary on the home screen: this week, month or year (stepping back with the
  * arrows) or a custom range, scrolling sideways through all sports and then each one done in
- * it. A page opens the editor with that period and sport, or does what `onChoose` says (the
- * editor choosing another period).
+ * it. A page goes on to choose what to make with that period and sport, or does what `onChoose`
+ * says (the editor choosing another period).
  */
 export function PeriodCard({
   kind,
@@ -74,7 +75,7 @@ export function PeriodCard({
   today,
   unit,
   locale,
-  onChoose = openEditor,
+  onChoose = (choice) => openSelection(choice, formatPeriodName(choice.kind, choice.range, locale)),
 }: {
   readonly kind: PeriodKind;
   readonly width: number;

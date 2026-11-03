@@ -30,13 +30,33 @@ export const EXPORT_MAX_SIDE = 4096;
 /** MIME types Skia can decode on iOS and Android. */
 const DECODABLE_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-/** What the image picker tells us about the chosen photo. */
+/** What the library tells us about the chosen photo (see `data/photo-library.ts`). */
 export interface PickedPhoto {
   readonly uri: string;
   readonly width: number;
   readonly height: number;
   /** Not always reported; an unknown type is treated as not decodable. */
   readonly mimeType?: string | null;
+}
+
+/** The type a file's extension says it has, or `null` for one not known. */
+export function mimeTypeOf(path: string): string | null {
+  const extension = path.split(/[?#]/u)[0].split('.').pop()?.toLowerCase();
+  switch (extension) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'heic':
+      return 'image/heic';
+    case 'heif':
+      return 'image/heif';
+    default:
+      return null;
+  }
 }
 
 export type PhotoPlan =

@@ -1,4 +1,4 @@
-import { fromLocalDate, todayLocal, toLocalDate, toLocalTimestamp } from './today';
+import { dayOfMoment, fromLocalDate, todayLocal, toLocalDate, toLocalTimestamp } from './today';
 
 describe('local dates and Date', () => {
   it('reads the calendar day in the device time zone', () => {
@@ -19,5 +19,18 @@ describe('toLocalTimestamp', () => {
   it('writes the moment in the device time zone, padded', () => {
     expect(toLocalTimestamp(new Date(2026, 0, 5, 7, 3, 9))).toBe('20260105-070309');
     expect(toLocalTimestamp(new Date(2026, 9, 18, 15, 30, 12))).toBe('20261018-153012');
+  });
+});
+
+describe('dayOfMoment', () => {
+  it('names the local day of a moment in milliseconds, as the photo library gives it', () => {
+    expect(dayOfMoment(new Date(2026, 10, 3, 12).getTime())).toBe('2026-11-03');
+  });
+
+  // A photo's date only labels it for screen readers: a wrong one must not break the grid.
+  it('gives nothing for a moment that is not a day we can write', () => {
+    expect(dayOfMoment(new Date(2026, 10, 3, 12).getTime() * 1000)).toBeNull();
+    expect(dayOfMoment(Number.NaN)).toBeNull();
+    expect(dayOfMoment(Number.POSITIVE_INFINITY)).toBeNull();
   });
 });
