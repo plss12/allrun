@@ -1,5 +1,4 @@
 import { SymbolView } from 'expo-symbols';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, Text, View } from 'react-native';
 
@@ -7,6 +6,7 @@ import type { SportFamily } from '@/core/sports';
 import { floatingSurface } from '@/theme/card-surface';
 import { colors, darkLabelInk } from '@/theme/colors';
 import { SportGlyph } from '@/ui/sport-glyph';
+import { useTopBarRoom } from '@/ui/top-bar';
 
 /** What the filter shows: one family, or every activity. */
 export type SportFilter = SportFamily | 'all';
@@ -39,7 +39,7 @@ export function SportFilterMenu({
   readonly onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const headerHeight = useHeaderHeight();
+  const barRoom = useTopBarRoom();
   const options: readonly SportFilter[] = ['all', ...families];
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -55,7 +55,7 @@ export function SportFilterMenu({
         style={{
           ...floatingSurface(18),
           position: 'absolute',
-          top: headerHeight + BELOW_HEADER,
+          top: barRoom + BELOW_HEADER,
           right: EDGE,
           minWidth: 220,
           padding: 6,

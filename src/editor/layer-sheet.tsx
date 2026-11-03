@@ -1,6 +1,6 @@
 import type { ParseKeys } from 'i18next';
 import { Canvas, Group, Paint } from '@shopify/react-native-skia';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
@@ -279,7 +279,8 @@ export function LayerSheet({
 /**
  * The gallery's sections as a list of rows of tiles, a tile scrolling sideways through its
  * variants. A tap does `onPress` with the variant shown, and a long press `onLongPress`, which a
- * screen reader offers as an action named `longPressLabel`.
+ * screen reader offers as an action named `longPressLabel`. `header` goes on top, scrolling with
+ * the list, which starts `topInset` points down so that it can pass under a screen's header.
  */
 export function WidgetGalleryList({
   sections,
@@ -287,23 +288,32 @@ export function WidgetGalleryList({
   onPress,
   onLongPress,
   longPressLabel,
+  header,
+  topInset = 0,
 }: {
   readonly sections: BuiltGallery['sections'];
   readonly layerContext: LayerContext;
   readonly onPress: (page: GalleryPage) => void;
   readonly onLongPress?: (page: GalleryPage) => void;
   readonly longPressLabel?: string;
+  readonly header?: ReactElement;
+  readonly topInset?: number;
 }) {
   const { t } = useTranslation();
   return (
     <SectionList
+      ListHeaderComponent={header}
       sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
       keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
       stickySectionHeadersEnabled={false}
       initialNumToRender={8}
       // Rows two screens away are let go: each tile draws on a canvas of its own.
       windowSize={5}
-      contentContainerStyle={{ paddingHorizontal: GALLERY_PADDING, paddingBottom: 32 }}
+      contentContainerStyle={{
+        paddingHorizontal: GALLERY_PADDING,
+        paddingTop: topInset,
+        paddingBottom: 32,
+      }}
       renderSectionHeader={({ section }) => (
         <Text
           accessibilityRole="header"

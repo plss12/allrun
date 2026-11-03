@@ -1,9 +1,9 @@
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { addListener, presentPermissionsPicker } from 'expo-media-library';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, Linking, Pressable, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -16,6 +16,7 @@ import {
   type PhotoSource,
   readPhotoAccess,
 } from '@/data/photo-library';
+import { KeptMounted } from '@/editor/round-button';
 import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { formatRelativeDay } from '@/ui/format';
@@ -195,6 +196,22 @@ function NoPhotoCell({ onPress }: { readonly onPress: () => void }) {
   );
 }
 
+/** What goes on top of a list, scrolling with it, and how far down it starts. */
+interface ListTop {
+  readonly header: ReactNode;
+  readonly inset: number;
+}
+
+/** A screen's state without a list (loading, empty…), under what goes on top of the list. */
+function Framed({ top, children }: { readonly top: ListTop; readonly children: ReactNode }) {
+  return (
+    <View style={{ flex: 1, paddingTop: top.inset }}>
+      {top.header}
+      {children}
+    </View>
+  );
+}
+
 type GridItem =
   { readonly kind: 'none' } | { readonly kind: 'photo'; readonly photo: LibraryPhoto };
 
@@ -203,11 +220,13 @@ const NO_PHOTO_ITEM: GridItem = { kind: 'none' };
 /** The photos of `source` in a grid, keeping only what is on screen. */
 function PhotoGrid({
   source,
+  top,
   emptyMessage,
   onPick,
   onNoPhoto,
 }: {
   readonly source: PhotoSource;
+  readonly top: ListTop;
   readonly emptyMessage: string;
   readonly onPick: (id: string) => void;
   readonly onNoPhoto?: () => void;
@@ -217,13 +236,25 @@ function PhotoGrid({
   const insets = useSafeAreaInsets();
   const { photos, status, loadMore, retry } = useLibraryPhotos(source);
   if (status === 'loading') {
-    return <LoadingView />;
+    return (
+      <Framed top={top}>
+        <LoadingView />
+      </Framed>
+    );
   }
   if (status === 'error') {
-    return <ErrorView message={t('photos.error')} onRetry={retry} />;
+    return (
+      <Framed top={top}>
+        <ErrorView message={t('photos.error')} onRetry={retry} />
+      </Framed>
+    );
   }
   if (photos.length === 0 && onNoPhoto === undefined) {
-    return <EmptyView message={emptyMessage} />;
+    return (
+      <Framed top={top}>
+        <EmptyView message={emptyMessage} />
+      </Framed>
+    );
   }
   const today = todayLocal();
   const labelOf = ({ takenAt }: LibraryPhoto) => {
@@ -249,7 +280,8 @@ function PhotoGrid({
       getItemType={(item) => item.kind}
       onEndReached={loadMore}
       onEndReachedThreshold={1}
-      contentContainerStyle={{ paddingBottom: insets.bottom }}
+      ListHeaderComponent={<>{top.header}</>}
+      contentContainerStyle={{ paddingTop: top.inset, paddingBottom: insets.bottom }}
       renderItem={({ item }) =>
         item.kind === 'photo' ? (
           <PhotoCell
@@ -266,25 +298,48 @@ function PhotoGrid({
 }
 
 /** The albums with photos, two per row, each with its newest photo as cover. */
-function AlbumList({ onOpen }: { readonly onOpen: (album: PhotoAlbum) => void }) {
+function AlbumList({
+  top,
+  onOpen,
+}: {
+  readonly top: ListTop;
+  readonly onOpen: (album: PhotoAlbum) => void;
+}) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const albums = useAsync(loadAlbums, 'albums');
   if (albums.status === 'loading') {
-    return <LoadingView />;
+    return (
+      <Framed top={top}>
+        <LoadingView />
+      </Framed>
+    );
   }
   if (albums.status === 'error') {
-    return <ErrorView message={t('photos.error')} onRetry={albums.retry} />;
+    return (
+      <Framed top={top}>
+        <ErrorView message={t('photos.error')} onRetry={albums.retry} />
+      </Framed>
+    );
   }
   if (albums.data.length === 0) {
-    return <EmptyView message={t('photos.noAlbums')} />;
+    return (
+      <Framed top={top}>
+        <EmptyView message={t('photos.noAlbums')} />
+      </Framed>
+    );
   }
   return (
     <FlashList
       data={albums.data}
       numColumns={2}
       keyExtractor={(album) => album.id}
-      contentContainerStyle={{ padding: 8, paddingBottom: insets.bottom + 8 }}
+      ListHeaderComponent={<>{top.header}</>}
+      contentContainerStyle={{
+        paddingHorizontal: 8,
+        paddingTop: top.inset,
+        paddingBottom: insets.bottom + 8,
+      }}
       renderItem={({ item }) => (
         <Pressable
           accessibilityRole="button"
@@ -390,27 +445,52 @@ function NoAccess({
  * The user's photos inside the app (ADR 009): Recent, Favorites and Albums, in a grid that keeps
  * only what is on screen. With limited access, only the photos allowed show, and a line offers to
  * choose others. A tap on a photo gives its library id to `onPick`; with `onNoPhoto`, the recent
- * photos start with a cell to go on without one.
+ * photos start with a cell to go on without one. `top` goes over all of it, scrolling with the
+ * list, which starts `topInset` points down so that it can pass under a header.
  */
 export function PhotoBrowser({
   onPick,
   onNoPhoto,
+  top = null,
+  topInset = 0,
 }: {
   readonly onPick: (id: string) => void;
   readonly onNoPhoto?: () => void;
+  readonly top?: ReactNode;
+  readonly topInset?: number;
 }) {
   const { t } = useTranslation();
   const { access, ask } = usePhotoAccess();
   const [shelf, setShelf] = useState<Shelf>('recent');
+  // Each shelf stays mounted once opened, so its list stays where it was.
+  const [opened, setOpened] = useState<ReadonlySet<Shelf>>(new Set(['recent']));
   const [album, setAlbum] = useState<PhotoAlbum | null>(null);
   if (access === null) {
-    return <LoadingView />;
+    return (
+      <Framed top={{ header: top, inset: topInset }}>
+        <LoadingView />
+      </Framed>
+    );
   }
   if (access.level === 'none') {
-    return <NoAccess canAskAgain={access.canAskAgain} onAsk={ask} onNoPhoto={onNoPhoto} />;
+    return (
+      <Framed top={{ header: top, inset: topInset }}>
+        <NoAccess canAskAgain={access.canAskAgain} onAsk={ask} onNoPhoto={onNoPhoto} />
+      </Framed>
+    );
   }
-  return (
-    <View style={{ flex: 1 }}>
+  const listTop = (extra: ReactNode = null): ListTop => ({
+    inset: topInset,
+    header: (
+      <>
+        {top}
+        {shelves}
+        {extra}
+      </>
+    ),
+  });
+  const shelves = (
+    <>
       {access.level !== 'limited' ? null : (
         <Pressable
           accessibilityRole="button"
@@ -430,38 +510,59 @@ export function PhotoBrowser({
         shown={shelf}
         onChoose={(next) => {
           setShelf(next);
+          setOpened((current) => new Set(current).add(next));
           setAlbum(null);
         }}
       />
-      {shelf !== 'albums' ? (
+    </>
+  );
+  return (
+    <View style={{ flex: 1 }}>
+      <KeptMounted hidden={shelf !== 'recent'} style={StyleSheet.absoluteFill}>
         <PhotoGrid
-          key={shelf}
-          source={{ kind: shelf }}
-          emptyMessage={t(shelf === 'recent' ? 'photos.empty' : 'photos.noFavorites')}
+          top={listTop()}
+          source={{ kind: 'recent' }}
+          emptyMessage={t('photos.empty')}
           onPick={onPick}
-          onNoPhoto={shelf === 'recent' ? onNoPhoto : undefined}
+          onNoPhoto={onNoPhoto}
         />
-      ) : album === null ? (
-        <AlbumList onOpen={setAlbum} />
-      ) : (
-        <>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setAlbum(null)}
-            style={{ paddingHorizontal: 16, paddingBottom: 12 }}
-          >
-            <Text numberOfLines={1} style={{ color: colors.label, fontSize: 15 }}>
-              ‹ {album.title}
-            </Text>
-          </Pressable>
+      </KeptMounted>
+      {opened.has('favorites') ? (
+        <KeptMounted hidden={shelf !== 'favorites'} style={StyleSheet.absoluteFill}>
+          <PhotoGrid
+            top={listTop()}
+            source={{ kind: 'favorites' }}
+            emptyMessage={t('photos.noFavorites')}
+            onPick={onPick}
+          />
+        </KeptMounted>
+      ) : null}
+      {opened.has('albums') ? (
+        <KeptMounted hidden={shelf !== 'albums' || album !== null} style={StyleSheet.absoluteFill}>
+          <AlbumList top={listTop()} onOpen={setAlbum} />
+        </KeptMounted>
+      ) : null}
+      {shelf === 'albums' && album !== null ? (
+        <View style={StyleSheet.absoluteFill}>
           <PhotoGrid
             key={album.id}
+            top={listTop(
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setAlbum(null)}
+                style={{ paddingHorizontal: 16, paddingBottom: 12 }}
+              >
+                <Text numberOfLines={1} style={{ color: colors.label, fontSize: 15 }}>
+                  ‹ {album.title}
+                </Text>
+              </Pressable>,
+            )}
             source={{ kind: 'album', albumId: album.id }}
             emptyMessage={t('photos.empty')}
             onPick={onPick}
           />
-        </>
-      )}
+        </View>
+      ) : null}
     </View>
   );
 }

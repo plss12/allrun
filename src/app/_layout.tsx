@@ -9,7 +9,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ActivitySourceProvider } from '@/data/activity-source';
 import { TemplateStoreProvider } from '@/data/user-templates';
-import { BrandMark } from '@/editor/brand/brand-art';
 import { syncPhrases } from '@/data/phrases';
 import { loadEditorFonts } from '@/editor/fonts';
 import { colors } from '@/theme/colors';
@@ -57,29 +56,18 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ActivitySourceProvider>
           <TemplateStoreProvider>
-            {/* Back buttons are just the arrow: the previous screen's title adds nothing. */}
             <Stack
               screenOptions={{
                 contentStyle: { backgroundColor: colors.systemBackground },
-                headerBackButtonDisplayMode: 'minimal',
+                // Each screen has its own bar on top (see `ui/top-bar.tsx`).
+                headerShown: false,
               }}
             >
-              {/* Home titles itself with its Activities and Summaries tabs. */}
-              <Stack.Screen
-                name="index"
-                options={{
-                  title: t('home.title'),
-                  headerLeft: () => <BrandMark height={22} />,
-                }}
-              />
-              {/* What to make with the activity or period: it titles itself with its tabs. */}
+              <Stack.Screen name="index" options={{ title: t('home.title') }} />
               <Stack.Screen name="select" options={{ title: '' }} />
               {/* The editor is full screen, with its own floating controls (ADR 009); it rises
                   as a modal and closes with its own button, which asks before losing edits. */}
-              <Stack.Screen
-                name="editor"
-                options={{ headerShown: false, presentation: 'fullScreenModal' }}
-              />
+              <Stack.Screen name="editor" options={{ presentation: 'fullScreenModal' }} />
             </Stack>
           </TemplateStoreProvider>
         </ActivitySourceProvider>

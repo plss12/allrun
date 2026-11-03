@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { useState } from 'react';
+import { type ReactNode, useDeferredValue, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Linking, Modal, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { stickerCatalog } from '@/core/layer-catalog';
 import { type StickerLook, withStickerLook } from '@/core/layer-style';
 import { startOf } from '@/core/place';
 import { useActivitySource } from '@/data/activity-source';
-import { lookUpPlace, UNKNOWN_PLACE } from '@/data/place-lookup';
+import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
 import { usePhrases } from '@/data/phrases';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
@@ -23,6 +23,7 @@ import { useAsync } from '@/ui/use-async';
 import { CHOICE_TITLES, ChoiceList } from './choice-list';
 import { ColorMenu } from './color-menu';
 import { Dock } from './dock';
+import type { EditorData } from './editor-data';
 import type { EditorRequest } from './editor-params';
 import { copyImage, saveToPhotos } from './export-actions';
 import { encodeBase64, writeImage } from './export-image';
@@ -63,22 +64,24 @@ function HowTo({ icon, text }: { readonly icon: SymbolViewProps['name']; readonl
   );
 }
 
+/** Longest the stickers wait for the name of the place before being laid out without it. */
+const MAX_PLACE_WAIT_MS = 800;
+
+/** What the stickers are made of, with the name of the place once it is known. */
+export interface StickerData {
+  readonly data: ReturnType<typeof useAsync<EditorData>>;
+  readonly place: PlaceLookup;
+  /** Whether to lay them out already: the place is known, or it took too long. */
+  readonly ready: boolean;
+}
+
 /**
- * The Stickers tab (ADR 009): the widgets drawn with the user's data, ready to paste over anything.
- * A tap copies one and a long press saves it, as a PNG cut to the widget; a widget chosen from a
- * list asks which words first. On top, the font and color of all of them, in a panel at the bottom
- * as in the editor, with the gallery changing behind it, and a button back to how each one was;
- * replicas of apps keep their own look.
+ * Loads what the stickers are made of as the selection screen opens, so that their tab finds it
+ * ready, also on coming back to it. Laying them out takes a moment, and the name of the place would
+ * have them laid out again a moment later.
  */
-export function StickerGallery({ params }: { readonly params: EditorRequest }) {
-  const { t } = useTranslation();
-  const window = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const { unit, locale } = useDisplaySettings();
+export function useStickerData(params: EditorRequest): StickerData {
   const source = useActivitySource();
-  const fonts = useEditorFonts();
-  const phrases = usePhrases();
-  const notice = useNotice();
   const data = useAsync(() => loadEditorData(source, params), JSON.stringify(params));
   // Its place, named without asking for anything: if that needs a permission, it isn't offered.
   const activity = data.status === 'success' && data.data.mode === 'activity' ? data.data : null;
@@ -89,12 +92,50 @@ export function StickerGallery({ params }: { readonly params: EditorRequest }) {
         : lookUpPlace(startOf(activity.activity), false),
     activity?.activity.id ?? 'none',
   );
-  const place = lookup.status === 'success' ? lookup.data : UNKNOWN_PLACE;
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setWaited(true), MAX_PLACE_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return {
+    data,
+    place: lookup.status === 'success' ? lookup.data : UNKNOWN_PLACE,
+    ready: data.status === 'success' && (waited || lookup.status !== 'loading'),
+  };
+}
+
+/**
+ * The Stickers tab (ADR 009): the widgets drawn with the user's data, ready to paste over anything.
+ * A tap copies one and a long press saves it, as a PNG cut to the widget; a widget chosen from a
+ * list asks which words first. On top, the font and color of all of them, in a panel at the bottom
+ * as in the editor, with the gallery changing behind it, and a button back to how each one was;
+ * replicas of apps keep their own look.
+ */
+export function StickerGallery({
+  stickerData: { data, place, ready },
+  top,
+  topInset,
+}: {
+  readonly stickerData: StickerData;
+  /** Goes over the gallery, scrolling with it. */
+  readonly top: ReactNode;
+  /** How far down the gallery starts, so that it can pass under the screen's header. */
+  readonly topInset: number;
+}) {
+  const { t } = useTranslation();
+  const window = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { unit, locale } = useDisplaySettings();
+  const fonts = useEditorFonts();
+  const phrases = usePhrases();
+  const notice = useNotice();
   const [look, setLook] = useState<StickerLook>(NO_LOOK);
+  // A tap answers at once, in the panel; the gallery, a moment's work, follows in its own render.
+  const drawnLook = useDeferredValue(look);
   const [panel, setPanel] = useState<'font' | 'color' | null>(null);
   const [choosing, setChoosing] = useState<Choice | null>(null);
 
-  const loaded = data.status === 'success' ? data.data : null;
+  const loaded = ready && data.status === 'success' ? data.data : null;
   const shown =
     loaded?.mode === 'activity' && place.status === 'known'
       ? { ...loaded, place: place.place }
@@ -117,7 +158,7 @@ export function StickerGallery({ params }: { readonly params: EditorRequest }) {
           },
           translate: (key, values) => t(key, values),
           phrases,
-          restyle: (layer) => withStickerLook(layer, look),
+          restyle: (layer) => withStickerLook(layer, drawnLook),
         };
   const textSample = t('gallery.textSample');
   const catalog =
@@ -129,8 +170,8 @@ export function StickerGallery({ params }: { readonly params: EditorRequest }) {
       : [
           galleryDataKey(context.data),
           catalog.map((section) => section.widgets.map((widget) => widget.key).join(',')).join(';'),
-          look.font,
-          look.color,
+          drawnLook.font,
+          drawnLook.color,
           unit,
           locale,
           window.width,
@@ -202,20 +243,30 @@ export function StickerGallery({ params }: { readonly params: EditorRequest }) {
     });
 
   if (data.status === 'error') {
-    return <ErrorView message={t('editor.error')} onRetry={data.retry} />;
+    return (
+      <View style={{ flex: 1, paddingTop: topInset }}>
+        {top}
+        <ErrorView message={t('editor.error')} onRetry={data.retry} />
+      </View>
+    );
   }
   if (context === null) {
-    return <LoadingView />;
+    return (
+      <View style={{ flex: 1, paddingTop: topInset }}>
+        {top}
+        <LoadingView />
+      </View>
+    );
   }
-  return (
-    <View style={{ flex: 1 }}>
+  const header = (
+    <>
+      {top}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
           gap: 8,
-          paddingHorizontal: 16,
-          paddingVertical: 8,
+          paddingTop: 8,
         }}
       >
         <RoundButton
@@ -254,7 +305,13 @@ export function StickerGallery({ params }: { readonly params: EditorRequest }) {
           />
         </View>
       </View>
+    </>
+  );
+  return (
+    <View style={{ flex: 1 }}>
       <WidgetGalleryList
+        header={header}
+        topInset={topInset}
         sections={sections}
         layerContext={context}
         longPressLabel={t('stickers.longPress')}
