@@ -409,7 +409,7 @@ function measureTile(
  * anything to show. Its data are drawn no bigger than in a tile `capWidth` wide (see
  * `MAX_CANVAS_SPAN`).
  */
-export function measureWidget(
+function measureWidget(
   widget: CatalogWidget,
   { width, height, capWidth }: { width: number; height: number; capWidth: number },
   format: CanvasFormat,

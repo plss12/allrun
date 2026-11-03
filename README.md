@@ -23,15 +23,14 @@ npm start              # scan the QR code with Expo Go
 
 ## Scripts
 
-| Command                   | Description                                                    |
-| ------------------------- | -------------------------------------------------------------- |
-| `npm start`               | Start the Expo dev server                                      |
-| `npm run lint`            | Lint with ESLint (`expo lint`)                                 |
-| `npm run format`          | Format with Prettier                                           |
-| `npm run typecheck`       | Type-check with `tsc`                                          |
-| `npm test`                | Run unit tests (Jest + `jest-expo`)                            |
-| `npm run doctor`          | Check the project with `expo-doctor`                           |
-| `npm run phrases:preview` | Draw the phrases of the table on their gallery tiles (ADR 012) |
+| Command             | Description                          |
+| ------------------- | ------------------------------------ |
+| `npm start`         | Start the Expo dev server            |
+| `npm run lint`      | Lint with ESLint (`expo lint`)       |
+| `npm run format`    | Format with Prettier                 |
+| `npm run typecheck` | Type-check with `tsc`                |
+| `npm test`          | Run unit tests (Jest + `jest-expo`)  |
+| `npm run doctor`    | Check the project with `expo-doctor` |
 
 CI runs lint, a formatting check, type-check, tests and a JS bundle export for iOS and Android on
 every push and PR.

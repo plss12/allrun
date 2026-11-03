@@ -9,7 +9,7 @@ App móvil (iOS + Android) para poner datos de Strava sobre tus fotos con libert
 ## Stack y comandos
 
 - Stack: Expo SDK 58 + Expo Router + TypeScript `strict`; editor con `@shopify/react-native-skia` + gesture-handler + reanimated; Supabase (la tabla de frases, ADR 012; Edge Functions para el OAuth de Strava, usuario anónimo); Zod; i18next (es/en); Sentry.
-- `npm start`: dev (Expo Go en el iPhone) · `npm test`: tests · `npm run lint`: lint (incluye Prettier) · `npm run format`: formatear · `npm run typecheck`: tipos · `npx expo export --platform ios --platform android`: build del bundle · `npm run phrases:preview`: dibuja las frases de la tabla en sus tarjetas, en `.expo/phrases-preview/`.
+- `npm start`: dev (Expo Go en el iPhone) · `npm test`: tests · `npm run lint`: lint (incluye Prettier) · `npm run format`: formatear · `npm run typecheck`: tipos · `npx expo export --platform ios --platform android`: build del bundle.
 - Comprobaciones: `npm run check:fast` mientras se itera (tipos incrementales, lint y los tests de lo cambiado; o `npx jest --findRelatedTests <ficheros>`) y `npm run check`, espejo exacto de la CI, una vez antes de pedir la prueba en el iPhone y antes del commit. La CI corre en tres trabajos en paralelo (estático, tests, doctor y bundle) con la preparación común en `.github/actions/setup`.
 
 ## Reglas por área

@@ -44,10 +44,6 @@ users updating the app.
   hint, and its cover is the first phrase of the list whose words, drawn in the tile with the real
   font and language, measure at least 10 points. A long dated phrase heads the list but doesn't
   become the cover.
-- **`npm run phrases:preview`** reads the table and draws every phrase in its widget, in both
-  languages, on a sheet that marks the ones too small to be a cover. A change in the table reaches
-  users without going through CI, so this is how to look before publishing. It uses CanvasKit, which
-  doesn't always match native Skia: the last word is the phone.
 - **These texts leave i18next.** They are data, not interface: `t()` keeps the interface's words, and
   the translations of a phrase travel in its row.
 
@@ -63,5 +59,9 @@ users updating the app.
   is chosen per design and can change later.
 - **A character limit for the cover:** letters, fonts and languages differ, and the app already lays
   the phrase out for the gallery, so it can look at what really happens.
+- **A command drawing the table's phrases on a sheet:** built and then removed. The table's
+  constraints, the measured cover and a test at the maximum length already cover what could go wrong,
+  and in development the app reads the table on every launch, so the phone itself shows a new phrase,
+  drawn for real. A typo is fixed in the dashboard, and reaches users within a day.
 - **A `theme` column:** the app has no sections by theme, and dates already cover Christmas or New
   Year's Eve. Adding it later breaks nothing.
