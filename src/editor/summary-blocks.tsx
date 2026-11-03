@@ -3,6 +3,8 @@ import { Skia } from '@shopify/react-native-skia';
 import type { Activity } from '@/core/activity';
 import { bigMetrics, sportIcon, type SportIconId } from '@/core/activity-block';
 import { periodEquivalences } from '@/core/equivalences';
+import { phraseLanguage, phraseWords } from '@/core/phrases';
+import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import { familyTotals } from '@/core/summary';
 import { gridColumns, isSummaryReplica, mainFamily } from '@/core/summary-block';
 import { periodTotals, summaryMetricValue } from '@/core/summary-metrics';
@@ -202,9 +204,17 @@ function fadedColor(color: string): string {
 export function prepareSummaryBlock(
   layer: SummaryBlockLayer,
   data: SummaryData,
-  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+  { fonts, textContext, translate, phrases = BUILT_IN_PHRASES }: Omit<BlockContext, 'canvas'>,
 ): PreparedBlock | null {
   const { block, style } = layer;
+  /** A verse's or a quote's words, in the design's language. */
+  let wordsSize: number | undefined;
+  const quotation = (kind: 'verse' | 'quote', id: string): Box => {
+    const words = phraseWords(phrases, kind, id, phraseLanguage(textContext.locale));
+    const box = quotationBox(fonts, style, translate, words.text, words.source);
+    wordsSize = box.wordsSize;
+    return box;
+  };
   /** `text` on one line at `size`, cut to its letters (or to all of `shared`'s, see `capitalsBox`). */
   const line = (
     text: string,
@@ -584,21 +594,9 @@ export function prepareSummaryBlock(
         );
       }
       case 'quote':
-        return quotationBox(
-          fonts,
-          style,
-          translate,
-          translate(`widgets.quotes.${block.quote}.text`),
-          translate(`widgets.quotes.${block.quote}.author`),
-        );
+        return quotation('quote', block.quote);
       case 'verse':
-        return quotationBox(
-          fonts,
-          style,
-          translate,
-          translate(`widgets.verses.${block.verse}.text`),
-          translate(`widgets.verses.${block.verse}.source`),
-        );
+        return quotation('verse', block.verse);
       case 'periodSentence':
         return periodSentenceBox(data, { fonts, textContext, translate });
       case 'periodPlaylist':
@@ -644,7 +642,11 @@ export function prepareSummaryBlock(
     }
   })();
   // A replica is the app's own view: no signature.
-  return body === null ? null : finishBlock(body, layer, !isSummaryReplica(block.design));
+  if (body === null) {
+    return null;
+  }
+  const finished = finishBlock(body, layer, !isSummaryReplica(block.design));
+  return wordsSize === undefined ? finished : { ...finished, wordsSize };
 }
 
 /** A line of the widget with icons: an icon beside a total, under a day's name when it has one. */

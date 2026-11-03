@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ActivitySourceProvider } from '@/data/activity-source';
 import { TemplateStoreProvider } from '@/data/user-templates';
 import { BrandMark } from '@/editor/brand/brand-art';
+import { syncPhrases } from '@/data/phrases';
 import { loadEditorFonts } from '@/editor/fonts';
 import { colors } from '@/theme/colors';
 import { LaunchScreen } from '@/ui/launch-screen';
@@ -46,6 +47,10 @@ export default function RootLayout() {
         setLaunching(false);
       });
     return () => clearTimeout(timeout);
+  }, []);
+  // In the background: the app uses the copy on the phone meanwhile.
+  useEffect(() => {
+    void syncPhrases();
   }, []);
   return (
     <ThemeProvider value={DarkTheme}>

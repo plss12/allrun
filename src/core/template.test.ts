@@ -1,3 +1,4 @@
+import { newLayer } from './default-layout';
 import { COVER_PLACEMENT } from './photo-placement';
 import {
   isCapsOnly,
@@ -56,6 +57,18 @@ const activityTemplate: Template = newTemplate({
 });
 
 describe('parseTemplate', () => {
+  it('reads a phrase of the table by its id, whatever the id', () => {
+    const verse = newLayer(
+      { kind: 'activityBlock', block: { design: 'verse', verse: 'added-after-this-version' } },
+      'verse',
+      'story',
+      'inter',
+    );
+    expect(parseTemplate({ ...activityTemplate, layers: [verse] }).layers[0]).toMatchObject({
+      block: { verse: 'added-after-this-version' },
+    });
+  });
+
   it('accepts a valid template and survives a JSON round trip', () => {
     expect(parseTemplate(JSON.parse(JSON.stringify(activityTemplate)))).toEqual(activityTemplate);
   });

@@ -363,98 +363,11 @@ export const LAPS_LAYOUTS = ['board', 'sheet'] as const;
  * average values, without shares).
  */
 export const NUTRITION_LABELS = ['facts', 'table'] as const;
-/**
- * Bible verses of the verse widget, from translations in the public domain: the World English
- * Bible in English, the Reina-Valera 1909 in Spanish. Their texts are in the locales. The first
- * is the one the gallery shows, under its "Tap to choose" hint: a short one, so the hint covers
- * little of it (the same goes for the quotes).
- */
-export const VERSES = [
-  'philippians4v13',
-  'romans8v18',
-  'corinthians9v24',
-  'hebrews12v1',
-  'isaiah40v31',
-  'isaiah40v29',
-  'psalms18v33',
-  'galatians6v9',
-  'timothy4v7',
-  'proverbs24v16',
-  'joshua1v9',
-  'psalms28v7',
-  'james1v12',
-  'corinthians9v25',
-  'psalms119v32',
-  'deuteronomy31v6',
-  'philippians3v13',
-  'psalms60v12',
-  'romans5v3',
-  'colossians3v23',
-] as const;
-/** Quotes of the quote widget, by their author; their texts are in the locales. */
-export const QUOTES = [
-  'kipchoge',
-  'phelps',
-  'lemond',
-  'zatopek',
-  'prefontaine',
-  'merckx',
-  'jordan',
-  'ali',
-  'serenaWilliams',
-  'bolt',
-  'nyad',
-  'ashe',
-  'gretzky',
-  'billieJeanKing',
-  'pele',
-  'owens',
-  'nadal',
-  'kobe',
-  'biles',
-  'switzer',
-  'murakami',
-  'karnazes',
-  'bingham',
-  'notke',
-] as const;
-
-/**
- * Phrases of the chat message, by name; their texts are in the locales. The first is the one the
- * gallery shows, under its "Tap to choose" hint, so it is a short one.
- */
-export const CHAT_PHRASES = [
-  'zombieMode',
-  'sweatOrTears',
-  'soulLeft',
-  'stairsEnemy',
-  'survived',
-  'whoToldMe',
-  'foodMotivation',
-  'crawling',
-  'seemedGood',
-  'jellyLegs',
-  'rebooting',
-  'couchCalling',
-  'fakeSmile',
-  'alienAbduction',
-  'endorphins',
-  'sleep2030',
-  'ghostedBreath',
-  'hungryBear',
-  'willToLive',
-  'brainEmpty',
-  'therapy',
-  'easyOne',
-  'coachProud',
-  'beforeCoffee',
-] as const;
 /** Longest phrase the user can write in a chat message, in characters. */
 export const MAX_CHAT_LENGTH = 60;
 
-export type Verse = (typeof VERSES)[number];
-export type Quote = (typeof QUOTES)[number];
-export type ChatPhrase = (typeof CHAT_PHRASES)[number];
+/** A verse, a quote or a chat phrase, by its id in the phrases (ADR 012, `core/phrases.ts`). */
+const phraseIdSchema = z.string().min(1);
 
 const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -489,8 +402,8 @@ const activityBlockSchema = z.discriminatedUnion('design', [
     cover: z.enum(BRAND_COVERS),
   }),
   z.object({ design: z.literal('camera'), cover: z.enum(BRAND_COVERS) }),
-  z.object({ design: z.literal('verse'), verse: z.enum(VERSES) }),
-  z.object({ design: z.literal('quote'), quote: z.enum(QUOTES) }),
+  z.object({ design: z.literal('verse'), verse: phraseIdSchema }),
+  z.object({ design: z.literal('quote'), quote: phraseIdSchema }),
   z.object({
     design: z.literal('laps'),
     layout: z.enum(LAPS_LAYOUTS),
@@ -506,7 +419,7 @@ const activityBlockSchema = z.discriminatedUnion('design', [
     design: z.literal('chat'),
     layout: z.enum(APP_MODES),
     phrase: z.union([
-      z.enum(CHAT_PHRASES),
+      phraseIdSchema,
       z.object({ own: z.string().trim().min(1).max(MAX_CHAT_LENGTH) }),
     ]),
   }),
@@ -556,8 +469,8 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('periodIcons'), layout: z.enum(['sports', 'days']) }),
   z.object({ design: z.literal('periodRoutes'), layout: z.enum(['grid', 'overlay']) }),
   z.object({ design: z.literal('periodCards') }),
-  z.object({ design: z.literal('quote'), quote: z.enum(QUOTES) }),
-  z.object({ design: z.literal('verse'), verse: z.enum(VERSES) }),
+  z.object({ design: z.literal('quote'), quote: phraseIdSchema }),
+  z.object({ design: z.literal('verse'), verse: phraseIdSchema }),
   z.object({ design: z.literal('periodSentence') }),
   z.object({
     design: z.literal('periodPlaylist'),

@@ -42,15 +42,7 @@ import {
   summaryMetricValue,
   toDisplaySummaryMetric,
 } from '@/core/summary-metrics';
-import type {
-  ActivityChartSeries,
-  ChatPhrase,
-  Layer,
-  Quote,
-  SummaryMetricId,
-  Verse,
-  FontId,
-} from '@/core/template';
+import type { ActivityChartSeries, Layer, SummaryMetricId, FontId } from '@/core/template';
 import { writesInCapitals } from '@/core/template';
 import { type DistanceUnit, durationParts, type DurationUnit, formatDuration } from '@/core/units';
 import {
@@ -166,14 +158,11 @@ export type LabelKey =
   | 'widgets.sessionOne'
   | 'widgets.activities'
   | 'widgets.sessions'
-  | `widgets.verses.${Verse}.${'text' | 'source'}`
-  | `widgets.quotes.${Quote}.${'text' | 'author'}`
   | `widgets.laps.${'title' | 'lap' | 'distance' | 'calories' | 'time' | 'pace' | 'speed' | 'activities'}`
   | 'widgets.grandPrix.leader'
   | `widgets.splitBars.${DistanceUnit}`
   | 'widgets.splitLadder.title'
   | `widgets.verified.${DistanceUnit}`
-  | `widgets.phrases.${ChatPhrase}`
   | `widgets.sentence.leads.${SentenceLead}`
   | `widgets.sentence.units.${DistanceUnit}`
   | `widgets.sentence.clauses.${SentenceClause}`

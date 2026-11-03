@@ -34,6 +34,8 @@ import { splitRows } from '@/core/activity-charts';
 import { activityEquivalences, type EquivalenceId } from '@/core/equivalences';
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import { metricValue, type MetricId } from '@/core/metrics';
+import { type Phrase, phraseLanguage, phraseWords } from '@/core/phrases';
+import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import { formatPlace } from '@/core/place';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
@@ -100,6 +102,8 @@ export interface BlockContext {
   readonly translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string;
   /** Size of the canvas, which the camera frames whole. */
   readonly canvas: Size;
+  /** The verses, quotes and chat phrases to read a widget's words from; by default, the built-in. */
+  readonly phrases?: readonly Phrase[];
 }
 
 /**
@@ -111,6 +115,8 @@ export interface PreparedBlock {
   readonly height: number;
   readonly content: ReactElement;
   readonly hole?: HitHole;
+  /** The size of its words, in a widget whose words are chosen from a list. */
+  readonly wordsSize?: number;
 }
 
 /** Something drawn in a block, at its place in the block (top-left origin). */
@@ -740,7 +746,7 @@ function styledTextBox(
 /**
  * Words in quotation marks in the block's lettering, wrapped in even lines (at most
  * `SIZES.quotation.lines`, shrunk until they fit), and who said them or where, under them: a
- * quote's or a verse's, of an activity or a period alike. Time O(s log w) layouts for the s sizes
+ * quote's or a verse's, of an activity or a period alike; and the size they ended up at. Time O(s log w) layouts for the s sizes
  * tried, each balanced in O(log w).
  */
 export function quotationBox(
@@ -749,7 +755,7 @@ export function quotationBox(
   translate: BlockContext['translate'],
   words: string,
   source: string,
-): Box {
+): Box & { readonly wordsSize: number } {
   const sizes = SIZES.quotation;
   const laidOut = (size: number) =>
     paragraph(
@@ -764,18 +770,21 @@ export function quotationBox(
     size = Math.max(sizes.minText, size * 0.92);
     fitted = laidOut(size);
   }
-  return column(
-    [
-      wrappedBox(fitted, size, style.italic),
-      styledTextBox(
-        fonts,
-        [{ text: source, size: sizes.source, bold: false, faded: true, spacing: LABEL_SPACING }],
-        style,
-      ),
-    ],
-    sizes.source * 0.6,
-    'center',
-  );
+  return {
+    ...column(
+      [
+        wrappedBox(fitted, size, style.italic),
+        styledTextBox(
+          fonts,
+          [{ text: source, size: sizes.source, bold: false, faded: true, spacing: LABEL_SPACING }],
+          style,
+        ),
+      ],
+      sizes.source * 0.6,
+      'center',
+    ),
+    wordsSize: size,
+  };
 }
 
 /** `box` on a replica's card of `color`, `padX` and `padY` inside its edges. */
@@ -2723,7 +2732,7 @@ const LOGO_GAP = 40;
 export function prepareActivityBlock(
   layer: BlockLayer,
   data: ActivityData,
-  { fonts, textContext, translate, canvas }: BlockContext,
+  { fonts, textContext, translate, canvas, phrases = BUILT_IN_PHRASES }: BlockContext,
 ): PreparedBlock | null {
   const { activity } = data;
   const { block, style } = layer;
@@ -2827,8 +2836,13 @@ export function prepareActivityBlock(
       : textContext.unit === 'mi'
         ? data.detail.splits.imperial
         : data.detail.splits.metric;
-  const quotation = (words: string, source: string): Box =>
-    quotationBox(fonts, style, translate, words, source);
+  let wordsSize: number | undefined;
+  const quotation = (kind: 'verse' | 'quote', id: string): Box => {
+    const words = phraseWords(phrases, kind, id, phraseLanguage(textContext.locale));
+    const box = quotationBox(fonts, style, translate, words.text, words.source);
+    wordsSize = box.wordsSize;
+    return box;
+  };
 
   let hole: HitHole | undefined;
   const body = ((): Box | null => {
@@ -3581,15 +3595,9 @@ export function prepareActivityBlock(
         );
       }
       case 'verse':
-        return quotation(
-          translate(`widgets.verses.${block.verse}.text`),
-          translate(`widgets.verses.${block.verse}.source`),
-        );
+        return quotation('verse', block.verse);
       case 'quote':
-        return quotation(
-          translate(`widgets.quotes.${block.quote}.text`),
-          translate(`widgets.quotes.${block.quote}.author`),
-        );
+        return quotation('quote', block.quote);
       case 'message': {
         // The data as a sent chat message, but the time: the sport and the activity's time go
         // where the message's time goes. Without other data, the time is the message and the
@@ -3787,13 +3795,15 @@ export function prepareActivityBlock(
       case 'chat': {
         // A phrase as a sent chat message: the second datum where the time goes, the main one by
         // the read ticks.
+        wordsSize = CHAT.text;
         const colors = MESSAGE_COLORS[block.layout];
         const said = appText(
           [
             {
               text:
                 typeof block.phrase === 'string'
-                  ? translate(`widgets.phrases.${block.phrase}`)
+                  ? phraseWords(phrases, 'chat', block.phrase, phraseLanguage(textContext.locale))
+                      .text
                   : block.phrase.own,
               size: CHAT.text,
               bold: false,
@@ -3952,7 +3962,8 @@ export function prepareActivityBlock(
   }
 
   // A replica is the app's own view: no signature under it.
-  return finishBlock(body, layer, !isAppReplica(block.design), hole);
+  const finished = finishBlock(body, layer, !isAppReplica(block.design), hole);
+  return wordsSize === undefined ? finished : { ...finished, wordsSize };
 }
 
 /**

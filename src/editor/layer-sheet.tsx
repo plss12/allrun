@@ -15,6 +15,8 @@ import {
 
 import { SAMPLE_IMAGE } from '@/core/image-layer';
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
+import { type PhraseKind, phraseLanguage, phraseWords } from '@/core/phrases';
+import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import type { CanvasFormat, DesignLanguage, FontId, Layer } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
@@ -33,6 +35,7 @@ import {
   type GalleryWidget,
   buildGallery,
   type BuiltGallery,
+  hintBottom,
 } from './widget-gallery';
 
 /** How a picture added from the gallery looks: its frame, and an instant photo's caption. */
@@ -324,6 +327,13 @@ function pageLabel(
 ): string {
   const shown = layerText(prepared.layer, context.data, context.textContext)?.value ?? '';
   const flag = (on: boolean | undefined, label: string) => (on === true ? label : '');
+  const words = (kind: PhraseKind, id: string) =>
+    phraseWords(
+      context.phrases ?? BUILT_IN_PHRASES,
+      kind,
+      id,
+      phraseLanguage(context.textContext.locale),
+    );
   const parts = ((): string[] => {
     switch (item.kind) {
       case 'metric':
@@ -379,18 +389,16 @@ function pageLabel(
         const { block } = item;
         const name: string = t(`widgets.blocks.${block.design}`);
         if (block.design === 'verse') {
-          return [name, t(`widgets.verses.${block.verse}.source`)];
+          return [name, words('verse', block.verse).source];
         }
         if (block.design === 'quote') {
-          return [name, t(`widgets.quotes.${block.quote}.author`)];
+          return [name, words('quote', block.quote).source];
         }
         if (block.design === 'chat') {
           return [
             name,
             t(`gallery.blockLayouts.${block.layout}`),
-            typeof block.phrase === 'string'
-              ? t(`widgets.phrases.${block.phrase}`)
-              : block.phrase.own,
+            typeof block.phrase === 'string' ? words('chat', block.phrase).text : block.phrase.own,
           ];
         }
         if (!('layout' in block)) {
@@ -406,10 +414,10 @@ function pageLabel(
         const { block } = item;
         const name: string = t(`widgets.summaryBlocks.${block.design}`);
         if (block.design === 'verse') {
-          return [name, t(`widgets.verses.${block.verse}.source`)];
+          return [name, words('verse', block.verse).source];
         }
         if (block.design === 'quote') {
-          return [name, t(`widgets.quotes.${block.quote}.author`)];
+          return [name, words('quote', block.quote).source];
         }
         if (block.design === 'periodNotes') {
           return [
@@ -521,7 +529,7 @@ function WidgetTile({
           // Over the dots, when there are some.
           style={{
             position: 'absolute',
-            bottom: several ? GALLERY_DOTS_HEIGHT + 2 : 6,
+            bottom: hintBottom(several),
             left: 0,
             right: 0,
             alignItems: 'center',

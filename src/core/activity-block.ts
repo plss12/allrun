@@ -17,13 +17,11 @@ import {
   BIG_TOPS,
   type FontId,
   BRAND_COVERS,
-  CHAT_PHRASES,
   DATA_LINE_LAYOUTS,
   LAPS_LAYOUTS,
   NUTRITION_LABELS,
-  QUOTES,
-  VERSES,
 } from './template';
+import { FIRST_PHRASE } from './phrases';
 
 /**
  * What the mixed widgets of an activity show (ADR 009). They pick their data by sport, as the
@@ -268,10 +266,10 @@ export function activityBlocks(
     // The data widgets (see `isDataWidget`).
     ...dataBlocks(activity),
     // Words: the quote, the verse, the two chat messages, the sentence and the badge.
-    { design: 'quote', quote: QUOTES[0] } as const,
-    { design: 'verse', verse: VERSES[0] } as const,
+    { design: 'quote', quote: FIRST_PHRASE.quote } as const,
+    { design: 'verse', verse: FIRST_PHRASE.verse } as const,
     ...APP_MODES.map((layout) => ({ design: 'message', layout }) as const),
-    ...APP_MODES.map((layout) => ({ design: 'chat', layout, phrase: CHAT_PHRASES[0] }) as const),
+    ...APP_MODES.map((layout) => ({ design: 'chat', layout, phrase: FIRST_PHRASE.chat }) as const),
     ...(sentencePlan(activity, withPlace) === null ? [] : [{ design: 'sentence' } as const]),
     // Its data as things anyone pictures, beside the sentence that tells them.
     ...(activityEquivalences(activity).length === 0

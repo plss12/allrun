@@ -86,6 +86,7 @@ import {
 } from '@/core/text-draft';
 import { useActivitySource } from '@/data/activity-source';
 import type { ActivitySource } from '@/sources/activity-source';
+import { usePhrases } from '@/data/phrases';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
 import { ColorMenu } from '@/editor/color-menu';
@@ -407,6 +408,7 @@ function EditorWorkspace({
       }));
     },
   );
+  const phrases = usePhrases();
   const layerContext: LayerContext = {
     data,
     images: pictures.images,
@@ -422,6 +424,7 @@ function EditorWorkspace({
       unitLabel: (metricUnit) => widgetT(`metricUnits.${metricUnit}`),
     },
     translate: (key, values) => widgetT(key, values),
+    phrases,
   };
   // While typing, the text leaves the canvas for the typing overlay, which shows it as typed.
   const shownTemplate =

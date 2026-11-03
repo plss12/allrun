@@ -32,7 +32,7 @@ import {
   summaryBlocks,
   tableBucket,
 } from './summary-block';
-import { QUOTES, VERSES } from './template';
+import { FIRST_PHRASE } from './phrases';
 
 const week = weekRange('2026-10-14');
 
@@ -70,8 +70,8 @@ describe('summaryBlocks', () => {
       { design: 'periodCards' },
       { design: 'periodRoutes', layout: 'grid' },
       { design: 'periodRoutes', layout: 'overlay' },
-      { design: 'quote', quote: QUOTES[0] },
-      { design: 'verse', verse: VERSES[0] },
+      { design: 'quote', quote: FIRST_PHRASE.quote },
+      { design: 'verse', verse: FIRST_PHRASE.verse },
       { design: 'periodSentence' },
       { design: 'periodEquivalences', layout: 'dark' },
       { design: 'periodEquivalences', layout: 'light' },
@@ -149,8 +149,8 @@ describe('summaryBlocks', () => {
       { design: 'periodRoutes', layout: 'grid' },
       // Without any route, its sport's icon in their place: the page isn't lost.
       { design: 'periodRoutes', layout: 'overlay' },
-      { design: 'quote', quote: QUOTES[0] },
-      { design: 'verse', verse: VERSES[0] },
+      { design: 'quote', quote: FIRST_PHRASE.quote },
+      { design: 'verse', verse: FIRST_PHRASE.verse },
       { design: 'periodSentence' },
       { design: 'periodEquivalences', layout: 'dark' },
       { design: 'periodEquivalences', layout: 'light' },

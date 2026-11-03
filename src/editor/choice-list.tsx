@@ -10,16 +10,13 @@ import {
   View,
 } from 'react-native';
 
-import {
-  CHAT_PHRASES,
-  type DesignLanguage,
-  MAX_CHAT_LENGTH,
-  QUOTES,
-  VERSES,
-} from '@/core/template';
+import { listedPhrases, wordsIn } from '@/core/phrases';
+import { type DesignLanguage, MAX_CHAT_LENGTH } from '@/core/template';
 import type { ChosenWords } from '@/core/template-edit';
+import { usePhrases } from '@/data/phrases';
 import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { todayLocal } from '@/ui/today';
 
 import { SheetFrame } from './sheet-frame';
 import { GALLERY_GAP, GALLERY_PADDING } from './widget-gallery';
@@ -72,31 +69,33 @@ export function ChoiceList({
 }) {
   const { i18n } = useTranslation();
   const t = i18n.getFixedT(language);
-  const entries = ((): ChoiceEntry[] => {
+  const phrases = usePhrases();
+  const entries = listedPhrases(phrases, words.design, todayLocal()).map((phrase): ChoiceEntry => {
+    const { text, source } = wordsIn(phrase, language);
     switch (words.design) {
       case 'verse':
-        return VERSES.map((verse) => ({
-          key: verse,
-          words: t('widgets.quoted', { text: t(`widgets.verses.${verse}.text`) }),
-          source: t(`widgets.verses.${verse}.source`),
-          block: { design: 'verse', verse },
-        }));
+        return {
+          key: phrase.id,
+          words: t('widgets.quoted', { text }),
+          source,
+          block: { design: 'verse', verse: phrase.id },
+        };
       case 'quote':
-        return QUOTES.map((quote) => ({
-          key: quote,
-          words: t('widgets.quoted', { text: t(`widgets.quotes.${quote}.text`) }),
-          source: t(`widgets.quotes.${quote}.author`),
-          block: { design: 'quote', quote },
-        }));
+        return {
+          key: phrase.id,
+          words: t('widgets.quoted', { text }),
+          source,
+          block: { design: 'quote', quote: phrase.id },
+        };
       case 'chat':
-        return CHAT_PHRASES.map((phrase) => ({
-          key: phrase,
-          words: t(`widgets.phrases.${phrase}`),
+        return {
+          key: phrase.id,
+          words: text,
           source: null,
-          block: { ...words, phrase },
-        }));
+          block: { ...words, phrase: phrase.id },
+        };
     }
-  })();
+  });
   const markedKey = marked ? entryKey(words) : null;
   // The marked entry is scrolled to once, when it is first laid out.
   const scroll = useRef<ScrollViewInstance>(null);

@@ -409,7 +409,8 @@ describe('activity charts', () => {
       'splits',
     );
     expect(rows.layers[0].height).toBeGreaterThan(400);
-  });
+    // Seven story-sized drawings: over 5 s with the whole suite running.
+  }, 60_000);
 });
 
 describe("a period's bar values", () => {

@@ -1,4 +1,4 @@
-# AllRun
+﻿# AllRun
 
 Overlay your Strava activities on your own photos with full design freedom, including weekly,
 monthly, yearly or custom-range summaries (for example, the 10 weeks of a half-marathon block).
@@ -17,20 +17,21 @@ Share the result to Instagram and other networks, as a full image or as a transp
 
 ```bash
 npm install
-cp .env.example .env   # fill in when the Strava/Supabase integration lands
+cp .env.example .env   # fill in to read the phrases from Supabase; without it, the built-in ones
 npm start              # scan the QR code with Expo Go
 ```
 
 ## Scripts
 
-| Command             | Description                          |
-| ------------------- | ------------------------------------ |
-| `npm start`         | Start the Expo dev server            |
-| `npm run lint`      | Lint with ESLint (`expo lint`)       |
-| `npm run format`    | Format with Prettier                 |
-| `npm run typecheck` | Type-check with `tsc`                |
-| `npm test`          | Run unit tests (Jest + `jest-expo`)  |
-| `npm run doctor`    | Check the project with `expo-doctor` |
+| Command                   | Description                                                    |
+| ------------------------- | -------------------------------------------------------------- |
+| `npm start`               | Start the Expo dev server                                      |
+| `npm run lint`            | Lint with ESLint (`expo lint`)                                 |
+| `npm run format`          | Format with Prettier                                           |
+| `npm run typecheck`       | Type-check with `tsc`                                          |
+| `npm test`                | Run unit tests (Jest + `jest-expo`)                            |
+| `npm run doctor`          | Check the project with `expo-doctor`                           |
+| `npm run phrases:preview` | Draw the phrases of the table on their gallery tiles (ADR 012) |
 
 CI runs lint, a formatting check, type-check, tests and a JS bundle export for iOS and Android on
 every push and PR.

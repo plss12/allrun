@@ -12,7 +12,11 @@ import {
   type NewLayer,
   rowPartner,
 } from '@/core/layer-catalog';
+import { listedPhrases, type PhraseKind } from '@/core/phrases';
+import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import { CANVAS_FORMATS, type CanvasFormat, type FontId, newTemplate } from '@/core/template';
+import { CARD_BORDER } from '@/theme/card-surface';
+import { todayLocal } from '@/ui/today';
 
 import { layerText } from './editor-data';
 import { inParagraphArena } from './paragraph-arena';
@@ -34,6 +38,15 @@ export const GALLERY_DOTS_HEIGHT = 14;
  * as in a verse's tile), which would cover it.
  */
 export const GALLERY_HINT_HEIGHT = 18;
+
+/** How far the "Tap to choose" hint sits from the bottom of a tile: over the dots, when it has some. */
+export const hintBottom = (several: boolean): number => (several ? GALLERY_DOTS_HEIGHT + 2 : 6);
+
+/**
+ * Smallest size, in points, at which the words of a phrase on a tile read at a glance. A phrase
+ * under it doesn't become the cover (see `readsInTile`).
+ */
+const MIN_COVER_WORDS = 10;
 
 /** Room inside a tile around its widget, as a fraction of the tile. */
 const TILE_INSET = 0.08;
@@ -175,7 +188,7 @@ export function gallerySections(
     const tallest = Math.round(width * MAX_TILE_RATIO);
     // A wide tile draws its widget as big as its neighbours do: it only has more room.
     const measure = (widget: CatalogWidget, tileWidth: number, tileHeight: number) =>
-      measureWidget(
+      measureTile(
         widget,
         { width: tileWidth, height: tileHeight, capWidth: width },
         format,
@@ -299,12 +312,104 @@ function settleAlone(
   return settled.map((group) => (alone(group) ? (wide(group.tiles[0]) ?? group) : group));
 }
 
+/** The list an item's words are chosen from, if they are. */
+function chosenFrom(item: CatalogItem): PhraseKind | null {
+  if (
+    (item.kind === 'activityBlock' || item.kind === 'summaryBlock') &&
+    (item.block.design === 'verse' || item.block.design === 'quote' || item.block.design === 'chat')
+  ) {
+    return item.block.design;
+  }
+  return null;
+}
+
+/** `item`, whose words are chosen from a list, saying the phrase `id`. */
+function withPhrase(item: CatalogItem, id: string): CatalogItem {
+  if (item.kind === 'summaryBlock') {
+    return item.block.design === 'verse'
+      ? { ...item, block: { ...item.block, verse: id } }
+      : item.block.design === 'quote'
+        ? { ...item, block: { ...item.block, quote: id } }
+        : item;
+  }
+  if (item.kind === 'activityBlock') {
+    return item.block.design === 'verse'
+      ? { ...item, block: { ...item.block, verse: id } }
+      : item.block.design === 'quote'
+        ? { ...item, block: { ...item.block, quote: id } }
+        : item.block.design === 'chat'
+          ? { ...item, block: { ...item.block, phrase: id } }
+          : item;
+  }
+  return item;
+}
+
+/**
+ * How tall a widget chosen from a list may be drawn in a tile `height` points tall: each page is
+ * centered in the room over the dots (see `WidgetTile`), and the "Tap to choose" hint lies over its
+ * bottom, so it never covers the widget.
+ */
+export function heightOverHint(height: number, several: boolean): number {
+  const page = height - 2 * CARD_BORDER;
+  const hintTop = page - hintBottom(several) - GALLERY_HINT_HEIGHT;
+  return 2 * (hintTop - (page - GALLERY_DOTS_HEIGHT) / 2);
+}
+
+/**
+ * Whether a tile's words read at a glance, drawn at its scale: a long phrase isn't covered by the
+ * hint (it shrinks to its lines and fills the tile's width), it gets too small.
+ */
+export function readsInTile(tile: GalleryWidget): boolean {
+  return tile.pages.every(
+    ({ prepared, scale }) => (prepared.wordsSize ?? Infinity) * scale >= MIN_COVER_WORDS,
+  );
+}
+
+/**
+ * A widget made into its tile (see `measureWidget`). One whose words are chosen from a list shows
+ * the first phrase of the list whose words read at a glance, drawn here with their real letters and
+ * language (ADR 012), so a long one heading the list isn't the cover; if none does, the first. Time
+ * O(k) for the k phrases measured: usually one.
+ */
+function measureTile(
+  widget: CatalogWidget,
+  size: { width: number; height: number; capWidth: number },
+  format: CanvasFormat,
+  font: FontId,
+  context: LayerContext,
+  textSample: string,
+): GalleryWidget | null {
+  const kind = chosenFrom(widget.variants[0]);
+  if (kind === null) {
+    return measureWidget(widget, size, format, font, context, textSample);
+  }
+  let first: GalleryWidget | null = null;
+  for (const phrase of listedPhrases(context.phrases ?? BUILT_IN_PHRASES, kind, todayLocal())) {
+    const tile = measureWidget(
+      { ...widget, variants: widget.variants.map((item) => withPhrase(item, phrase.id)) },
+      size,
+      format,
+      font,
+      context,
+      textSample,
+    );
+    if (tile === null) {
+      return null;
+    }
+    if (readsInTile(tile)) {
+      return tile;
+    }
+    first ??= tile;
+  }
+  return first;
+}
+
 /**
  * A widget's variants made into the pages of a `width` × `height` tile, or `null` when none has
  * anything to show. Its data are drawn no bigger than in a tile `capWidth` wide (see
  * `MAX_CANVAS_SPAN`).
  */
-function measureWidget(
+export function measureWidget(
   widget: CatalogWidget,
   { width, height, capWidth }: { width: number; height: number; capWidth: number },
   format: CanvasFormat,
@@ -336,11 +441,12 @@ function measureWidget(
   const room =
     (measured.length > 1 ? height - GALLERY_DOTS_HEIGHT : height) -
     (isPicture(widget) ? GALLERY_HINT_HEIGHT : 0);
+  const tallest =
+    chosenFrom(widget.variants[0]) === null
+      ? room * (1 - 2 * TILE_INSET)
+      : heightOverHint(height, measured.length > 1);
   const fill = (prepared: PreparedLayer) =>
-    Math.min(
-      (width * (1 - 2 * TILE_INSET)) / prepared.width,
-      (room * (1 - 2 * TILE_INSET)) / prepared.height,
-    );
+    Math.min((width * (1 - 2 * TILE_INSET)) / prepared.width, tallest / prepared.height);
   const capped = (prepared: PreparedLayer) =>
     Math.min(fill(prepared), capWidth / (canvasWidth * MAX_CANVAS_SPAN));
   const shared = Math.min(...measured.map(({ prepared }) => capped(prepared)));

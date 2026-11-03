@@ -42,6 +42,7 @@ import {
 } from '@/core/image-layer';
 import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
 import type { PhotoDrawing, Size } from '@/core/photo-placement';
+import type { Phrase } from '@/core/phrases';
 import { decodePolyline } from '@/core/polyline';
 import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
@@ -103,6 +104,8 @@ export interface PreparedLayer {
   readonly hole?: HitHole;
   /** The lines that alone take touches, for a layer of lines such as a route (see `HitLine`). */
   readonly line?: HitLine;
+  /** The size of its words, in a widget whose words are chosen from a list. */
+  readonly wordsSize?: number;
 }
 
 /**
@@ -123,6 +126,8 @@ export interface LayerContext {
   readonly textContext: TextContext;
   /** Translates a label; `values` fill its placeholders, such as the chart title's unit. */
   readonly translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string;
+  /** The verses, quotes and chat phrases, as the phone has them; by default, the built-in. */
+  readonly phrases?: readonly Phrase[];
 }
 
 /**
@@ -322,7 +327,7 @@ export function TemplateScene({
 /** Fills in and measures one layer, or `null` when it has nothing to show for this data. */
 function prepareLayer(
   layer: Layer,
-  { data, fonts, textContext, translate, images }: LayerContext,
+  { data, fonts, textContext, translate, images, phrases }: LayerContext,
   canvas: Size,
 ): PreparedLayer | null {
   const canvasWidth = canvas.width;
@@ -632,14 +637,20 @@ function prepareLayer(
       if (data.mode !== 'activity') {
         return null;
       }
-      const block = prepareActivityBlock(layer, data, { fonts, textContext, translate, canvas });
+      const block = prepareActivityBlock(layer, data, {
+        fonts,
+        textContext,
+        translate,
+        canvas,
+        phrases,
+      });
       return block === null ? null : { layer, ...block };
     }
     case 'summaryBlock': {
       if (data.mode !== 'summary') {
         return null;
       }
-      const block = prepareSummaryBlock(layer, data, { fonts, textContext, translate });
+      const block = prepareSummaryBlock(layer, data, { fonts, textContext, translate, phrases });
       return block === null ? null : { layer, ...block };
     }
     case 'image': {

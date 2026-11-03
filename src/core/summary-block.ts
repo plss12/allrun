@@ -14,15 +14,14 @@ import { periodEquivalences } from './equivalences';
 import { bucketCount } from './periods';
 import type { SportFamily, SportModality } from './sports';
 import { type BucketSize, bucketize, familyTotals, type PeriodSummary } from './summary';
+import { FIRST_PHRASE } from './phrases';
 import { periodTotals, summaryHasDistance } from './summary-metrics';
 import {
   APP_MODES,
   BRAND_COVERS,
   LAPS_LAYOUTS,
-  QUOTES,
   type SummaryBlock,
   type SummaryBlockDesign,
-  VERSES,
 } from './template';
 
 /**
@@ -621,8 +620,8 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     { design: 'periodCards' },
     ...(days <= MAX_ROUTES_DAYS ? [{ design: 'periodRoutes', layout: 'grid' } as const] : []),
     { design: 'periodRoutes', layout: 'overlay' },
-    { design: 'quote', quote: QUOTES[0] },
-    { design: 'verse', verse: VERSES[0] },
+    { design: 'quote', quote: FIRST_PHRASE.quote },
+    { design: 'verse', verse: FIRST_PHRASE.verse },
     { design: 'periodSentence' },
     // Its totals as things anyone pictures, beside the sentence that tells them (offered by its
     // totals: its calories only add a line).
