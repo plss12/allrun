@@ -76,7 +76,7 @@ const stamped = (date: string) => date.split('/').join('-');
  *   and its dates, and its distance (its time without one) and how many activities.
  */
 export function mountCaption(
-  mount: ImageMount,
+  mount: Exclude<ImageMount, 'camera'>,
   data: EditorData,
   context: TextContext,
   translate: Translate,
@@ -92,7 +92,7 @@ function stripOf(top: string, [main = '', left, right]: readonly string[]): Moun
 }
 
 function activityText(
-  mount: ImageMount,
+  mount: Exclude<ImageMount, 'camera'>,
   { activity, place }: ActivityData,
   context: TextContext,
   translate: Translate,
@@ -137,7 +137,7 @@ function activityText(
 }
 
 function periodText(
-  mount: ImageMount,
+  mount: Exclude<ImageMount, 'camera'>,
   data: SummaryData,
   context: TextContext,
   translate: Translate,

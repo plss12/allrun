@@ -23,7 +23,7 @@ import {
   withEmptySlots,
 } from './image-layer';
 import { setImageRounded } from './layer-style';
-import { IMAGE_MOUNTS, type Layer, parseTemplate, type Template } from './template';
+import { CANVAS_FORMATS, IMAGE_MOUNTS, type Layer, parseTemplate, type Template } from './template';
 import { addLayer } from './template-edit';
 
 const story = defaultActivityTemplate(makeActivity(), 'story');
@@ -203,13 +203,19 @@ describe('slotBox', () => {
 
 describe('mountBox', () => {
   it.each(IMAGE_MOUNTS)('%s: its window, cut-outs and sides are inside it', (mount) => {
-    const box = mountBox(mount);
+    const box = mountBox(mount, CANVAS_FORMATS.story);
     const inside = (rect: { x: number; y: number; width: number; height: number }) => {
       expect(rect.x).toBeGreaterThanOrEqual(-box.width / 2);
       expect(rect.y).toBeGreaterThanOrEqual(-box.height / 2);
       expect(rect.x + rect.width).toBeLessThanOrEqual(box.width / 2 + 1e-9);
       expect(rect.y + rect.height).toBeLessThanOrEqual(box.height / 2 + 1e-9);
     };
+    if (mount === 'camera') {
+      // As big as the canvas, seen through it: its photo covers it.
+      expect(box).toMatchObject(CANVAS_FORMATS.story);
+      expect(box.picture).toMatchObject(CANVAS_FORMATS.story);
+      return;
+    }
     expect(box.height).toBe(IMAGE_SIDE);
     expect(box.width).toBeGreaterThan(box.picture.width);
     // The frames beside the window run off the widget, which shows at most 30% of them.
@@ -228,7 +234,7 @@ describe('mountBox', () => {
 
   it('never covers the window with a cut-out, or a cut-out with a side', () => {
     for (const mount of IMAGE_MOUNTS) {
-      const { picture, holes, sides } = mountBox(mount);
+      const { picture, holes, sides } = mountBox(mount, CANVAS_FORMATS.story);
       const overlap = (
         a: { x: number; y: number; width: number; height: number },
         b: { x: number; y: number; width: number; height: number },

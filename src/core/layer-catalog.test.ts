@@ -155,7 +155,7 @@ describe('activityCatalog', () => {
       'image-filmFrame',
       'image-lightNegative',
       'image-filmStrip',
-      'block-camera',
+      'image-camera',
     ]);
     expect(variantKeys(trail, 'image')).toEqual(['image', 'image-light', 'image-dark']);
     // And an instant photo of it, with each caption.

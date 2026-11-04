@@ -106,7 +106,6 @@ export const es: Translations = {
     addText: 'Texto',
     placeUnavailable: 'No se ha podido saber el lugar de esta actividad',
     export: 'Exportar',
-    addImage: 'Añadir imagen',
     depth: 'Efecto de profundidad',
     comingSoon: 'Llegará pronto',
     maxImages: 'Un diseño admite hasta {{max}} fotos',

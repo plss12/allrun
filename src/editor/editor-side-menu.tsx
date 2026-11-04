@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -22,10 +22,11 @@ interface EditorSideMenuProps {
   readonly formatsOpen: boolean;
   readonly onFormatsOpenChange: (open: boolean) => void;
   readonly onPickFormat: (format: CanvasFormat) => void;
-  readonly onAddImage: () => void;
   readonly onDepth: () => void;
   /** The collage's layout, `null` for one photo; whether their panel is open, as the formats'. */
   readonly collage: CollageLayout | null;
+  /** Whether the canvas has a design, whose photos no layout of the panel says. */
+  readonly inDesign: boolean;
   readonly collagesOpen: boolean;
   readonly onCollagesOpenChange: (open: boolean) => void;
   readonly onPickCollage: (layout: CollageLayout | null) => void;
@@ -48,21 +49,21 @@ const LANGUAGE_NAMES: Readonly<Record<DesignLanguage, string>> = {
 };
 
 /**
- * The top right corner of the editor (ADR 009): adding an image, the depth effect and a chevron in
- * a row, and under them the design's menus in a column, Collages, Designs, Ratio (the format, as
- * "9:16"), the unit ("KM") and the language ("ES") of every widget, each switched with a tap, and
- * Activity, which the chevron unfolds (it starts folded, leaving the photo clear).
- * Every button is the size of the top left ones. The menus' names show next to them for a moment
- * when the column opens, then only the icons stay.
+ * The top right corner of the editor (ADR 009): in a row, what changes the design, which undo takes
+ * back (the depth effect, Collages and Designs), and a chevron; and under them, in a
+ * column that the chevron unfolds (it starts folded, leaving the photo clear), its settings, which
+ * stay as chosen: Ratio (the format, as "9:16"), the unit ("KM") and the language ("ES") of every
+ * widget, each switched with a tap, and Activity. Every button is the size of the top left ones. The
+ * settings' names show next to them for a moment when the column opens, then only the icons stay.
  */
 export function EditorSideMenu({
   format,
   formatsOpen,
   onFormatsOpenChange,
   onPickFormat,
-  onAddImage,
   onDepth,
   collage,
+  inDesign,
   collagesOpen,
   onCollagesOpenChange,
   onPickCollage,
@@ -98,33 +99,21 @@ export function EditorSideMenu({
     <View pointerEvents="box-none" style={{ alignItems: 'flex-end', gap: TOP_BAR_GAP + 4 }}>
       <View accessibilityRole="toolbar" style={{ flexDirection: 'row', gap: TOP_BAR_GAP }}>
         <RoundButton
-          icon={{ ios: 'photo.badge.plus', android: 'add_photo_alternate' }}
-          label={t('editor.addImage')}
-          onPress={onAddImage}
-        />
-        <RoundButton
           icon={{ ios: 'person.and.background.dotted', android: 'portrait' }}
           label={t('editor.depth')}
           onPress={onDepth}
         />
-        <RoundButton label={t(open ? 'editor.hideMenu' : 'editor.showMenu')} onPress={toggle}>
-          <SymbolView
-            name={
-              open
-                ? { ios: 'chevron.up', android: 'expand_less' }
-                : { ios: 'chevron.down', android: 'expand_more' }
-            }
-            size={18}
-            weight="bold"
-            tintColor={FLOATING_INK}
-          />
-        </RoundButton>
-      </View>
-      <KeptMounted hidden={!open} style={{ alignItems: 'flex-end', gap: TOP_BAR_GAP }}>
-        <Item label={t('editor.collages')} showLabel={showLabels}>
-          {collagesOpen && open ? (
-            <View style={{ position: 'absolute', top: 0, right: ROUND_BUTTON_SIZE + TOP_BAR_GAP }}>
-              <CollageMenu layout={collage} onPick={onPickCollage} />
+        <View pointerEvents="box-none">
+          {collagesOpen ? (
+            // As wide as the row's three, from the depth to the designs, centered under them.
+            <View
+              style={{
+                position: 'absolute',
+                top: ROUND_BUTTON_SIZE + TOP_BAR_GAP,
+                right: -(ROUND_BUTTON_SIZE + TOP_BAR_GAP),
+              }}
+            >
+              <CollageMenu layout={inDesign ? undefined : collage} onPick={onPickCollage} />
             </View>
           ) : null}
           <RoundButton
@@ -136,14 +125,17 @@ export function EditorSideMenu({
             }}
             selected={collagesOpen}
           />
-        </Item>
-        <Item label={t('editor.designs')} showLabel={showLabels}>
-          <RoundButton
-            icon={{ ios: 'square.split.bottomrightquarter', android: 'space_dashboard' }}
-            label={t('editor.designs')}
-            onPress={onDesigns}
-          />
-        </Item>
+        </View>
+        <RoundButton
+          icon={{ ios: 'square.split.bottomrightquarter', android: 'space_dashboard' }}
+          label={t('editor.designs')}
+          onPress={onDesigns}
+        />
+        <RoundButton label={t(open ? 'editor.hideMenu' : 'editor.showMenu')} onPress={toggle}>
+          <MenuChevron up={open} />
+        </RoundButton>
+      </View>
+      <KeptMounted hidden={!open} style={{ alignItems: 'flex-end', gap: TOP_BAR_GAP }}>
         <Item label={t('editor.ratio')} showLabel={showLabels}>
           {formatsOpen && open ? (
             <View style={{ position: 'absolute', top: 0, right: ROUND_BUTTON_SIZE + TOP_BAR_GAP }}>
@@ -191,6 +183,33 @@ export function EditorSideMenu({
         </Item>
       </KeptMounted>
     </View>
+  );
+}
+
+/** The chevron's box and its two strokes: as wide and tall around the box's center either way. */
+const CHEVRON = { width: 18, height: 18, stroke: 2.6 } as const;
+const CHEVRON_DOWN = Skia.Path.MakeFromSVGString('M3 6 L9 12 L15 6');
+const CHEVRON_UP = Skia.Path.MakeFromSVGString('M3 12 L9 6 L15 12');
+
+/**
+ * The chevron that folds the menu, drawn here: the system's sits off the middle of its box, and
+ * nothing in the app may look off center (the user's rule).
+ */
+function MenuChevron({ up }: { readonly up: boolean }) {
+  const path = up ? CHEVRON_UP : CHEVRON_DOWN;
+  return (
+    <Canvas style={{ width: CHEVRON.width, height: CHEVRON.height }}>
+      {path === null ? null : (
+        <Path
+          path={path}
+          style="stroke"
+          strokeWidth={CHEVRON.stroke}
+          strokeCap="round"
+          strokeJoin="round"
+          color={FLOATING_INK}
+        />
+      )}
+    </Canvas>
   );
 }
 

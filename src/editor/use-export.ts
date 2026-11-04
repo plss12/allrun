@@ -24,6 +24,22 @@ export type ExportState =
 
 const IDLE: ExportState = { status: 'idle' };
 
+/** Draws a design at full quality, encoded and written to a file. */
+export async function produceImage(design: ExportDesign): Promise<ExportedImage> {
+  const { photo, cells = [] } = design;
+  const encoding = exportEncoding(
+    isOpaque(
+      design.template,
+      photo === null ? null : { width: photo.width(), height: photo.height() },
+      design.dominant,
+      cells.map((cell) => (cell === null ? null : { width: cell.width(), height: cell.height() })),
+    ),
+  );
+  const image = await renderDesign(design);
+  const uri = writeImage(image, encoding, exportFileName(encoding, toLocalTimestamp(new Date())));
+  return { image, uri, encoding };
+}
+
 /**
  * Exporting: `start` draws the design once, at full quality, so that saving, sharing and copying
  * it are instant; `stop` leaves. An opaque design becomes a JPEG, one with see-through parts (no
@@ -42,23 +58,9 @@ export function useExport() {
     setState({ status: 'rendering' });
     void (async () => {
       try {
-        const resolved = await design();
-        const { photo, cells = [] } = resolved;
-        const encoding = exportEncoding(
-          isOpaque(
-            resolved.template,
-            photo === null ? null : { width: photo.width(), height: photo.height() },
-            resolved.dominant,
-            cells.map((cell) =>
-              cell === null ? null : { width: cell.width(), height: cell.height() },
-            ),
-          ),
-        );
-        const image = await renderDesign(resolved);
-        const name = exportFileName(encoding, toLocalTimestamp(new Date()));
-        const uri = writeImage(image, encoding, name);
+        const exported = await produceImage(await design());
         if (run.current === id) {
-          setState({ status: 'ready', exported: { image, uri, encoding } });
+          setState({ status: 'ready', exported });
         }
       } catch (error) {
         logError('Could not prepare the image to export', error);

@@ -1,4 +1,4 @@
-import { isDataWidget, framesCanvas } from '@/core/activity-block';
+import { isDataWidget } from '@/core/activity-block';
 import { isSummaryDataWidget } from '@/core/summary-block';
 import { newLayer } from '@/core/default-layout';
 import {
@@ -80,22 +80,12 @@ const TILE_RATIO = { 1: 0.5, 2: 0.6 } as const;
  * the room, and in a row of the usual height it was too small to tell (the user's pick).
  */
 function isPicture(widget: CatalogWidget): boolean {
-  return isPictureItem(widget.variants[0]);
+  return widget.variants[0].kind === 'image';
 }
 
-/**
- * Whether an item asks for a photo as it is added: the user's pictures, and what frames one, which
- * would otherwise frame nothing.
- */
-export function isPictureItem(item: CatalogItem): boolean {
-  return item.kind === 'image' || framesItem(item);
-}
-
-/** Whether an item frames the photo, as the camera: as tall as a story, in a tile of its height. */
+/** Whether an item is the camera with its photo: as tall as a story, in a tile of its height. */
 function framesItem(item: CatalogItem): boolean {
-  return (
-    (item.kind === 'activityBlock' || item.kind === 'summaryBlock') && framesCanvas(item.block)
-  );
+  return item.kind === 'image' && item.mount === 'camera';
 }
 
 /**
@@ -104,7 +94,7 @@ function framesItem(item: CatalogItem): boolean {
  */
 const GROWING_SECTIONS: ReadonlySet<CatalogSectionId> = new Set(['data']);
 const MAX_TILE_RATIO = 1;
-/** The height of a row with a widget that frames the photo, over its width: tall, for it to read. */
+/** The height of a row with the camera, over its width: tall, for it to read. */
 const FRAMING_TILE_RATIO = 1.5;
 
 /** Height a tile needs for `tile`'s tallest page drawn at its scale, its room and dots around. */
@@ -287,7 +277,7 @@ export function gallerySections(
     }
     const rows = groups.map(({ width: rowWidth, tiles }): GalleryRow => {
       if (!grows) {
-        const pictures = tiles.some((tile) => isPictureItem(tile.pages[0].item));
+        const pictures = tiles.some((tile) => tile.pages[0].item.kind === 'image');
         const framing = tiles.some((tile) => framesItem(tile.pages[0].item));
         return {
           width: rowWidth,

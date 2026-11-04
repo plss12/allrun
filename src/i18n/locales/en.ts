@@ -107,7 +107,6 @@ export const en = {
     addText: 'Text',
     placeUnavailable: 'The place of this activity could not be named',
     export: 'Export',
-    addImage: 'Add image',
     depth: 'Depth effect',
     comingSoon: 'Coming soon',
     maxImages: 'A design takes up to {{max}} photos',

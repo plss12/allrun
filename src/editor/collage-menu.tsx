@@ -9,19 +9,16 @@ import { colors } from '@/theme/colors';
 import { TOP_BAR_GAP } from './editor-top-bar';
 import { ROUND_BUTTON_SIZE } from './round-button';
 
-/**
- * The panel fits the buttons around it, so the corner stays even: as wide as the two beside the
- * arrow over it, and as tall as the three of the column next to it.
- */
+/** Three by two: as wide as the three buttons of the row over it, and as tall as two of them. */
 const PANEL = {
-  width: 2 * ROUND_BUTTON_SIZE + TOP_BAR_GAP,
-  height: 3 * ROUND_BUTTON_SIZE + 2 * TOP_BAR_GAP,
+  width: 3 * ROUND_BUTTON_SIZE + 2 * TOP_BAR_GAP,
+  height: 2 * ROUND_BUTTON_SIZE + TOP_BAR_GAP,
   padding: 6,
   gap: 6,
 } as const;
 const TILE = {
-  width: (PANEL.width - 2 * PANEL.padding - PANEL.gap) / 2,
-  height: (PANEL.height - 2 * PANEL.padding - 2 * PANEL.gap) / 3,
+  width: (PANEL.width - 2 * PANEL.padding - 2 * PANEL.gap) / 3,
+  height: (PANEL.height - 2 * PANEL.padding - PANEL.gap) / 2,
 } as const;
 /** Every layout's drawing, the same size: only its inner lines change. */
 const SHAPE = { width: 18, height: 28, line: 1.5, radius: 4 } as const;
@@ -120,14 +117,14 @@ function LayoutTile({
 
 /**
  * The ways to lay the photos out, in a floating panel opened from the editor's Collages button: one
- * photo and each collage, two to a row, drawn in outline, the chosen one lit.
+ * photo and each collage, three to a row in two rows, drawn in outline, the chosen one lit.
  */
 export function CollageMenu({
   layout: current,
   onPick,
 }: {
-  /** The collage's layout; `null` for one photo. */
-  readonly layout: CollageLayout | null;
+  /** The collage's layout; `null` for one photo; absent in a design, where none of them is lit. */
+  readonly layout?: CollageLayout | null;
   readonly onPick: (layout: CollageLayout | null) => void;
 }) {
   const { t } = useTranslation();

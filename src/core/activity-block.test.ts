@@ -167,7 +167,6 @@ describe('activityBlocks', () => {
       { design: 'music', layout: 'light', cover: 'ink' },
       { design: 'alarm', layout: 'dark' },
       { design: 'alarm', layout: 'light' },
-      { design: 'camera' },
       // Things of paper.
       { design: 'receipt' },
       { design: 'nutrition', label: 'facts', layout: 'light' },
@@ -224,8 +223,8 @@ describe('activityBlocks', () => {
 
   it('offers the timing tables only for an activity with splits or laps, after the apps', () => {
     const designs = activityBlocks(makeActivity(), true, false, true).map((block) => block.design);
-    expect(designs.slice(designs.lastIndexOf('camera') + 1, designs.indexOf('receipt'))).toEqual([
-      // The note, with the phone's apps, after the camera; then the races: the laps as AURA's
+    expect(designs.slice(designs.lastIndexOf('alarm') + 1, designs.indexOf('receipt'))).toEqual([
+      // The note, with the phone's apps, after the alarm; then the races: the laps as AURA's
       // board and a karting's sheet beside the splits as a race on TV, and the splits as AURA's
       // bars and a typewriter's ladder.
       'notes',
@@ -295,13 +294,6 @@ describe('activityBlocks', () => {
         }),
       ),
     ).not.toContain('sentence');
-  });
-
-  it('offers one camera, with a route or without', () => {
-    const cameras = (routePolyline: string | null) =>
-      activityBlocks(makeActivity({ routePolyline })).filter((block) => block.design === 'camera');
-    expect(cameras('_p~iF~ps|U_ulLnnqC')).toEqual([{ design: 'camera' }]);
-    expect(cameras(null)).toEqual([{ design: 'camera' }]);
   });
 
   it('offers nothing for an activity without data', () => {

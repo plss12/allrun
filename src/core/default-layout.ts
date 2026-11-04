@@ -338,11 +338,11 @@ export function newLayer(
         opacity: 0.95,
       };
     case 'image':
-      // As big in every format as in a story, next to the other widgets.
+      // As big in every format as in a story, next to the other widgets; the camera, as the canvas.
       return {
         ...item,
         id,
-        transform: centered(layout.scale / LAYOUTS.story.scale),
+        transform: centered(item.mount === 'camera' ? 1 : layout.scale / LAYOUTS.story.scale),
         opacity: 1,
       };
     case 'activityBlock':

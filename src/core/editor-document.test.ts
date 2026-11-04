@@ -7,12 +7,14 @@ import {
   setLanguage,
   setUnits,
   canStartOver,
+  designStart,
   type DefaultTemplate,
   editLayers,
   type EditorDesign,
   INITIAL_DESIGN,
   layoutTemplate,
   setBackground,
+  setCollageLayout,
   setFormat,
   setLayerTransform,
   setPhotoPlacement,
@@ -24,12 +26,8 @@ import { newCollage } from './collage';
 import { commit, createHistory, mapHistory, undo } from './history';
 import { EDITOR_PHOTO, SAMPLE_IMAGE } from './image-layer';
 import { COVER_PLACEMENT } from './photo-placement';
-import { type CollageLayout, type Layer, parseTemplate } from './template';
+import { type Layer, parseTemplate } from './template';
 import { addLayer, removeLayer } from './template-edit';
-
-/** `design` started again from a collage of `layout`, with its frame. */
-const withLayout = (design: EditorDesign, layout: CollageLayout | null) =>
-  applyCollage(design, layout, design.frame);
 
 const activity = makeActivity();
 const defaultTemplate: DefaultTemplate = (format) => defaultActivityTemplate(activity, format);
@@ -110,7 +108,7 @@ describe('applyDesign', () => {
   it("takes a saved design's widgets, photo placement and background, keeping the format", () => {
     const layers = defaultTemplate('square').layers.slice(2);
     const square = setFormat(INITIAL_DESIGN, 'square');
-    expect(applyDesign(square, { layers, photo: framed, background: night }, [])).toEqual({
+    expect(applyDesign(square, { layers, photo: framed, background: night }, [])).toMatchObject({
       format: 'square',
       photo: framed,
       collage: null,
@@ -212,18 +210,154 @@ describe('the slots of an applied design', () => {
       format: 'square' as const,
     };
     const collage = applyCollage(applied, 'two', 'light');
-    expect(collage).toEqual({
+    expect(collage).toMatchObject({
       ...INITIAL_DESIGN,
       format: 'square',
       units: 'mi',
       collage: newCollage('two'),
       frame: 'light',
+      isDesign: false,
     });
   });
 
   it('do nothing on choosing the collage it already has', () => {
     const collage = applyCollage(INITIAL_DESIGN, 'two', 'light');
     expect(applyCollage(collage, 'two', 'light')).toBe(collage);
+  });
+});
+
+describe('choosing a collage', () => {
+  const slot: Layer = {
+    id: 'a',
+    kind: 'image',
+    image: SAMPLE_IMAGE,
+    frame: 'none',
+    slot: true,
+    transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+    opacity: 1,
+  };
+  const inDesign = applyDesign(
+    INITIAL_DESIGN,
+    { layers: [slot], photo: COVER_PLACEMENT, background: night },
+    [],
+  );
+
+  it('keeps the widgets and background of what is not a design, and takes its frame', () => {
+    const own = setBackground(withFirstMoved(INITIAL_DESIGN), night);
+    const collage = applyCollage(own, 'four', 'light');
+    expect(collage.layers).toEqual(own.layers);
+    expect(collage.background).toEqual(night);
+    expect(collage.frame).toBe('light');
+  });
+
+  it('starts from zero over a design, from the gallery and from the panel', () => {
+    for (const collage of [
+      applyCollage(inDesign, 'four', 'none'),
+      setCollageLayout(inDesign, 'four'),
+    ]) {
+      expect(collage.layers).toBeNull();
+      expect(collage.background).toEqual(INITIAL_DESIGN.background);
+      expect(collage.collage?.layout).toBe('four');
+    }
+  });
+
+  it('leaves a design with one photo, the way out of it in the panel', () => {
+    const out = setCollageLayout(inDesign, null);
+    expect(out).toEqual(INITIAL_DESIGN);
+  });
+
+  it('does nothing in the panel with the layout it has, out of a design', () => {
+    const collage = setCollageLayout(INITIAL_DESIGN, 'two');
+    expect(setCollageLayout(collage, 'two')).toBe(collage);
+    expect(setCollageLayout(INITIAL_DESIGN, null)).toBe(INITIAL_DESIGN);
+  });
+});
+
+describe('start over, to how the canvas started', () => {
+  const slot = (image: string): Layer => ({
+    id: 'a',
+    kind: 'image',
+    image,
+    frame: 'none',
+    slot: true,
+    transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+    opacity: 1,
+  });
+  const design = { layers: [slot(SAMPLE_IMAGE)], photo: COVER_PLACEMENT, background: night };
+  const chosen = applyDesign(INITIAL_DESIGN, design, []);
+  const start = designStart(chosen);
+
+  it('has nothing to do while the design is as it opened', () => {
+    expect(canStartOver(chosen, start)).toBe(false);
+    expect(startOver(chosen, start)).toBe(chosen);
+  });
+
+  it('goes from a design chosen later back to an empty canvas, if it opened empty', () => {
+    const later = applyDesign({ ...INITIAL_DESIGN, photoId: 1 }, design, [EDITOR_PHOTO]);
+    expect(canStartOver(later)).toBe(true);
+    const back = startOver(later);
+    expect(back.layers).toBeNull();
+    expect(back.isDesign).toBe(false);
+    expect(back.photoId).toBe(1);
+  });
+
+  it('goes from another design chosen later back to the one it opened with, with the photos', () => {
+    const later = applyDesign(chosen, { layers: [], photo: framed, background: night }, []);
+    expect(canStartOver(later, start)).toBe(true);
+    const back = startOver({ ...later, cells: ['picked-1', null, null, null, null] }, start);
+    expect(back.layers).toEqual([slot('picked-1')]);
+    expect(back.photo).toEqual(COVER_PLACEMENT);
+    expect(back.isDesign).toBe(true);
+  });
+
+  it('counts its photos in its slots as no edit, and keeps them', () => {
+    const filled = { ...chosen, layers: [slot('picked-1')] };
+    expect(canStartOver(filled, start)).toBe(false);
+    const changed = setBackground(filled, { kind: 'transparent' });
+    expect(canStartOver(changed, start)).toBe(true);
+    expect(startOver(changed, start).layers).toEqual([slot('picked-1')]);
+    expect(startOver(changed, start).background).toEqual(night);
+  });
+
+  it('goes back to the collage it opened with, with its frame', () => {
+    const collage = applyCollage(INITIAL_DESIGN, 'four', 'light');
+    const opened = designStart(collage);
+    expect(canStartOver(collage, opened)).toBe(false);
+    expect(startOver(withFirstMoved(collage), opened)).toMatchObject({
+      layers: null,
+      collage: newCollage('four'),
+      frame: 'light',
+    });
+  });
+});
+
+describe('the photos of a design', () => {
+  const withPhoto = { ...INITIAL_DESIGN, photoId: 1, cells: ['picked-1', null, null, null, null] };
+
+  it('stay on starting over', () => {
+    const edited = withFirstMoved(withPhoto);
+    expect(startOver(edited).photoId).toBe(1);
+    expect(startOver(edited).cells).toEqual(withPhoto.cells);
+  });
+
+  it('come back on undoing', () => {
+    const history = commit(createHistory<EditorDesign>(withPhoto), { ...withPhoto, photoId: 2 });
+    expect(undo(history).present.photoId).toBe(1);
+  });
+
+  it('are no edit by themselves, for Start over', () => {
+    expect(canStartOver(withPhoto)).toBe(false);
+  });
+
+  it('stay on choosing another design or collage', () => {
+    const applied = applyDesign(
+      withPhoto,
+      { layers: [], photo: COVER_PLACEMENT, background: night },
+      [],
+    );
+    expect([applied.photoId, applied.cells]).toEqual([1, withPhoto.cells]);
+    const collage = applyCollage(applied, 'two', 'none');
+    expect([collage.photoId, collage.cells]).toEqual([1, withPhoto.cells]);
   });
 });
 
@@ -349,15 +483,15 @@ describe('a collage in the design', () => {
   });
 
   it('lays the photos out, as one step, and back to one photo', () => {
-    const collage = withLayout(INITIAL_DESIGN, 'four');
+    const collage = setCollageLayout(INITIAL_DESIGN, 'four');
     expect(collage.collage?.layout).toBe('four');
-    expect(withLayout(collage, null).collage).toBeNull();
+    expect(setCollageLayout(collage, null).collage).toBeNull();
   });
 
   it('records nothing for the same layout, frame or placement', () => {
-    expect(withLayout(INITIAL_DESIGN, null)).toBe(INITIAL_DESIGN);
-    const collage = withLayout(INITIAL_DESIGN, 'two');
-    expect(withLayout(collage, 'two')).toBe(collage);
+    expect(setCollageLayout(INITIAL_DESIGN, null)).toBe(INITIAL_DESIGN);
+    const collage = setCollageLayout(INITIAL_DESIGN, 'two');
+    expect(setCollageLayout(collage, 'two')).toBe(collage);
     expect(setFrame(collage, 'none')).toBe(collage);
     expect(setCellPlacement(collage, 1, COVER_PLACEMENT)).toBe(collage);
   });
@@ -369,9 +503,9 @@ describe('a collage in the design', () => {
   it('frames a single photo too, and keeps it on going to a collage and back', () => {
     const framedPhoto = setFrame(INITIAL_DESIGN, 'light');
     expect(framedPhoto.frame).toBe('light');
-    const collage = withLayout(framedPhoto, 'four');
+    const collage = setCollageLayout(framedPhoto, 'four');
     expect(collage.frame).toBe('light');
-    expect(withLayout(collage, null).frame).toBe('light');
+    expect(setCollageLayout(collage, null).frame).toBe('light');
   });
 
   it('counts its frame for starting over, which takes it away', () => {
@@ -393,13 +527,17 @@ describe('a collage in the design', () => {
     ).toBe('none');
   });
 
-  it('starts again on changing layouts: each photo back to covering its cell', () => {
-    const placed = setCellPlacement(withLayout(INITIAL_DESIGN, 'six'), 5, moved);
-    expect(withLayout(placed, 'two').collage?.placements[5]).toEqual(COVER_PLACEMENT);
+  it('keeps the frame, the widgets and where each photo was, on changing layouts', () => {
+    const framed = setFrame(setCollageLayout(withFirstMoved(INITIAL_DESIGN), 'six'), 'dark');
+    const placed = setCellPlacement(framed, 5, moved);
+    const fewer = setCollageLayout(placed, 'two');
+    expect(fewer.frame).toBe('dark');
+    expect(fewer.layers).toEqual(placed.layers);
+    expect(setCollageLayout(fewer, 'six').collage?.placements[5]).toEqual(moved);
   });
 
   it('goes into the template, and out of it when it has none', () => {
-    const design = withLayout(INITIAL_DESIGN, 'two');
+    const design = setCollageLayout(INITIAL_DESIGN, 'two');
     const template = layoutTemplate(
       (format) => defaultActivityTemplate(makeActivity(), format),
       design,
@@ -415,7 +553,7 @@ describe('a collage in the design', () => {
   it('comes with a saved design, and goes with one without it', () => {
     const defaults = (format: Parameters<typeof defaultActivityTemplate>[1]) =>
       defaultActivityTemplate(makeActivity(), format);
-    const saved = layoutTemplate(defaults, withLayout(INITIAL_DESIGN, 'four'));
+    const saved = layoutTemplate(defaults, setCollageLayout(INITIAL_DESIGN, 'four'));
     const applied = applyDesign(INITIAL_DESIGN, saved, []);
     expect(applied.collage?.layout).toBe('four');
     const plain = layoutTemplate(defaults, INITIAL_DESIGN);
@@ -423,7 +561,7 @@ describe('a collage in the design', () => {
   });
 
   it('counts for starting over, which takes it away', () => {
-    const collage = withLayout(INITIAL_DESIGN, 'two');
+    const collage = setCollageLayout(INITIAL_DESIGN, 'two');
     expect(canStartOver(collage)).toBe(true);
     expect(startOver(collage).collage).toBeNull();
   });

@@ -341,3 +341,30 @@ export function hitTestLayers(
   }
   return null;
 }
+
+/**
+ * Whether a layer of `size` (before its scale) covers the whole canvas, turned as it is: then there is
+ * no canvas left around it to tap on. Time and space O(1).
+ */
+export function layerCoversCanvas(
+  transform: LayerTransform,
+  size: { readonly width: number; readonly height: number },
+  canvas: { readonly width: number; readonly height: number },
+): boolean {
+  const halfWidth = (size.width * transform.scale) / 2;
+  const halfHeight = (size.height * transform.scale) / 2;
+  const cos = Math.cos(-transform.rotation);
+  const sin = Math.sin(-transform.rotation);
+  return [
+    [0, 0],
+    [canvas.width, 0],
+    [0, canvas.height],
+    [canvas.width, canvas.height],
+  ].every(([x, y]) => {
+    const dx = x - transform.x * canvas.width;
+    const dy = y - transform.y * canvas.height;
+    return (
+      Math.abs(dx * cos - dy * sin) <= halfWidth && Math.abs(dx * sin + dy * cos) <= halfHeight
+    );
+  });
+}

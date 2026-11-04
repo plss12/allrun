@@ -649,7 +649,6 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
       ? []
       : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
     ...APP_MODES.map((layout): SummaryBlock => ({ design: 'periodStreak', layout })),
-    { design: 'periodCamera' },
     // The races: the karting's laps beside the Grand Prix.
     ...LAPS_LAYOUTS.flatMap((layout) =>
       BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodLaps', layout, cover })),

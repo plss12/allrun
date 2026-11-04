@@ -39,16 +39,10 @@ export function useNotice(): EditorNotice {
 }
 
 /**
- * The notice as a pill, centered at `top`, or larger in the middle of what holds it when something
- * was done that shows nowhere else; nothing while there is none.
+ * The notice in the middle of what holds it, big, where it can't be missed (the user's choice: at the
+ * top they hardly showed); nothing while there is none.
  */
-export function Notice({
-  message,
-  top,
-}: {
-  readonly message: string | null;
-  readonly top?: number;
-}) {
+export function Notice({ message }: { readonly message: string | null }) {
   if (message === null) {
     return null;
   }
@@ -63,20 +57,22 @@ export function Notice({
         left: 72,
         right: 72,
         alignItems: 'center',
-        ...(top === undefined ? { top: 0, bottom: 0, justifyContent: 'center' } : { top }),
+        top: 0,
+        bottom: 0,
+        justifyContent: 'center',
       }}
     >
       <View
         style={{
           ...floatingSurface(18),
-          paddingHorizontal: top === undefined ? 24 : 16,
-          paddingVertical: top === undefined ? 14 : 10,
+          paddingHorizontal: 24,
+          paddingVertical: 14,
         }}
       >
         <Text
           style={{
             color: FLOATING_INK,
-            fontSize: top === undefined ? 20 : 15,
+            fontSize: 20,
             fontWeight: '600',
             textAlign: 'center',
           }}

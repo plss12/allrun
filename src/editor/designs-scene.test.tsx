@@ -140,23 +140,29 @@ describe('a design with no photo chosen', () => {
       .readyDesign('filmFrame', { mode: 'activity', activity: makeActivity() }, 'story');
     const [slot] = template.layers;
     expect(isPhotoSlot(slot) && slot.image).toBe(SAMPLE_IMAGE);
-    const box = mountBox('filmFrame');
+    const box = mountBox('filmFrame', CANVAS_FORMATS.story);
     const [prepared] = scene().prepareLayers(template, { ...context, emptySlots: 'blank' });
     expect([prepared.width, prepared.height]).toEqual([box.width, box.height]);
   });
 });
 
-describe('the camera of a period', () => {
-  it('is as big as the canvas, and lets touches through to the photo', () => {
-    const context = contextOf(period);
+describe('the camera', () => {
+  it.each([
+    ['an activity', activity],
+    ['a period', period],
+  ])('holds its photo in %s, as big as the canvas, and is grabbed whole', (_name, data) => {
+    const context = contextOf(data);
     const { readyTemplate } = jest.requireActual<typeof import('./ready-design')>('./ready-design');
     for (const format of FORMATS) {
-      const [prepared] = scene().prepareLayers(readyTemplate('camera', context, format), context);
+      const template = readyTemplate('camera', context, format);
+      expect(template.layers).toHaveLength(1);
+      expect(isPhotoSlot(template.layers[0])).toBe(true);
+      const [prepared] = scene().prepareLayers(template, context);
       expect([prepared.width, prepared.height]).toEqual([
         CANVAS_FORMATS[format].width,
         CANVAS_FORMATS[format].height,
       ]);
-      expect(prepared.hole).toBeDefined();
+      expect(prepared.hole).toBeUndefined();
     }
   });
 });

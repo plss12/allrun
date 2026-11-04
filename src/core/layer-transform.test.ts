@@ -1,4 +1,5 @@
 import {
+  layerCoversCanvas,
   hitTestLayers,
   type LayerBox,
   layerVerticalReach,
@@ -294,5 +295,25 @@ describe('hitTestLayers', () => {
       // Between the two lines, where joining them would draw one.
       expect(hitTestLayers([two], { x: 540, y: 1160 }, story, 44)).toBeNull();
     });
+  });
+});
+
+describe('layerCoversCanvas', () => {
+  const canvas = { width: 1080, height: 1920 };
+  const centered = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
+
+  it('says so of a layer as big as the canvas, in its place', () => {
+    expect(layerCoversCanvas(centered, canvas, canvas)).toBe(true);
+  });
+
+  it('says no once moved or turned away from a corner, or smaller', () => {
+    expect(layerCoversCanvas({ ...centered, x: 0.6 }, canvas, canvas)).toBe(false);
+    expect(layerCoversCanvas({ ...centered, rotation: 0.2 }, canvas, canvas)).toBe(false);
+    expect(layerCoversCanvas({ ...centered, scale: 0.9 }, canvas, canvas)).toBe(false);
+  });
+
+  it('says so of a small layer scaled up, turned and all, if it reaches every corner', () => {
+    const size = { width: 300, height: 300 };
+    expect(layerCoversCanvas({ ...centered, scale: 10, rotation: 0.3 }, size, canvas)).toBe(true);
   });
 });

@@ -14,6 +14,21 @@ import type { ExportState } from './use-export';
 /** How long a tile reads "Saved" or "Copied" after its action. */
 const DONE_MS = 2000;
 
+/** Says that the image can't be saved without permission, with the way to the settings. */
+export function alertNoPhotosPermission(t: ReturnType<typeof useTranslation>['t']): void {
+  Alert.alert(t('export.noPermissionTitle'), t('export.noPermissionMessage'), [
+    { text: t('editor.cancel'), style: 'cancel' },
+    {
+      text: t('export.openSettings'),
+      onPress: () => {
+        Linking.openSettings().catch((error: unknown) => {
+          logError('Could not open the settings', error);
+        });
+      },
+    },
+  ]);
+}
+
 /**
  * What to do with the exported image, in the row under the canvas, in this order (the user's): post
  * it as an Instagram story (`onStory`, coming soon: ADR 009), share it, save it to the photo
@@ -103,17 +118,7 @@ export function ExportBar({
         succeed('saved');
         return;
       }
-      Alert.alert(t('export.noPermissionTitle'), t('export.noPermissionMessage'), [
-        { text: t('editor.cancel'), style: 'cancel' },
-        {
-          text: t('export.openSettings'),
-          onPress: () => {
-            Linking.openSettings().catch((error: unknown) => {
-              logError('Could not open the settings', error);
-            });
-          },
-        },
-      ]);
+      alertNoPhotosPermission(t);
     });
   const share = () => run('share', () => shareImage(exported.uri, exported.encoding));
   const copy = () =>

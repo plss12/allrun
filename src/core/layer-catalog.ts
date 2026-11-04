@@ -1,5 +1,5 @@
 import type { Activity } from './activity';
-import { activityBlocks, blockTile, framesCanvas, isDataWidget } from './activity-block';
+import { activityBlocks, blockTile, isDataWidget } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
 import { bucketCount, chartBucketOptions } from './periods';
 import { SAMPLE_IMAGE } from './image-layer';
@@ -578,14 +578,11 @@ export function activityCatalog(
   withLaps = false,
 ): CatalogSection[] {
   return sections([
-    ...activityBlocks(activity, charts.includes('splits'), withPlace, withLaps)
-      // The camera goes with the photos, after them.
-      .filter((block) => !framesCanvas(block))
-      .flatMap((block) =>
-        tileEntries(isDataWidget(block.design) ? 'data' : 'creative', [
-          { kind: 'activityBlock', block },
-        ]),
-      ),
+    ...activityBlocks(activity, charts.includes('splits'), withPlace, withLaps).flatMap((block) =>
+      tileEntries(isDataWidget(block.design) ? 'data' : 'creative', [
+        { kind: 'activityBlock', block },
+      ]),
+    ),
     ...availableMetrics(activity).flatMap((metric) => dataEntries({ kind: 'metric', metric })),
     ...(activity.routePolyline === null ? [] : lineEntries('route')),
     ...tileEntries('basic', [{ kind: 'text' }, { kind: 'info', field: 'activityName' }]),
@@ -612,7 +609,6 @@ export function activityCatalog(
       chartEntries(series, activity.averageHeartRate !== null, withZones),
     ),
     ...IMAGE_ENTRIES,
-    ...tileEntries('photos', [{ kind: 'activityBlock', block: { design: 'camera' } }]),
     ...BRAND,
   ]);
 }
@@ -627,13 +623,11 @@ export function activityCatalog(
  */
 export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): CatalogSection[] {
   return sections([
-    ...summaryBlocks(summary)
-      .filter((block) => !framesCanvas(block))
-      .map((block): Entry => [
-        isSummaryDataWidget(block.design) ? 'data' : 'creative',
-        `summaryBlock-${block.design}`,
-        { kind: 'summaryBlock', block },
-      ]),
+    ...summaryBlocks(summary).map((block): Entry => [
+      isSummaryDataWidget(block.design) ? 'data' : 'creative',
+      `summaryBlock-${block.design}`,
+      { kind: 'summaryBlock', block },
+    ]),
     ...availableSummaryMetrics(summary).flatMap((metric) =>
       dataEntries({ kind: 'summaryMetric', metric }),
     ),
@@ -649,7 +643,6 @@ export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): 
     ),
     ...periodChartEntries(summary, autoBucket),
     ...IMAGE_ENTRIES,
-    ...tileEntries('photos', [{ kind: 'summaryBlock', block: { design: 'periodCamera' } }]),
     ...BRAND,
   ]);
 }

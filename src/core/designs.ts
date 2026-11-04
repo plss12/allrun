@@ -258,7 +258,7 @@ function centeredPiece(
   format: CanvasFormat,
 ): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
-  const box = mountBox(mount);
+  const box = mountBox(mount, canvas);
   const scale = Math.min(
     (PIECE.width * canvas.width) / box.width,
     (PIECE.height * canvas.height) / box.height,
@@ -280,7 +280,7 @@ const STRIP = { width: 0.8, height: 0.82 } as const;
  */
 function filmStrip(data: TemplateData, format: CanvasFormat): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
-  const box = mountBox('filmStrip');
+  const box = mountBox('filmStrip', canvas);
   const scale = Math.min(
     (STRIP.width * canvas.width) / box.picture.width,
     (STRIP.height * canvas.height) / box.height,
@@ -295,24 +295,12 @@ function filmStrip(data: TemplateData, format: CanvasFormat): ReadyDesign {
 }
 
 /**
- * The phone's camera over the whole photo, the design's only widget: it frames the photo, so it has
- * no slot for it, and is as big as the canvas in every format. Time and space O(1).
+ * The phone's camera with its photo, the design's only widget: as big as the canvas in every format,
+ * over black where it is moved away from. Time and space O(1).
  */
 function camera(data: TemplateData, format: CanvasFormat): ReadyDesign {
-  const transform = at({ x: 0.5, y: 0.5, scale: 1 });
-  const style = { font: 'inter', color: WHITE, bold: false, uppercase: false } as const;
-  const common = { id: 'camera', logo: false, style, transform, opacity: 1 };
-  const widget: Layer =
-    data.mode === 'activity'
-      ? { ...common, kind: 'activityBlock', block: { design: 'camera' } }
-      : { ...common, kind: 'summaryBlock', block: { design: 'periodCamera' } };
   return {
-    template: newTemplate({
-      id: 'allrun-camera',
-      mode: data.mode,
-      format,
-      layers: [widget],
-    }),
+    template: design('camera', data, format, BLACK, [slot('photo-1', 'camera', 0.5, 0.5, 1)]),
     alignRight: [],
   };
 }

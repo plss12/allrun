@@ -108,6 +108,7 @@ const MOUNT_PHOTOS: Readonly<Record<ImageMount, StockPhoto>> = {
   filmFrame: 'monoSprinter',
   lightNegative: 'forestTrail',
   filmStrip: 'trackShoes',
+  camera: 'forestBridge',
 };
 const FRAME_PHOTOS: Readonly<Record<ImageFrame, StockPhoto>> = {
   none: 'mountainRunner',

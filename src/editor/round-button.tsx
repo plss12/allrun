@@ -48,6 +48,7 @@ export function RoundButton({
   disabled = false,
   selected,
   size = ROUND_BUTTON_SIZE,
+  iconLift = 0,
   children,
 }: {
   readonly icon?: SymbolViewProps['name'];
@@ -58,6 +59,8 @@ export function RoundButton({
   /** Whether a menu it opens is open; leave it out for plain buttons. */
   readonly selected?: boolean;
   readonly size?: number;
+  /** How far up its icon goes, in points, for one whose weight isn't in its middle. */
+  readonly iconLift?: number;
   readonly children?: ReactNode;
 }) {
   return (
@@ -81,7 +84,9 @@ export function RoundButton({
       })}
     >
       {icon === undefined ? null : (
-        <SymbolView name={icon} size={size * 0.45} weight="semibold" tintColor={FLOATING_INK} />
+        <View style={{ transform: [{ translateY: -iconLift }] }}>
+          <SymbolView name={icon} size={size * 0.45} weight="semibold" tintColor={FLOATING_INK} />
+        </View>
       )}
       {children}
     </Pressable>
@@ -102,6 +107,7 @@ export function PillButton({
   accent = false,
   height,
   minWidth,
+  iconLift = 0,
 }: {
   readonly icon: SymbolViewProps['name'];
   readonly iconSize?: number;
@@ -113,6 +119,8 @@ export function PillButton({
   readonly accent?: boolean;
   readonly height: number;
   readonly minWidth?: number;
+  /** How far up its icon goes, in points, for one whose weight isn't in its middle. */
+  readonly iconLift?: number;
 }) {
   const ink = accent ? colors.onTint : FLOATING_INK;
   return (
@@ -136,7 +144,9 @@ export function PillButton({
         opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
       })}
     >
-      <SymbolView name={icon} size={iconSize} weight="semibold" tintColor={ink} />
+      <View style={{ transform: [{ translateY: -iconLift }] }}>
+        <SymbolView name={icon} size={iconSize} weight="semibold" tintColor={ink} />
+      </View>
       {showLabel ? (
         <Text
           numberOfLines={1}

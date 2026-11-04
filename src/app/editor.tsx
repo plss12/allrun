@@ -1,8 +1,9 @@
 import { type SkImage, useImage } from '@shopify/react-native-skia';
 import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { NotificationFeedbackType, notificationAsync } from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -15,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
 import type { Activity } from '@/core/activity';
-import { framesCanvas, sportIcon } from '@/core/activity-block';
+import { sportIcon } from '@/core/activity-block';
 import {
   defaultActivityTemplate,
   defaultSummaryTemplate,
@@ -25,10 +26,11 @@ import {
 } from '@/core/default-layout';
 import {
   canStartOver,
+  designStart,
   type DefaultTemplate,
   editLayers,
   type EditorDesign,
-  applyCollage,
+  setCollageLayout,
   INITIAL_DESIGN,
   layoutTemplate,
   setBackground,
@@ -46,7 +48,12 @@ import { catalogItemKey, type NewLayer } from '@/core/layer-catalog';
 import { splitOpacity, withOpacity } from '@/core/color-menu';
 import { cellAt, collageCells } from '@/core/collage';
 import { backgroundColor } from '@/core/design-background';
-import { LAYER_MARGIN, layerVerticalReach, liftToClear } from '@/core/layer-transform';
+import {
+  LAYER_MARGIN,
+  layerCoversCanvas,
+  layerVerticalReach,
+  liftToClear,
+} from '@/core/layer-transform';
 import { COVER_PLACEMENT, samePlacement, type Size } from '@/core/photo-placement';
 import { startOf } from '@/core/place';
 import { setLayerColor, setLayerOpacity } from '@/core/layer-style';
@@ -58,7 +65,6 @@ import {
   type DesignLanguage,
   IMAGE_FRAMES,
   type Layer,
-  MAX_COLLAGE_PHOTOS,
   type Template,
 } from '@/core/template';
 import {
@@ -103,7 +109,7 @@ import { EditorCanvas } from '@/editor/editor-canvas';
 import { DataSheet } from '@/editor/data-sheet';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar } from '@/editor/editor-top-bar';
-import { ExportBar } from '@/editor/export-bar';
+import { alertNoPhotosPermission, ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
 import { type CellPhoto, type ExportDesign, sceneCollage, sceneFrame } from '@/editor/export-scene';
 import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
@@ -122,13 +128,7 @@ import { photoDominantColor } from '@/editor/photo-color';
 import type { PickedPhoto } from '@/editor/photo-plan';
 import { usePictures } from '@/editor/use-pictures';
 import { preparePhoto } from '@/editor/prepare-photo';
-import {
-  FLOATING_INK,
-  KeptMounted,
-  PillButton,
-  ROUND_BUTTON_SIZE,
-  RoundButton,
-} from '@/editor/round-button';
+import { FLOATING_INK, KeptMounted, PillButton, RoundButton } from '@/editor/round-button';
 import { Chip, Row, StylePanel, widgetTools } from '@/editor/style-panel';
 import {
   applyChoice,
@@ -136,9 +136,10 @@ import {
   openChoice,
   parseDesignChoice,
 } from '@/editor/design-choice';
+import { saveToPhotos } from '@/editor/export-actions';
 import { useStockPhotos } from '@/editor/stock-photos';
 import { TemplateSheet } from '@/editor/template-sheet';
-import { useExport } from '@/editor/use-export';
+import { produceImage, useExport } from '@/editor/use-export';
 import { type ColumnTool, WidgetColumn } from '@/editor/widget-column';
 import { usePhotoPicker } from '@/photos/use-photo-picker';
 import { logError } from '@/ui/log';
@@ -162,16 +163,13 @@ interface EditorPhoto {
   readonly exportUri: string | null;
 }
 
-/** A collage's cells after the first, all empty. */
-const NO_CELL_PICTURES: readonly (string | null)[] = Array.from(
-  { length: MAX_COLLAGE_PHOTOS - 1 },
-  () => null,
-);
-
 /** Room between the screen's safe area and the floating controls, in points. */
 const EDGE = 12;
-/** Where the right column starts, under the top right buttons, from the safe area's top. */
-const BELOW_TOP_BAR = EDGE + ROUND_BUTTON_SIZE + 12;
+/**
+ * How far up the icons of saving and exporting go, in points: Apple's draw an arrow over a tray, with
+ * their weight low in their box, so they looked low in their circles.
+ */
+const ARROW_TRAY_LIFT = Platform.OS === 'ios' ? 2 : 0;
 /** The room left between a widget being edited and the panel of its options, in points. */
 const PANEL_GAP = 16;
 /** How the canvas rises over the panel of a widget's options, and settles back. */
@@ -328,13 +326,16 @@ function EditorWorkspace({
    * or change. It starts as chosen before opening, if it was: nothing to undo or to lose yet.
    */
   const [history, setHistory] = useState(() =>
-    createHistory<EditorDesign>(
-      initialDesign === null
+    createHistory<EditorDesign>({
+      ...(initialDesign === null
         ? INITIAL_DESIGN
-        : openChoice(initialDesign, contextFor(deviceUnit, appLocale, t)),
-    ),
+        : openChoice(initialDesign, contextFor(deviceUnit, appLocale, t))),
+      photoId: initialPhoto === null ? null : 0,
+    }),
   );
   const design = history.present;
+  /** How this canvas started, which Start over goes back to, whatever was chosen since. */
+  const [canvasStart] = useState(() => designStart(design));
   /** The widgets' unit and language: the design's own, or the device's and the app's. */
   const unit = design.units ?? deviceUnit;
   const language: DesignLanguage = design.language ?? (appLocale === 'es' ? 'es' : 'en');
@@ -362,10 +363,9 @@ function EditorWorkspace({
   const [collagesOpen, setCollagesOpen] = useState(false);
   /**
    * The photos of a collage's cells after the first, which is the editor's photo, by their keys in
-   * `pictures`. As the photo, they aren't in the design: undo never swaps them. They stay when the
-   * layout shows fewer, and come back with one that shows them.
+   * `pictures`. They stay when the layout shows fewer, and come back with one that shows them.
    */
-  const [cellPictures, setCellPictures] = useState<readonly (string | null)[]>(NO_CELL_PICTURES);
+  const cellPictures = design.cells;
   /** The cell the photo's tools act on, in a collage. */
   const [toolsCell, setToolsCell] = useState(0);
   /** Whether the photo's actions show, after a tap on it. */
@@ -430,7 +430,12 @@ function EditorWorkspace({
     ],
     (key) => {
       notice.show(t('editor.photoError'));
-      setCellPictures((current) => current.map((cell) => (cell === key ? null : cell)));
+      setHistory((current) =>
+        mapHistory(current, (value) => ({
+          ...value,
+          cells: value.cells.map((cell) => (cell === key ? null : cell)),
+        })),
+      );
       // A slot of the design goes back to empty; a picture stuck on leaves it.
       edit((current) => ({
         ...current,
@@ -446,27 +451,43 @@ function EditorWorkspace({
     photoPicker.pick,
   );
   const phrases = usePhrases();
-  const [photo, setPhoto] = useState<EditorPhoto | null>(
-    initialPhoto === null
-      ? null
-      : {
-          id: 0,
-          libraryId: initialPhoto,
-          picked: null,
-          editorUri: null,
-          editorReencoded: false,
-          exportUri: null,
-        },
+  /**
+   * Every photo the editor has had, by its id, for undo to bring one back: only their files are kept,
+   * and only the one on the canvas (`design.photoId`) is decoded.
+   */
+  const [photos, setPhotos] = useState<ReadonlyMap<number, EditorPhoto>>(
+    () =>
+      new Map(
+        initialPhoto === null
+          ? []
+          : [
+              [
+                0,
+                {
+                  id: 0,
+                  libraryId: initialPhoto,
+                  picked: null,
+                  editorUri: null,
+                  editorReencoded: false,
+                  exportUri: null,
+                },
+              ],
+            ],
+      ),
   );
+  const photo = design.photoId === null ? null : (photos.get(design.photoId) ?? null);
   /** The full-quality copy being prepared in the background, to wait for it when exporting. */
   const pendingExportCopy = useRef<{ id: number; uri: Promise<string> } | null>(null);
   /** Applies a change only if `id` is still the current photo. */
   const updatePhoto = (id: number, change: Partial<EditorPhoto>) =>
-    setPhoto((current) => (current?.id === id ? { ...current, ...change } : current));
+    setPhotos((current) => {
+      const updated = current.get(id);
+      return updated === undefined ? current : new Map(current).set(id, { ...updated, ...change });
+    });
 
   const failPhoto = (id: number, context: string, error: unknown) => {
     logError(context, error);
-    setPhoto((current) => (current?.id === id ? null : current));
+    setPhotos((current) => new Map([...current].filter(([key]) => key !== id)));
     notice.show(t('editor.photoError'));
   };
 
@@ -560,30 +581,62 @@ function EditorWorkspace({
       ...shownCellPictures.map((key) => (key === null ? null : cellImage(key))),
     ];
   };
+  /** The design for the image: with the full-quality copy of its photo. */
+  const exportDesign = async (): Promise<ExportDesign> => {
+    const full =
+      photo !== null && (design.collage === null || photoInSlot)
+        ? await loadPhoto(await exportCopyOf(photo))
+        : null;
+    return {
+      template,
+      layerContext:
+        full !== null && photoInSlot
+          ? {
+              ...layerContext,
+              images: new Map(pictures.images).set(EDITOR_PHOTO, pictureOfPhoto(full)),
+            }
+          : layerContext,
+      // In a collage or a design's slot, the photo goes there.
+      photo: design.collage !== null || photoInSlot ? null : full,
+      cells: await exportCells(),
+      dominant,
+    };
+  };
   const startExport = () => {
     setSelectedId(null);
     setPhotoTools(false);
     setFormatsOpen(false);
-    exporter.start(async (): Promise<ExportDesign> => {
-      const full =
-        photo !== null && (design.collage === null || photoInSlot)
-          ? await loadPhoto(await exportCopyOf(photo))
-          : null;
-      return {
-        template,
-        layerContext:
-          full !== null && photoInSlot
-            ? {
-                ...layerContext,
-                images: new Map(pictures.images).set(EDITOR_PHOTO, pictureOfPhoto(full)),
-              }
-            : layerContext,
-        // In a collage or a design's slot, the photo goes there.
-        photo: design.collage !== null || photoInSlot ? null : full,
-        cells: await exportCells(),
-        dominant,
-      };
-    });
+    exporter.start(exportDesign);
+  };
+  /** The image is being saved from the bottom row. */
+  const [savingNow, setSavingNow] = useState(false);
+  /** Draws the image and saves it to the photo library at once, without the export's panel. */
+  const saveNow = () => {
+    setSelectedId(null);
+    setPhotoTools(false);
+    setFormatsOpen(false);
+    setSavingNow(true);
+    void (async () => {
+      try {
+        const { image, uri } = await produceImage(await exportDesign());
+        const result = await saveToPhotos(uri);
+        // Only encoded, never on the screen: nothing draws it.
+        image.dispose();
+        if (result === 'denied') {
+          alertNoPhotosPermission(t);
+        } else {
+          notice.show(t('export.saved'));
+          notificationAsync(NotificationFeedbackType.Success).catch((error: unknown) => {
+            logError('Could not play a haptic', error);
+          });
+        }
+      } catch (error) {
+        logError('Could not save the image', error);
+        notice.show(t('export.actionError'));
+      } finally {
+        setSavingNow(false);
+      }
+    })();
   };
 
   /** Whether the sheet to choose another activity or period shows, and one is being loaded. */
@@ -785,16 +838,6 @@ function EditorWorkspace({
 
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' | 'image' }>) => {
-    // What frames the photo asks for one first, if there is none, as the pictures do.
-    if (
-      (item.kind === 'activityBlock' || item.kind === 'summaryBlock') &&
-      framesCanvas(item.block) &&
-      photo === null &&
-      design.collage === null
-    ) {
-      void pickPhoto(() => addLayerNow(item));
-      return;
-    }
     // The place needs the permission first (Android): asked now, the widget is added once named.
     if (
       ((item.kind === 'info' && item.field === 'activityPlace') ||
@@ -815,20 +858,26 @@ function EditorWorkspace({
   };
   const addLayerNow = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     const id = uniqueLayerId(template, catalogItemKey(item));
-    edit((current) =>
-      addLayer(current, newLayer(item, id, current.format, designFont(current.layers))),
-    );
+    edit((current) => {
+      const added = addLayer(
+        current,
+        newLayer(item, id, current.format, designFont(current.layers)),
+      );
+      // As big as the canvas, it goes under the widgets there, not to hide them.
+      return item.kind === 'image' && item.mount === 'camera'
+        ? moveLayer(added, id, 'back')
+        : added;
+    });
     selectLayer(id);
     setSheetOpen(false);
   };
 
   /**
    * Starts the design again, as one undo step, with `next` (from the photos that go on, in order):
-   * another design or collage keeps the photos (the user's choice). Those of its slots also wait in
-   * the cells, for a collage to show them; those of the cells stay where they were, so that undoing
-   * finds its collage as it was.
+   * another design keeps the photos (the user's choice). Those of its slots also wait in the cells,
+   * for a collage to show them; those of the cells stay where they were.
    */
-  const startAgain = (next: (pictures: readonly string[]) => EditorDesign) => {
+  const startAgain = (next: (pictures: readonly string[]) => EditorDesign): EditorDesign => {
     const inSlots = template.layers
       .filter(isPhotoSlot)
       .map((layer) => layer.image)
@@ -838,25 +887,33 @@ function EditorWorkspace({
       (key, i, all) => all.indexOf(key) === i,
     );
     let arrived = 0;
-    setCellPictures(
-      cellPictures.map((key) => {
-        if (key !== null || arrived >= newcomers.length) {
-          return key;
-        }
-        arrived += 1;
-        return newcomers[arrived - 1];
-      }),
-    );
-    change(() => next(photo === null ? others : [EDITOR_PHOTO, ...others]));
+    const cells = cellPictures.map((key) => {
+      if (key !== null || arrived >= newcomers.length) {
+        return key;
+      }
+      arrived += 1;
+      return newcomers[arrived - 1];
+    });
+    const started = next(photo === null ? others : [EDITOR_PHOTO, ...others]);
+    change(() => (started === design ? design : { ...started, cells }));
     setSelectedId(null);
     setPhotoTools(false);
     setToolsCell(0);
+    return started;
   };
 
   /** Starts the design again from a choice of the Designs gallery, and closes the sheet. */
   const chooseDesign = (choice: DesignChoice) => {
     startAgain((pictures) => applyChoice(design, choice, layerContext, pictures));
     setTemplatesOpen(false);
+  };
+
+  /**
+   * Another layout in the Collages panel, as one undo step: over a design it starts again; otherwise
+   * it only lays the photos out, and the same one does nothing.
+   */
+  const pickCollage = (layout: CollageLayout | null) => {
+    startAgain(() => setCollageLayout(design, layout));
   };
 
   /** Another format: the widgets keep their relative places. */
@@ -903,10 +960,22 @@ function EditorWorkspace({
   const canEditLayer = (layer: Layer) =>
     layer.kind === 'text' || layer.kind === 'image' || chosenWordsOf(layer) !== null;
 
-  /** A tap on the selected widget edits it as its Edit button does, as in a story editor. */
+  /**
+   * A tap on the selected widget edits it as its Edit button does, as in a story editor. While it
+   * leaves no canvas to tap on, whichever it is and however it got there, it lets go instead, or it
+   * could never be let go of: its action stays on its button (the user's choice).
+   */
   const tapSelected = (id: string) => {
     const layer = template.layers.find((candidate) => candidate.id === id);
-    if (layer !== undefined) {
+    if (layer === undefined) {
+      return;
+    }
+    const covers =
+      selectedSize !== null &&
+      layerCoversCanvas(layer.transform, selectedSize, CANVAS_FORMATS[template.format]);
+    if (covers && !isEmptySlot(layer, photo !== null)) {
+      setSelectedId(null);
+    } else {
       editLayer(layer);
     }
   };
@@ -925,19 +994,6 @@ function EditorWorkspace({
       setPhotoTools(false);
     }
   };
-
-  /**
-   * A design that frames the photo, as the camera does, has no slot for it: with none, a tap goes
-   * straight to choosing it, and the canvas shows the sign to.
-   */
-  const wantsPhoto =
-    photo === null &&
-    design.collage === null &&
-    template.layers.some(
-      (layer) =>
-        (layer.kind === 'activityBlock' || layer.kind === 'summaryBlock') &&
-        framesCanvas(layer.block),
-    );
 
   /** The first slot of the design with no photo, which the bottom row's photo button fills. */
   const firstEmptySlot = template.layers.find((layer) => isEmptySlot(layer, photo !== null));
@@ -958,8 +1014,6 @@ function EditorWorkspace({
   const tapPhoto = (at: { readonly x: number; readonly y: number }) => {
     if (selectedId !== null) {
       setSelectedId(null);
-    } else if (wantsPhoto) {
-      void pickPhoto();
     } else if (design.collage === null) {
       if (!photoTools) {
         setPhotoTools(true);
@@ -1008,25 +1062,27 @@ function EditorWorkspace({
     rotation: layer.transform.rotation,
   });
 
-  const pickPhoto = async (onPicked?: () => void) => {
+  const pickPhoto = async () => {
     setPhotoTools(false);
     const libraryId = await photoPicker.pick();
     if (libraryId !== null) {
-      onPicked?.();
       const id = nextPhotoId;
       setNextPhotoId(id + 1);
-      setPhoto({
-        id,
-        libraryId,
-        picked: null,
-        editorUri: null,
-        editorReencoded: false,
-        exportUri: null,
-      });
-      // A new photo starts centered and covering the canvas (user's choice), as one undo step.
-      change((current) =>
-        setCellPlacement(setPhotoPlacement(current, COVER_PLACEMENT), 0, COVER_PLACEMENT),
+      setPhotos((current) =>
+        new Map(current).set(id, {
+          id,
+          libraryId,
+          picked: null,
+          editorUri: null,
+          editorReencoded: false,
+          exportUri: null,
+        }),
       );
+      // A new photo starts centered and covering the canvas (user's choice), as one undo step.
+      change((current) => ({
+        ...setCellPlacement(setPhotoPlacement(current, COVER_PLACEMENT), 0, COVER_PLACEMENT),
+        photoId: id,
+      }));
       void loadChosenPhoto(id, libraryId);
     }
   };
@@ -1036,15 +1092,16 @@ function EditorWorkspace({
    * sticker); the widgets stay.
    */
   const removePhoto = () => {
-    setPhoto(null);
     setPhotoTools(false);
-    change((current) => setPhotoPlacement(current, COVER_PLACEMENT));
+    change((current) => ({ ...setPhotoPlacement(current, COVER_PLACEMENT), photoId: null }));
   };
 
   /** Shows `key` in a cell after the first, centered and covering it. */
   const setCellPicture = (cell: number, key: string | null) => {
-    setCellPictures((current) => current.map((old, i) => (i === cell - 1 ? key : old)));
-    change((current) => setCellPlacement(current, cell, COVER_PLACEMENT));
+    change((current) => ({
+      ...setCellPlacement(current, cell, COVER_PLACEMENT),
+      cells: current.cells.map((old, i) => (i === cell - 1 ? key : old)),
+    }));
   };
 
   /** Lets the user choose the photo of a cell. The first is the editor's photo. */
@@ -1076,24 +1133,16 @@ function EditorWorkspace({
   const removeCellPhoto = (cell: number) => {
     setPhotoTools(false);
     if (cell === 0) {
-      setPhoto(null);
-      change((current) => setCellPlacement(current, 0, COVER_PLACEMENT));
+      change((current) => ({ ...setCellPlacement(current, 0, COVER_PLACEMENT), photoId: null }));
     } else {
       setCellPicture(cell, null);
-    }
-  };
-
-  /** Starts the design again from the collage `layout`, without borders; the same one does nothing. */
-  const pickCollage = (layout: CollageLayout | null) => {
-    if ((design.collage?.layout ?? null) !== layout) {
-      startAgain(() => applyCollage(design, layout, 'none'));
     }
   };
 
   // Leaving with edits asks first: the design is not kept. The photo alone doesn't count: it was
   // chosen on the screen under this one, and stays in the library. Going back while exporting
   // leaves the export, while typing commits the text, and with the eyedropper open closes it.
-  const unsaved = canUndo(history);
+  const unsaved = canStartOver(design, canvasStart);
   /**
    * Whether the user confirmed leaving: prevention stops and the blocked action is repeated
    * (expo-router's `repeat`; dispatching it again while still prevented did nothing).
@@ -1124,7 +1173,6 @@ function EditorWorkspace({
     },
   );
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
-
   /**
    * What the dock shows, if anything: the export, the options of a tool of the widget column, the
    * photo's tools.
@@ -1270,7 +1318,6 @@ function EditorWorkspace({
                 photoTools && !backgroundMenu && canvasCells[toolsCell] !== null ? toolsCell : null,
               )}
               frame={sceneFrame(shownTemplate)}
-              photoSign={wantsPhoto}
               onCellGrab={setToolsCell}
               onCellPlacementChange={(cell, placement) =>
                 change((current) => setCellPlacement(current, cell, placement))
@@ -1357,10 +1404,10 @@ function EditorWorkspace({
             onClose={close}
             onUndo={() => setHistory(undo)}
             onRedo={() => setHistory(redo)}
-            onStartOver={() => change(startOver)}
+            onStartOver={() => change((current) => startOver(current, canvasStart))}
             canUndo={canUndo(history)}
             canRedo={canRedo(history)}
-            canStartOver={canStartOver(design)}
+            canStartOver={canStartOver(design, canvasStart)}
           />
         </View>
       ) : null}
@@ -1371,13 +1418,13 @@ function EditorWorkspace({
         style={{ position: 'absolute', top: insets.top + EDGE, right: EDGE }}
       >
         <EditorSideMenu
-          onAddImage={() => addPicture({ frame: 'none' })}
           onDepth={comingSoon}
           format={design.format}
           formatsOpen={formatsOpen}
           onFormatsOpenChange={setFormatsOpen}
           onPickFormat={chooseFormat}
           collage={design.collage?.layout ?? null}
+          inDesign={design.isDesign}
           collagesOpen={collagesOpen}
           onCollagesOpenChange={setCollagesOpen}
           onPickCollage={pickCollage}
@@ -1436,7 +1483,8 @@ function EditorWorkspace({
         </View>
       ) : null}
       {controlsShown && dock === null ? (
-        // What to add on the left; exporting, the step that finishes the image, on the right.
+        // Symmetric: the photo and a text at the left, "+", the main thing to do, in the middle, and
+        // saving and exporting, what finishes the image, at the right.
         <View
           pointerEvents="box-none"
           style={{
@@ -1446,10 +1494,9 @@ function EditorWorkspace({
             right: EDGE,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between',
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {/* The photo's tools, as a tap on it opens them; without a photo, the picker straight
                 away (a tap on the empty canvas still opens the background). Here rather than over
                 the canvas, where it kept widgets from being moved. */}
@@ -1469,15 +1516,6 @@ function EditorWorkspace({
               }
               size={BOTTOM_BUTTON_SIZE}
             />
-            <PillButton
-              icon={{ ios: 'plus', android: 'add' }}
-              iconSize={28}
-              label={t('editor.addLayer')}
-              onPress={() => setSheetOpen(true)}
-              disabled={!canAddLayer(template)}
-              height={BOTTOM_BUTTON_SIZE}
-              minWidth={ADD_BUTTON_WIDTH}
-            />
             <RoundButton
               label={t('editor.addText')}
               onPress={addText}
@@ -1494,13 +1532,40 @@ function EditorWorkspace({
             </RoundButton>
           </View>
           <PillButton
-            icon={{ ios: 'square.and.arrow.up', android: 'ios_share' }}
-            label={t('editor.export')}
-            showLabel
-            onPress={startExport}
-            accent
+            icon={{ ios: 'plus', android: 'add' }}
+            iconSize={28}
+            label={t('editor.addLayer')}
+            onPress={() => setSheetOpen(true)}
+            disabled={!canAddLayer(template)}
             height={BOTTOM_BUTTON_SIZE}
+            minWidth={ADD_BUTTON_WIDTH}
           />
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 8,
+            }}
+          >
+            <RoundButton
+              icon={{ ios: 'square.and.arrow.down', android: 'download' }}
+              label={t('export.save')}
+              onPress={saveNow}
+              disabled={savingNow}
+              size={BOTTOM_BUTTON_SIZE}
+              iconLift={ARROW_TRAY_LIFT}
+            />
+            <PillButton
+              icon={{ ios: 'square.and.arrow.up', android: 'ios_share' }}
+              label={t('editor.export')}
+              onPress={startExport}
+              accent
+              height={BOTTOM_BUTTON_SIZE}
+              iconLift={ARROW_TRAY_LIFT}
+            />
+          </View>
         </View>
       ) : null}
       {controlsShown && dock !== null ? (
@@ -1622,7 +1687,7 @@ function EditorWorkspace({
           </Dock>
         </View>
       ) : null}
-      <Notice message={notice.message} top={insets.top + BELOW_TOP_BAR} />
+      <Notice message={notice.message} />
       {textDraft === null || typedLayer?.kind !== 'text' ? null : (
         <View style={{ position: 'absolute', top: insets.top, left: 0, right: 0, bottom: 0 }}>
           <TypingOverlay

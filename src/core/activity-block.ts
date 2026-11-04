@@ -279,12 +279,11 @@ export function activityBlocks(
     // The badge beside the place, both stickers of the photo (see `rowPartner`).
     ...APP_MODES.map((layout) => ({ design: 'verified', layout }) as const),
     ...(withPlace ? APP_MODES.map((layout) => ({ design: 'location', layout }) as const) : []),
-    // The phone's apps: the music with the alarm; the camera, in the gallery with the photos.
+    // The phone's apps: the music with the alarm.
     ...APP_MODES.flatMap((layout) =>
       BRAND_COVERS.map((cover) => ({ design: 'music', layout, cover }) as const),
     ),
     ...APP_MODES.map((layout) => ({ design: 'alarm', layout }) as const),
-    { design: 'camera' },
     // The note lists the splits: in the gallery, beside them.
     ...(withSplits ? APP_MODES.map((layout) => ({ design: 'notes', layout }) as const) : []),
     // The races: the laps as AURA's board and a karting's sheet beside the splits as a race on TV;

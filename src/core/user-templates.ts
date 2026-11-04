@@ -75,7 +75,7 @@ export function isSaved(saved: readonly SavedTemplate[], design: Template): bool
  * Deep equality of JSON values. Object keys may come in any order: a template read back from
  * storage lists its fields in the schema's order, not in the order the editor built them.
  */
-function sameJson(a: unknown, b: unknown): boolean {
+export function sameJson(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) {
     return true;
   }

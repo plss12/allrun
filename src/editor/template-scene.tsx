@@ -319,8 +319,6 @@ export interface TemplateSceneProps {
   readonly photo: ScenePhoto | null;
   /** The photos of a collage over the backdrop, instead of `photo`. */
   readonly collage?: SceneCollage | null;
-  /** With no photo, a design that frames one shows the sign to fill it, on the canvas. */
-  readonly photoSign?: boolean;
   /** The frame over the photos, under the widgets. */
   readonly frame?: SceneFrame | null;
   /**
@@ -379,7 +377,6 @@ export function TemplateScene({
   photo,
   collage = null,
   frame = null,
-  photoSign = false,
   live = null,
 }: TemplateSceneProps) {
   const canvas = CANVAS_FORMATS[format];
@@ -426,7 +423,6 @@ export function TemplateScene({
       {frame === null
         ? null
         : frame.bars.map((bar, index) => <Rect key={index} {...bar} color={frame.color} />)}
-      {photoSign ? <EmptySign cx={width / 2} cy={height / 2} /> : null}
       {/* A layer's opacity fades it as a whole, drawn on its own Skia layer: a group's `opacity`
           only reaches shapes (paragraphs ignore it) and fades each shape and its shadow apart,
           letting the shadow show through. Opaque layers skip the extra layer. */}
@@ -793,8 +789,43 @@ function prepareLayer(
         (layer.image === SAMPLE_IMAGE || picked === undefined)
           ? emptySlots
           : null;
+      if (layer.mount === 'camera') {
+        // The app's view over the picture, as one widget: moving it moves the picture.
+        const common = {
+          id: layer.id,
+          transform: layer.transform,
+          opacity: 1,
+          logo: false,
+          style: { font: 'inter', color: '#FFFFFF', bold: false, uppercase: false },
+        } as const;
+        const context = { fonts, textContext, translate, canvas, phrases };
+        const view =
+          data.mode === 'activity'
+            ? prepareActivityBlock(
+                { ...common, kind: 'activityBlock', block: { design: 'camera' } },
+                data,
+                context,
+              )
+            : prepareSummaryBlock(
+                { ...common, kind: 'summaryBlock', block: { design: 'periodCamera' } },
+                data,
+                context,
+              );
+        return {
+          layer,
+          ...canvas,
+          content: (
+            <CameraWidget
+              box={mountBox('camera', canvas)}
+              picture={picked?.image ?? null}
+              empty={empty}
+              view={view?.content ?? null}
+            />
+          ),
+        };
+      }
       if (layer.mount !== undefined) {
-        const box = mountBox(layer.mount);
+        const box = mountBox(layer.mount, canvas);
         const { sides, marks, strip } = mountCaption(layer.mount, data, textContext, translate);
         return {
           layer,
@@ -982,10 +1013,13 @@ function InstantWidget({
   );
 }
 
+/** A holder with its letters around its picture, as all are but the camera. */
+type LetteredMount = Exclude<ImageMount, 'camera'>;
+
 /** How each holder looks: its color, its letters and how they read along its sides. */
 const MOUNT_LOOKS: Readonly<
   Record<
-    ImageMount,
+    LetteredMount,
     {
       readonly color: string;
       readonly ink: string;
@@ -1053,7 +1087,7 @@ interface LaidOutSide {
  */
 function mountSides(
   fonts: SkTypefaceFontProvider,
-  mount: ImageMount,
+  mount: LetteredMount,
   box: MountBox,
   sides: readonly [MountSide, MountSide],
   locale: string,
@@ -1140,7 +1174,7 @@ interface LaidOutMarks {
  */
 function mountMarks(
   fonts: SkTypefaceFontProvider,
-  mount: ImageMount,
+  mount: LetteredMount,
   box: MountBox,
   marks: MountMarks,
   strip: MountStrip | undefined,
@@ -1275,7 +1309,7 @@ const mountPaths = new Map<string, SkPath>();
  * A holder's shape with its cut-outs, and its window when `open`: only when it shows nothing there,
  * because a picture over a hole lets the background through along its edge.
  */
-function mountPath(mount: ImageMount, box: MountBox, open: boolean): SkPath {
+function mountPath(mount: LetteredMount, box: MountBox, open: boolean): SkPath {
   const key = `${mount}-${open}`;
   const cached = mountPaths.get(key);
   if (cached !== undefined) {
@@ -1313,6 +1347,35 @@ function arrowPath(at: number, size: number): SkPath {
 }
 
 /**
+ * The camera with its picture, as one piece: the picture covering it, cut around its middle, under
+ * the app's view. With no picture, the sign to fill it (`hint`) or nothing.
+ */
+function CameraWidget({
+  box,
+  picture,
+  empty,
+  view,
+}: {
+  readonly box: MountBox;
+  readonly picture: SkImage | null;
+  readonly empty: 'hint' | 'blank' | null;
+  readonly view: ReactElement | null;
+}) {
+  const rect = box.picture;
+  return (
+    <Group clip={rect}>
+      {empty === 'blank' ? null : empty === null && picture !== null ? (
+        <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
+      ) : (
+        <Rect {...rect} color={LOADING_PICTURE} />
+      )}
+      {view}
+      {empty === 'hint' ? <EmptySign cx={0} cy={0} /> : null}
+    </Group>
+  );
+}
+
+/**
  * A picture in its holder, as one piece (see `IMAGE_MOUNTS`): the holder with its cut-outs, through
  * which the background shows, the picture cut to its window around its middle, and the texts turned
  * along its sides. With no picture, the window shows the sign to fill it (`hint`) or nothing.
@@ -1325,7 +1388,7 @@ function MountWidget({
   sides,
   marks,
 }: {
-  readonly mount: ImageMount;
+  readonly mount: LetteredMount;
   readonly box: MountBox;
   readonly picture: SkImage | null;
   readonly empty: 'hint' | 'blank' | null;

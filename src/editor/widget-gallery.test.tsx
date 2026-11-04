@@ -356,7 +356,7 @@ describe('gallerySections', () => {
     expect((photos?.rows ?? []).map((row) => row.widgets.map((widget) => widget.key))).toEqual([
       ['image', 'image-instant'],
       ['image-filmFrame', 'image-lightNegative'],
-      ['image-filmStrip', 'block-camera'],
+      ['image-filmStrip', 'image-camera'],
     ]);
   });
 

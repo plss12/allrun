@@ -237,12 +237,22 @@ function windowIn(band: number): BoxRect {
 }
 
 /**
- * The widget of a picture in its holder (see `IMAGE_MOUNTS`), as tall as `IMAGE_SIDE`. Time and
- * space O(1).
+ * The widget of a picture in its holder (see `IMAGE_MOUNTS`), as tall as `IMAGE_SIDE`, but the
+ * camera, as big as the `canvas`. Time and space O(1).
  */
-export function mountBox(mount: ImageMount): MountBox {
+export function mountBox(mount: ImageMount, canvas: Size): MountBox {
   const height = IMAGE_SIDE;
   switch (mount) {
+    case 'camera': {
+      const picture = {
+        x: -canvas.width / 2,
+        y: -canvas.height / 2,
+        width: canvas.width,
+        height: canvas.height,
+      };
+      const none = { ...picture, width: 0 };
+      return { ...canvas, picture, radius: 0, holes: [], sides: [none, none], frames: [] };
+    }
     case 'filmFrame': {
       const { band, side } = FILM_FRAME;
       const picture = windowIn(band);
