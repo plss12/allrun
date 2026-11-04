@@ -164,7 +164,7 @@ function DesignsTab({
   const { t } = useTranslation();
   const { unit, locale } = useDisplaySettings();
   const fonts = useEditorFonts();
-  const stock = useStockPhotos(true);
+  const stock = useStockPhotos();
   const userTemplates = useUserTemplates();
   if (data.status === 'error') {
     return <ErrorView message={t('editor.error')} onRetry={data.retry} />;

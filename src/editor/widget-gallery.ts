@@ -1,4 +1,4 @@
-import { isDataWidget } from '@/core/activity-block';
+import { isDataWidget, framesCanvas } from '@/core/activity-block';
 import { isSummaryDataWidget } from '@/core/summary-block';
 import { newLayer } from '@/core/default-layout';
 import {
@@ -80,7 +80,22 @@ const TILE_RATIO = { 1: 0.5, 2: 0.6 } as const;
  * the room, and in a row of the usual height it was too small to tell (the user's pick).
  */
 function isPicture(widget: CatalogWidget): boolean {
-  return widget.variants[0].kind === 'image';
+  return isPictureItem(widget.variants[0]);
+}
+
+/**
+ * Whether an item asks for a photo as it is added: the user's pictures, and what frames one, which
+ * would otherwise frame nothing.
+ */
+export function isPictureItem(item: CatalogItem): boolean {
+  return item.kind === 'image' || framesItem(item);
+}
+
+/** Whether an item frames the photo, as the camera: as tall as a story, in a tile of its height. */
+function framesItem(item: CatalogItem): boolean {
+  return (
+    (item.kind === 'activityBlock' || item.kind === 'summaryBlock') && framesCanvas(item.block)
+  );
 }
 
 /**
@@ -89,6 +104,8 @@ function isPicture(widget: CatalogWidget): boolean {
  */
 const GROWING_SECTIONS: ReadonlySet<CatalogSectionId> = new Set(['data']);
 const MAX_TILE_RATIO = 1;
+/** The height of a row with a widget that frames the photo, over its width: tall, for it to read. */
+const FRAMING_TILE_RATIO = 1.5;
 
 /** Height a tile needs for `tile`'s tallest page drawn at its scale, its room and dots around. */
 function neededHeight(tile: GalleryWidget): number {
@@ -216,7 +233,12 @@ export function gallerySections(
       }
     };
     /** The height a tile of `widget` is first measured at. */
-    const heightOf = (widget: CatalogWidget) => (grows || isPicture(widget) ? tallest : height);
+    const heightOf = (widget: CatalogWidget) =>
+      framesItem(widget.variants[0])
+        ? Math.round(width * FRAMING_TILE_RATIO)
+        : grows || isPicture(widget)
+          ? tallest
+          : height;
     const tiles = section.widgets.flatMap((widget) => {
       const wide = columns > 1 && spansRow(widget);
       const tile = measure(widget, wide ? full : width, heightOf(widget));
@@ -254,14 +276,24 @@ export function gallerySections(
     if (themed) {
       groups = settleAlone(groups, width, (widget) => {
         const source = section.widgets.find((candidate) => candidate.key === widget.key);
-        const wide = source === undefined ? null : measure(source, full, heightOf(source));
+        // A tall widget alone stays at half a row: as wide as the row it was huge, and ugly.
+        const page = widget.pages[0].prepared;
+        if (source === undefined || page.height > page.width) {
+          return null;
+        }
+        const wide = measure(source, full, heightOf(source));
         return wide === null ? null : { width: full, tiles: [wide] };
       });
     }
     const rows = groups.map(({ width: rowWidth, tiles }): GalleryRow => {
       if (!grows) {
-        const pictures = tiles.some((tile) => tile.pages[0].item.kind === 'image');
-        return { width: rowWidth, height: pictures ? tallest : height, widgets: tiles };
+        const pictures = tiles.some((tile) => isPictureItem(tile.pages[0].item));
+        const framing = tiles.some((tile) => framesItem(tile.pages[0].item));
+        return {
+          width: rowWidth,
+          height: framing ? Math.round(width * FRAMING_TILE_RATIO) : pictures ? tallest : height,
+          widgets: tiles,
+        };
       }
       // As tall as its tallest widget needs, between the usual tiles and square ones.
       const needed = Math.max(...tiles.map(neededHeight));
@@ -302,7 +334,23 @@ function settleAlone(
 ): TileGroup[] {
   const settled = [...groups];
   const alone = (group: TileGroup) => group.width === width && group.tiles.length === 1;
+  // Tiles alone go together first, whatever their themes: if one has to stay alone, it is a wildcard
+  // (the user's choice), never the note one day and the boarding pass another.
   for (let i = 0; i < settled.length; i++) {
+    const group = settled[i];
+    if (!alone(group) || isCreativeWildcard(group.tiles[0].key)) {
+      continue;
+    }
+    const partner = settled.findIndex(
+      (other, j) => j > i && alone(other) && !isCreativeWildcard(other.tiles[0].key),
+    );
+    if (partner !== -1) {
+      settled[i] = { width, tiles: [group.tiles[0], settled[partner].tiles[0]] };
+      settled.splice(partner, 1);
+    }
+  }
+  // From the last, so that of two wildcards the first (the boarding pass) is the one left alone.
+  for (let i = settled.length - 1; i >= 0; i--) {
     const group = settled[i];
     if (!alone(group) || !isCreativeWildcard(group.tiles[0].key)) {
       continue;
@@ -317,7 +365,6 @@ function settleAlone(
     if (slot !== undefined) {
       settled[slot.j] = { width, tiles: [slot.other.tiles[0], group.tiles[0]] };
       settled.splice(i, 1);
-      i--;
     }
   }
   return settled.map((group) => (alone(group) ? (wide(group.tiles[0]) ?? group) : group));

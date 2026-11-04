@@ -11,7 +11,6 @@ import {
   setBlockOptions,
   setChartOptions,
   setDataLabels,
-  setImageFrame,
   setImageRounded,
   setLayerColor,
   setLogoOptions,
@@ -23,7 +22,6 @@ import {
 import {
   BACKDROPS,
   FONT_IDS,
-  IMAGE_FRAMES,
   isCapsOnly,
   type FontId,
   LETTER_SPACINGS,
@@ -70,7 +68,7 @@ export interface WidgetTools {
    * colors) and the opacity; a picture's frames and the opacity; or, for a replica of an app,
    * which keeps the app's look, only the opacity.
    */
-  readonly color: 'colors' | 'tones' | 'frames' | 'opacity';
+  readonly color: 'colors' | 'tones' | 'corners' | 'opacity';
   /**
    * What goes behind its text, and how to change it, when it can have one: in the color panel,
    * under the opacity.
@@ -92,7 +90,7 @@ export function widgetTools(layer: Layer): WidgetTools {
       // A photo in a design's holder keeps its look, as a replica does.
       return {
         lettering: null,
-        color: layer.mount === undefined ? 'frames' : 'opacity',
+        color: layer.mount === undefined && layer.caption === undefined ? 'corners' : 'opacity',
         backdrop: null,
       };
     case 'activityBlock':
@@ -187,15 +185,9 @@ export function StylePanel({
           return layer.kind === 'logo'
             ? [<LogoRow key="tones" layer={layer} onChange={onChange} />, opacity]
             : [opacity];
-        case 'frames':
+        case 'corners':
           return layer.kind === 'image'
-            ? [
-                <FrameRow key="frames" layer={layer} onChange={onChange} />,
-                ...(layer.caption === undefined
-                  ? [<CornersRow key="corners" layer={layer} onChange={onChange} />]
-                  : []),
-                opacity,
-              ]
+            ? [<CornersRow key="corners" layer={layer} onChange={onChange} />, opacity]
             : [opacity];
         case 'opacity':
           return [opacity];
@@ -531,30 +523,6 @@ function LogoRow({
 }
 
 /** A picture's frame: none, light or dark; an instant photo's, light or dark. */
-function FrameRow({
-  layer,
-  onChange,
-}: {
-  readonly layer: ImageLayer;
-  readonly onChange: (change: StyleChange) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Row>
-      {IMAGE_FRAMES.filter((frame) => layer.caption === undefined || frame !== 'none').map(
-        (frame) => (
-          <Chip
-            key={frame}
-            label={t(`style.frames.${frame}`)}
-            selected={layer.frame === frame}
-            onPress={() => onChange((template) => setImageFrame(template, layer.id, frame))}
-          />
-        ),
-      )}
-    </Row>
-  );
-}
-
 /** The corners of a picture: square or rounded, as a chat shows it. */
 function CornersRow({
   layer,
@@ -567,6 +535,7 @@ function CornersRow({
   const rounded = layer.rounded ?? false;
   return (
     <Row>
+      <RowIcon label={t('style.cornersLabel')} icon={{ ios: 'app', android: 'rounded_corner' }} />
       {[false, true].map((option) => (
         <Chip
           key={String(option)}
@@ -590,17 +559,10 @@ function BackdropRow({
   const { t } = useTranslation();
   return (
     <Row>
-      <View
-        accessible
-        accessibilityLabel={t('style.backdrop')}
-        style={{ width: 28, alignItems: 'center' }}
-      >
-        <SymbolView
-          name={{ ios: 'character.textbox', android: 'format_color_fill' }}
-          size={20}
-          tintColor={colors.secondaryLabel}
-        />
-      </View>
+      <RowIcon
+        label={t('style.backdrop')}
+        icon={{ ios: 'character.textbox', android: 'format_color_fill' }}
+      />
       {BACKDROPS.map((option) => (
         <Chip
           key={option}
@@ -610,6 +572,21 @@ function BackdropRow({
         />
       ))}
     </Row>
+  );
+}
+
+/** What a row of options is about, as an icon before them. */
+function RowIcon({
+  label,
+  icon,
+}: {
+  readonly label: string;
+  readonly icon: SymbolViewProps['name'];
+}) {
+  return (
+    <View accessible accessibilityLabel={label} style={{ width: 28, alignItems: 'center' }}>
+      <SymbolView name={icon} size={20} tintColor={colors.secondaryLabel} />
+    </View>
   );
 }
 

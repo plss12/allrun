@@ -1,6 +1,8 @@
 import { Skia } from '@shopify/react-native-skia';
 
 import type { Activity } from '@/core/activity';
+import type { HitHole } from '@/core/layer-transform';
+import { CANVAS_FORMATS } from '@/core/template';
 import { bigMetrics, sportIcon, type SportIconId } from '@/core/activity-block';
 import { periodEquivalences } from '@/core/equivalences';
 import { phraseLanguage, phraseWords } from '@/core/phrases';
@@ -51,6 +53,7 @@ import {
   periodCalendarBox,
   periodStreakBox,
   periodWeatherBox,
+  periodCameraBox,
   periodMessageBox,
   periodMetroBox,
   periodGrandPrixBox,
@@ -205,9 +208,17 @@ function fadedColor(color: string): string {
 export function prepareSummaryBlock(
   layer: SummaryBlockLayer,
   data: SummaryData,
-  { fonts, textContext, translate, phrases = BUILT_IN_PHRASES }: Omit<BlockContext, 'canvas'>,
+  {
+    fonts,
+    textContext,
+    translate,
+    canvas = CANVAS_FORMATS.story,
+    phrases = BUILT_IN_PHRASES,
+  }: Omit<BlockContext, 'canvas'> & Partial<Pick<BlockContext, 'canvas'>>,
 ): PreparedBlock | null {
   const { block, style } = layer;
+  /** The see-through part of a widget, which touches go through. */
+  let hole: HitHole | undefined;
   /** A verse's or a quote's words, in the design's language. */
   let wordsSize: number | undefined;
   const quotation = (kind: 'verse' | 'quote', id: string): Box => {
@@ -640,6 +651,16 @@ export function prepareSummaryBlock(
         return periodMetroBox(block, data, { fonts, textContext, translate });
       case 'periodMessage':
         return periodMessageBox(block, data, { fonts, textContext: compact, translate });
+      case 'periodCamera': {
+        const camera = periodCameraBox(data, {
+          fonts,
+          textContext: compact,
+          translate,
+          canvas,
+        });
+        hole = camera.hole;
+        return camera.box;
+      }
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }
@@ -648,7 +669,7 @@ export function prepareSummaryBlock(
   if (body === null) {
     return null;
   }
-  const finished = finishBlock(body, layer, !isSummaryReplica(block.design));
+  const finished = finishBlock(body, layer, !isSummaryReplica(block.design), hole);
   return wordsSize === undefined ? finished : { ...finished, wordsSize };
 }
 

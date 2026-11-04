@@ -90,6 +90,7 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodMetro',
   'periodEquivalences',
   'periodMessage',
+  'periodCamera',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -648,6 +649,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
       ? []
       : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodCalendar', layout }))),
     ...APP_MODES.map((layout): SummaryBlock => ({ design: 'periodStreak', layout })),
+    { design: 'periodCamera' },
     // The races: the karting's laps beside the Grand Prix.
     ...LAPS_LAYOUTS.flatMap((layout) =>
       BRAND_COVERS.map((cover): SummaryBlock => ({ design: 'periodLaps', layout, cover })),
@@ -703,6 +705,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodMetro':
     case 'periodEquivalences':
     case 'periodMessage':
+    case 'periodCamera':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

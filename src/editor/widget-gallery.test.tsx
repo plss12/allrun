@@ -192,21 +192,24 @@ describe('gallerySections', () => {
     60_000,
   );
 
-  it('keeps the camera among the apps, and takes the boarding pass up beside a tile alone', () => {
-    // Without its place, the badge waits for the camera; the pass, with no one alone, alone.
-    const plain = activityRows(false, false);
-    expect(plain).toContainEqual(['block-verified', 'block-camera']);
-    expect(plain).toContainEqual(['block-boardingPass']);
-    // The user's pictures go last, the photo and the instant photo together: a wildcard goes up
-    // beside a tile, never down.
-    expect(plain.at(-2)).toEqual(['image', 'image-instant']);
-    expect(plain.at(-1)).toEqual(['image-filmFrame', 'image-lightNegative']);
-    // With it, the camera is left alone at the end of the apps: the pass goes up beside it.
-    expect(activityRows(true, false)).toContainEqual(['block-camera', 'block-boardingPass']);
-    // With its splits, the camera has its note, and the splits are left alone among the races.
+  it('takes the boarding pass up beside a tile alone', () => {
+    // Without its place, the badge is left alone at the end of the apps: the pass goes up beside it.
+    expect(activityRows(false, false)).toContainEqual(['block-verified', 'block-boardingPass']);
+    // With it, with no one alone, the pass stays alone.
+    expect(activityRows(true, false)).toContainEqual(['block-boardingPass']);
+    // With its splits, the note goes beside them, both from the same data.
     const full = activityRows(true, true);
-    expect(full).toContainEqual(['block-camera', 'block-notes']);
-    expect(full).toContainEqual(['block-splits', 'block-boardingPass']);
+    expect(full).toContainEqual(['block-splits', 'block-notes']);
+    expect(full).toContainEqual(['block-boardingPass']);
+  }, 60_000);
+
+  it('leaves alone only the boarding pass, if any, whatever the activity has', () => {
+    for (const withPlace of [false, true]) {
+      for (const withDetail of [false, true]) {
+        const alone = activityRows(withPlace, withDetail).filter((row) => row.length === 1);
+        expect(alone.filter(([key]) => key !== 'block-boardingPass')).toEqual([]);
+      }
+    }
   }, 60_000);
 
   it('fits every variant in its tile, above its dots, and lays tiles out in rows that fit', () => {
@@ -334,8 +337,8 @@ describe('gallerySections', () => {
   });
 
   it("gives the user's pictures a row as tall as square tiles, the photo over its hint", () => {
-    const creative = activitySections().find((section) => section.id === 'creative');
-    const row = (creative?.rows ?? []).find((candidate) =>
+    const photos = activitySections().find((section) => section.id === 'photos');
+    const row = (photos?.rows ?? []).find((candidate) =>
       candidate.widgets.some((widget) => widget.key === 'image'),
     );
     const full = SCREEN - 2 * gallery.GALLERY_PADDING;
@@ -346,6 +349,15 @@ describe('gallerySections', () => {
     for (const page of row?.widgets[0].pages ?? []) {
       expect(page.prepared.height * page.scale).toBeLessThanOrEqual(room);
     }
+  });
+
+  it("lays the user's pictures out in a section of their own, two by two, the camera last", () => {
+    const photos = activitySections().find((section) => section.id === 'photos');
+    expect((photos?.rows ?? []).map((row) => row.widgets.map((widget) => widget.key))).toEqual([
+      ['image', 'image-instant'],
+      ['image-filmFrame', 'image-lightNegative'],
+      ['image-filmStrip', 'block-camera'],
+    ]);
   });
 
   it('lays the name and the monogram side by side, and both together under them, as wide', () => {

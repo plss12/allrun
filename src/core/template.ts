@@ -217,10 +217,11 @@ export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
 
 /**
  * What holds a picture (see `mountBox`), the picture cut to fit it around its middle: a black 35 mm
- * frame with its data around it (`filmFrame`), or a light strip of negative with perforations
- * (`lightNegative`). The holder and the data on it move as one piece.
+ * frame with its data around it (`filmFrame`), a light strip of negative with perforations
+ * (`lightNegative`), or a dark strip of film with the same picture again in the frames beside it
+ * (`filmStrip`). The holder and the data on it move as one piece.
  */
-export const IMAGE_MOUNTS = ['filmFrame', 'lightNegative'] as const;
+export const IMAGE_MOUNTS = ['filmFrame', 'lightNegative', 'filmStrip'] as const;
 
 export type ImageMount = (typeof IMAGE_MOUNTS)[number];
 
@@ -410,7 +411,8 @@ const activityBlockSchema = z.discriminatedUnion('design', [
     layout: z.enum(APP_MODES),
     cover: z.enum(BRAND_COVERS),
   }),
-  z.object({ design: z.literal('camera'), cover: z.enum(BRAND_COVERS) }),
+  // Cameras saved while they came in brand colors still read: the field is dropped.
+  z.object({ design: z.literal('camera') }),
   z.object({ design: z.literal('verse'), verse: phraseIdSchema }),
   z.object({ design: z.literal('quote'), quote: phraseIdSchema }),
   z.object({
@@ -467,7 +469,8 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * food's nutrition label, as an activity's (`periodNutrition`); its totals as things anyone
  * pictures, as an activity's (`periodEquivalences`); and as a metro line, its days,
  * weeks or months as its stations, in a brand color (`periodMetro`); and as a sent chat message
- * with two of its totals (`periodMessage`), only in AllRun's designs, not in the gallery.
+ * with two of its totals (`periodMessage`), only in AllRun's designs, not in the gallery; and
+ * through the phone's camera, its routes overlaid as the last photo's thumbnail (`periodCamera`).
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -515,6 +518,7 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   }),
   z.object({ design: z.literal('periodMetro'), cover: z.enum(BRAND_COVERS) }),
   z.object({ design: z.literal('periodMessage'), layout: z.enum(APP_MODES) }),
+  z.object({ design: z.literal('periodCamera') }),
   z.object({ design: z.literal('periodEquivalences'), layout: z.enum(APP_MODES) }),
 ]);
 

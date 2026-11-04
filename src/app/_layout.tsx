@@ -11,6 +11,7 @@ import { ActivitySourceProvider } from '@/data/activity-source';
 import { TemplateStoreProvider } from '@/data/user-templates';
 import { syncPhrases } from '@/data/phrases';
 import { loadEditorFonts } from '@/editor/fonts';
+import { loadStockPhotos } from '@/editor/stock-photos';
 import { colors } from '@/theme/colors';
 import { LaunchScreen } from '@/ui/launch-screen';
 import { logError } from '@/ui/log';
@@ -50,6 +51,12 @@ export default function RootLayout() {
   // In the background: the app uses the copy on the phone meanwhile.
   useEffect(() => {
     void syncPhrases();
+  }, []);
+  // From the start, without holding the launch screen for them: a gallery shows its tiles anyway.
+  useEffect(() => {
+    loadStockPhotos().catch((error: unknown) =>
+      logError('Could not decode the stock photos ahead of time', error),
+    );
   }, []);
   return (
     <ThemeProvider value={DarkTheme}>

@@ -20,6 +20,7 @@ import {
   DATA_LINE_LAYOUTS,
   LAPS_LAYOUTS,
   NUTRITION_LABELS,
+  type SummaryBlock,
 } from './template';
 import { FIRST_PHRASE } from './phrases';
 
@@ -278,16 +279,13 @@ export function activityBlocks(
     // The badge beside the place, both stickers of the photo (see `rowPartner`).
     ...APP_MODES.map((layout) => ({ design: 'verified', layout }) as const),
     ...(withPlace ? APP_MODES.map((layout) => ({ design: 'location', layout }) as const) : []),
-    // The phone's apps: the music with the alarm, the camera with the note.
+    // The phone's apps: the music with the alarm; the camera, in the gallery with the photos.
     ...APP_MODES.flatMap((layout) =>
       BRAND_COVERS.map((cover) => ({ design: 'music', layout, cover }) as const),
     ),
     ...APP_MODES.map((layout) => ({ design: 'alarm', layout }) as const),
-    // The camera's thumbnail is the route: without one, there is a single camera.
-    ...(activity.routePolyline === null
-      ? [{ design: 'camera', cover: BRAND_COVERS[0] } as const]
-      : BRAND_COVERS.map((cover) => ({ design: 'camera', cover }) as const)),
-    // The note lists the splits, but it is one of the phone's apps.
+    { design: 'camera' },
+    // The note lists the splits: in the gallery, beside them.
     ...(withSplits ? APP_MODES.map((layout) => ({ design: 'notes', layout }) as const) : []),
     // The races: the laps as AURA's board and a karting's sheet beside the splits as a race on TV;
     // then the splits as AURA's bars and a typewriter's ladder.
@@ -512,8 +510,8 @@ export function isDataWidget(design: ActivityBlockDesign): boolean {
  * Whether a design frames the whole canvas, as the camera does around the photo: it is as big as
  * the canvas, not a widget scaled to the format.
  */
-export function framesCanvas(block: ActivityBlock): boolean {
-  return block.design === 'camera';
+export function framesCanvas(block: ActivityBlock | SummaryBlock): boolean {
+  return block.design === 'camera' || block.design === 'periodCamera';
 }
 
 /** How a mixed widget's texts start: their font, and whether bold, italic and in capitals. */

@@ -3,7 +3,7 @@ import { INITIAL_DESIGN } from '@/core/editor-document';
 import { makeActivity } from '@/test-utils/make-activity';
 import { logError } from '@/ui/log';
 
-import { applyChoice, type DesignChoice, parseDesignChoice } from './design-choice';
+import { applyChoice, type DesignChoice, openChoice, parseDesignChoice } from './design-choice';
 import type { LayerContext } from './template-scene';
 
 jest.mock('@/ui/log', () => ({ logError: jest.fn() }));
@@ -39,20 +39,45 @@ describe('parseDesignChoice', () => {
   });
 });
 
+describe('openChoice', () => {
+  it("brings the unit and language of one of the user's designs to a new canvas", () => {
+    const design = openChoice(
+      { kind: 'saved', template: { ...saved, units: 'mi', language: 'en' } },
+      context,
+    );
+    expect([design.units, design.language]).toEqual(['mi', 'en']);
+  });
+
+  it('leaves them to the phone and the app otherwise', () => {
+    const design = openChoice({ kind: 'saved', template: saved }, context);
+    expect([design.units, design.language]).toEqual([null, null]);
+  });
+});
+
 describe('applyChoice', () => {
+  it("keeps the canvas's unit and language on choosing one of the user's designs", () => {
+    const design = applyChoice(
+      { ...INITIAL_DESIGN, units: 'km', language: 'es' },
+      { kind: 'saved', template: { ...saved, units: 'mi', language: 'en' } },
+      context,
+      [],
+    );
+    expect([design.units, design.language]).toEqual(['km', 'es']);
+  });
+
   it('lays a collage out with its frame', () => {
     const design = applyChoice(
       INITIAL_DESIGN,
       { kind: 'collage', layout: 'four', frame: 'dark' },
       context,
-      false,
+      [],
     );
     expect(design.collage?.layout).toBe('four');
     expect(design.frame).toBe('dark');
   });
 
   it("opens one of the user's designs in its own format", () => {
-    const design = applyChoice(INITIAL_DESIGN, { kind: 'saved', template: saved }, context, false);
+    const design = applyChoice(INITIAL_DESIGN, { kind: 'saved', template: saved }, context, []);
     expect(design.format).toBe('square');
     expect(design.layers).toEqual(saved.layers);
   });

@@ -38,7 +38,7 @@ describe('the camera', () => {
     'frames the whole canvas of a %s, its view of the photo see-through to touches',
     async (format) => {
       const layer = newLayer(
-        { kind: 'activityBlock', block: { design: 'camera', cover: 'red' } },
+        { kind: 'activityBlock', block: { design: 'camera' } },
         'camera',
         format,
       );

@@ -1,4 +1,34 @@
-import { canRedo, canUndo, commit, createHistory, HISTORY_LIMIT, redo, undo } from './history';
+import {
+  canRedo,
+  canUndo,
+  commit,
+  createHistory,
+  HISTORY_LIMIT,
+  mapHistory,
+  redo,
+  undo,
+} from './history';
+
+describe('mapHistory', () => {
+  const upper = (value: string) => value.toUpperCase();
+
+  it('changes every value without a step, so undoing and redoing keep the change', () => {
+    const history = undo(commit(commit(createHistory('a'), 'b'), 'c'));
+    const changed = mapHistory(history, upper);
+    expect(changed).toEqual({ past: ['A'], present: 'B', future: ['C'] });
+    expect(undo(changed).present).toBe('A');
+    expect(redo(changed).present).toBe('C');
+  });
+
+  it('adds nothing to undo', () => {
+    expect(canUndo(mapHistory(createHistory('a'), upper))).toBe(false);
+  });
+
+  it('returns the history itself when the current value stays', () => {
+    const history = createHistory('A');
+    expect(mapHistory(history, upper)).toBe(history);
+  });
+});
 
 describe('history', () => {
   it('undoes and redoes committed values in order', () => {

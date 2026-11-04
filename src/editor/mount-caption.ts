@@ -35,7 +35,19 @@ export interface MountMarks {
 export interface MountText {
   readonly sides: readonly [MountSide, MountSide];
   readonly marks: MountMarks;
+  /** What a strip of film writes: over its frame, and under it, the main datum in the middle. */
+  readonly strip?: MountStrip;
 }
+
+/** What a strip of film writes (see `MountText`). */
+export interface MountStrip {
+  readonly top: string;
+  readonly left: string | null;
+  readonly main: string;
+  readonly right: string | null;
+}
+
+const NO_SIDES: readonly [MountSide, MountSide] = [{ texts: [] }, { texts: [] }];
 
 /**
  * The app's name, written in the holder's own letters (decision of the user: its logo looked out of
@@ -57,6 +69,8 @@ const stamped = (date: string) => date.split('/').join('-');
  * - `filmFrame`: at its sides, its sport and its first three data; on its reel marks, its date and
  *   start time over where it started, when known, and AllRun's name. A period writes its name and
  *   how many activities, and its first three totals; and its dates over AllRun's name.
+ * - `filmStrip`: AllRun's name over its frame, and its first three data under it, the main one in
+ *   the middle; a period, its name and its main totals.
  * - `lightNegative`: at its sides, AllRun's name and its date and start time as a camera stamps them,
  *   and one line with its distance (its time without one) and sport. A period writes AllRun's name
  *   and its dates, and its distance (its time without one) and how many activities.
@@ -70,6 +84,11 @@ export function mountCaption(
   return data.mode === 'activity'
     ? activityText(mount, data, context, translate)
     : periodText(mount, data, context, translate);
+}
+
+/** A strip's texts from its data, by importance: the first in the middle, between the others. */
+function stripOf(top: string, [main = '', left, right]: readonly string[]): MountStrip {
+  return { top, left: left ?? null, main, right: right ?? null };
 }
 
 function activityText(
@@ -86,6 +105,13 @@ function activityText(
       ? shortDistance(distance, context)
       : plainMetricText(activity, metric, context, 'tight');
   const date = stamped(formatActivityDate(activity.startLocal, context.locale, 'numeric'));
+  if (mount === 'filmStrip') {
+    return {
+      sides: NO_SIDES,
+      marks: NO_MARKS,
+      strip: stripOf(BRAND_NAME, cardMetrics(activity).map(written)),
+    };
+  }
   if (mount === 'filmFrame') {
     return {
       sides: [{ texts: [sport] }, { texts: cardMetrics(activity).map(written) }],
@@ -124,6 +150,13 @@ function periodText(
       ? shortDistance(summary.totalDistanceMeters, context)
       : summaryTotalText(metric, summaryMetricValue(summary, metric) ?? 0, context, translate);
   const range = formatShortRange(summary.range, context.locale);
+  if (mount === 'filmStrip') {
+    return {
+      sides: NO_SIDES,
+      marks: NO_MARKS,
+      strip: stripOf(periodName(data, context, translate), totals.map(total)),
+    };
+  }
   if (mount === 'filmFrame') {
     return {
       sides: [

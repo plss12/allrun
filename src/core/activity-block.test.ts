@@ -167,8 +167,7 @@ describe('activityBlocks', () => {
       { design: 'music', layout: 'light', cover: 'ink' },
       { design: 'alarm', layout: 'dark' },
       { design: 'alarm', layout: 'light' },
-      { design: 'camera', cover: 'red' },
-      { design: 'camera', cover: 'ink' },
+      { design: 'camera' },
       // Things of paper.
       { design: 'receipt' },
       { design: 'nutrition', label: 'facts', layout: 'light' },
@@ -298,14 +297,11 @@ describe('activityBlocks', () => {
     ).not.toContain('sentence');
   });
 
-  it('offers the camera in both brand colors with a route, and once without its thumbnail', () => {
+  it('offers one camera, with a route or without', () => {
     const cameras = (routePolyline: string | null) =>
       activityBlocks(makeActivity({ routePolyline })).filter((block) => block.design === 'camera');
-    expect(cameras('_p~iF~ps|U_ulLnnqC')).toEqual([
-      { design: 'camera', cover: 'red' },
-      { design: 'camera', cover: 'ink' },
-    ]);
-    expect(cameras(null)).toHaveLength(1);
+    expect(cameras('_p~iF~ps|U_ulLnnqC')).toEqual([{ design: 'camera' }]);
+    expect(cameras(null)).toEqual([{ design: 'camera' }]);
   });
 
   it('offers nothing for an activity without data', () => {
@@ -405,7 +401,7 @@ describe('blockDataCount', () => {
     // three data where the camera's settings go.
     expect(blockDataCount({ design: 'music', layout: 'dark', cover: 'red' })).toBe(2);
     expect(blockDataCount({ design: 'message', layout: 'dark' })).toBe(3);
-    expect(blockDataCount({ design: 'camera', cover: 'ink' })).toBe(3);
+    expect(blockDataCount({ design: 'camera' })).toBe(3);
     // The tables list splits; the alarm's label and the sticker carry the main datum.
     expect(blockDataCount({ design: 'grandPrix' })).toBe(1);
     expect(blockDataCount({ design: 'alarm', layout: 'light' })).toBe(1);
@@ -425,8 +421,9 @@ describe('blockDataCount', () => {
 });
 
 describe('framesCanvas', () => {
-  it('is only the camera, which frames the photo', () => {
-    expect(framesCanvas({ design: 'camera', cover: 'red' })).toBe(true);
+  it('is only the camera, of an activity or a period, which frames the photo', () => {
+    expect(framesCanvas({ design: 'camera' })).toBe(true);
+    expect(framesCanvas({ design: 'periodCamera' })).toBe(true);
     expect(framesCanvas({ design: 'music', layout: 'dark', cover: 'ink' })).toBe(false);
     expect(framesCanvas({ design: 'receipt' })).toBe(false);
   });

@@ -22,7 +22,7 @@ import {
   usesEditorPhoto,
   withEmptySlots,
 } from './image-layer';
-import { setImageFrame, setImageRounded } from './layer-style';
+import { setImageRounded } from './layer-style';
 import { IMAGE_MOUNTS, type Layer, parseTemplate, type Template } from './template';
 import { addLayer } from './template-edit';
 
@@ -212,6 +212,13 @@ describe('mountBox', () => {
     };
     expect(box.height).toBe(IMAGE_SIDE);
     expect(box.width).toBeGreaterThan(box.picture.width);
+    // The frames beside the window run off the widget, which shows at most 30% of them.
+    for (const frame of box.frames) {
+      const shown =
+        Math.min(frame.x + frame.width, box.width / 2) - Math.max(frame.x, -box.width / 2);
+      expect(shown / frame.width).toBeLessThanOrEqual(0.3 + 1e-9);
+      expect(shown).toBeGreaterThan(0);
+    }
     inside(box.picture);
     box.holes.forEach(inside);
     box.sides.forEach(inside);
@@ -240,24 +247,21 @@ describe('mountBox', () => {
   });
 });
 
-describe('setLayerImage and setImageFrame', () => {
+describe('setLayerImage', () => {
   const template = withPictures(1);
 
-  it('change the picture or the frame, nothing else', () => {
+  it('changes the picture, nothing else', () => {
     const changed = setLayerImage(template, 'image-1', 'picked-9');
     expect(changed.layers.at(-1)).toEqual({ ...template.layers.at(-1), image: 'picked-9' });
-    const dark = setImageFrame(template, 'image-1', 'dark');
-    expect(dark.layers.at(-1)).toEqual({ ...template.layers.at(-1), frame: 'dark' });
   });
 
-  it('return the same template when nothing changes', () => {
+  it('returns the same template when nothing changes', () => {
     expect(setLayerImage(template, 'image-1', 'picked-1')).toBe(template);
     expect(setLayerImage(template, 'missing', 'picked-9')).toBe(template);
     expect(setLayerImage(template, story.layers[0].id, 'picked-9')).toBe(template);
-    expect(setImageFrame(template, 'image-1', 'light')).toBe(template);
   });
 
-  it('round-trip through the schema in both modes', () => {
+  it('round-trips through the schema in both modes', () => {
     expect(parseTemplate(JSON.parse(JSON.stringify(template)))).toEqual(template);
   });
 });

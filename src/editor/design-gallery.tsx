@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newCollage } from '@/core/collage';
 import { READY_DESIGN_IDS, type ReadyDesignId } from '@/core/designs';
-import { isPhotoSlot, SAMPLE_IMAGE, SAMPLE_PICTURE } from '@/core/image-layer';
+import { isPhotoSlot } from '@/core/image-layer';
 import {
   CANVAS_FORMATS,
   type CanvasFormat,
@@ -22,13 +22,12 @@ import { newTemplateId } from '@/data/template-store';
 import type { UserTemplates } from '@/data/user-templates';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
-import { LoadingView } from '@/ui/state-views';
 
 import type { DesignChoice } from './design-choice';
 import { disposeLater, inParagraphArena } from './paragraph-arena';
 import { readyTemplate } from './ready-design';
-import type { StockPhoto, StockPhotos } from './stock-photos';
-import { type LayerContext, type LayerImage, prepareLayers } from './template-scene';
+import { type StockPhoto, stockImages, type StockPhotos } from './stock-photos';
+import { type LayerContext, prepareLayers } from './template-scene';
 import { TemplateThumbnail } from './template-thumbnail';
 
 /** Room around and between the thumbnails, in points. */
@@ -68,6 +67,8 @@ const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   messageTwo: ['forestBridge', 'trackShadow'],
   filmFrame: ['monoSprinter'],
   lightNegative: ['forestTrail'],
+  filmStrip: ['trackShoes'],
+  camera: ['forestBridge'],
 };
 
 /** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */
@@ -79,11 +80,6 @@ const SAVED_PHOTOS: readonly StockPhoto[] = [
   'trackShadow',
   'forestTrail',
 ];
-
-const imageOf = (image: SkImage): LayerImage => ({
-  size: { width: image.width(), height: image.height() },
-  image,
-});
 
 /** `template` with the photos `names` in its slots, by the keys of `images`. */
 function withStock(template: Template, names: readonly StockPhoto[]): Template {
@@ -190,15 +186,9 @@ export function DesignGallery({
   ].join('|');
 
   const laidOut = useMemo(() => {
-    if (stock === null) {
-      return null;
-    }
-    const images = new Map<string, LayerImage>(
-      (Object.keys(stock) as StockPhoto[]).map((name) => [name, imageOf(stock[name])]),
-    );
     const shown: LayerContext = {
       ...context,
-      images: images.set(SAMPLE_IMAGE, { size: SAMPLE_PICTURE, image: stock.monoSprinter }),
+      images: stock === null ? new Map() : stockImages(stock),
       // Thumbnails fill their slots, whatever the canvas behind the sheet does with its own.
       emptySlots: undefined,
     };
@@ -215,12 +205,7 @@ export function DesignGallery({
     // The context is recreated on every render; the key says what it lays out.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataKey]);
-  useEffect(() => {
-    if (laidOut === null) {
-      return undefined;
-    }
-    return () => disposeLater(laidOut.dispose);
-  }, [laidOut]);
+  useEffect(() => () => disposeLater(laidOut.dispose), [laidOut]);
 
   const [saving, setSaving] = useState(false);
   const saveCurrent = async () => {
@@ -253,9 +238,9 @@ export function DesignGallery({
       },
     ]);
 
-  if (stock === null || laidOut === null) {
-    return <LoadingView />;
-  }
+  /** The photos `names`, once decoded; until then none, and the tile shows its place for them. */
+  const photosOf = (names: readonly StockPhoto[]) =>
+    stock === null ? [] : names.map((name) => stock[name]);
 
   const collageTiles = COLLAGE_FRAMES.flatMap((frame) =>
     COLLAGES.map(({ layout, photos }): Tile => {
@@ -273,7 +258,7 @@ export function DesignGallery({
           collage: newCollage(layout),
           ...(frame === 'none' ? {} : { frame }),
         },
-        photos: photos.map((name) => stock[name]),
+        photos: photosOf(photos),
         choice: { kind: 'collage', layout, frame },
       };
     }),
@@ -282,7 +267,8 @@ export function DesignGallery({
     key: template.id,
     label: t(`templates.ready.${id}`),
     template,
-    photos: [],
+    // With slots, those show the photos; without any, it goes over the canvas.
+    photos: template.layers.some(isPhotoSlot) ? [] : photosOf(READY_PHOTOS[id]),
     choice: { kind: 'ready', id },
   }));
   const savedTiles = laidOut.value.saved.map(({ one, template }, i): Tile => ({
@@ -290,7 +276,7 @@ export function DesignGallery({
     label: t('templates.saved', { number: i + 1 }),
     template,
     // With slots, those show the photos: over the canvas, one would hide the design.
-    photos: template.layers.some(isPhotoSlot) ? [] : SAVED_PHOTOS.map((name) => stock[name]),
+    photos: template.layers.some(isPhotoSlot) ? [] : photosOf(SAVED_PHOTOS),
     choice: { kind: 'saved', template: one.template },
     saved: one,
   }));
@@ -336,6 +322,7 @@ export function DesignGallery({
           template={one.template}
           layers={layersOf(one)}
           photos={one.photos}
+          loading={stock === null}
           width={width}
         />
       </Pressable>

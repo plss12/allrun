@@ -86,6 +86,8 @@ interface EditorCanvasProps {
   readonly collage: SceneCollage | null;
   /** The frame around the photos. */
   readonly frame: SceneFrame | null;
+  /** With no photo, a design that frames one shows the sign to fill it. */
+  readonly photoSign: boolean;
   /** A photo of a collage was taken by the fingers: the tools, if open, go to its cell. */
   readonly onCellGrab: (cell: number) => void;
   /** Called once per gesture on a photo of a collage, when the fingers lift. */
@@ -226,6 +228,7 @@ export function EditorCanvas({
   photo,
   collage,
   frame,
+  photoSign,
   onCellGrab,
   onCellPlacementChange,
   placement,
@@ -736,6 +739,7 @@ export function EditorCanvas({
                   : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
               }
               frame={frame}
+              photoSign={photoSign}
               collage={
                 collage === null || movingCell === null
                   ? collage

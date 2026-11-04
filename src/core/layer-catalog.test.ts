@@ -64,11 +64,18 @@ describe('activityCatalog', () => {
   const trail = activityCatalog(makeActivity({ sportType: 'TrailRun' }));
 
   it('groups the widgets in sections, in the gallery order', () => {
-    expect(trail.map((section) => section.id)).toEqual(['data', 'creative', 'basic', 'brand']);
+    expect(trail.map((section) => section.id)).toEqual([
+      'data',
+      'creative',
+      'photos',
+      'basic',
+      'brand',
+    ]);
     const withCharts = activityCatalog(makeActivity({ sportType: 'TrailRun' }), ['pace']);
     expect(withCharts.map((section) => section.id)).toEqual([
       'data',
       'creative',
+      'photos',
       'charts',
       'basic',
       'brand',
@@ -137,19 +144,27 @@ describe('activityCatalog', () => {
       'block-verified',
       'block-music',
       'block-alarm',
-      'block-camera',
       'block-receipt',
       'block-nutrition',
       'block-boardingPass',
+    ]);
+    // A picture of the user's, as is and then in each frame; chosen when the tile is tapped.
+    expect(tileKeys(trail, 'photos')).toEqual([
       'image',
       'image-instant',
       'image-filmFrame',
       'image-lightNegative',
+      'image-filmStrip',
+      'block-camera',
     ]);
-    // A picture of the user's, as is and then in each frame; chosen when the tile is tapped.
     expect(variantKeys(trail, 'image')).toEqual(['image', 'image-light', 'image-dark']);
     // And an instant photo of it, with each caption.
-    expect(variantKeys(trail, 'image-instant')).toEqual(['image-instant', 'image-instant-data']);
+    expect(variantKeys(trail, 'image-instant')).toEqual([
+      'image-instant',
+      'image-instant-dark',
+      'image-instant-data',
+      'image-instant-data-dark',
+    ]);
     // The quote and the verse with their first phrase: the others are chosen from a list.
     expect(variantKeys(trail, 'block-quote')).toEqual(['block-quote-kipchoge']);
     expect(variantKeys(trail, 'block-verse')).toEqual(['block-verse-philippians4v13']);
@@ -172,15 +187,13 @@ describe('activityCatalog', () => {
     // camera; then the bars and the ladder together and the race on TV apart; the laps' two, with
     // its laps.
     const withSplits = activityCatalog(makeActivity(), ['splits']);
-    expect(tileKeys(withSplits, 'creative').slice(-11, -3)).toEqual([
-      'block-camera',
-      'block-notes',
+    expect(tileKeys(withSplits, 'creative').slice(-6)).toEqual([
       'block-grandPrix',
       'block-splits',
+      'block-notes',
       'block-receipt',
       'block-nutrition',
       'block-boardingPass',
-      'image',
     ]);
     expect(variantKeys(withSplits, 'block-splits')).toEqual([
       'block-splits-splitBars',
@@ -407,6 +420,7 @@ describe('summaryCatalog', () => {
     expect(catalog.map((section) => section.id)).toEqual([
       'data',
       'creative',
+      'photos',
       'charts',
       'basic',
       'brand',
@@ -428,10 +442,6 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodNutrition',
       'summaryBlock-periodBoardingPass',
       'summaryBlock-periodMetro',
-      'image',
-      'image-instant',
-      'image-filmFrame',
-      'image-lightNegative',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',
@@ -603,16 +613,16 @@ describe('creativeTheme and rowPartner', () => {
   });
 
   it('pairs only the first of a pair, with the second', () => {
-    expect(rowPartner('block-camera')).toBe('block-notes');
+    expect(rowPartner('block-music')).toBe('block-alarm');
     expect(rowPartner('block-notes')).toBeNull();
     expect(rowPartner('summaryBlock-periodBoardingPass')).toBe('summaryBlock-periodMetro');
-    expect(creativeTheme('block-camera')).toBe(creativeTheme('block-music'));
-    expect(creativeTheme('block-camera')).not.toBe(creativeTheme('block-receipt'));
+    expect(creativeTheme('block-alarm')).toBe(creativeTheme('block-music'));
+    expect(creativeTheme('block-alarm')).not.toBe(creativeTheme('block-receipt'));
     expect(creativeTheme('block-unknown')).toBeNull();
     // Only the trips go up beside a tile alone of another theme.
     expect(isCreativeWildcard('block-boardingPass')).toBe(true);
     expect(isCreativeWildcard('summaryBlock-periodMetro')).toBe(true);
-    expect(isCreativeWildcard('block-camera')).toBe(false);
+    expect(isCreativeWildcard('block-alarm')).toBe(false);
   });
 });
 

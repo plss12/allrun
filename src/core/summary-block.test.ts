@@ -93,6 +93,7 @@ describe('summaryBlocks', () => {
       { design: 'periodCalendar', layout: 'light' },
       { design: 'periodStreak', layout: 'dark' },
       { design: 'periodStreak', layout: 'light' },
+      { design: 'periodCamera' },
       { design: 'periodLaps', layout: 'board', cover: 'red' },
       { design: 'periodLaps', layout: 'board', cover: 'ink' },
       { design: 'periodLaps', layout: 'sheet', cover: 'red' },
@@ -172,6 +173,7 @@ describe('summaryBlocks', () => {
       { design: 'periodCalendar', layout: 'light' },
       { design: 'periodStreak', layout: 'dark' },
       { design: 'periodStreak', layout: 'light' },
+      { design: 'periodCamera' },
       // Its laps by their calories.
       { design: 'periodLaps', layout: 'board', cover: 'red' },
       { design: 'periodLaps', layout: 'board', cover: 'ink' },

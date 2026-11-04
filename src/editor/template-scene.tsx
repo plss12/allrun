@@ -46,6 +46,7 @@ import {
   SAMPLE_PICTURE,
   SLOT_PICTURE,
   slotBox,
+  STRIP_TEXT_INSET,
 } from '@/core/image-layer';
 import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
 import type { PhotoDrawing, Size } from '@/core/photo-placement';
@@ -57,6 +58,7 @@ import {
   type ActivityChartSeries,
   CANVAS_FORMATS,
   type CanvasFormat,
+  type FontId,
   type ImageMount,
   type Layer,
   type Template,
@@ -100,6 +102,7 @@ import {
   mountCaption,
   type MountMarks,
   type MountSide,
+  type MountStrip,
 } from './mount-caption';
 import { discardParagraph, finishParagraph } from './paragraph-arena';
 
@@ -316,6 +319,8 @@ export interface TemplateSceneProps {
   readonly photo: ScenePhoto | null;
   /** The photos of a collage over the backdrop, instead of `photo`. */
   readonly collage?: SceneCollage | null;
+  /** With no photo, a design that frames one shows the sign to fill it, on the canvas. */
+  readonly photoSign?: boolean;
   /** The frame over the photos, under the widgets. */
   readonly frame?: SceneFrame | null;
   /**
@@ -374,6 +379,7 @@ export function TemplateScene({
   photo,
   collage = null,
   frame = null,
+  photoSign = false,
   live = null,
 }: TemplateSceneProps) {
   const canvas = CANVAS_FORMATS[format];
@@ -420,6 +426,7 @@ export function TemplateScene({
       {frame === null
         ? null
         : frame.bars.map((bar, index) => <Rect key={index} {...bar} color={frame.color} />)}
+      {photoSign ? <EmptySign cx={width / 2} cy={height / 2} /> : null}
       {/* A layer's opacity fades it as a whole, drawn on its own Skia layer: a group's `opacity`
           only reaches shapes (paragraphs ignore it) and fades each shape and its shadow apart,
           letting the shadow show through. Opaque layers skip the extra layer. */}
@@ -768,7 +775,13 @@ function prepareLayer(
       if (data.mode !== 'summary') {
         return null;
       }
-      const block = prepareSummaryBlock(layer, data, { fonts, textContext, translate, phrases });
+      const block = prepareSummaryBlock(layer, data, {
+        fonts,
+        textContext,
+        translate,
+        canvas,
+        phrases,
+      });
       return block === null ? null : { layer, ...block };
     }
     case 'image': {
@@ -782,7 +795,7 @@ function prepareLayer(
           : null;
       if (layer.mount !== undefined) {
         const box = mountBox(layer.mount);
-        const { sides, marks } = mountCaption(layer.mount, data, textContext, translate);
+        const { sides, marks, strip } = mountCaption(layer.mount, data, textContext, translate);
         return {
           layer,
           width: box.width,
@@ -794,7 +807,7 @@ function prepareLayer(
               picture={picked?.image ?? null}
               empty={empty}
               sides={mountSides(fonts, layer.mount, box, sides, textContext.locale)}
-              marks={mountMarks(fonts, layer.mount, box, marks, textContext.locale)}
+              marks={mountMarks(fonts, layer.mount, box, marks, strip, textContext.locale)}
             />
           ),
         };
@@ -976,7 +989,7 @@ const MOUNT_LOOKS: Readonly<
     {
       readonly color: string;
       readonly ink: string;
-      readonly font: 'spaceMono' | 'orbitron';
+      readonly font: FontId;
       readonly bold: boolean;
       readonly size: number;
       /** How its sides are turned: 1 reads downwards, -1 upwards. */
@@ -992,6 +1005,14 @@ const MOUNT_LOOKS: Readonly<
     size: 24,
     turn: 1,
   },
+  filmStrip: {
+    color: '#161616',
+    ink: '#FFFFFF',
+    font: 'unbounded',
+    bold: false,
+    size: 0,
+    turn: 1,
+  },
   // Thin, as a date a camera stamps on a negative (the user's choice).
   lightNegative: {
     color: '#E6E6E3',
@@ -1002,6 +1023,9 @@ const MOUNT_LOOKS: Readonly<
     turn: -1,
   },
 };
+
+/** A strip of film's texts: their sizes, and the gray of all of them but the main datum. */
+const MOUNT_STRIP = { top: 13, data: 16, main: 17, faded: '#9A9A9E', gap: 1 } as const;
 
 /** The marks on a reel's edge, in the bands above and below a frame: their color and size. */
 const MOUNT_MARKS = { color: '#E9A23B', size: 18, gap: 1.5 } as const;
@@ -1100,6 +1124,16 @@ function mountSides(
   });
 }
 
+/** A holder's texts around its window laid out, and the arrow of its main datum, if it has one. */
+interface LaidOutMarks {
+  readonly paragraphs: readonly PlacedParagraph[];
+  readonly arrow: {
+    readonly x: number;
+    readonly y: number;
+    readonly size: number;
+  } | null;
+}
+
 /**
  * Lays out a holder's reel marks in the bands above and below its window (see `MountMarks`), each
  * band's two ends shrunk together so that they fit it. Time O(1).
@@ -1109,18 +1143,24 @@ function mountMarks(
   mount: ImageMount,
   box: MountBox,
   marks: MountMarks,
+  strip: MountStrip | undefined,
   locale: string,
-): readonly PlacedParagraph[] {
+): LaidOutMarks {
   const look = MOUNT_LOOKS[mount];
   const { x: left, y: top, width } = box.picture;
   const right = left + width;
-  const layOut = (text: string, size: number) => {
+  const layOut = (
+    text: string,
+    size: number,
+    color: string = MOUNT_MARKS.color,
+    bold: boolean = true,
+  ) => {
     const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
     builder.pushStyle({
-      color: Skia.Color(MOUNT_MARKS.color),
+      color: Skia.Color(color),
       fontFamilies: fontFamiliesOf(look.font),
       fontSize: size,
-      fontStyle: { weight: drawsBold(look.font, true) ? FontWeight.Bold : FontWeight.Normal },
+      fontStyle: { weight: drawsBold(look.font, bold) ? FontWeight.Bold : FontWeight.Normal },
       letterSpacing: size * MOUNT_TRACKING,
     });
     builder.addText(text.toLocaleUpperCase(locale));
@@ -1162,10 +1202,70 @@ function mountMarks(
     );
   };
   const topBand = (-box.height / 2 + top) / 2;
-  return [
-    ...band(marks.topLeft, marks.topRight, topBand),
-    ...band(marks.bottomLeft, marks.bottomRight, -topBand),
-  ];
+  if (strip !== undefined) {
+    return stripTexts(strip);
+  }
+  return {
+    paragraphs: [
+      ...band(marks.topLeft, marks.topRight, topBand),
+      ...band(marks.bottomLeft, marks.bottomRight, -topBand),
+    ],
+    arrow: null,
+  };
+
+  /** A strip's texts: one centered over its frame, and its data under it, spread and fitted. */
+  function stripTexts({ top: over, left: first, main, right: last }: MountStrip): LaidOutMarks {
+    const heading = layOut(over, MOUNT_STRIP.top, MOUNT_STRIP.faded, false);
+    const y = box.height / 2 - STRIP_TEXT_INSET;
+    const row = (scale: number) => ({
+      first:
+        first === null ? null : layOut(first, MOUNT_STRIP.data * scale, MOUNT_STRIP.faded, false),
+      main: layOut(main, MOUNT_STRIP.main * scale, look.ink, true),
+      last: last === null ? null : layOut(last, MOUNT_STRIP.data * scale, MOUNT_STRIP.faded, false),
+    });
+    // The main datum is centered, so what limits it is the wider side of the two.
+    const sideOf = (one: SkParagraph | null) => one?.getLongestLine() ?? 0;
+    let laid = row(1);
+    let scale = 1;
+    /** How much the arrow takes before the main datum, at its size. */
+    const arrowRoom = (size: number) => size * (MOUNT_ARROW.size + MOUNT_ARROW.room);
+    const taken =
+      laid.main.getLongestLine() +
+      arrowRoom(MOUNT_STRIP.main) +
+      2 * Math.max(sideOf(laid.first), sideOf(laid.last)) +
+      2 * MOUNT_STRIP.data * MOUNT_STRIP.gap;
+    if (taken > width) {
+      [laid.first, laid.main, laid.last].forEach((one) => {
+        if (one !== null) {
+          discardParagraph(one);
+        }
+      });
+      laid = row(width / taken);
+      scale = width / taken;
+    }
+    // The arrow and the main datum, centered together.
+    const mainSize = MOUNT_STRIP.main * scale;
+    const mainWidth = arrowRoom(mainSize) + laid.main.getLongestLine();
+    const arrowAt = -mainWidth / 2;
+    const at = (paragraph: SkParagraph, x: number): PlacedParagraph => ({
+      paragraph,
+      x,
+      y: y - paragraph.getHeight() / 2,
+    });
+    return {
+      paragraphs: [
+        {
+          paragraph: heading,
+          x: -heading.getLongestLine() / 2,
+          y: -box.height / 2 + STRIP_TEXT_INSET - heading.getHeight() / 2,
+        },
+        at(laid.main, arrowAt + arrowRoom(mainSize)),
+        ...(laid.first === null ? [] : [at(laid.first, left)]),
+        ...(laid.last === null ? [] : [at(laid.last, right - laid.last.getLongestLine())]),
+      ],
+      arrow: { x: arrowAt, y, size: mainSize * MOUNT_ARROW.size },
+    };
+  }
 }
 
 /** Each holder's shape with its cut-outs, with and without its window, built once. */
@@ -1184,8 +1284,9 @@ function mountPath(mount: ImageMount, box: MountBox, open: boolean): SkPath {
   const builder = Skia.PathBuilder.Make();
   builder.addRect(Skia.XYWHRect(-box.width / 2, -box.height / 2, box.width, box.height));
   if (open) {
-    const { x, y, width, height } = box.picture;
-    builder.addRRect(Skia.RRectXY(Skia.XYWHRect(x, y, width, height), box.radius, box.radius));
+    for (const { x, y, width, height } of [box.picture, ...box.frames]) {
+      builder.addRRect(Skia.RRectXY(Skia.XYWHRect(x, y, width, height), box.radius, box.radius));
+    }
   }
   for (const hole of box.holes) {
     builder.addRRect(
@@ -1229,17 +1330,12 @@ function MountWidget({
   readonly picture: SkImage | null;
   readonly empty: 'hint' | 'blank' | null;
   readonly sides: readonly LaidOutSide[];
-  readonly marks: readonly PlacedParagraph[];
+  readonly marks: LaidOutMarks;
 }) {
   const look = MOUNT_LOOKS[mount];
   const rect = box.picture;
-  const shape = Skia.RRectXY(
-    Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height),
-    box.radius,
-    box.radius,
-  );
   return (
-    <Group>
+    <Group clip={{ x: -box.width / 2, y: -box.height / 2, width: box.width, height: box.height }}>
       {look.color === null ? null : (
         <Path
           path={mountPath(mount, box, empty === 'blank')}
@@ -1247,19 +1343,33 @@ function MountWidget({
           fillType="evenOdd"
         />
       )}
-      {empty === 'blank' ? null : (
-        <Group clip={shape}>
-          {empty === null && picture !== null ? (
-            <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
-          ) : (
-            <Rect {...rect} color={LOADING_PICTURE} />
-          )}
-          {empty === 'hint' ? (
-            <EmptySign cx={rect.x + rect.width / 2} cy={rect.y + rect.height / 2} />
-          ) : null}
+      {empty === 'blank'
+        ? null
+        : [rect, ...box.frames].map((frame, index) => (
+            <Group
+              key={index}
+              clip={Skia.RRectXY(
+                Skia.XYWHRect(frame.x, frame.y, frame.width, frame.height),
+                box.radius,
+                box.radius,
+              )}
+            >
+              {empty === null && picture !== null ? (
+                <Image image={picture} rect={frame} fit="cover" sampling={PHOTO_SAMPLING} />
+              ) : (
+                <Rect {...frame} color={LOADING_PICTURE} />
+              )}
+              {empty === 'hint' && index === 0 ? (
+                <EmptySign cx={frame.x + frame.width / 2} cy={frame.y + frame.height / 2} />
+              ) : null}
+            </Group>
+          ))}
+      {marks.arrow === null ? null : (
+        <Group transform={[{ translateY: marks.arrow.y }]}>
+          <Path path={arrowPath(marks.arrow.x, marks.arrow.size)} color={look.ink} />
         </Group>
       )}
-      {marks.map(({ paragraph, x, y }, i) => (
+      {marks.paragraphs.map(({ paragraph, x, y }, i) => (
         <Paragraph
           key={i}
           paragraph={paragraph}

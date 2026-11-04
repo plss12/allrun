@@ -15,7 +15,14 @@ import {
  * given, each with its slots for photos (see `isPhotoSlot`), empty until the user fills them. Their
  * thumbnails show our stock photos in those slots. Adding one is adding a recipe here.
  */
-export const READY_DESIGN_IDS = ['messageOne', 'messageTwo', 'filmFrame', 'lightNegative'] as const;
+export const READY_DESIGN_IDS = [
+  'messageOne',
+  'messageTwo',
+  'filmFrame',
+  'lightNegative',
+  'filmStrip',
+  'camera',
+] as const;
 
 export type ReadyDesignId = (typeof READY_DESIGN_IDS)[number];
 
@@ -40,6 +47,8 @@ const WIDE_BUBBLE_SCALE = 0.6;
 /** A chat's date: its size and about how tall it comes out; and the room around each part. */
 const DATE = { scale: 0.62, height: 50 } as const;
 const GAP = 28;
+/** Where the watermark goes across a wide canvas, as a fraction of it. */
+const WIDE_WATERMARK_X = 0.72;
 /** The room the watermark takes at the canvas's foot, on it. */
 const FOOT = 0.1;
 
@@ -110,11 +119,15 @@ function chatBubble(data: TemplateData, x: number, y: number, scale: number = BU
 
 /** The format's AllRun watermark, where a new design has it. */
 function watermark(data: TemplateData, format: CanvasFormat): readonly Layer[] {
-  return emptyLayout(
+  const { layers } = emptyLayout(
     data.mode === 'activity'
       ? defaultActivityTemplate(data.activity, format)
       : defaultSummaryTemplate(data.summary, format),
-  ).layers;
+  );
+  // A wide canvas has the photos at its left: under the message, beside them.
+  return CANVAS_FORMATS[format].width > CANVAS_FORMATS[format].height
+    ? layers.map((layer) => ({ ...layer, transform: { ...layer.transform, x: WIDE_WATERMARK_X } }))
+    : layers;
 }
 
 /** A design over a color of its own, with the widgets `layers`. */
@@ -256,6 +269,54 @@ function centeredPiece(
   };
 }
 
+/** How much a strip of film leans, clockwise (2°): what sets it apart from the other films. */
+const STRIP_TILT = (2 * Math.PI) / 180;
+/** Most of the canvas a strip's frame takes wide, and the strip tall. */
+const STRIP = { width: 0.8, height: 0.82 } as const;
+
+/**
+ * A strip of film across a black canvas, leaning, its ends off the canvas (but in a wide canvas,
+ * where it is too low to reach them). Time and space O(1).
+ */
+function filmStrip(data: TemplateData, format: CanvasFormat): ReadyDesign {
+  const canvas = CANVAS_FORMATS[format];
+  const box = mountBox('filmStrip');
+  const scale = Math.min(
+    (STRIP.width * canvas.width) / box.picture.width,
+    (STRIP.height * canvas.height) / box.height,
+  );
+  const strip = slot('photo-1', 'filmStrip', 0.5, 0.5, scale);
+  return {
+    template: design('filmStrip', data, format, BLACK, [
+      { ...strip, transform: { ...strip.transform, rotation: STRIP_TILT } },
+    ]),
+    alignRight: [],
+  };
+}
+
+/**
+ * The phone's camera over the whole photo, the design's only widget: it frames the photo, so it has
+ * no slot for it, and is as big as the canvas in every format. Time and space O(1).
+ */
+function camera(data: TemplateData, format: CanvasFormat): ReadyDesign {
+  const transform = at({ x: 0.5, y: 0.5, scale: 1 });
+  const style = { font: 'inter', color: WHITE, bold: false, uppercase: false } as const;
+  const common = { id: 'camera', logo: false, style, transform, opacity: 1 };
+  const widget: Layer =
+    data.mode === 'activity'
+      ? { ...common, kind: 'activityBlock', block: { design: 'camera' } }
+      : { ...common, kind: 'summaryBlock', block: { design: 'periodCamera' } };
+  return {
+    template: newTemplate({
+      id: 'allrun-camera',
+      mode: data.mode,
+      format,
+      layers: [widget],
+    }),
+    alignRight: [],
+  };
+}
+
 const RECIPES: Readonly<
   Record<ReadyDesignId, (data: TemplateData, format: CanvasFormat) => ReadyDesign>
 > = {
@@ -263,6 +324,8 @@ const RECIPES: Readonly<
   messageTwo,
   filmFrame: (data, format) => centeredPiece('filmFrame', 'filmFrame', data, format),
   lightNegative: (data, format) => centeredPiece('lightNegative', 'lightNegative', data, format),
+  filmStrip,
+  camera,
 };
 
 /** One of AllRun's designs laid out for `data` in `format`. Time and space O(1). */

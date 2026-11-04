@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
 import type { Activity } from '@/core/activity';
-import { sportIcon } from '@/core/activity-block';
+import { framesCanvas, sportIcon } from '@/core/activity-block';
 import {
   defaultActivityTemplate,
   defaultSummaryTemplate,
@@ -41,7 +41,7 @@ import {
   setUnits,
   startOver,
 } from '@/core/editor-document';
-import { canRedo, canUndo, commit, createHistory, redo, undo } from '@/core/history';
+import { canRedo, canUndo, commit, createHistory, redo, undo, mapHistory } from '@/core/history';
 import { catalogItemKey, type NewLayer } from '@/core/layer-catalog';
 import { splitOpacity, withOpacity } from '@/core/color-menu';
 import { cellAt, collageCells } from '@/core/collage';
@@ -130,7 +130,12 @@ import {
   RoundButton,
 } from '@/editor/round-button';
 import { Chip, Row, StylePanel, widgetTools } from '@/editor/style-panel';
-import { applyChoice, type DesignChoice, parseDesignChoice } from '@/editor/design-choice';
+import {
+  applyChoice,
+  type DesignChoice,
+  openChoice,
+  parseDesignChoice,
+} from '@/editor/design-choice';
 import { useStockPhotos } from '@/editor/stock-photos';
 import { TemplateSheet } from '@/editor/template-sheet';
 import { useExport } from '@/editor/use-export';
@@ -326,7 +331,7 @@ function EditorWorkspace({
     createHistory<EditorDesign>(
       initialDesign === null
         ? INITIAL_DESIGN
-        : applyChoice(INITIAL_DESIGN, initialDesign, contextFor(deviceUnit, appLocale, t), false),
+        : openChoice(initialDesign, contextFor(deviceUnit, appLocale, t)),
     ),
   );
   const design = history.present;
@@ -340,6 +345,9 @@ function EditorWorkspace({
   /** Applies a change of the design as one undo step (none when it changes nothing). */
   const change = (next: (current: EditorDesign) => EditorDesign) =>
     setHistory((current) => commit(current, next(current.present)));
+  /** Applies a setting of the side menu, which is no edit: nothing to undo, or to start over. */
+  const changeSetting = (next: (current: EditorDesign) => EditorDesign) =>
+    setHistory((current) => mapHistory(current, next));
   /** Applies an edit of the widgets as one undo step. */
   const edit = (next: (template: Template) => Template) =>
     change((current) => editLayers(current, defaultTemplate, next));
@@ -348,9 +356,8 @@ function EditorWorkspace({
   const selected = template.layers.find((layer) => layer.id === selectedId) ?? null;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  /** Decoded the first time the Designs sheet opens, and kept for the next. */
-  const [templatesOpened, setTemplatesOpened] = useState(false);
-  const stock = useStockPhotos(templatesOpened);
+  /** Decoded as the editor opens, so its galleries have them at once. */
+  const stock = useStockPhotos();
   const [formatsOpen, setFormatsOpen] = useState(false);
   const [collagesOpen, setCollagesOpen] = useState(false);
   /**
@@ -778,6 +785,16 @@ function EditorWorkspace({
 
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
   const addNewLayer = (item: Exclude<NewLayer, { kind: 'text' | 'image' }>) => {
+    // What frames the photo asks for one first, if there is none, as the pictures do.
+    if (
+      (item.kind === 'activityBlock' || item.kind === 'summaryBlock') &&
+      framesCanvas(item.block) &&
+      photo === null &&
+      design.collage === null
+    ) {
+      void pickPhoto(() => addLayerNow(item));
+      return;
+    }
     // The place needs the permission first (Android): asked now, the widget is added once named.
     if (
       ((item.kind === 'info' && item.field === 'activityPlace') ||
@@ -805,18 +822,46 @@ function EditorWorkspace({
     setSheetOpen(false);
   };
 
-  /** Applies a choice of the Designs gallery, as one undo step, and closes the sheet. */
-  const chooseDesign = (choice: DesignChoice) => {
-    change((current) => applyChoice(current, choice, layerContext, photo !== null));
+  /**
+   * Starts the design again, as one undo step, with `next` (from the photos that go on, in order):
+   * another design or collage keeps the photos (the user's choice). Those of its slots also wait in
+   * the cells, for a collage to show them; those of the cells stay where they were, so that undoing
+   * finds its collage as it was.
+   */
+  const startAgain = (next: (pictures: readonly string[]) => EditorDesign) => {
+    const inSlots = template.layers
+      .filter(isPhotoSlot)
+      .map((layer) => layer.image)
+      .filter((key) => key !== SAMPLE_IMAGE && key !== EDITOR_PHOTO);
+    const newcomers = inSlots.filter((key) => !cellPictures.includes(key));
+    const others = [...inSlots, ...cellPictures.filter((key) => key !== null)].filter(
+      (key, i, all) => all.indexOf(key) === i,
+    );
+    let arrived = 0;
+    setCellPictures(
+      cellPictures.map((key) => {
+        if (key !== null || arrived >= newcomers.length) {
+          return key;
+        }
+        arrived += 1;
+        return newcomers[arrived - 1];
+      }),
+    );
+    change(() => next(photo === null ? others : [EDITOR_PHOTO, ...others]));
     setSelectedId(null);
     setPhotoTools(false);
     setToolsCell(0);
+  };
+
+  /** Starts the design again from a choice of the Designs gallery, and closes the sheet. */
+  const chooseDesign = (choice: DesignChoice) => {
+    startAgain((pictures) => applyChoice(design, choice, layerContext, pictures));
     setTemplatesOpen(false);
   };
 
-  /** Another format, as one undo step: the widgets keep their relative places. */
+  /** Another format: the widgets keep their relative places. */
   const chooseFormat = (format: CanvasFormat) => {
-    change((current) => setFormat(current, format));
+    changeSetting((current) => setFormat(current, format));
     setFormatsOpen(false);
   };
 
@@ -881,6 +926,19 @@ function EditorWorkspace({
     }
   };
 
+  /**
+   * A design that frames the photo, as the camera does, has no slot for it: with none, a tap goes
+   * straight to choosing it, and the canvas shows the sign to.
+   */
+  const wantsPhoto =
+    photo === null &&
+    design.collage === null &&
+    template.layers.some(
+      (layer) =>
+        (layer.kind === 'activityBlock' || layer.kind === 'summaryBlock') &&
+        framesCanvas(layer.block),
+    );
+
   /** The first slot of the design with no photo, which the bottom row's photo button fills. */
   const firstEmptySlot = template.layers.find((layer) => isEmptySlot(layer, photo !== null));
 
@@ -900,6 +958,8 @@ function EditorWorkspace({
   const tapPhoto = (at: { readonly x: number; readonly y: number }) => {
     if (selectedId !== null) {
       setSelectedId(null);
+    } else if (wantsPhoto) {
+      void pickPhoto();
     } else if (design.collage === null) {
       if (!photoTools) {
         setPhotoTools(true);
@@ -948,10 +1008,11 @@ function EditorWorkspace({
     rotation: layer.transform.rotation,
   });
 
-  const pickPhoto = async () => {
+  const pickPhoto = async (onPicked?: () => void) => {
     setPhotoTools(false);
     const libraryId = await photoPicker.pick();
     if (libraryId !== null) {
+      onPicked?.();
       const id = nextPhotoId;
       setNextPhotoId(id + 1);
       setPhoto({
@@ -1022,11 +1083,11 @@ function EditorWorkspace({
     }
   };
 
-  /** Lays the photos out as `layout` says, as one undo step; a design's slots give way to it. */
+  /** Starts the design again from the collage `layout`, without borders; the same one does nothing. */
   const pickCollage = (layout: CollageLayout | null) => {
-    setPhotoTools(false);
-    setToolsCell(0);
-    change((current) => applyCollage(current, layout, current.frame));
+    if ((design.collage?.layout ?? null) !== layout) {
+      startAgain(() => applyCollage(design, layout, 'none'));
+    }
   };
 
   // Leaving with edits asks first: the design is not kept. The photo alone doesn't count: it was
@@ -1141,6 +1202,7 @@ function EditorWorkspace({
             : galleryContext
         }
         language={language}
+        stock={stock}
         onAdd={addNewLayer}
         onAddText={addText}
         onAddImage={addPicture}
@@ -1208,6 +1270,7 @@ function EditorWorkspace({
                 photoTools && !backgroundMenu && canvasCells[toolsCell] !== null ? toolsCell : null,
               )}
               frame={sceneFrame(shownTemplate)}
+              photoSign={wantsPhoto}
               onCellGrab={setToolsCell}
               onCellPlacementChange={(cell, placement) =>
                 change((current) => setCellPlacement(current, cell, placement))
@@ -1320,16 +1383,17 @@ function EditorWorkspace({
           onPickCollage={pickCollage}
           onDesigns={() => {
             setFormatsOpen(false);
-            setTemplatesOpened(true);
             setTemplatesOpen(true);
           }}
           onActivity={() => setDataOpen(true)}
           sport={data.mode === 'activity' ? sportIcon(data.activity) : null}
           units={unit}
-          onToggleUnits={() => change((current) => setUnits(current, unit === 'km' ? 'mi' : 'km'))}
+          onToggleUnits={() =>
+            changeSetting((current) => setUnits(current, unit === 'km' ? 'mi' : 'km'))
+          }
           language={language}
           onToggleLanguage={() =>
-            change((current) => setLanguage(current, language === 'es' ? 'en' : 'es'))
+            changeSetting((current) => setLanguage(current, language === 'es' ? 'en' : 'es'))
           }
         />
       </KeptMounted>

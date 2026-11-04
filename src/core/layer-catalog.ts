@@ -1,5 +1,5 @@
 import type { Activity } from './activity';
-import { activityBlocks, blockTile, isDataWidget } from './activity-block';
+import { activityBlocks, blockTile, framesCanvas, isDataWidget } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
 import { bucketCount, chartBucketOptions } from './periods';
 import { SAMPLE_IMAGE } from './image-layer';
@@ -83,7 +83,7 @@ export type CatalogItem =
 export type NewLayer =
   Exclude<CatalogItem, { kind: 'text' }> | { readonly kind: 'text'; readonly content: string };
 
-export type CatalogSectionId = 'data' | 'creative' | 'charts' | 'basic' | 'brand';
+export type CatalogSectionId = 'data' | 'creative' | 'photos' | 'charts' | 'basic' | 'brand';
 
 /** A tile of the gallery: one widget, whose variants scroll inside it, the default first. */
 export interface CatalogWidget {
@@ -115,14 +115,9 @@ const CREATIVE_THEMES: Readonly<
     [
       ['block-verified', 'block-location'],
       ['block-music', 'block-alarm'],
-      ['block-camera', 'block-notes'],
     ],
-    [['block-laps', 'block-grandPrix'], ['block-splits']],
+    [['block-laps', 'block-grandPrix'], ['block-splits'], ['block-notes']],
     [['block-receipt', 'block-nutrition'], ['block-boardingPass']],
-    [
-      ['image', 'image-instant'],
-      ['image-filmFrame', 'image-lightNegative'],
-    ],
   ],
   summary: [
     [
@@ -138,10 +133,6 @@ const CREATIVE_THEMES: Readonly<
     [
       ['summaryBlock-periodReceipt', 'summaryBlock-periodNutrition'],
       ['summaryBlock-periodBoardingPass', 'summaryBlock-periodMetro'],
-    ],
-    [
-      ['image', 'image-instant'],
-      ['image-filmFrame', 'image-lightNegative'],
     ],
   ],
 };
@@ -322,7 +313,10 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           ? []
           : item.caption === undefined
             ? [item.frame === 'none' ? undefined : item.frame]
-            : [item.caption === 'place' ? undefined : item.caption];
+            : [
+                item.caption === 'place' ? undefined : item.caption,
+                item.frame === 'dark' ? 'dark' : undefined,
+              ];
       case 'text':
         return [];
     }
@@ -390,27 +384,29 @@ const tileEntries = (section: CatalogSectionId, items: readonly CatalogItem[]): 
 const OFFERED_DATE_FORMATS = DATE_FORMATS.filter((format) => format !== 'weekdayTime');
 
 /**
- * A picture of the user's, chosen when its tile is tapped: as is, in a light frame and in a dark
- * one (also chosen later with its color button); an instant photo of it, a Polaroid, with each
- * caption (its frame dark with its color button); and each holder (see `IMAGE_MOUNTS`), the same
- * pieces AllRun's designs are made of.
+ * A picture of the user's, chosen when its tile is tapped, in a section of their own: as is, in a
+ * light frame and in a dark one; an instant photo of it, a Polaroid, with each caption, in each
+ * frame; and each holder (see `IMAGE_MOUNTS`), the same pieces AllRun's designs are made of. Their
+ * frame is only chosen here (the user's choice); in the editor, a picture only rounds its corners.
  */
 const IMAGE_ENTRIES: readonly Entry[] = [
   ...tileEntries(
-    'creative',
+    'photos',
     IMAGE_FRAMES.map((frame) => ({ kind: 'image', image: SAMPLE_IMAGE, frame })),
   ),
   ...tileEntries(
-    'creative',
-    INSTANT_CAPTIONS.map((caption) => ({
-      kind: 'image',
-      image: SAMPLE_IMAGE,
-      frame: 'light',
-      caption,
-    })),
+    'photos',
+    INSTANT_CAPTIONS.flatMap((caption) =>
+      (['light', 'dark'] as const).map((frame) => ({
+        kind: 'image',
+        image: SAMPLE_IMAGE,
+        frame,
+        caption,
+      })),
+    ),
   ),
   ...IMAGE_MOUNTS.flatMap((mount) =>
-    tileEntries('creative', [{ kind: 'image', image: SAMPLE_IMAGE, frame: 'none', mount }]),
+    tileEntries('photos', [{ kind: 'image', image: SAMPLE_IMAGE, frame: 'none', mount }]),
   ),
 ];
 
@@ -522,7 +518,14 @@ const BRAND: readonly Entry[] = tileEntries(
  * The gallery's sections: the data widgets and the creative ones (the mixed widgets, see
  * `isDataWidget`: replicas of apps and things, and phrases), the charts, the basics and the logo.
  */
-const SECTION_ORDER: readonly CatalogSectionId[] = ['data', 'creative', 'charts', 'basic', 'brand'];
+const SECTION_ORDER: readonly CatalogSectionId[] = [
+  'data',
+  'creative',
+  'photos',
+  'charts',
+  'basic',
+  'brand',
+];
 
 /**
  * Puts the items in their tiles and the tiles in their sections, in the gallery's order, leaving
@@ -560,20 +563,11 @@ function sections(entries: readonly Entry[]): CatalogSection[] {
 const STICKER_SECTIONS: ReadonlySet<CatalogSectionId> = new Set(['data', 'creative', 'charts']);
 
 /**
- * The widgets offered as stickers (ADR 009): those with the data on them, without the user's
- * pictures, which would need a photo. Time O(w) for w widgets.
+ * The widgets offered as stickers (ADR 009): those with the data on them, not the user's pictures,
+ * which would need a photo. Time O(w) for w widgets.
  */
 export function stickerCatalog(catalog: readonly CatalogSection[]): CatalogSection[] {
-  return catalog.flatMap((section) =>
-    STICKER_SECTIONS.has(section.id)
-      ? [
-          {
-            ...section,
-            widgets: section.widgets.filter((widget) => widget.variants[0].kind !== 'image'),
-          },
-        ]
-      : [],
-  );
+  return catalog.flatMap((section) => (STICKER_SECTIONS.has(section.id) ? [section] : []));
 }
 
 export function activityCatalog(
@@ -584,11 +578,14 @@ export function activityCatalog(
   withLaps = false,
 ): CatalogSection[] {
   return sections([
-    ...activityBlocks(activity, charts.includes('splits'), withPlace, withLaps).flatMap((block) =>
-      tileEntries(isDataWidget(block.design) ? 'data' : 'creative', [
-        { kind: 'activityBlock', block },
-      ]),
-    ),
+    ...activityBlocks(activity, charts.includes('splits'), withPlace, withLaps)
+      // The camera goes with the photos, after them.
+      .filter((block) => !framesCanvas(block))
+      .flatMap((block) =>
+        tileEntries(isDataWidget(block.design) ? 'data' : 'creative', [
+          { kind: 'activityBlock', block },
+        ]),
+      ),
     ...availableMetrics(activity).flatMap((metric) => dataEntries({ kind: 'metric', metric })),
     ...(activity.routePolyline === null ? [] : lineEntries('route')),
     ...tileEntries('basic', [{ kind: 'text' }, { kind: 'info', field: 'activityName' }]),
@@ -615,6 +612,7 @@ export function activityCatalog(
       chartEntries(series, activity.averageHeartRate !== null, withZones),
     ),
     ...IMAGE_ENTRIES,
+    ...tileEntries('photos', [{ kind: 'activityBlock', block: { design: 'camera' } }]),
     ...BRAND,
   ]);
 }
@@ -629,11 +627,13 @@ export function activityCatalog(
  */
 export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): CatalogSection[] {
   return sections([
-    ...summaryBlocks(summary).map((block): Entry => [
-      isSummaryDataWidget(block.design) ? 'data' : 'creative',
-      `summaryBlock-${block.design}`,
-      { kind: 'summaryBlock', block },
-    ]),
+    ...summaryBlocks(summary)
+      .filter((block) => !framesCanvas(block))
+      .map((block): Entry => [
+        isSummaryDataWidget(block.design) ? 'data' : 'creative',
+        `summaryBlock-${block.design}`,
+        { kind: 'summaryBlock', block },
+      ]),
     ...availableSummaryMetrics(summary).flatMap((metric) =>
       dataEntries({ kind: 'summaryMetric', metric }),
     ),
@@ -649,6 +649,7 @@ export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): 
     ),
     ...periodChartEntries(summary, autoBucket),
     ...IMAGE_ENTRIES,
+    ...tileEntries('photos', [{ kind: 'summaryBlock', block: { design: 'periodCamera' } }]),
     ...BRAND,
   ]);
 }

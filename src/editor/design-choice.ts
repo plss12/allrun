@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 import { READY_DESIGN_IDS } from '@/core/designs';
-import { applyCollage, applyDesign, type EditorDesign } from '@/core/editor-document';
+import {
+  applyCollage,
+  applyDesign,
+  type EditorDesign,
+  INITIAL_DESIGN,
+} from '@/core/editor-document';
 import { COLLAGE_LAYOUTS, IMAGE_FRAMES, templateSchema } from '@/core/template';
 import { logError } from '@/ui/log';
 
@@ -41,26 +46,41 @@ export function parseDesignChoice(param: string | undefined): DesignChoice | nul
 }
 
 /**
- * `design` with a choice of the gallery applied.
+ * `design` started again from a choice of the gallery (see `applyDesign`).
  *
  * @param context - What AllRun's designs are laid out for.
- * @param hasPhoto - Whether the editor has a photo, which goes in the design's first slot.
+ * @param pictures - The photos that go on, by their keys, for its slots.
  */
 export function applyChoice(
   design: EditorDesign,
   choice: DesignChoice,
   context: LayerContext,
-  hasPhoto: boolean,
+  pictures: readonly string[],
 ): EditorDesign {
   switch (choice.kind) {
     case 'collage':
       return applyCollage(design, choice.layout, choice.frame);
     case 'ready':
-      return applyDesign(design, readyTemplate(choice.id, context, design.format), hasPhoto);
+      return applyDesign(design, readyTemplate(choice.id, context, design.format), pictures);
     case 'saved':
       return {
-        ...applyDesign(design, choice.template, hasPhoto),
+        ...applyDesign(design, choice.template, pictures),
         format: choice.template.format,
       };
   }
+}
+
+/**
+ * The design a new canvas opens with, for a choice of the gallery: one of the user's brings the unit
+ * and language it was saved with, as the settings of this canvas.
+ */
+export function openChoice(choice: DesignChoice, context: LayerContext): EditorDesign {
+  const design = applyChoice(INITIAL_DESIGN, choice, context, []);
+  return choice.kind === 'saved'
+    ? {
+        ...design,
+        units: choice.template.units ?? null,
+        language: choice.template.language ?? null,
+      }
+    : design;
 }

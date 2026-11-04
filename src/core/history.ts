@@ -34,6 +34,18 @@ export function commit<T>(history: History<T>, next: T): History<T> {
   };
 }
 
+/**
+ * Applies `change` to every value of the history, without a step: a setting that undoing doesn't
+ * bring back, whichever value it goes to. The history itself when the current value doesn't change.
+ * Time O(`HISTORY_LIMIT`) calls of `change`.
+ */
+export function mapHistory<T>(history: History<T>, change: (value: T) => T): History<T> {
+  const present = change(history.present);
+  return Object.is(present, history.present)
+    ? history
+    : { past: history.past.map(change), present, future: history.future.map(change) };
+}
+
 /** Goes back one step; unchanged when there is nothing to undo. */
 export function undo<T>(history: History<T>): History<T> {
   if (history.past.length === 0) {

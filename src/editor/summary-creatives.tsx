@@ -22,7 +22,13 @@ import {
   periodWrapped,
   playlistSongs,
 } from '@/core/summary-block';
-import { summaryHasDistance, toDisplaySummaryMetric } from '@/core/summary-metrics';
+import {
+  periodTotals,
+  summaryHasDistance,
+  summaryMetricValue,
+  toDisplaySummaryMetric,
+} from '@/core/summary-metrics';
+import type { HitHole } from '@/core/layer-transform';
 import { durationParts, formatDuration } from '@/core/units';
 import { bucketize, type SummaryBucket } from '@/core/summary';
 import {
@@ -38,6 +44,8 @@ import {
   type BlockContext,
   capitalsBox,
   boardingPassBox,
+  CAMERA_ROUTE,
+  cameraBox,
   type Box,
   BRAND_COVER_COLORS,
   column,
@@ -94,6 +102,7 @@ import {
   plainSummaryText,
   roundedChartValue,
   type SummaryData,
+  summaryTotalText,
 } from './editor-data';
 
 /**
@@ -1639,6 +1648,44 @@ function metroStationBox(active: boolean, terminal: boolean, line: string): Box 
  * small and faded, its ends ringed as terminals. Across up to a week's seven stations, down
  * beyond (see `metroLayout`).
  */
+/**
+ * A period through the phone's camera, as an activity: its main totals where the settings go, the
+ * sport it is filtered to on its f button (AllRun's monogram without a filter), and all its routes
+ * overlaid as the last photo's thumbnail, or nothing without any. Time O(p) for p points.
+ */
+export function periodCameraBox(
+  data: SummaryData,
+  { fonts, textContext, translate, canvas }: BlockContext,
+): { readonly box: Box; readonly hole: HitHole } {
+  const { summary } = data;
+  const [family] = data.families;
+  return cameraBox(fonts, translate, canvas, {
+    // As an activity's: its distance as the language writes it.
+    values: periodTotals(summary).map((metric) =>
+      metric === 'totalDistance'
+        ? shortDistance(summary.totalDistanceMeters, textContext)
+        : summaryTotalText(
+            metric,
+            summaryMetricValue(summary, metric) ?? 0,
+            textContext,
+            translate,
+          ),
+    ),
+    lens: (size, color) =>
+      sportMarkBox(data.families.length === 1 ? family : 'allrun', size, color),
+    thumbnail: (size) =>
+      routesBox(
+        data.activities.flatMap(({ routePolyline }) =>
+          routePolyline === null ? [] : [routePolyline],
+        ),
+        size,
+        size,
+        3,
+        CAMERA_ROUTE,
+      ),
+  });
+}
+
 /**
  * A period as a sent chat message: its distance and how many activities (its time without one), and
  * where the message's time goes, its time when the message doesn't say it already. Only in AllRun's

@@ -110,9 +110,12 @@ describe.each(READY_DESIGN_IDS)('%s', (id: ReadyDesignId) => {
       expect(boxes.length).toBe(template.layers.length);
       for (const box of boxes) {
         expect([box.id, box.left]).toEqual([box.id, expect.any(Number)]);
-        expect(box.left).toBeGreaterThanOrEqual(0);
+        // A strip of film runs off the sides of the canvas, on purpose.
+        if (id !== 'filmStrip') {
+          expect(box.left).toBeGreaterThanOrEqual(0);
+          expect(box.right).toBeLessThanOrEqual(canvas.width);
+        }
         expect(box.top).toBeGreaterThanOrEqual(0);
-        expect(box.right).toBeLessThanOrEqual(canvas.width);
         expect(box.bottom).toBeLessThanOrEqual(canvas.height);
       }
       for (const a of boxes) {
@@ -143,7 +146,35 @@ describe('a design with no photo chosen', () => {
   });
 });
 
+describe('the camera of a period', () => {
+  it('is as big as the canvas, and lets touches through to the photo', () => {
+    const context = contextOf(period);
+    const { readyTemplate } = jest.requireActual<typeof import('./ready-design')>('./ready-design');
+    for (const format of FORMATS) {
+      const [prepared] = scene().prepareLayers(readyTemplate('camera', context, format), context);
+      expect([prepared.width, prepared.height]).toEqual([
+        CANVAS_FORMATS[format].width,
+        CANVAS_FORMATS[format].height,
+      ]);
+      expect(prepared.hole).toBeDefined();
+    }
+  });
+});
+
 describe('mountCaption', () => {
+  it('writes AllRun over a strip of film, and the main datum between the others under it', () => {
+    const { strip } = mountCaption('filmStrip', activity, textContext, translate as never);
+    expect(strip?.top).toBe('ALLRUN');
+    expect(strip?.main).toContain('km');
+    expect(strip?.left).not.toBeNull();
+    expect(strip?.right).not.toBeNull();
+  });
+
+  it('writes the name of a period over a strip of film', () => {
+    const { strip } = mountCaption('filmStrip', period, textContext, translate as never);
+    expect(strip?.top).toBe(es.thisWeek);
+  });
+
   it('writes the sport, start time and three data on a film frame', () => {
     const { sides, marks } = mountCaption('filmFrame', activity, textContext, translate as never);
     const [left, right] = sides;

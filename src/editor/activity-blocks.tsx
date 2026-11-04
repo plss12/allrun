@@ -1308,6 +1308,160 @@ export const MUSIC_COLORS = {
 export const BRAND_COVER_COLORS = { red: '#C94A2E', ink: '#141B2D' } as const;
 export const COVER_ROUTE = '#F6F1EA';
 
+/** What the camera shows of an activity or a period (see `cameraBox`). */
+export interface CameraContent {
+  /** Where its settings go, at the top. */
+  readonly values: readonly string[];
+  /** The mark on its f button, `size` big. */
+  readonly lens: (size: number, color: string) => Box;
+  /** What its last photo's thumbnail shows, `size` big, or `null` for no thumbnail. */
+  readonly thumbnail: (size: number) => Box | null;
+}
+
+/** The route on the camera's last photo, white over black: one camera, with no brand colors. */
+export const CAMERA_ROUTE = '#FFFFFF';
+const CAMERA_THUMBNAIL = '#000000';
+
+/**
+ * The phone's camera framing the whole canvas: its dimmed bands, grid and buttons over the photo,
+ * seen through its see-through part (`hole`, which touches go through), as an activity's and a
+ * period's widgets draw it. Time and space O(1).
+ */
+export function cameraBox(
+  fonts: SkTypefaceFontProvider,
+  translate: BlockContext['translate'],
+  { width, height }: Size,
+  { values: written, lens: lensMark, thumbnail }: CameraContent,
+): { readonly box: Box; readonly hole: HitHole } {
+  const colors = CAMERA_COLORS;
+  const unit = Math.min(1, height / CAMERA.storyHeight);
+  const top = CAMERA.top * unit;
+  const bottom = height - CAMERA.bottom * unit;
+  const third = (bottom - top) / 3;
+  const flat = {};
+  const glass = { edge: colors.edge };
+  /** A round button `size` across with `content` in its middle. */
+  const button = (size: number, color: string, content: Box | null, edge?: string) =>
+    [discBox(size / 2, color), ...(edge === undefined ? [] : [discBox(size / 2, edge, 2)])]
+      .concat(content === null ? [] : [content])
+      .reduce(overlay);
+  const camText = (key: LabelKey, size: number, color: string, bold = false) =>
+    appTextBox(fonts, [{ text: translate(key), size: size * unit, bold }], color);
+
+  const data = CAMERA.data;
+  const values = row(
+    written.map((value) =>
+      appTextBox(fonts, [{ text: value, size: data.size * unit, bold: true }], colors.ink),
+    ),
+    data.gap * unit,
+    'center',
+  );
+  const pillHeight = data.height * unit;
+  const pill = overlay(
+    fillBox(values.width + 2 * data.pad * unit, pillHeight, pillHeight / 2, colors.pill, flat),
+    values,
+  );
+
+  const lens = CAMERA.lens;
+  const lensSize = lens.size * unit;
+  const lensY = bottom - lens.fromBottom * unit;
+  const zoom = CAMERA.zoom;
+
+  const shutter = CAMERA.shutter;
+  const shutterY = bottom + shutter.y * unit;
+
+  const controls = CAMERA.controls;
+  const controlSize = controls.size * unit;
+  const controlsY = bottom + controls.y * unit;
+  const shown = thumbnail(controlSize * 0.55);
+  const thumb = shown === null ? null : button(controlSize, CAMERA_THUMBNAIL, shown);
+  const modes = CAMERA.modes;
+  const chosenWidth = (modes.chosenTo - modes.chosenFrom) * unit;
+  const chosenHeight = controlSize - 2 * modes.inset * unit;
+
+  return {
+    hole: { x: 0, y: top, width, height: bottom - top },
+    box: placed(width, height, [
+      { box: fillBox(width, top, 0, colors.band, flat), x: 0, y: 0 },
+      { box: fillBox(width, height - bottom, 0, colors.band, flat), x: 0, y: bottom },
+      ...[1, 2].flatMap((i) => [
+        {
+          box: hairlineBox(0, bottom - top, CAMERA.grid, colors.grid),
+          x: (width * i) / 3,
+          y: top,
+        },
+        { box: hairlineBox(width, 0, CAMERA.grid, colors.grid), x: 0, y: top + third * i },
+      ]),
+      centeredAt(pill, width - data.inset * unit - pill.width / 2, top / 2),
+      centeredAt(
+        button(lensSize, colors.button, lensMark(lensSize * lens.icon, colors.ink)),
+        lens.x * unit,
+        lensY,
+      ),
+      centeredAt(
+        camText('widgets.cameraZoom.wide', zoom.size, colors.ink),
+        width / 2 - zoom.side * unit,
+        lensY,
+      ),
+      centeredAt(
+        button(
+          lensSize,
+          colors.button,
+          camText('widgets.cameraZoom.main', zoom.size, colors.chosen),
+        ),
+        width / 2,
+        lensY,
+      ),
+      centeredAt(
+        camText('widgets.cameraZoom.tele', zoom.size, colors.ink),
+        width / 2 + zoom.side * unit,
+        lensY,
+      ),
+      centeredAt(
+        button(
+          2 * shutter.outer * unit,
+          colors.ring,
+          discBox(shutter.inner * unit, colors.shutter),
+          colors.edge,
+        ),
+        width / 2,
+        shutterY,
+      ),
+      ...(thumb === null ? [] : [centeredAt(thumb, controls.x * unit, controlsY)]),
+      centeredAt(
+        fillBox(modes.width * unit, controlSize, controlSize / 2, colors.pill, glass),
+        width / 2,
+        controlsY,
+      ),
+      {
+        box: fillBox(chosenWidth, chosenHeight, chosenHeight / 2, colors.chosenPill, glass),
+        x: width / 2 + modes.chosenFrom * unit,
+        y: controlsY - chosenHeight / 2,
+      },
+      centeredAt(
+        camText('widgets.cameraModes.video', modes.size, colors.ink),
+        width / 2 + modes.videoX * unit,
+        controlsY,
+      ),
+      centeredAt(
+        camText('widgets.cameraModes.photo', modes.size, colors.chosen),
+        width / 2 + ((modes.chosenFrom + modes.chosenTo) / 2) * unit,
+        controlsY,
+      ),
+      centeredAt(
+        button(
+          controlSize,
+          colors.pill,
+          symbolBox('flip', controlSize * controls.symbol, colors.ink),
+          colors.edge,
+        ),
+        width - controls.x * unit,
+        controlsY,
+      ),
+    ]),
+  };
+}
+
 /**
  * Where the lock screen's player puts each thing, measured on an iPhone and scaled to a card
  * 840 px wide: the cover in the top-left corner with the song's name and artist beside it, the
@@ -3299,153 +3453,18 @@ export function prepareActivityBlock(
         ]);
       }
       case 'camera': {
-        // The photo seen through the camera, which frames the whole canvas: the data where its
-        // settings go, the sport's icon on its f button, and the route as the last photo's
-        // thumbnail.
-        const colors = CAMERA_COLORS;
-        const { width, height } = canvas;
-        const unit = Math.min(1, height / CAMERA.storyHeight);
-        const top = CAMERA.top * unit;
-        const bottom = height - CAMERA.bottom * unit;
-        const third = (bottom - top) / 3;
-        const flat = {};
-        const glass = { edge: colors.edge };
-        /** A round button `size` across with `content` in its middle. */
-        const button = (size: number, color: string, content: Box | null, edge?: string) =>
-          [discBox(size / 2, color), ...(edge === undefined ? [] : [discBox(size / 2, edge, 2)])]
-            .concat(content === null ? [] : [content])
-            .reduce(overlay);
-        const camText = (key: LabelKey, size: number, color: string, bold = false) =>
-          appText([{ text: translate(key), size: size * unit, bold }], color);
-
-        const data = CAMERA.data;
-        const values = row(
-          metrics.map((metric) =>
-            appText([{ text: written(metric), size: data.size * unit, bold: true }], colors.ink),
-          ),
-          data.gap * unit,
-          'center',
-        );
-        const pillHeight = data.height * unit;
-        const pill = overlay(
-          fillBox(
-            values.width + 2 * data.pad * unit,
-            pillHeight,
-            pillHeight / 2,
-            colors.pill,
-            flat,
-          ),
-          values,
-        );
-
-        const lens = CAMERA.lens;
-        const lensSize = lens.size * unit;
-        const lensY = bottom - lens.fromBottom * unit;
-        const zoom = CAMERA.zoom;
-
-        const shutter = CAMERA.shutter;
-        const shutterY = bottom + shutter.y * unit;
-
-        const controls = CAMERA.controls;
-        const controlSize = controls.size * unit;
-        const controlsY = bottom + controls.y * unit;
-        const route =
-          activity.routePolyline === null
-            ? null
-            : routeBox(activity.routePolyline, controlSize * 0.55, controlSize * 0.55, {
-                color: COVER_ROUTE,
-                width: 3,
-              });
-        // The last photo is the route; without one, nothing: the f button has the sport's icon.
-        const thumb =
-          route === null ? null : button(controlSize, BRAND_COVER_COLORS[block.cover], route);
-        const modes = CAMERA.modes;
-        const chosenWidth = (modes.chosenTo - modes.chosenFrom) * unit;
-        const chosenHeight = controlSize - 2 * modes.inset * unit;
-
-        hole = { x: 0, y: top, width, height: bottom - top };
-        return placed(width, height, [
-          { box: fillBox(width, top, 0, colors.band, flat), x: 0, y: 0 },
-          { box: fillBox(width, height - bottom, 0, colors.band, flat), x: 0, y: bottom },
-          ...[1, 2].flatMap((i) => [
-            {
-              box: hairlineBox(0, bottom - top, CAMERA.grid, colors.grid),
-              x: (width * i) / 3,
-              y: top,
-            },
-            { box: hairlineBox(width, 0, CAMERA.grid, colors.grid), x: 0, y: top + third * i },
-          ]),
-          centeredAt(pill, width - data.inset * unit - pill.width / 2, top / 2),
-          centeredAt(
-            button(
-              lensSize,
-              colors.button,
-              iconBox(sportIcon(activity), lensSize * lens.icon, colors.ink),
-            ),
-            lens.x * unit,
-            lensY,
-          ),
-          centeredAt(
-            camText('widgets.cameraZoom.wide', zoom.size, colors.ink),
-            width / 2 - zoom.side * unit,
-            lensY,
-          ),
-          centeredAt(
-            button(
-              lensSize,
-              colors.button,
-              camText('widgets.cameraZoom.main', zoom.size, colors.chosen),
-            ),
-            width / 2,
-            lensY,
-          ),
-          centeredAt(
-            camText('widgets.cameraZoom.tele', zoom.size, colors.ink),
-            width / 2 + zoom.side * unit,
-            lensY,
-          ),
-          centeredAt(
-            button(
-              2 * shutter.outer * unit,
-              colors.ring,
-              discBox(shutter.inner * unit, colors.shutter),
-              colors.edge,
-            ),
-            width / 2,
-            shutterY,
-          ),
-          ...(thumb === null ? [] : [centeredAt(thumb, controls.x * unit, controlsY)]),
-          centeredAt(
-            fillBox(modes.width * unit, controlSize, controlSize / 2, colors.pill, glass),
-            width / 2,
-            controlsY,
-          ),
-          {
-            box: fillBox(chosenWidth, chosenHeight, chosenHeight / 2, colors.chosenPill, glass),
-            x: width / 2 + modes.chosenFrom * unit,
-            y: controlsY - chosenHeight / 2,
-          },
-          centeredAt(
-            camText('widgets.cameraModes.video', modes.size, colors.ink),
-            width / 2 + modes.videoX * unit,
-            controlsY,
-          ),
-          centeredAt(
-            camText('widgets.cameraModes.photo', modes.size, colors.chosen),
-            width / 2 + ((modes.chosenFrom + modes.chosenTo) / 2) * unit,
-            controlsY,
-          ),
-          centeredAt(
-            button(
-              controlSize,
-              colors.pill,
-              symbolBox('flip', controlSize * controls.symbol, colors.ink),
-              colors.edge,
-            ),
-            width - controls.x * unit,
-            controlsY,
-          ),
-        ]);
+        // The sport's icon on its f button, and the route as the last photo's thumbnail; without
+        // one, nothing.
+        const camera = cameraBox(fonts, translate, canvas, {
+          values: metrics.map(written),
+          lens: (size, color) => iconBox(sportIcon(activity), size, color),
+          thumbnail: (size) =>
+            activity.routePolyline === null
+              ? null
+              : routeBox(activity.routePolyline, size, size, { color: CAMERA_ROUTE, width: 3 }),
+        });
+        hole = camera.hole;
+        return camera.box;
       }
       case 'laps': {
         // The laps as a table: number, distance, time and pace (or speed).

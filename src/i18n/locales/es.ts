@@ -162,6 +162,7 @@ export const es: Translations = {
     sections: {
       data: 'Datos',
       creative: 'Creativos',
+      photos: 'Fotos',
       basic: 'Básicos',
       charts: 'Gráficas',
       brand: 'Logo',
@@ -236,6 +237,7 @@ export const es: Translations = {
       periodNutrition: 'Información nutricional',
       periodMetro: 'Línea de metro',
       periodMessage: 'Mensaje',
+      periodCamera: 'Cámara',
       periodEquivalences: 'Equivalencias',
     },
     blocks: {
@@ -536,6 +538,8 @@ export const es: Translations = {
       dark: 'Oscuro',
       color: 'Color',
     },
+    look: 'Aspecto',
+    cornersLabel: 'Esquinas',
     frames: {
       none: 'Sin marco',
       light: 'Claro',
@@ -714,6 +718,8 @@ export const es: Translations = {
       messageTwo: 'Mensaje, dos fotos',
       filmFrame: 'Marco de película',
       lightNegative: 'Negativo claro',
+      filmStrip: 'Tira de película',
+      camera: 'Cámara',
     },
   },
   activityCharts: {

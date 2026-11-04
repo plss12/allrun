@@ -269,6 +269,14 @@ export function StickerGallery({
           paddingTop: 8,
         }}
       >
+        {/* The color first, as in the column of a selected widget. */}
+        <RoundButton
+          label={t('stickers.color')}
+          selected={panel === 'color'}
+          onPress={() => setPanel(panel === 'color' ? null : 'color')}
+        >
+          <Swatch color={look.color ?? FLOATING_INK} />
+        </RoundButton>
         <RoundButton
           label={t('stickers.font')}
           selected={panel === 'font'}
@@ -280,13 +288,6 @@ export function StickerGallery({
           >
             Aa
           </Text>
-        </RoundButton>
-        <RoundButton
-          label={t('stickers.color')}
-          selected={panel === 'color'}
-          onPress={() => setPanel(panel === 'color' ? null : 'color')}
-        >
-          <Swatch color={look.color ?? FLOATING_INK} />
         </RoundButton>
         <RoundButton
           icon={{ ios: 'arrow.counterclockwise', android: 'restart_alt' }}

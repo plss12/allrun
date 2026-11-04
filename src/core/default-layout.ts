@@ -112,7 +112,11 @@ const logo = (layout: FormatLayout): Layer => logoLayer(layout.logo);
  */
 export const emptyLayout = (template: Template): Template => ({
   ...template,
-  layers: template.layers.filter((layer) => layer.kind === 'logo'),
+  // Alone, in the middle of the canvas in every format: a wide one's default layout has it under
+  // its right column of texts, which aren't here.
+  layers: template.layers.flatMap((layer) =>
+    layer.kind === 'logo' ? [{ ...layer, transform: { ...layer.transform, x: 0.5 } }] : [],
+  ),
 });
 
 /**
@@ -355,13 +359,14 @@ export function newLayer(
       };
     case 'summaryBlock':
       // As the activities' data widgets: in the lettering that suits each (see
-      // `summaryBlockLettering`), shrinking with the other widgets in smaller formats.
+      // `summaryBlockLettering`), shrinking with the other widgets in smaller formats, but the
+      // camera, which is as big as the canvas.
       return {
         ...item,
         id,
         logo: false,
         style: { ...summaryBlockLettering(item.block), color: WHITE },
-        transform: centered(layout.scale / LAYOUTS.story.scale),
+        transform: centered(framesCanvas(item.block) ? 1 : layout.scale / LAYOUTS.story.scale),
         opacity: 1,
       };
   }

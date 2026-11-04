@@ -1,5 +1,5 @@
 import type { ParseKeys } from 'i18next';
-import { Canvas, Group, Paint } from '@shopify/react-native-skia';
+import { Canvas, Group, Paint, Image } from '@shopify/react-native-skia';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 
-import { SAMPLE_IMAGE } from '@/core/image-layer';
+import { framesCanvas } from '@/core/activity-block';
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
 import { type PhraseKind, phraseLanguage, phraseWords } from '@/core/phrases';
 import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
@@ -24,6 +24,7 @@ import { colors } from '@/theme/colors';
 import { CHOICE_TITLES, ChoiceList } from './choice-list';
 import { layerText } from './editor-data';
 import { disposeLater } from './paragraph-arena';
+import { stockImages, type StockPhotos, useStockPhotos, withStockPicture } from './stock-photos';
 import { SheetFrame } from './sheet-frame';
 import type { LayerContext } from './template-scene';
 import {
@@ -36,6 +37,7 @@ import {
   buildGallery,
   type BuiltGallery,
   hintBottom,
+  isPictureItem,
 } from './widget-gallery';
 
 /** How a picture added from the gallery looks: its frame, and an instant photo's caption. */
@@ -50,6 +52,8 @@ interface LayerSheetProps {
   readonly format: CanvasFormat;
   readonly font: FontId;
   readonly layerContext: LayerContext;
+  /** The stock photos its tiles of pictures show, once decoded. */
+  readonly stock: StockPhotos | null;
   /** Adds a widget; free text and pictures go through `onAddText` and `onAddImage` instead. */
   readonly onAdd: (item: Exclude<NewLayer, { kind: 'text' | 'image' }>) => void;
   /** Starts typing a new free text, straight on the canvas, once the sheet has closed. */
@@ -179,6 +183,7 @@ export function LayerSheet({
   font,
   layerContext,
   language,
+  stock,
   onAdd,
   onAddText,
   onAddImage,
@@ -212,12 +217,24 @@ export function LayerSheet({
       font,
       layerContext.textContext.unit,
       layerContext.textContext.locale,
-      // The sample picture, once decoded.
-      layerContext.images?.get(SAMPLE_IMAGE)?.image == null ? '' : 'sample',
+      // The stock photos, once decoded.
+      stock === null ? '' : 'stock',
       window.width,
       textSample,
     ].join('|'),
-    () => buildGallery(catalog, format, font, layerContext, window.width, textSample),
+    () =>
+      buildGallery(
+        catalog,
+        format,
+        font,
+        {
+          ...layerContext,
+          images: stock === null ? new Map() : stockImages(stock),
+          restyle: withStockPicture,
+        },
+        window.width,
+        textSample,
+      ),
   );
   return (
     <Modal
@@ -265,6 +282,9 @@ export function LayerSheet({
                 afterClosing(onAddText);
               } else if (item.kind === 'image') {
                 afterClosing(() => onAddImage(item));
+              } else if (isPictureItem(item)) {
+                // It asks for a photo: the library opens once the sheet has closed.
+                afterClosing(() => onAdd(item));
               } else {
                 onAdd(item);
               }
@@ -338,7 +358,7 @@ export function WidgetGalleryList({
               height={row.height}
               label={(page) => pageLabel(page, layerContext, (key) => t(key))}
               hint={
-                choiceOf(widget.pages[0].item) === null && widget.pages[0].item.kind !== 'image'
+                choiceOf(widget.pages[0].item) === null && !isPictureItem(widget.pages[0].item)
                   ? undefined
                   : t('gallery.choose')
               }
@@ -426,7 +446,11 @@ function pageLabel(
         }
         return item.caption === undefined
           ? [t('widgets.image'), t(`style.frames.${item.frame}`)]
-          : [t('widgets.instant'), t(`gallery.captions.${item.caption}`)];
+          : [
+              t('widgets.instant'),
+              t(`gallery.captions.${item.caption}`),
+              t(`style.frames.${item.frame}`),
+            ];
       case 'activityBlock': {
         const { block } = item;
         const name: string = t(`widgets.blocks.${block.design}`);
@@ -519,7 +543,7 @@ function WidgetTile({
    * `GALLERY_HINT_HEIGHT`); other widgets sit as high as in the tiles next to them, the hint going
    * where the dots would, or over them without taking room.
    */
-  const canvasHeight = widget.pages.some(({ item }) => item.kind === 'image')
+  const canvasHeight = widget.pages.some(({ item }) => isPictureItem(item))
     ? pageHeight - GALLERY_DOTS_HEIGHT - GALLERY_HINT_HEIGHT
     : several || hint !== undefined
       ? pageHeight - GALLERY_DOTS_HEIGHT
@@ -632,6 +656,18 @@ function WidgetTile({
   );
 }
 
+/** A stock photo covering a widget `width` × `height`, centered on (0, 0). */
+function FramedStockPhoto({ width, height }: { readonly width: number; readonly height: number }) {
+  const stock = useStockPhotos();
+  return stock === null ? null : (
+    <Image
+      image={stock.forestBridge}
+      rect={{ x: -width / 2, y: -height / 2, width, height }}
+      fit="cover"
+    />
+  );
+}
+
 /** A variant drawn centered in its page, at its tile's scale. */
 function PageCanvas({
   page,
@@ -642,13 +678,17 @@ function PageCanvas({
   readonly width: number;
   readonly height: number;
 }) {
-  const { layer, content } = page.prepared;
+  const { layer, content, width: widgetWidth, height: widgetHeight } = page.prepared;
+  // A widget that frames the photo needs one in its tile: without it, it shows a dark nothing.
+  const framesPhoto =
+    (layer.kind === 'activityBlock' || layer.kind === 'summaryBlock') && framesCanvas(layer.block);
   return (
     <Canvas style={{ width, height }}>
       <Group
         transform={[{ translateX: width / 2 }, { translateY: height / 2 }, { scale: page.scale }]}
         layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
       >
+        {framesPhoto ? <FramedStockPhoto width={widgetWidth} height={widgetHeight} /> : null}
         {content}
       </Group>
     </Canvas>

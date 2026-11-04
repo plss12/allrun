@@ -1,7 +1,6 @@
-import { Skia, type SkImage, useImage } from '@shopify/react-native-skia';
+import { Skia, type SkImage } from '@shopify/react-native-skia';
 import { useEffect, useRef, useState } from 'react';
 
-import { SAMPLE_IMAGE, SAMPLE_PICTURE } from '@/core/image-layer';
 import { pickedPhoto } from '@/data/photo-library';
 import { logError } from '@/ui/log';
 
@@ -37,10 +36,7 @@ export function usePictures(
   onFail: (key: string) => void,
   choose: () => Promise<string | null>,
 ): {
-  /**
-   * The pictures in use, for the layers to draw (see `LayerContext`), and the gallery's sample
-   * (`SAMPLE_IMAGE`).
-   */
+  /** The pictures in use, for the layers to draw (see `LayerContext`). */
   readonly images: ReadonlyMap<string, LayerImage>;
   /**
    * Lets the user choose a photo: the new picture's key, its copy (the editor's by default)
@@ -51,10 +47,6 @@ export function usePictures(
   readonly pick: (copy?: PhotoCopy) => Promise<string | null>;
 } {
   const [pictures, setPictures] = useState<ReadonlyMap<string, Picture>>(new Map());
-  // Decoded as the editor opens, so the gallery has it (88 KB, 720 × 720 px).
-  const sample = useImage(require('../../assets/images/sample-picture.jpg'), (error) =>
-    logError('Could not decode the sample picture', error),
-  );
   const [decoded, setDecoded] = useState<ReadonlyMap<string, SkImage>>(new Map());
   const nextKey = useRef(1);
   const decoding = useRef(new Set<string>());
@@ -156,9 +148,7 @@ export function usePictures(
     [],
   );
 
-  const images = new Map<string, LayerImage>([
-    [SAMPLE_IMAGE, { size: SAMPLE_PICTURE, image: sample }],
-  ]);
+  const images = new Map<string, LayerImage>();
   for (const key of inUse) {
     const picture = pictures.get(key);
     if (picture !== undefined) {

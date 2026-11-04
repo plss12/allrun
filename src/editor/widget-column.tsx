@@ -108,15 +108,23 @@ export function WidgetColumn({
       {/* The color always second, whatever the widget; its own tool comes after it. */}
       <RoundButton
         icon={
-          tools.color === 'opacity'
+          tools.color === 'opacity' || tools.color === 'corners'
             ? { ios: 'circle.lefthalf.filled', android: 'opacity' }
             : undefined
         }
-        label={t(tools.color === 'opacity' ? 'style.opacity' : 'style.color')}
+        label={t(
+          tools.color === 'opacity'
+            ? 'style.opacity'
+            : tools.color === 'corners'
+              ? 'style.look'
+              : 'style.color',
+        )}
         onPress={() => toggle('color')}
         selected={tool === 'color'}
       >
-        {tools.color === 'opacity' ? null : <Swatch color={swatchOf(layer)} />}
+        {tools.color === 'opacity' || tools.color === 'corners' ? null : (
+          <Swatch color={swatchOf(layer)} />
+        )}
       </RoundButton>
       {tools.lettering === null ? null : (
         <RoundButton

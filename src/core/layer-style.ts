@@ -1,6 +1,6 @@
 import { isAppReplica } from './activity-block';
 import { isSummaryReplica } from './summary-block';
-import type { FontId, ImageFrame, Layer, LayerKind, Template } from './template';
+import type { FontId, Layer, LayerKind, Template } from './template';
 
 /**
  * The look of each layer, as the style panel edits it: color, opacity, text style, data labels,
@@ -322,13 +322,6 @@ export function setLogoOptions(
 ): Template {
   return editLayer(template, id, ['logo'], 'logo options', (layer) =>
     unchanged(layer, patch) ? layer : { ...layer, ...patch },
-  );
-}
-
-/** Frames a picture of the user's (see `IMAGE_FRAMES`), or takes its frame away. */
-export function setImageFrame(template: Template, id: string, frame: ImageFrame): Template {
-  return editLayer(template, id, ['image'], 'frame', (layer) =>
-    layer.frame === frame ? layer : { ...layer, frame },
   );
 }
 

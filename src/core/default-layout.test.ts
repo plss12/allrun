@@ -10,13 +10,14 @@ import {
 import { type Layer, parseTemplate } from './template';
 
 describe('emptyLayout', () => {
-  it('leaves only the watermark, in each format where the format puts it', () => {
+  it('leaves only the watermark, as high and as big as the format puts it, in the middle', () => {
     for (const format of ['story', 'square', 'landscape'] as const) {
       const full = defaultActivityTemplate(makeActivity(), format);
       const empty = emptyLayout(full);
+      const logo = full.layers.find((layer) => layer.kind === 'logo');
       expect(full.layers.length).toBeGreaterThan(1);
       expect(empty.layers.map((layer) => layer.kind)).toEqual(['logo']);
-      expect(empty.layers[0]).toEqual(full.layers.find((layer) => layer.kind === 'logo'));
+      expect(empty.layers[0].transform).toEqual({ ...logo?.transform, x: 0.5 });
     }
   });
 

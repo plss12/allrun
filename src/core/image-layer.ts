@@ -23,9 +23,8 @@ export const IMAGE_SIDE = 640;
 export const FRAME_SHARE = 0.05;
 
 /**
- * The key of a layer with no picture chosen: the gallery's sample picture, a runner in the mountains
- * (Pexels, square), shown in the tile before the user picks theirs. A slot of a design (see
- * `isPhotoSlot`) has it until then, and shows a sign to fill it on the canvas.
+ * The key of a layer with no picture chosen. A tile of the gallery has it, and shows a stock photo;
+ * a slot of a design (see `isPhotoSlot`) has it until then, and shows a sign to fill it on the canvas.
  */
 export const SAMPLE_IMAGE = '';
 
@@ -36,7 +35,7 @@ export const SAMPLE_IMAGE = '';
  */
 export const EDITOR_PHOTO = 'photo';
 
-/** Proportions of the gallery's sample picture. */
+/** Proportions of a picture not known yet. */
 export const SAMPLE_PICTURE: Size = { width: 1, height: 1 };
 
 /**
@@ -190,6 +189,11 @@ export interface MountBox extends ImageBox {
   readonly holes: readonly BoxHole[];
   /** The two columns at the window's sides where its data is written, turned on their side. */
   readonly sides: readonly [BoxRect, BoxRect];
+  /**
+   * The frames beside the window, which show the same picture again: whole, here, though the widget
+   * cuts them at its ends, so that a frame shows the side of the picture nearest the window.
+   */
+  readonly frames: readonly BoxRect[];
 }
 
 /** Proportions of the window of every holder: as a phone's vertical photos, which it never cuts. */
@@ -207,6 +211,23 @@ const NEGATIVE = {
   holes: 7,
   radius: 6,
 } as const;
+
+/**
+ * A strip of film: the band above and below its frames, for its texts, the room between frames, how
+ * much of the frames beside the main one shows, its frames' corners, and its perforations along
+ * both edges.
+ */
+const FILM_STRIP = {
+  band: 52,
+  gap: 16,
+  shown: 0.3,
+  radius: 14,
+  hole: { width: 20, height: 12, radius: 3, inset: 6, step: 46 },
+} as const;
+
+/** Where a strip of film's texts go, in the middle of what the perforations leave of its band. */
+export const STRIP_TEXT_INSET =
+  (FILM_STRIP.hole.inset + FILM_STRIP.hole.height + FILM_STRIP.band) / 2;
 
 /** The window of a holder as tall as `IMAGE_SIDE`, with its `band` above and below. */
 function windowIn(band: number): BoxRect {
@@ -236,6 +257,34 @@ export function mountBox(mount: ImageMount): MountBox {
           { x: -width / 2, y: picture.y, width: side, height: picture.height },
           { x: -picture.x, y: picture.y, width: side, height: picture.height },
         ],
+        frames: [],
+      };
+    }
+    case 'filmStrip': {
+      const { band, gap, shown, radius, hole } = FILM_STRIP;
+      const picture = windowIn(band);
+      const width = picture.width * (1 + 2 * shown) + 2 * gap;
+      const none = { ...picture, width: 0 };
+      const count = Math.floor(width / hole.step);
+      const start = (-count * hole.step) / 2 + (hole.step - hole.width) / 2;
+      return {
+        width,
+        height,
+        picture,
+        radius,
+        holes: Array.from({ length: count }, (_, i) => {
+          const x = start + i * hole.step;
+          const shape = { width: hole.width, height: hole.height, radius: hole.radius };
+          return [
+            { ...shape, x, y: -height / 2 + hole.inset },
+            { ...shape, x, y: height / 2 - hole.inset - hole.height },
+          ];
+        }).flat(),
+        sides: [none, none],
+        frames: [
+          { ...picture, x: picture.x - picture.width - gap },
+          { ...picture, x: -picture.x + gap },
+        ],
       };
     }
     case 'lightNegative': {
@@ -259,6 +308,7 @@ export function mountBox(mount: ImageMount): MountBox {
           { x: -width / 2, y: picture.y, width: data, height: picture.height },
           { x: width / 2 - data, y: picture.y, width: data, height: picture.height },
         ],
+        frames: [],
       };
     }
   }

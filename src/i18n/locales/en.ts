@@ -163,6 +163,7 @@ export const en = {
     sections: {
       data: 'Data',
       creative: 'Creative',
+      photos: 'Photos',
       basic: 'Basics',
       charts: 'Charts',
       brand: 'Logo',
@@ -241,6 +242,7 @@ export const en = {
       periodNutrition: 'Nutrition facts',
       periodMetro: 'Metro line',
       periodMessage: 'Message',
+      periodCamera: 'Camera',
       periodEquivalences: 'Equivalences',
     },
     blocks: {
@@ -566,6 +568,8 @@ export const en = {
       dark: 'Dark',
       color: 'Color',
     },
+    look: 'Look',
+    cornersLabel: 'Corners',
     frames: {
       none: 'No frame',
       light: 'Light',
@@ -750,6 +754,8 @@ export const en = {
       messageTwo: 'Message, two photos',
       filmFrame: 'Film frame',
       lightNegative: 'Light negative',
+      filmStrip: 'Film strip',
+      camera: 'Camera',
     },
   },
   activityCharts: {
