@@ -90,7 +90,7 @@ export function WidgetColumn({
         {tool === 'size' ? (
           <View style={{ position: 'absolute', top: 0, right: ROUND_BUTTON_SIZE + TOP_BAR_GAP }}>
             <SizeSlider
-              buttons={tools.lettering === null ? 3 : 4}
+              buttons={(tools.lettering === null ? 3 : 4) + (layer.kind === 'image' ? 1 : 0)}
               scale={layer.transform.scale}
               liveScale={liveScale}
               onStart={onResizeStart}
@@ -105,6 +105,19 @@ export function WidgetColumn({
           selected={tool === 'size'}
         />
       </View>
+      {/* The color always second, whatever the widget; its own tool comes after it. */}
+      <RoundButton
+        icon={
+          tools.color === 'opacity'
+            ? { ios: 'circle.lefthalf.filled', android: 'opacity' }
+            : undefined
+        }
+        label={t(tools.color === 'opacity' ? 'style.opacity' : 'style.color')}
+        onPress={() => toggle('color')}
+        selected={tool === 'color'}
+      >
+        {tools.color === 'opacity' ? null : <Swatch color={swatchOf(layer)} />}
+      </RoundButton>
       {tools.lettering === null ? null : (
         <RoundButton
           icon={
@@ -125,18 +138,18 @@ export function WidgetColumn({
           )}
         </RoundButton>
       )}
-      <RoundButton
-        icon={
-          tools.color === 'opacity'
-            ? { ios: 'circle.lefthalf.filled', android: 'opacity' }
-            : undefined
-        }
-        label={t(tools.color === 'opacity' ? 'style.opacity' : 'style.color')}
-        onPress={() => toggle('color')}
-        selected={tool === 'color'}
-      >
-        {tools.color === 'opacity' ? null : <Swatch color={swatchOf(layer)} />}
-      </RoundButton>
+      {/* A picture's own action, where a text has its letters. */}
+      {layer.kind === 'image' && actions.onEdit !== undefined ? (
+        <RoundButton
+          icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+          label={t('editor.changePhoto')}
+          onPress={() => {
+            onToolChange(null);
+            onMoreOpenChange(false);
+            actions.onEdit?.();
+          }}
+        />
+      ) : null}
       <View pointerEvents="box-none">
         {moreOpen ? (
           <View style={{ position: 'absolute', top: 0, right: ROUND_BUTTON_SIZE + TOP_BAR_GAP }}>
@@ -215,21 +228,13 @@ function MoreMenu({
     readonly disabled?: boolean;
     readonly destructive?: boolean;
   }[] = [
-    ...(actions.onEdit === undefined
+    ...(actions.onEdit === undefined || layer.kind === 'image'
       ? []
       : [
           {
             key: 'edit',
-            // A picture has nothing to write: its action is the one the photo's tools have.
-            ...(layer.kind === 'image'
-              ? {
-                  icon: { ios: 'photo.on.rectangle', android: 'photo_library' } as const,
-                  label: t('editor.changePhoto'),
-                }
-              : {
-                  icon: { ios: 'character.cursor.ibeam', android: 'edit' } as const,
-                  label: t('editor.editText'),
-                }),
+            icon: { ios: 'character.cursor.ibeam', android: 'edit' } as const,
+            label: t('editor.editText'),
             onPress: actions.onEdit,
           },
         ]),
