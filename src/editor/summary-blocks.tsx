@@ -51,6 +51,7 @@ import {
   periodCalendarBox,
   periodStreakBox,
   periodWeatherBox,
+  periodMessageBox,
   periodMetroBox,
   periodGrandPrixBox,
   periodLapsBox,
@@ -637,6 +638,8 @@ export function prepareSummaryBlock(
         );
       case 'periodMetro':
         return periodMetroBox(block, data, { fonts, textContext, translate });
+      case 'periodMessage':
+        return periodMessageBox(block, data, { fonts, textContext: compact, translate });
       case 'periodNotes':
         return periodNotesBox(block, data, { fonts, textContext: compact, translate });
     }

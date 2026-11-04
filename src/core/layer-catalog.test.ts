@@ -143,6 +143,8 @@ describe('activityCatalog', () => {
       'block-boardingPass',
       'image',
       'image-instant',
+      'image-filmFrame',
+      'image-lightNegative',
     ]);
     // A picture of the user's, as is and then in each frame; chosen when the tile is tapped.
     expect(variantKeys(trail, 'image')).toEqual(['image', 'image-light', 'image-dark']);
@@ -170,7 +172,7 @@ describe('activityCatalog', () => {
     // camera; then the bars and the ladder together and the race on TV apart; the laps' two, with
     // its laps.
     const withSplits = activityCatalog(makeActivity(), ['splits']);
-    expect(tileKeys(withSplits, 'creative').slice(-9, -1)).toEqual([
+    expect(tileKeys(withSplits, 'creative').slice(-11, -3)).toEqual([
       'block-camera',
       'block-notes',
       'block-grandPrix',
@@ -428,6 +430,8 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodMetro',
       'image',
       'image-instant',
+      'image-filmFrame',
+      'image-lightNegative',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodNotes')).toEqual([
       'summaryBlock-periodNotes-dark-activities',

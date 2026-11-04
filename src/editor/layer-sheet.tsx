@@ -39,7 +39,7 @@ import {
 } from './widget-gallery';
 
 /** How a picture added from the gallery looks: its frame, and an instant photo's caption. */
-export type PictureLook = Pick<Extract<Layer, { kind: 'image' }>, 'frame' | 'caption'>;
+export type PictureLook = Pick<Extract<Layer, { kind: 'image' }>, 'frame' | 'caption' | 'mount'>;
 
 interface LayerSheetProps {
   readonly visible: boolean;
@@ -421,6 +421,9 @@ function pageLabel(
       case 'logo':
         return [t('widgets.allrunLogo'), t(`gallery.variants.${item.variant}`)];
       case 'image':
+        if (item.mount !== undefined) {
+          return [t(`templates.ready.${item.mount}`)];
+        }
         return item.caption === undefined
           ? [t('widgets.image'), t(`style.frames.${item.frame}`)]
           : [t('widgets.instant'), t(`gallery.captions.${item.caption}`)];

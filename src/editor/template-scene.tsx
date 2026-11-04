@@ -38,7 +38,14 @@ import {
   type InstantBox,
   instantBox,
   instantFrame,
+  isPhotoSlot,
+  type MountBox,
+  mountBox,
+  PICTURE_RADIUS,
+  SAMPLE_IMAGE,
   SAMPLE_PICTURE,
+  SLOT_PICTURE,
+  slotBox,
 } from '@/core/image-layer';
 import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
 import type { PhotoDrawing, Size } from '@/core/photo-placement';
@@ -50,6 +57,7 @@ import {
   type ActivityChartSeries,
   CANVAS_FORMATS,
   type CanvasFormat,
+  type ImageMount,
   type Layer,
   type Template,
 } from '@/core/template';
@@ -87,6 +95,12 @@ import {
   textShadows,
 } from './scene-text';
 import { type CaptionText, instantCaption } from './instant-caption';
+import {
+  MOUNT_ARROW as MOUNT_ARROW_MARK,
+  mountCaption,
+  type MountMarks,
+  type MountSide,
+} from './mount-caption';
 import { discardParagraph, finishParagraph } from './paragraph-arena';
 
 /**
@@ -122,6 +136,11 @@ export interface LayerContext {
   readonly data: EditorData;
   /** The user's pictures, by key; none in the gallery, which shows a sample instead. */
   readonly images?: ReadonlyMap<string, LayerImage>;
+  /**
+   * What a design's slot with no picture shows: the sign to fill it (`hint`, on the canvas) or
+   * nothing (`blank`, in the image). Absent, the pictures of `images`, for a thumbnail.
+   */
+  readonly emptySlots?: 'hint' | 'blank';
   readonly fonts: SkTypefaceFontProvider;
   readonly textContext: TextContext;
   /** Translates a label; `values` fill its placeholders, such as the chart title's unit. */
@@ -235,11 +254,13 @@ function CollageCellScene({ cell }: { readonly cell: SceneCell }) {
   if (cell.kind === 'loading') {
     return <Rect {...clip} color={LOADING_CELL} />;
   }
-  if (!cell.hint) {
-    return null;
-  }
-  const cx = clip.x + clip.width / 2;
-  const cy = clip.y + clip.height / 2;
+  return cell.hint ? (
+    <EmptySign cx={clip.x + clip.width / 2} cy={clip.y + clip.height / 2} />
+  ) : null;
+}
+
+/** The sign to fill an empty place with a photo, on the canvas: never in the image. */
+function EmptySign({ cx, cy }: { readonly cx: number; readonly cy: number }) {
   const { radius, length, thickness } = EMPTY_HINT;
   return (
     <Group>
@@ -424,7 +445,7 @@ export function TemplateScene({
 /** Fills in and measures one layer, or `null` when it has nothing to show for this data. */
 function prepareLayer(
   layer: Layer,
-  { data, fonts, textContext, translate, images, phrases }: LayerContext,
+  { data, fonts, textContext, translate, images, emptySlots, phrases }: LayerContext,
   canvas: Size,
 ): PreparedLayer | null {
   const canvasWidth = canvas.width;
@@ -753,6 +774,31 @@ function prepareLayer(
     case 'image': {
       // A picture not known yet (the gallery's sample before it is decoded) shows as loading.
       const picked = images?.get(layer.image);
+      const empty =
+        emptySlots !== undefined &&
+        isPhotoSlot(layer) &&
+        (layer.image === SAMPLE_IMAGE || picked === undefined)
+          ? emptySlots
+          : null;
+      if (layer.mount !== undefined) {
+        const box = mountBox(layer.mount);
+        const { sides, marks } = mountCaption(layer.mount, data, textContext, translate);
+        return {
+          layer,
+          width: box.width,
+          height: box.height,
+          content: (
+            <MountWidget
+              mount={layer.mount}
+              box={box}
+              picture={picked?.image ?? null}
+              empty={empty}
+              sides={mountSides(fonts, layer.mount, box, sides, textContext.locale)}
+              marks={mountMarks(fonts, layer.mount, box, marks, textContext.locale)}
+            />
+          ),
+        };
+      }
       if (layer.caption !== undefined) {
         const box = instantBox();
         const frame = instantFrame(layer.frame);
@@ -777,7 +823,10 @@ function prepareLayer(
           ),
         };
       }
-      const box = imageBox(picked?.size ?? SAMPLE_PICTURE, layer.frame);
+      const box =
+        layer.slot === true
+          ? slotBox(empty === null ? (picked?.size ?? SLOT_PICTURE) : SLOT_PICTURE, layer.frame)
+          : imageBox(picked?.size ?? SAMPLE_PICTURE, layer.frame);
       return {
         layer,
         width: box.width,
@@ -787,6 +836,8 @@ function prepareLayer(
             box={box}
             frame={layer.frame === 'none' ? null : FRAME_COLORS[layer.frame]}
             picture={picked?.image ?? null}
+            radius={layer.rounded === true ? PICTURE_RADIUS : 0}
+            empty={empty}
           />
         ),
       };
@@ -814,12 +865,27 @@ function PictureWidget({
   box,
   frame,
   picture,
+  radius,
+  empty,
 }: {
   readonly box: ImageBox;
   readonly frame: string | null;
   readonly picture: SkImage | null;
+  /** The radius of the picture's corners; its frame's go around them. */
+  readonly radius: number;
+  /** A slot with no picture: the sign to fill it, on the canvas, or nothing, in the image. */
+  readonly empty: 'hint' | 'blank' | null;
 }) {
+  if (empty === 'blank') {
+    return null;
+  }
   const rect = box.picture;
+  const outer = radius === 0 ? 0 : radius + (box.width - rect.width) / 2;
+  const shape = Skia.RRectXY(
+    Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height),
+    radius,
+    radius,
+  );
   return (
     <Group
       layer={
@@ -829,20 +895,26 @@ function PictureWidget({
       }
     >
       {frame === null ? null : (
-        <Rect
+        <RoundedRect
           x={-box.width / 2}
           y={-box.height / 2}
           width={box.width}
           height={box.height}
+          r={outer}
           color={frame}
         />
       )}
-      {picture === null ? (
-        <Rect {...rect} color={LOADING_PICTURE} />
-      ) : (
-        // Its proportions are the picture's: it fills its place without cropping.
-        <Image image={picture} rect={rect} fit="fill" sampling={PHOTO_SAMPLING} />
-      )}
+      <Group clip={shape}>
+        {empty === null && picture !== null ? (
+          // Its proportions are the picture's: it fills its place without cropping.
+          <Image image={picture} rect={rect} fit="fill" sampling={PHOTO_SAMPLING} />
+        ) : (
+          <Rect {...rect} color={LOADING_PICTURE} />
+        )}
+        {empty === 'hint' ? (
+          <EmptySign cx={rect.x + rect.width / 2} cy={rect.y + rect.height / 2} />
+        ) : null}
+      </Group>
     </Group>
   );
 }
@@ -892,6 +964,332 @@ function InstantWidget({
           y={y}
           width={Math.ceil(paragraph.getLongestLine()) + 1}
         />
+      ))}
+    </Group>
+  );
+}
+
+/** How each holder looks: its color, its letters and how they read along its sides. */
+const MOUNT_LOOKS: Readonly<
+  Record<
+    ImageMount,
+    {
+      readonly color: string;
+      readonly ink: string;
+      readonly font: 'spaceMono' | 'orbitron';
+      readonly bold: boolean;
+      readonly size: number;
+      /** How its sides are turned: 1 reads downwards, -1 upwards. */
+      readonly turn: 1 | -1;
+    }
+  >
+> = {
+  filmFrame: {
+    color: '#000000',
+    ink: '#FFFFFF',
+    font: 'spaceMono',
+    bold: true,
+    size: 24,
+    turn: 1,
+  },
+  // Thin, as a date a camera stamps on a negative (the user's choice).
+  lightNegative: {
+    color: '#E6E6E3',
+    ink: '#2C2C2E',
+    font: 'orbitron',
+    bold: false,
+    size: 19,
+    turn: -1,
+  },
+};
+
+/** The marks on a reel's edge, in the bands above and below a frame: their color and size. */
+const MOUNT_MARKS = { color: '#E9A23B', size: 18, gap: 1.5 } as const;
+
+/** Least room between two texts of a holder's side, as a share of their size. */
+const MOUNT_TEXT_GAP = 1;
+/** Room between letters of a holder's texts, as a share of their size. */
+const MOUNT_TRACKING = 0.03;
+/** The arrow inside a holder's text: its size and the room at each side, as shares of the text's. */
+const MOUNT_ARROW = { size: 0.5, room: 0.45 } as const;
+
+/** A holder's side laid out: its texts at the size that fits, and the place of each. */
+interface LaidOutSide {
+  readonly rect: DrawRect;
+  readonly paragraphs: readonly { readonly paragraph: SkParagraph; readonly at: number }[];
+  /** Where each arrow goes along the side, by its left end, and how big. */
+  readonly arrows: readonly number[];
+  readonly arrowSize: number;
+}
+
+/**
+ * Lays out a holder's texts along its two sides (see `MOUNT_LOOKS`), spread along each, shrunk
+ * together so that they fit with room between them. An arrow in a text is drawn apart: the fonts of the film's edge don't have one. Time O(t) for t texts, each
+ * laid out at most twice.
+ */
+function mountSides(
+  fonts: SkTypefaceFontProvider,
+  mount: ImageMount,
+  box: MountBox,
+  sides: readonly [MountSide, MountSide],
+  locale: string,
+): readonly LaidOutSide[] {
+  const look = MOUNT_LOOKS[mount];
+  const layOut = (text: string, size: number) => {
+    const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+    builder.pushStyle({
+      color: Skia.Color(look.ink),
+      fontFamilies: fontFamiliesOf(look.font),
+      fontSize: size,
+      fontStyle: { weight: drawsBold(look.font, look.bold) ? FontWeight.Bold : FontWeight.Normal },
+      letterSpacing: size * MOUNT_TRACKING,
+    });
+    builder.addText(text.toLocaleUpperCase(locale));
+    builder.pop();
+    const paragraph = finishParagraph(builder);
+    paragraph.layout(NO_WRAP_WIDTH);
+    paragraph.layout(Math.ceil(paragraph.getLongestLine()) + 1);
+    return paragraph;
+  };
+  /** Each text at `size`, in its parts: the arrows go between them. */
+  const layOutAll = (texts: readonly string[], size: number) =>
+    texts.map((one) => one.split(MOUNT_ARROW_MARK).map((part) => layOut(part.trim(), size)));
+  const arrowRoom = (size: number) => size * (MOUNT_ARROW.size + 2 * MOUNT_ARROW.room);
+  /** How long a text is along its side: its parts, and an arrow between each two. */
+  const lengthOf = (parts: readonly SkParagraph[], size: number) =>
+    parts.reduce((sum, part) => sum + part.getLongestLine(), 0) +
+    (parts.length - 1) * arrowRoom(size);
+  return sides.map((side, index): LaidOutSide => {
+    const rect = box.sides[index];
+    const length = rect.height;
+    const count = side.texts.length;
+    const needed = (texts: readonly (readonly SkParagraph[])[], size: number) =>
+      texts.reduce((sum, parts) => sum + lengthOf(parts, size), 0) +
+      size * MOUNT_TEXT_GAP * (count - 1);
+    let size: number = look.size;
+    let texts = layOutAll(side.texts, size);
+    const fit = Math.min(1, length / Math.max(1, needed(texts, size)));
+    if (fit < 1) {
+      texts.flat().forEach(discardParagraph);
+      size *= fit;
+      texts = layOutAll(side.texts, size);
+    }
+    // What is left goes evenly between them; alone, a text goes in the middle of its side.
+    const free = length - needed(texts, size);
+    const gap = size * MOUNT_TEXT_GAP + (count > 1 ? free / (count - 1) : 0);
+    let at = count === 1 ? -needed(texts, size) / 2 : -length / 2;
+    const paragraphs: { readonly paragraph: SkParagraph; readonly at: number }[] = [];
+    const arrows: number[] = [];
+    for (const parts of texts) {
+      parts.forEach((paragraph, i) => {
+        if (i > 0) {
+          arrows.push(at + size * MOUNT_ARROW.room);
+          at += arrowRoom(size);
+        }
+        paragraphs.push({ paragraph, at });
+        at += paragraph.getLongestLine();
+      });
+      at += gap;
+    }
+    return {
+      rect,
+      paragraphs,
+      arrows,
+      arrowSize: size * MOUNT_ARROW.size,
+    };
+  });
+}
+
+/**
+ * Lays out a holder's reel marks in the bands above and below its window (see `MountMarks`), each
+ * band's two ends shrunk together so that they fit it. Time O(1).
+ */
+function mountMarks(
+  fonts: SkTypefaceFontProvider,
+  mount: ImageMount,
+  box: MountBox,
+  marks: MountMarks,
+  locale: string,
+): readonly PlacedParagraph[] {
+  const look = MOUNT_LOOKS[mount];
+  const { x: left, y: top, width } = box.picture;
+  const right = left + width;
+  const layOut = (text: string, size: number) => {
+    const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+    builder.pushStyle({
+      color: Skia.Color(MOUNT_MARKS.color),
+      fontFamilies: fontFamiliesOf(look.font),
+      fontSize: size,
+      fontStyle: { weight: drawsBold(look.font, true) ? FontWeight.Bold : FontWeight.Normal },
+      letterSpacing: size * MOUNT_TRACKING,
+    });
+    builder.addText(text.toLocaleUpperCase(locale));
+    builder.pop();
+    const paragraph = finishParagraph(builder);
+    paragraph.layout(NO_WRAP_WIDTH);
+    paragraph.layout(Math.ceil(paragraph.getLongestLine()) + 1);
+    return paragraph;
+  };
+  /** A band at height `y`: its two ends, shrunk together to fit, so a long place never runs over. */
+  const band = (leftText: string | null, rightText: string | null, y: number) => {
+    const texts = [leftText, rightText];
+    const room = (paragraphs: readonly (SkParagraph | null)[], size: number) =>
+      paragraphs.reduce((sum, paragraph) => sum + (paragraph?.getLongestLine() ?? 0), 0) +
+      size * MOUNT_MARKS.gap;
+    const of = (size: number) => texts.map((text) => (text === null ? null : layOut(text, size)));
+    let size: number = MOUNT_MARKS.size;
+    let paragraphs = of(size);
+    const fit = Math.min(1, width / room(paragraphs, size));
+    if (fit < 1) {
+      paragraphs.forEach((paragraph) => {
+        if (paragraph !== null) {
+          discardParagraph(paragraph);
+        }
+      });
+      size *= fit;
+      paragraphs = of(size);
+    }
+    return paragraphs.flatMap((paragraph, i): PlacedParagraph[] =>
+      paragraph === null
+        ? []
+        : [
+            {
+              paragraph,
+              x: i === 0 ? left : right - paragraph.getLongestLine(),
+              y: y - paragraph.getHeight() / 2,
+            },
+          ],
+    );
+  };
+  const topBand = (-box.height / 2 + top) / 2;
+  return [
+    ...band(marks.topLeft, marks.topRight, topBand),
+    ...band(marks.bottomLeft, marks.bottomRight, -topBand),
+  ];
+}
+
+/** Each holder's shape with its cut-outs, with and without its window, built once. */
+const mountPaths = new Map<string, SkPath>();
+
+/**
+ * A holder's shape with its cut-outs, and its window when `open`: only when it shows nothing there,
+ * because a picture over a hole lets the background through along its edge.
+ */
+function mountPath(mount: ImageMount, box: MountBox, open: boolean): SkPath {
+  const key = `${mount}-${open}`;
+  const cached = mountPaths.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const builder = Skia.PathBuilder.Make();
+  builder.addRect(Skia.XYWHRect(-box.width / 2, -box.height / 2, box.width, box.height));
+  if (open) {
+    const { x, y, width, height } = box.picture;
+    builder.addRRect(Skia.RRectXY(Skia.XYWHRect(x, y, width, height), box.radius, box.radius));
+  }
+  for (const hole of box.holes) {
+    builder.addRRect(
+      Skia.RRectXY(
+        Skia.XYWHRect(hole.x, hole.y, hole.width, hole.height),
+        hole.radius,
+        hole.radius,
+      ),
+    );
+  }
+  const path = builder.detach();
+  mountPaths.set(key, path);
+  return path;
+}
+
+/** The arrow of a holder's text, pointing along it, centered on its line. */
+function arrowPath(at: number, size: number): SkPath {
+  const builder = Skia.PathBuilder.Make();
+  builder.moveTo(at, -size / 2);
+  builder.lineTo(at + size, 0);
+  builder.lineTo(at, size / 2);
+  builder.close();
+  return builder.detach();
+}
+
+/**
+ * A picture in its holder, as one piece (see `IMAGE_MOUNTS`): the holder with its cut-outs, through
+ * which the background shows, the picture cut to its window around its middle, and the texts turned
+ * along its sides. With no picture, the window shows the sign to fill it (`hint`) or nothing.
+ */
+function MountWidget({
+  mount,
+  box,
+  picture,
+  empty,
+  sides,
+  marks,
+}: {
+  readonly mount: ImageMount;
+  readonly box: MountBox;
+  readonly picture: SkImage | null;
+  readonly empty: 'hint' | 'blank' | null;
+  readonly sides: readonly LaidOutSide[];
+  readonly marks: readonly PlacedParagraph[];
+}) {
+  const look = MOUNT_LOOKS[mount];
+  const rect = box.picture;
+  const shape = Skia.RRectXY(
+    Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height),
+    box.radius,
+    box.radius,
+  );
+  return (
+    <Group>
+      {look.color === null ? null : (
+        <Path
+          path={mountPath(mount, box, empty === 'blank')}
+          color={look.color}
+          fillType="evenOdd"
+        />
+      )}
+      {empty === 'blank' ? null : (
+        <Group clip={shape}>
+          {empty === null && picture !== null ? (
+            <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
+          ) : (
+            <Rect {...rect} color={LOADING_PICTURE} />
+          )}
+          {empty === 'hint' ? (
+            <EmptySign cx={rect.x + rect.width / 2} cy={rect.y + rect.height / 2} />
+          ) : null}
+        </Group>
+      )}
+      {marks.map(({ paragraph, x, y }, i) => (
+        <Paragraph
+          key={i}
+          paragraph={paragraph}
+          x={x}
+          y={y}
+          width={Math.ceil(paragraph.getLongestLine()) + 1}
+        />
+      ))}
+      {sides.map((side, index) => (
+        <Group
+          key={index}
+          transform={[
+            { translateX: side.rect.x + side.rect.width / 2 },
+            { translateY: side.rect.y + side.rect.height / 2 },
+            { rotate: (look.turn * Math.PI) / 2 },
+          ]}
+        >
+          {side.paragraphs.map(({ paragraph, at }, i) => (
+            <Paragraph
+              key={i}
+              paragraph={paragraph}
+              x={at}
+              y={-paragraph.getHeight() / 2}
+              width={Math.ceil(paragraph.getLongestLine()) + 1}
+            />
+          ))}
+          {side.arrows.map((at, i) => (
+            <Path key={i} path={arrowPath(at, side.arrowSize)} color={look.ink} />
+          ))}
+        </Group>
       ))}
     </Group>
   );

@@ -12,6 +12,7 @@ import {
   DATE_FORMATS,
   HEART_RATE_ZONE_VIEWS,
   IMAGE_FRAMES,
+  IMAGE_MOUNTS,
   INSTANT_CAPTIONS,
   type Layer,
   type LayerKind,
@@ -76,7 +77,7 @@ export type CatalogItem =
     >
   | Readonly<Pick<LayerOf<'activityBlock'>, 'kind' | 'block'>>
   | Readonly<Pick<LayerOf<'summaryBlock'>, 'kind' | 'block'>>
-  | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame' | 'caption'>>;
+  | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame' | 'caption' | 'mount'>>;
 
 /** What a new layer is made from: a catalog item, with the typed content for free text. */
 export type NewLayer =
@@ -118,7 +119,10 @@ const CREATIVE_THEMES: Readonly<
     ],
     [['block-laps', 'block-grandPrix'], ['block-splits']],
     [['block-receipt', 'block-nutrition'], ['block-boardingPass']],
-    [['image', 'image-instant']],
+    [
+      ['image', 'image-instant'],
+      ['image-filmFrame', 'image-lightNegative'],
+    ],
   ],
   summary: [
     [
@@ -135,7 +139,10 @@ const CREATIVE_THEMES: Readonly<
       ['summaryBlock-periodReceipt', 'summaryBlock-periodNutrition'],
       ['summaryBlock-periodBoardingPass', 'summaryBlock-periodMetro'],
     ],
-    [['image', 'image-instant']],
+    [
+      ['image', 'image-instant'],
+      ['image-filmFrame', 'image-lightNegative'],
+    ],
   ],
 };
 
@@ -222,8 +229,12 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'summaryBlock':
       return `summaryBlock-${item.block.design}`;
     case 'image':
-      // The instant photos, a tile of their own.
-      return item.caption === undefined ? 'image' : 'image-instant';
+      // The instant photos and each holder, a tile of their own.
+      return item.mount !== undefined
+        ? `image-${item.mount}`
+        : item.caption === undefined
+          ? 'image'
+          : 'image-instant';
     case 'text':
     case 'route':
     case 'summaryRoutes':
@@ -307,9 +318,11 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         ];
       case 'image':
         // As is, the default; an instant photo by its caption, where and how far the default.
-        return item.caption === undefined
-          ? [item.frame === 'none' ? undefined : item.frame]
-          : [item.caption === 'place' ? undefined : item.caption];
+        return item.mount !== undefined
+          ? []
+          : item.caption === undefined
+            ? [item.frame === 'none' ? undefined : item.frame]
+            : [item.caption === 'place' ? undefined : item.caption];
       case 'text':
         return [];
     }
@@ -378,8 +391,9 @@ const OFFERED_DATE_FORMATS = DATE_FORMATS.filter((format) => format !== 'weekday
 
 /**
  * A picture of the user's, chosen when its tile is tapped: as is, in a light frame and in a dark
- * one (also chosen later with its color button); and an instant photo of it, a Polaroid, with
- * each caption (its frame dark with its color button).
+ * one (also chosen later with its color button); an instant photo of it, a Polaroid, with each
+ * caption (its frame dark with its color button); and each holder (see `IMAGE_MOUNTS`), the same
+ * pieces AllRun's designs are made of.
  */
 const IMAGE_ENTRIES: readonly Entry[] = [
   ...tileEntries(
@@ -394,6 +408,9 @@ const IMAGE_ENTRIES: readonly Entry[] = [
       frame: 'light',
       caption,
     })),
+  ),
+  ...IMAGE_MOUNTS.flatMap((mount) =>
+    tileEntries('creative', [{ kind: 'image', image: SAMPLE_IMAGE, frame: 'none', mount }]),
   ),
 ];
 

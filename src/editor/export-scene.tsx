@@ -116,7 +116,7 @@ export function exportScene({
   return (
     <TemplateScene
       format={template.format}
-      layers={prepareLayers(template, layerContext)}
+      layers={prepareLayers(template, { ...layerContext, emptySlots: 'blank' })}
       backdrop={color === null ? { kind: 'none' } : { kind: 'color', color }}
       photo={photo === null || template.collage !== undefined ? null : scenePhoto(template, photo)}
       collage={sceneCollage(template, cells, false)}

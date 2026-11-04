@@ -1,7 +1,6 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
 import { defaultActivityTemplate, newLayer } from './default-layout';
-import { starterTemplate } from './starter-templates';
 import { MAX_TEXT_LENGTH, parseTemplate, type Template } from './template';
 import { addLayer } from './template-edit';
 import { commitTextDraft, editTextDraft, previewTextDraft } from './text-draft';
@@ -67,11 +66,14 @@ describe('commitTextDraft', () => {
 
 describe('new texts', () => {
   it('take the font of the design they are added to', () => {
-    const poster = starterTemplate(
-      'poster',
-      { mode: 'activity', activity: makeActivity() },
-      'story',
-    );
+    const poster: Template = {
+      ...base,
+      layers: base.layers.map((layer) =>
+        layer.kind === 'info' || layer.kind === 'metric'
+          ? { ...layer, style: { ...layer.style, font: 'unbounded' } }
+          : layer,
+      ),
+    };
     const draft = { layerId: 'text', isNew: true, content: 'PB!' };
     for (const template of [previewTextDraft(poster, draft), commitTextDraft(poster, draft)]) {
       const added = template.layers[template.layers.length - 1];

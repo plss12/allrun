@@ -215,6 +215,15 @@ export const INSTANT_CAPTIONS = ['place', 'data'] as const;
 
 export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
 
+/**
+ * What holds a picture (see `mountBox`), the picture cut to fit it around its middle: a black 35 mm
+ * frame with its data around it (`filmFrame`), or a light strip of negative with perforations
+ * (`lightNegative`). The holder and the data on it move as one piece.
+ */
+export const IMAGE_MOUNTS = ['filmFrame', 'lightNegative'] as const;
+
+export type ImageMount = (typeof IMAGE_MOUNTS)[number];
+
 /** How a route's line is drawn. */
 export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 
@@ -457,7 +466,8 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * days, weeks or months as the forecast's (`periodWeather`: `light` by day, `dark` by night); as a
  * food's nutrition label, as an activity's (`periodNutrition`); its totals as things anyone
  * pictures, as an activity's (`periodEquivalences`); and as a metro line, its days,
- * weeks or months as its stations, in a brand color (`periodMetro`).
+ * weeks or months as its stations, in a brand color (`periodMetro`); and as a sent chat message
+ * with two of its totals (`periodMessage`), only in AllRun's designs, not in the gallery.
  */
 const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({
@@ -504,6 +514,7 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
     layout: z.enum(APP_MODES),
   }),
   z.object({ design: z.literal('periodMetro'), cover: z.enum(BRAND_COVERS) }),
+  z.object({ design: z.literal('periodMessage'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('periodEquivalences'), layout: z.enum(APP_MODES) }),
 ]);
 
@@ -772,6 +783,15 @@ export const layerSchema = z.discriminatedUnion('kind', [
      * `none` reads as `light`.
      */
     caption: z.enum(INSTANT_CAPTIONS).optional(),
+    /** What holds the picture (see `IMAGE_MOUNTS`); absent, a picture as it is. */
+    mount: z.enum(IMAGE_MOUNTS).optional(),
+    /** A picture with its corners rounded, as a chat shows it; a holder and an instant photo ignore it. */
+    rounded: z.boolean().optional(),
+    /**
+     * A plain picture that is a design's slot: it has its place before a photo is chosen, and keeps
+     * within it (see `slotBox`). A picture in a holder is always one (see `isPhotoSlot`).
+     */
+    slot: z.boolean().optional(),
   }),
   z.object({
     ...layerBase,

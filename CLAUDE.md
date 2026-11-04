@@ -21,10 +21,11 @@ El detalle de cada área vive en `.claude/rules/`, que se carga solo al leer o e
 Las carpetas que aún no existen se crean en su hito.
 
 - `src/app/`: solo pantallas y layouts (Expo Router).
-- `src/core/`: dominio puro y testeado (deportes, métricas, resúmenes, gráficas, widgets, plantillas, catálogo de la galería, exportación). Sin imports de React Native ni de E/S.
+- `src/core/`: dominio puro y testeado (deportes, métricas, resúmenes, gráficas, widgets, plantillas, diseños de AllRun, catálogo de la galería, exportación). Sin imports de React Native ni de E/S.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/schema.ts` valida con Zod y mapea al modelo `Activity`, y `strava/detail.ts` los _streams_, parciales y vueltas al `ActivityDetail`; `fixtures/` genera un historial sintético con el formato de Strava (y _streams_, parciales y vueltas coherentes con los totales: algunas carreras son series) que pasa por esos mismos esquemas.
 - `src/data/`: proveedores de datos de la app: la fuente de actividades, el almacén de plantillas del usuario (`TemplateStore`: un JSON por plantilla en local; Supabase cuando llegue el login), los colores favoritos (`color-favorites.ts`, un JSON en local), las frases de los widgets (`phrases.ts`, copia local de la tabla de Supabase, y `phrases-table.ts`) y el nombre del lugar de una actividad (`place-lookup.ts`, con el geocodificador del sistema hasta el hito 4).
-- `src/editor/`: lienzo Skia, widgets, galería, gestos y exportación.
+- `src/editor/`: lienzo Skia, widgets, galerías de widgets y de diseños, gestos y exportación.
+- `assets/images/stock/`: las fotos de las miniaturas de los diseños (Pexels, con su origen en `SOURCES.md`); los originales, en `docs/Fotos`, fuera de git.
 - `src/home/`: inicio: galería de actividades, tarjetas de resumen por periodo y su gráfica de línea. Las pestañas de inicio y de selección, y Recientes, Favoritas y Álbumes, siguen montadas al cambiar (`KeptMounted`): no cargan de nuevo y cada lista sigue donde estaba (decisión del usuario); los resúmenes empiezan a cargar poco después de abrir.
 - `src/photos/`: la cuadrícula propia de fotos (`photo-browser.tsx`), en la pantalla de selección (`app/select.tsx`) y, en una hoja, dentro del editor (`use-photo-picker.tsx`); lee de `data/photo-library.ts`. La pestaña Stickers de esa pantalla es `editor/sticker-gallery.tsx`.
 - `src/ui/`: piezas comunes de interfaz (formato de fechas y datos, estados de carga y error, la pantalla de carga, y `top-bar.tsx`: la barra de arriba de inicio y selección, propia de cada pantalla y con el cristal del sistema. Nunca un control de SwiftUI en la cabecera nativa: saltaba al entrar, se cortaba y salía duplicado al volver).

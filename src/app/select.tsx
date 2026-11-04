@@ -1,17 +1,24 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 
+import { INITIAL_FORMAT } from '@/core/editor-document';
 import { editorParamsSchema } from '@/editor/editor-params';
 import { KeptMounted, RoundButton } from '@/editor/round-button';
 import type { EditorRequest } from '@/editor/editor-params';
-import { StickerGallery, useStickerData } from '@/editor/sticker-gallery';
+import type { DesignChoice } from '@/editor/design-choice';
+import { DesignGallery } from '@/editor/design-gallery';
+import { useEditorFonts } from '@/editor/fonts';
+import { useStockPhotos } from '@/editor/stock-photos';
+import { StickerGallery, type StickerData, useStickerData } from '@/editor/sticker-gallery';
+import { useUserTemplates } from '@/data/user-templates';
 import { PhotoBrowser } from '@/photos/photo-browser';
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
-import { EmptyView, ErrorView } from '@/ui/state-views';
+import { ErrorView, LoadingView } from '@/ui/state-views';
+import { useDisplaySettings } from '@/ui/settings';
 import { GlassTabs, TOP_BAR_HEIGHT, TopBar, useTopBarRoom } from '@/ui/top-bar';
 
 const TABS = ['photo', 'designs', 'stickers'] as const;
@@ -52,6 +59,7 @@ function Selection({
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('photo');
   const [stickersOpened, setStickersOpened] = useState(false);
+  const [designsOpened, setDesignsOpened] = useState(false);
   // The lists scroll under the bar on top, whose glass takes on what passes beneath it.
   const topInset = useTopBarRoom();
   const stickerData = useStickerData(params);
@@ -61,6 +69,11 @@ function Selection({
     router.push({
       pathname: '/editor',
       params: { ...editorParams, ...(photo === undefined ? {} : { photo }) },
+    });
+  const openDesign = (choice: DesignChoice) =>
+    router.push({
+      pathname: '/editor',
+      params: { ...editorParams, design: JSON.stringify(choice) },
     });
   const top =
     line === undefined || line === '' ? null : (
@@ -93,11 +106,15 @@ function Selection({
           <StickerGallery stickerData={stickerData} top={top} topInset={topInset} />
         </KeptMounted>
       ) : null}
-      {tab === 'designs' ? (
-        <View style={{ flex: 1, paddingTop: topInset }}>
-          {top}
-          <EmptyView message={t('editor.comingSoon')} />
-        </View>
+      {designsOpened ? (
+        <KeptMounted hidden={tab !== 'designs'} style={StyleSheet.absoluteFill}>
+          <DesignsTab
+            stickerData={stickerData}
+            top={top}
+            topInset={topInset}
+            onChoose={openDesign}
+          />
+        </KeptMounted>
       ) : null}
       <TopBar
         left={
@@ -117,10 +134,68 @@ function Selection({
             if (TABS[index] === 'stickers') {
               setStickersOpened(true);
             }
+            if (TABS[index] === 'designs') {
+              setDesignsOpened(true);
+            }
           }}
           width={260}
         />
       </TopBar>
     </View>
+  );
+}
+
+/**
+ * The Designs tab: the gallery for the data the screen loaded for its stickers, in the format the
+ * editor opens in. Choosing one opens the editor with it, its slots empty.
+ */
+function DesignsTab({
+  stickerData: { data },
+  top,
+  topInset,
+  onChoose,
+}: {
+  readonly stickerData: StickerData;
+  /** Goes over the gallery, scrolling with it. */
+  readonly top: ReactNode;
+  readonly topInset: number;
+  readonly onChoose: (choice: DesignChoice) => void;
+}) {
+  const { t } = useTranslation();
+  const { unit, locale } = useDisplaySettings();
+  const fonts = useEditorFonts();
+  const stock = useStockPhotos(true);
+  const userTemplates = useUserTemplates();
+  if (data.status === 'error') {
+    return <ErrorView message={t('editor.error')} onRetry={data.retry} />;
+  }
+  if (data.status === 'loading' || fonts === null) {
+    return <LoadingView />;
+  }
+  return (
+    <DesignGallery
+      context={{
+        data: data.data,
+        fonts,
+        textContext: {
+          unit,
+          locale,
+          durationUnits: {
+            hours: t('durationUnits.hours'),
+            minutes: t('durationUnits.minutes'),
+            seconds: t('durationUnits.seconds'),
+          },
+          unitLabel: (metricUnit) => t(`metricUnits.${metricUnit}`),
+        },
+        translate: (key, values) => t(key, values),
+      }}
+      format={INITIAL_FORMAT}
+      anyFormat
+      stock={stock}
+      userTemplates={userTemplates}
+      onChoose={onChoose}
+      top={top}
+      topInset={topInset}
+    />
   );
 }

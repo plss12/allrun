@@ -808,7 +808,7 @@ const MESSAGE_RADIUS = 30;
 const MESSAGE_TAIL = 18;
 
 /** `box` in a sent message's bubble of `color`, its tail out of the top right corner. */
-const messageBubble = (box: Box, color: string): Box => {
+export const messageBubble = (box: Box, color: string): Box => {
   const bubble = panel(box, color, MESSAGE_PAD_X, MESSAGE_PAD_Y, MESSAGE_RADIUS);
   return {
     width: bubble.width + MESSAGE_TAIL,
@@ -1147,7 +1147,6 @@ const SIZES = {
    */
   quotation: { text: 64, minText: 34, width: 900, lines: 3, source: 36 },
   notes: { bar: 34, icon: 40, title: 74, row: 40 },
-  message: { text: 50, meta: 26 },
 } as const;
 
 /**
@@ -1268,11 +1267,14 @@ export const NOTES_COLORS = {
   light: { page: '#FFFFFF', ink: '#000000', accent: '#D49B12' },
 } as const;
 
+/** Sizes of a sent chat message: its text and the line under it. */
+export const MESSAGE_SIZES = { text: 50, meta: 26 } as const;
+
 /**
  * A sent chat message in dark and light mode: the green bubble, its text, the line under it
  * (where the time goes) and the blue read ticks.
  */
-const MESSAGE_COLORS = {
+export const MESSAGE_COLORS = {
   dark: { bubble: '#005C4B', ink: '#E9EDEF', meta: '#E9EDEF99', ticks: '#53BDEB' },
   light: { bubble: '#D9FDD3', ink: '#111B21', meta: '#667781', ticks: '#53BDEB' },
 } as const;
@@ -3603,7 +3605,7 @@ export function prepareActivityBlock(
         // where the message's time goes. Without other data, the time is the message and the
         // start time goes there.
         const colors = MESSAGE_COLORS[block.layout];
-        const sizes = SIZES.message;
+        const sizes = MESSAGE_SIZES;
         const others = metrics.filter((metric) => metric !== 'movingTime');
         const footTime =
           others.length > 0 && metrics.includes('movingTime')

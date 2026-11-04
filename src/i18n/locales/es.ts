@@ -235,6 +235,7 @@ export const es: Translations = {
       periodWeather: 'Tiempo',
       periodNutrition: 'Información nutricional',
       periodMetro: 'Línea de metro',
+      periodMessage: 'Mensaje',
       periodEquivalences: 'Equivalencias',
     },
     blocks: {
@@ -540,6 +541,10 @@ export const es: Translations = {
       light: 'Claro',
       dark: 'Oscuro',
     },
+    corners: {
+      square: 'Rectas',
+      rounded: 'Redondeadas',
+    },
   },
   gallery: {
     dataCounts: {
@@ -701,11 +706,14 @@ export const es: Translations = {
     delete: 'Eliminar',
     deleteError: 'No se pudo eliminar el diseño. Inténtalo de nuevo.',
     saved: 'Tu diseño {{number}}',
-    starters: {
-      sport: 'Deportivo',
-      poster: 'Póster',
-      classic: 'Clásico',
-      minimal: 'Minimalista',
+    noneYet: 'Aquí saldrán los diseños que guardes.',
+    collages: 'Collages',
+    /** AllRun's designs, by name: for screen readers, their thumbnails say the rest. */
+    ready: {
+      messageOne: 'Mensaje',
+      messageTwo: 'Mensaje, dos fotos',
+      filmFrame: 'Marco de película',
+      lightNegative: 'Negativo claro',
     },
   },
   activityCharts: {

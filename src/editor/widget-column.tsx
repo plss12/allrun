@@ -140,7 +140,7 @@ export function WidgetColumn({
       <View pointerEvents="box-none">
         {moreOpen ? (
           <View style={{ position: 'absolute', top: 0, right: ROUND_BUTTON_SIZE + TOP_BAR_GAP }}>
-            <MoreMenu actions={actions} onDone={() => onMoreOpenChange(false)} />
+            <MoreMenu layer={layer} actions={actions} onDone={() => onMoreOpenChange(false)} />
           </View>
         ) : null}
         <RoundButton
@@ -198,9 +198,11 @@ const MENU_ROW_HEIGHT = 44;
 
 /** The "…" menu: the selected widget's actions, a row each; removing it last, in red. */
 function MoreMenu({
+  layer,
   actions,
   onDone,
 }: {
+  readonly layer: Layer;
   readonly actions: WidgetActions;
   readonly onDone: () => void;
 }) {
@@ -218,8 +220,16 @@ function MoreMenu({
       : [
           {
             key: 'edit',
-            icon: { ios: 'character.cursor.ibeam', android: 'edit' } as const,
-            label: t('editor.editText'),
+            // A picture has nothing to write: its action is the one the photo's tools have.
+            ...(layer.kind === 'image'
+              ? {
+                  icon: { ios: 'photo.on.rectangle', android: 'photo_library' } as const,
+                  label: t('editor.changePhoto'),
+                }
+              : {
+                  icon: { ios: 'character.cursor.ibeam', android: 'edit' } as const,
+                  label: t('editor.editText'),
+                }),
             onPress: actions.onEdit,
           },
         ]),

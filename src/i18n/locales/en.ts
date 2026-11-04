@@ -240,6 +240,7 @@ export const en = {
       periodWeather: 'Weather',
       periodNutrition: 'Nutrition facts',
       periodMetro: 'Metro line',
+      periodMessage: 'Message',
       periodEquivalences: 'Equivalences',
     },
     blocks: {
@@ -570,6 +571,10 @@ export const en = {
       light: 'Light',
       dark: 'Dark',
     },
+    corners: {
+      square: 'Square',
+      rounded: 'Rounded',
+    },
   },
   gallery: {
     /** How many data a version of a widget shows. */
@@ -737,11 +742,14 @@ export const en = {
     delete: 'Delete',
     deleteError: "Couldn't delete the design. Please try again.",
     saved: 'Your design {{number}}',
-    starters: {
-      sport: 'Sport',
-      poster: 'Poster',
-      classic: 'Classic',
-      minimal: 'Minimal',
+    noneYet: 'Designs you save will show here.',
+    collages: 'Collages',
+    /** AllRun's designs, by name: for screen readers, their thumbnails say the rest. */
+    ready: {
+      messageOne: 'Message',
+      messageTwo: 'Message, two photos',
+      filmFrame: 'Film frame',
+      lightNegative: 'Light negative',
     },
   },
   activityCharts: {

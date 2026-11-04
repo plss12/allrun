@@ -1,5 +1,5 @@
 import type { Size } from './photo-placement';
-import type { ImageFrame, Layer, Template } from './template';
+import type { ImageFrame, ImageMount, Layer, Template } from './template';
 
 /**
  * Pictures of the user's on the canvas (image layers, ADR 009): a photo stuck over the design, as
@@ -10,10 +10,11 @@ import type { ImageFrame, Layer, Template } from './template';
 type ImageLayer = Extract<Layer, { kind: 'image' }>;
 
 /**
- * Most pictures a design takes. Each is decoded at up to 2048 px (16 MB), so four stay well
- * within a phone's memory next to the photo.
+ * Most pictures a design takes, as many as a collage's cells, whose photos count too (see
+ * `canAddImage`). Each is decoded at up to 2048 px (16 MB), so six stay within a phone's memory next
+ * to the photo.
  */
-export const MAX_IMAGES = 4;
+export const MAX_IMAGES = 6;
 
 /** Longest side of a picture, before the layer's scale, in canvas pixels (of 1080). */
 export const IMAGE_SIDE = 640;
@@ -22,10 +23,18 @@ export const IMAGE_SIDE = 640;
 export const FRAME_SHARE = 0.05;
 
 /**
- * The key of the gallery's sample picture, a runner in the mountains (Pexels, square), shown in the
- * tile before the user picks theirs.
+ * The key of a layer with no picture chosen: the gallery's sample picture, a runner in the mountains
+ * (Pexels, square), shown in the tile before the user picks theirs. A slot of a design (see
+ * `isPhotoSlot`) has it until then, and shows a sign to fill it on the canvas.
  */
 export const SAMPLE_IMAGE = '';
+
+/**
+ * The key of a slot showing the editor's own photo, which then isn't drawn over the canvas as well
+ * (see `usesEditorPhoto`). So choosing a design with slots for a photo already chosen puts it in the
+ * first one, and undoing brings it back, with no second copy of it.
+ */
+export const EDITOR_PHOTO = 'photo';
 
 /** Proportions of the gallery's sample picture. */
 export const SAMPLE_PICTURE: Size = { width: 1, height: 1 };
@@ -49,14 +58,63 @@ export function imageCount(layers: readonly Layer[]): number {
   return layers.filter(isImageLayer).length;
 }
 
-/** Whether another picture fits in the design (see `MAX_IMAGES`). */
-export function canAddImage(template: Template): boolean {
-  return imageCount(template.layers) < MAX_IMAGES;
+/**
+ * Whether another picture fits in the design (see `MAX_IMAGES`).
+ *
+ * @param cellPhotos - How many photos its collage shows: they are pictures of the design too.
+ */
+export function canAddImage(template: Template, cellPhotos = 0): boolean {
+  return imageCount(template.layers) + cellPhotos < MAX_IMAGES;
 }
 
-/** `layers` without the user's pictures, which designs never keep. Time O(n). */
-export function withoutImages(layers: readonly Layer[]): Layer[] {
-  return layers.filter((layer) => !isImageLayer(layer));
+/** Whether a layer is a slot of a design: a picture marked as one, or in a holder (`IMAGE_MOUNTS`). */
+export function isPhotoSlot(layer: Layer): layer is ImageLayer {
+  return isImageLayer(layer) && (layer.slot === true || layer.mount !== undefined);
+}
+
+/** Whether the editor's photo is in a slot, instead of over the canvas. Time O(n) for n layers. */
+export function usesEditorPhoto(layers: readonly Layer[]): boolean {
+  return layers.some((layer) => isPhotoSlot(layer) && layer.image === EDITOR_PHOTO);
+}
+
+/**
+ * Whether a slot has no picture: none chosen, or the editor's photo while there is none.
+ *
+ * @param hasPhoto - Whether the editor has a photo.
+ */
+export function isEmptySlot(layer: Layer, hasPhoto: boolean): layer is ImageLayer {
+  return (
+    isPhotoSlot(layer) &&
+    (layer.image === SAMPLE_IMAGE || (layer.image === EDITOR_PHOTO && !hasPhoto))
+  );
+}
+
+/**
+ * `layers` as a saved design keeps them: its slots empty, and without the other pictures, which
+ * belong to the image being made, not to the design. Time O(n) for n layers.
+ */
+export function withEmptySlots(layers: readonly Layer[]): Layer[] {
+  return layers.flatMap((layer): Layer[] => {
+    if (isPhotoSlot(layer)) {
+      return [{ ...layer, image: SAMPLE_IMAGE }];
+    }
+    return isImageLayer(layer) ? [] : [layer];
+  });
+}
+
+/**
+ * `layers` with their empty slots filled in order with `pictures`; those left over stay out. Time
+ * O(n) for n layers.
+ */
+export function fillSlots(layers: readonly Layer[], pictures: readonly string[]): Layer[] {
+  let next = 0;
+  return layers.map((layer) => {
+    if (!isPhotoSlot(layer) || layer.image !== SAMPLE_IMAGE || next >= pictures.length) {
+      return layer;
+    }
+    next += 1;
+    return { ...layer, image: pictures[next - 1] };
+  });
 }
 
 /** A rectangle inside a widget centered on (0, 0). */
@@ -102,6 +160,110 @@ export function instantBox(): InstantBox {
   };
 }
 
+/** The radius of a picture's rounded corners, in canvas pixels before its layer's scale. */
+export const PICTURE_RADIUS = 44;
+
+/** The place of a plain slot (see `slotBox`): as a phone's vertical photos, which fill it whole. */
+export const SLOT_PICTURE: Size = { width: 3, height: 4 };
+
+/**
+ * The widget of a picture of `size` in a plain slot: as `imageBox` makes it, but inside the slot's
+ * place, however wide it is, so that it never leaves the part of the design meant for it. Time and
+ * space O(1).
+ */
+export function slotBox(size: Size, frame: ImageFrame): ImageBox {
+  const fit = Math.min(
+    (IMAGE_SIDE * SLOT_PICTURE.width) / SLOT_PICTURE.height / size.width,
+    IMAGE_SIDE / size.height,
+  );
+  return framedBox(size.width * fit, size.height * fit, frame);
+}
+
+/** A cut-out of a holder: a rectangle with rounded corners. */
+export type BoxHole = BoxRect & { readonly radius: number };
+
+/** A picture in its holder: the widget, the window of the picture and the holder's cut-outs. */
+export interface MountBox extends ImageBox {
+  /** The radius of the window's corners. */
+  readonly radius: number;
+  /** The perforations and notches cut out of the holder, through which the background shows. */
+  readonly holes: readonly BoxHole[];
+  /** The two columns at the window's sides where its data is written, turned on their side. */
+  readonly sides: readonly [BoxRect, BoxRect];
+}
+
+/** Proportions of the window of every holder: as a phone's vertical photos, which it never cuts. */
+const WINDOW_RATIO = 3 / 4;
+
+/** A 35 mm frame: the band above and below its window, for its reel marks, and the one at its sides. */
+const FILM_FRAME = { band: 46, side: 54 } as const;
+
+/** A negative: the band above and below, its data's column and its perforations' column. */
+const NEGATIVE = {
+  band: 30,
+  data: 36,
+  gap: 12,
+  hole: { width: 44, height: 38, radius: 8 },
+  holes: 7,
+  radius: 6,
+} as const;
+
+/** The window of a holder as tall as `IMAGE_SIDE`, with its `band` above and below. */
+function windowIn(band: number): BoxRect {
+  const height = IMAGE_SIDE - 2 * band;
+  const width = height * WINDOW_RATIO;
+  return { x: -width / 2, y: -height / 2, width, height };
+}
+
+/**
+ * The widget of a picture in its holder (see `IMAGE_MOUNTS`), as tall as `IMAGE_SIDE`. Time and
+ * space O(1).
+ */
+export function mountBox(mount: ImageMount): MountBox {
+  const height = IMAGE_SIDE;
+  switch (mount) {
+    case 'filmFrame': {
+      const { band, side } = FILM_FRAME;
+      const picture = windowIn(band);
+      const width = picture.width + 2 * side;
+      return {
+        width,
+        height,
+        picture,
+        radius: 0,
+        holes: [],
+        sides: [
+          { x: -width / 2, y: picture.y, width: side, height: picture.height },
+          { x: -picture.x, y: picture.y, width: side, height: picture.height },
+        ],
+      };
+    }
+    case 'lightNegative': {
+      const { band, data, gap, hole, holes, radius } = NEGATIVE;
+      const picture = windowIn(band);
+      const width = picture.width + 2 * (data + hole.width + 2 * gap);
+      const step = (picture.height - hole.height) / (holes - 1);
+      return {
+        width,
+        height,
+        picture,
+        radius,
+        holes: Array.from({ length: holes }, (_, row) => {
+          const y = picture.y + row * step;
+          return [
+            { ...hole, x: picture.x - gap - hole.width, y },
+            { ...hole, x: -picture.x + gap, y },
+          ];
+        }).flat(),
+        sides: [
+          { x: -width / 2, y: picture.y, width: data, height: picture.height },
+          { x: width / 2 - data, y: picture.y, width: data, height: picture.height },
+        ],
+      };
+    }
+  }
+}
+
 /** The frame of an instant photo: light, or dark when chosen, never none. */
 export function instantFrame(frame: ImageFrame): Exclude<ImageFrame, 'none'> {
   return frame === 'dark' ? 'dark' : 'light';
@@ -120,8 +282,11 @@ export const CAPTION_INK: Readonly<Record<Exclude<ImageFrame, 'none'>, string>> 
  */
 export function imageBox(size: Size, frame: ImageFrame): ImageBox {
   const fit = IMAGE_SIDE / Math.max(size.width, size.height);
-  const width = size.width * fit;
-  const height = size.height * fit;
+  return framedBox(size.width * fit, size.height * fit, frame);
+}
+
+/** The widget of a picture `width` × `height`, with an even edge around it when framed. */
+function framedBox(width: number, height: number, frame: ImageFrame): ImageBox {
   const edge = frame === 'none' ? 0 : Math.min(width, height) * FRAME_SHARE;
   return {
     width: width + 2 * edge,

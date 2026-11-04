@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { withoutImages } from './image-layer';
+import { withEmptySlots } from './image-layer';
 import { type CanvasFormat, type Template, type TemplateMode, templateSchema } from './template';
 
 /**
@@ -34,10 +34,10 @@ export function parseSavedTemplate(json: unknown): SavedTemplate {
 
 /**
  * The design on the canvas, ready to store as a template of its own: without the user's pictures,
- * which belong to this image, not to the design (see `image-layer.ts`).
+ * which belong to this image, not to the design, and with its slots empty (see `image-layer.ts`).
  */
 export function saveDesign(design: Template, id: string, savedAt: string): SavedTemplate {
-  return { savedAt, template: { ...design, id, layers: withoutImages(design.layers) } };
+  return { savedAt, template: { ...design, id, layers: withEmptySlots(design.layers) } };
 }
 
 /**
@@ -60,7 +60,7 @@ export function templatesFor(
  * thumbnail. Time O(n · s) for n templates of size s.
  */
 export function isSaved(saved: readonly SavedTemplate[], design: Template): boolean {
-  const layers = withoutImages(design.layers);
+  const layers = withEmptySlots(design.layers);
   return saved.some(
     ({ template }) =>
       template.format === design.format &&

@@ -2,6 +2,7 @@ import { makeActivity } from '@/test-utils/make-activity';
 
 import { defaultActivityTemplate, newLayer } from './default-layout';
 import {
+  applyCollage,
   applyDesign,
   setLanguage,
   setUnits,
@@ -13,7 +14,6 @@ import {
   layoutTemplate,
   setBackground,
   setFormat,
-  setLayers,
   setLayerTransform,
   setPhotoPlacement,
   startOver,
@@ -22,8 +22,9 @@ import {
   setCollageLayout,
 } from './editor-document';
 import { commit, createHistory, undo } from './history';
+import { EDITOR_PHOTO, SAMPLE_IMAGE } from './image-layer';
 import { COVER_PLACEMENT } from './photo-placement';
-import { parseTemplate } from './template';
+import { type Layer, parseTemplate } from './template';
 import { addLayer, removeLayer } from './template-edit';
 
 const activity = makeActivity();
@@ -78,9 +79,8 @@ describe('editLayers', () => {
   });
 });
 
-describe('setLayers, setFormat, setPhotoPlacement and setBackground', () => {
+describe('setFormat, setPhotoPlacement and setBackground', () => {
   it('return the same design when nothing changes, so no undo step is recorded', () => {
-    expect(setLayers(INITIAL_DESIGN, null, defaultTemplate)).toBe(INITIAL_DESIGN);
     expect(setFormat(INITIAL_DESIGN, 'story')).toBe(INITIAL_DESIGN);
     expect(setPhotoPlacement(INITIAL_DESIGN, { ...COVER_PLACEMENT })).toBe(INITIAL_DESIGN);
     expect(setBackground(INITIAL_DESIGN, { kind: 'auto' })).toBe(INITIAL_DESIGN);
@@ -93,11 +93,6 @@ describe('setLayers, setFormat, setPhotoPlacement and setBackground', () => {
   });
 
   it('change only their part of the design', () => {
-    const layers = defaultTemplate('story').layers.slice(1);
-    expect(setLayers(INITIAL_DESIGN, layers, defaultTemplate)).toEqual({
-      ...INITIAL_DESIGN,
-      layers,
-    });
     expect(setFormat(INITIAL_DESIGN, 'landscape')).toEqual({
       ...INITIAL_DESIGN,
       format: 'landscape',
@@ -111,9 +106,7 @@ describe('applyDesign', () => {
   it("takes a saved design's widgets, photo placement and background, keeping the format", () => {
     const layers = defaultTemplate('square').layers.slice(2);
     const square = setFormat(INITIAL_DESIGN, 'square');
-    expect(
-      applyDesign(square, { layers, photo: framed, background: night }, defaultTemplate),
-    ).toEqual({
+    expect(applyDesign(square, { layers, photo: framed, background: night }, false)).toEqual({
       format: 'square',
       photo: framed,
       collage: null,
@@ -130,10 +123,10 @@ describe('applyDesign', () => {
     const own = applyDesign(
       INITIAL_DESIGN,
       { layers, photo: framed, background: night, units: 'mi', language: 'en' },
-      defaultTemplate,
+      false,
     );
     expect([own.units, own.language]).toEqual(['mi', 'en']);
-    const plain = applyDesign(own, { layers, photo: framed, background: night }, defaultTemplate);
+    const plain = applyDesign(own, { layers, photo: framed, background: night }, false);
     expect([plain.units, plain.language]).toEqual([null, null]);
   });
 });
@@ -146,21 +139,73 @@ describe("the user's pictures", () => {
 
   it('stay on top when another design is applied, as they are never saved with one', () => {
     const layers = defaultTemplate('story').layers.slice(2);
-    const applied = applyDesign(
-      withPicture,
-      { layers, photo: framed, background: night },
-      defaultTemplate,
-    );
+    const applied = applyDesign(withPicture, { layers, photo: framed, background: night }, false);
     expect(applied.layers).toEqual([...layers, picture]);
   });
+});
 
-  it("stay over the format's default widgets when those are chosen", () => {
-    const own = setLayers(withPicture, [], defaultTemplate);
-    expect(own.layers).toEqual([picture]);
-    expect(setLayers(own, null, defaultTemplate).layers).toEqual([
-      ...defaultTemplate('story').layers,
-      picture,
+describe('the slots of an applied design', () => {
+  const slot = (id: string, image: string): Layer => ({
+    id,
+    kind: 'image',
+    image,
+    frame: 'none',
+    slot: true,
+    transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+    opacity: 1,
+  });
+  const twoSlots = {
+    layers: [slot('a', SAMPLE_IMAGE), slot('b', SAMPLE_IMAGE)],
+    photo: COVER_PLACEMENT,
+    background: night,
+  };
+
+  it("take the editor's photo in the first, and the second stays empty", () => {
+    expect(applyDesign(INITIAL_DESIGN, twoSlots, true).layers).toEqual([
+      slot('a', EDITOR_PHOTO),
+      slot('b', SAMPLE_IMAGE),
     ]);
+  });
+
+  it('stay empty without a photo', () => {
+    expect(applyDesign(INITIAL_DESIGN, twoSlots, false).layers).toEqual(twoSlots.layers);
+  });
+
+  it('take the pictures of the slots of the design before, in order', () => {
+    const before = {
+      ...INITIAL_DESIGN,
+      layers: [slot('x', EDITOR_PHOTO), slot('y', 'picked-1')],
+    };
+    expect(applyDesign(before, twoSlots, true).layers).toEqual([
+      slot('a', EDITOR_PHOTO),
+      slot('b', 'picked-1'),
+    ]);
+  });
+
+  it('are given back by undoing, with the photo over the canvas again', () => {
+    const history = commit(
+      createHistory<EditorDesign>(INITIAL_DESIGN),
+      applyDesign(INITIAL_DESIGN, twoSlots, true),
+    );
+    expect(undo(history).present).toEqual(INITIAL_DESIGN);
+  });
+
+  it('leave with their background on choosing a collage, keeping the other widgets', () => {
+    const widget = defaultTemplate('story').layers[0];
+    const applied = {
+      ...applyDesign(INITIAL_DESIGN, twoSlots, true),
+      layers: [widget, slot('a', EDITOR_PHOTO)],
+    };
+    const collage = applyCollage(applied, 'two', 'light');
+    expect(collage.layers).toEqual([widget]);
+    expect(collage.background).toEqual(INITIAL_DESIGN.background);
+    expect(collage.collage?.layout).toBe('two');
+    expect(collage.frame).toBe('light');
+  });
+
+  it('are not needed for a collage over a design without them, which keeps its background', () => {
+    const dark = setBackground(INITIAL_DESIGN, night);
+    expect(applyCollage(dark, null, 'none')).toBe(dark);
   });
 });
 
@@ -309,13 +354,10 @@ describe('a collage in the design', () => {
     expect(layoutTemplate(defaults, INITIAL_DESIGN)).not.toHaveProperty('frame');
     const saved = layoutTemplate(defaults, setFrame(INITIAL_DESIGN, 'dark'));
     expect(saved.frame).toBe('dark');
-    expect(applyDesign(INITIAL_DESIGN, saved, defaults).frame).toBe('dark');
+    expect(applyDesign(INITIAL_DESIGN, saved, false).frame).toBe('dark');
     expect(
-      applyDesign(
-        setFrame(INITIAL_DESIGN, 'dark'),
-        layoutTemplate(defaults, INITIAL_DESIGN),
-        defaults,
-      ).frame,
+      applyDesign(setFrame(INITIAL_DESIGN, 'dark'), layoutTemplate(defaults, INITIAL_DESIGN), false)
+        .frame,
     ).toBe('none');
   });
 
@@ -345,10 +387,10 @@ describe('a collage in the design', () => {
     const defaults = (format: Parameters<typeof defaultActivityTemplate>[1]) =>
       defaultActivityTemplate(makeActivity(), format);
     const saved = layoutTemplate(defaults, setCollageLayout(INITIAL_DESIGN, 'four'));
-    const applied = applyDesign(INITIAL_DESIGN, saved, defaults);
+    const applied = applyDesign(INITIAL_DESIGN, saved, false);
     expect(applied.collage?.layout).toBe('four');
     const plain = layoutTemplate(defaults, INITIAL_DESIGN);
-    expect(applyDesign(applied, plain, defaults).collage).toBeNull();
+    expect(applyDesign(applied, plain, false).collage).toBeNull();
   });
 
   it('counts for starting over, which takes it away', () => {

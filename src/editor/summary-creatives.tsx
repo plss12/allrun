@@ -46,7 +46,11 @@ import {
   hairlineBox,
   lapsTableBox,
   logoBox,
+  markBox,
   markBrandBox,
+  MESSAGE_COLORS,
+  MESSAGE_SIZES,
+  messageBubble,
   MUSIC_COLORS,
   placed,
   receiptBox,
@@ -76,6 +80,7 @@ import {
   turned,
 } from './activity-blocks';
 import { markWidth } from './brand/brand-art';
+import { periodCount, shortDistance } from './instant-caption';
 import { CAP_HEIGHTS } from './fonts';
 import {
   metricText,
@@ -1634,6 +1639,50 @@ function metroStationBox(active: boolean, terminal: boolean, line: string): Box 
  * small and faded, its ends ringed as terminals. Across up to a week's seven stations, down
  * beyond (see `metroLayout`).
  */
+/**
+ * A period as a sent chat message: its distance and how many activities (its time without one), and
+ * where the message's time goes, its time when the message doesn't say it already. Only in AllRun's
+ * designs, under a photo, as an activity's message. Time and space O(1).
+ */
+export function periodMessageBox(
+  block: Extract<SummaryBlock, { design: 'periodMessage' }>,
+  data: SummaryData,
+  { fonts, textContext, translate }: Omit<BlockContext, 'canvas'>,
+): Box {
+  const colors = MESSAGE_COLORS[block.layout];
+  const { summary } = data;
+  const time = plainSummaryText('totalMovingTime', summary.totalMovingTimeSeconds, textContext);
+  const hasDistance = summaryHasDistance(summary);
+  const said = [
+    hasDistance ? shortDistance(summary.totalDistanceMeters, textContext) : time,
+    periodCount(data, translate),
+  ].join(', ');
+  const message = appTextBox(
+    fonts,
+    [{ text: said, size: MESSAGE_SIZES.text, bold: false }],
+    colors.ink,
+  );
+  const ticks = markBox('ticks', MESSAGE_SIZES.meta * 0.8, colors.ticks);
+  const meta = hasDistance
+    ? row(
+        [
+          appTextBox(fonts, [{ text: time, size: MESSAGE_SIZES.meta, bold: false }], colors.meta),
+          ticks,
+        ],
+        MESSAGE_SIZES.meta * 0.3,
+        'center',
+      )
+    : ticks;
+  return messageBubble(
+    column(
+      [message, widened(meta, Math.max(message.width, meta.width), 'end')],
+      MESSAGE_SIZES.meta * 0.2,
+      'start',
+    ),
+    colors.bubble,
+  );
+}
+
 export function periodMetroBox(
   block: Extract<SummaryBlock, { design: 'periodMetro' }>,
   data: SummaryData,

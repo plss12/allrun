@@ -332,6 +332,13 @@ export function setImageFrame(template: Template, id: string, frame: ImageFrame)
   );
 }
 
+/** Rounds the corners of the picture `id`, or squares them. */
+export function setImageRounded(template: Template, id: string, rounded: boolean): Template {
+  return editLayer(template, id, ['image'], 'rounded', (layer) =>
+    (layer.rounded ?? false) === rounded ? layer : { ...layer, rounded },
+  );
+}
+
 /**
  * What a mixed widget's panel sets: its texts' font, weight, slant and case, its logo, and a data
  * widget's backdrop and letter spacing.

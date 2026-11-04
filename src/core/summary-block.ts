@@ -89,6 +89,7 @@ const SUMMARY_REPLICAS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodNutrition',
   'periodMetro',
   'periodEquivalences',
+  'periodMessage',
 ]);
 
 /** A summary's data widgets: its data in a lettering the user can change. */
@@ -701,6 +702,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodNutrition':
     case 'periodMetro':
     case 'periodEquivalences':
+    case 'periodMessage':
       return { font: 'inter', bold: false, italic: false, uppercase: false };
   }
 }

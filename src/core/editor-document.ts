@@ -1,5 +1,5 @@
 import { newCollage, withCellPlacement } from './collage';
-import { isImageLayer, withoutImages } from './image-layer';
+import { EDITOR_PHOTO, fillSlots, isImageLayer, isPhotoSlot, SAMPLE_IMAGE } from './image-layer';
 import type { LayerTransform } from './layer-transform';
 import { COVER_PLACEMENT, type PhotoPlacement, samePlacement } from './photo-placement';
 import {
@@ -98,39 +98,36 @@ export function editLayers(
 }
 
 /**
- * Replaces the widgets (with a template's, or `null` for the default ones), but the user's
- * pictures, which stay on top: designs have none (see `keepingImages`).
- */
-export function setLayers(
-  design: EditorDesign,
-  layers: EditorLayers,
-  defaultTemplate: DefaultTemplate,
-): EditorDesign {
-  const next = keepingImages(design, layers, defaultTemplate);
-  return next === design.layers ? design : { ...design, layers: next };
-}
-
-/**
- * `layers` with the pictures of `design` over them. Designs never keep pictures, which belong to
- * the image being made, so choosing another design keeps the user's. With pictures, the default
- * widgets (`null`) become the format's default layout, under them. Time O(n) for n layers.
+ * The layers a design brings, with the pictures of `design` in them. A design never keeps pictures,
+ * which belong to the image being made, so the ones the user stuck on stay on top, and those in
+ * slots go to the new design's slots, with the editor's photo first if it isn't in one yet.
+ * Time O(n) for n layers.
  */
 function keepingImages(
   design: EditorDesign,
-  layers: EditorLayers,
-  defaultTemplate: DefaultTemplate,
-): EditorLayers {
-  const images = (design.layers ?? []).filter(isImageLayer);
-  if (images.length === 0) {
-    return layers;
-  }
-  return [...withoutImages(layers ?? defaultTemplate(design.format).layers), ...images];
+  layers: Template['layers'],
+  hasPhoto: boolean,
+): Template['layers'] {
+  const current = design.layers ?? [];
+  const inSlots = current
+    .filter(isPhotoSlot)
+    .map((layer) => layer.image)
+    .filter((image) => image !== SAMPLE_IMAGE);
+  const pictures =
+    hasPhoto && !inSlots.includes(EDITOR_PHOTO) ? [EDITOR_PHOTO, ...inSlots] : inSlots;
+  const own = layers.filter((layer) => !isImageLayer(layer) || isPhotoSlot(layer));
+  return [
+    ...fillSlots(own, pictures),
+    ...current.filter((layer) => isImageLayer(layer) && !isPhotoSlot(layer)),
+  ];
 }
 
 /**
- * Applies a saved design: its widgets (the user's pictures stay on top, see `keepingImages`),
- * where its photo goes, its background, and its unit and language (the device's and the app's
- * when it has none; the format is the same: the designs offered are the format's).
+ * Applies a design: its widgets, with the user's pictures (see `keepingImages`), where its photo
+ * goes, its background, and its unit and language (the device's and the app's when it has none; the
+ * format is the same: the designs offered are the format's).
+ *
+ * @param hasPhoto - Whether the editor has a photo, which goes in the design's first slot.
  */
 export function applyDesign(
   design: EditorDesign,
@@ -138,11 +135,11 @@ export function applyDesign(
     Template,
     'layers' | 'photo' | 'collage' | 'frame' | 'background' | 'units' | 'language'
   >,
-  defaultTemplate: DefaultTemplate,
+  hasPhoto: boolean,
 ): EditorDesign {
   return {
     ...design,
-    layers: keepingImages(design, saved.layers, defaultTemplate),
+    layers: keepingImages(design, saved.layers, hasPhoto),
     photo: saved.photo,
     collage: saved.collage ?? null,
     frame: saved.frame ?? 'none',
@@ -194,6 +191,27 @@ export function setCollageLayout(design: EditorDesign, layout: CollageLayout | n
     return { ...design, collage: null };
   }
   return { ...design, collage: { ...(design.collage ?? newCollage(layout)), layout } };
+}
+
+/**
+ * Lays the photos out as a collage of the Designs gallery (`layout`, `null` for one photo; its
+ * `frame`). The widgets stay, without the slots of a design that had them, and its background with
+ * them: their photos go back to the canvas. Time O(n) for n layers.
+ */
+export function applyCollage(
+  design: EditorDesign,
+  layout: CollageLayout | null,
+  frame: ImageFrame,
+): EditorDesign {
+  const laidOut = setFrame(setCollageLayout(design, layout), frame);
+  const layers = laidOut.layers;
+  return layers?.some(isPhotoSlot) === true
+    ? {
+        ...laidOut,
+        layers: layers.filter((layer) => !isPhotoSlot(layer)),
+        background: AUTO_BACKGROUND,
+      }
+    : laidOut;
 }
 
 /** Another frame around the photos. Returns `design` itself when it is the same. */

@@ -12,6 +12,7 @@ import {
   setChartOptions,
   setDataLabels,
   setImageFrame,
+  setImageRounded,
   setLayerColor,
   setLogoOptions,
   setStrokeWidth,
@@ -88,7 +89,12 @@ export function widgetTools(layer: Layer): WidgetTools {
     case 'logo':
       return { lettering: null, color: 'tones', backdrop: null };
     case 'image':
-      return { lettering: null, color: 'frames', backdrop: null };
+      // A photo in a design's holder keeps its look, as a replica does.
+      return {
+        lettering: null,
+        color: layer.mount === undefined ? 'frames' : 'opacity',
+        backdrop: null,
+      };
     case 'activityBlock':
     case 'summaryBlock': {
       const replica =
@@ -183,7 +189,13 @@ export function StylePanel({
             : [opacity];
         case 'frames':
           return layer.kind === 'image'
-            ? [<FrameRow key="frames" layer={layer} onChange={onChange} />, opacity]
+            ? [
+                <FrameRow key="frames" layer={layer} onChange={onChange} />,
+                ...(layer.caption === undefined
+                  ? [<CornersRow key="corners" layer={layer} onChange={onChange} />]
+                  : []),
+                opacity,
+              ]
             : [opacity];
         case 'opacity':
           return [opacity];
@@ -539,6 +551,30 @@ function FrameRow({
           />
         ),
       )}
+    </Row>
+  );
+}
+
+/** The corners of a picture: square or rounded, as a chat shows it. */
+function CornersRow({
+  layer,
+  onChange,
+}: {
+  readonly layer: ImageLayer;
+  readonly onChange: (change: StyleChange) => void;
+}) {
+  const { t } = useTranslation();
+  const rounded = layer.rounded ?? false;
+  return (
+    <Row>
+      {[false, true].map((option) => (
+        <Chip
+          key={String(option)}
+          label={t(`style.corners.${option ? 'rounded' : 'square'}`)}
+          selected={rounded === option}
+          onPress={() => onChange((template) => setImageRounded(template, layer.id, option))}
+        />
+      ))}
     </Row>
   );
 }

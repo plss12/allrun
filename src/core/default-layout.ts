@@ -10,8 +10,7 @@ import { type CanvasFormat, type FontId, type Layer, type Template, newTemplate 
 
 /**
  * Starting compositions for the editor: something good-looking on screen the moment a photo is
- * picked, which the user then rearranges. They are also the Sport starter template (see
- * `starter-templates.ts`).
+ * picked, which the user then rearranges.
  *
  * Every canvas is 1080 px wide but their heights differ (1920 for stories down to 566 for
  * landscape posts), so each format places every element explicitly: tall formats stack them,
@@ -20,7 +19,7 @@ import { type CanvasFormat, type FontId, type Layer, type Template, newTemplate 
 
 /**
  * The one font of every text in these compositions (a mix of fonts reads as clutter); each
- * starter template brings its own. Condensed, so big numbers fit side by side.
+ * design brings its own. Condensed, so big numbers fit side by side.
  */
 export const DEFAULT_FONT: FontId = 'barlowCondensed';
 

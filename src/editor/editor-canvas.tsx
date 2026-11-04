@@ -107,6 +107,8 @@ interface EditorCanvasProps {
   readonly onSelect: (id: string | null) => void;
   /** Called on a tap on the layer already selected: a text or a verse is edited. */
   readonly onTapSelected: (id: string) => void;
+  /** Called on a tap that selects a layer, after `onSelect`: a slot with no photo asks for one. */
+  readonly onTapLayer: (id: string) => void;
   /**
    * Called with the selected layer's content size, before scaling, when it changes (`null`: none
    * selected), so the editor knows how far down it reaches.
@@ -234,6 +236,7 @@ export function EditorCanvas({
   adjustedOpacity,
   onSelect,
   onTapSelected,
+  onTapLayer,
   onSelectedSizeChange,
   onTapPhoto,
   onDraggingChange,
@@ -307,6 +310,7 @@ export function EditorCanvas({
       onTapSelected(id);
     } else {
       onSelect(id);
+      onTapLayer(id);
     }
   };
 

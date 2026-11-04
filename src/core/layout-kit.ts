@@ -3,7 +3,7 @@ import type { PeriodSummary } from './summary';
 import type { FontId, Layer } from './template';
 
 /**
- * Building blocks shared by the compositions in `default-layout.ts` and the starter templates:
+ * Building blocks shared by the compositions in `default-layout.ts` and AllRun's designs:
  * slots on the canvas, text styles and the AllRun watermark.
  */
 

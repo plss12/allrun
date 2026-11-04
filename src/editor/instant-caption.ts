@@ -16,7 +16,7 @@ import {
 } from './editor-data';
 
 /** Translates a label, its placeholders filled with `values`. */
-type Translate = (key: LabelKey, values?: Readonly<Record<string, string>>) => string;
+export type Translate = (key: LabelKey, values?: Readonly<Record<string, string>>) => string;
 
 /** An instant photo's caption: its lines, in columns, and a shorter first line. */
 export interface CaptionText {
@@ -105,20 +105,22 @@ function periodCaption(
       ],
     };
   }
-  // Named by its sport when the summary is of one ("6 carreras").
-  const kind = data.families.length === 1 ? data.families[0] : 'all';
-  const count =
-    summary.activityCount === 1
-      ? translate(`widgets.playlist.counts.${kind}.one`)
-      : translate(`widgets.playlist.counts.${kind}.other`, {
-          count: String(summary.activityCount),
-        });
   return {
     columns: [
-      [formatShortRange(summary.range, context.locale), count],
+      [formatShortRange(summary.range, context.locale), periodCount(data, translate)],
       distance > 0 ? [shortDistance(distance, context), time] : [time],
     ],
   };
+}
+
+/** How many activities a period has, named by its sport when it is of one ("6 carreras"). */
+export function periodCount({ summary, families }: SummaryData, translate: Translate): string {
+  const kind = families.length === 1 ? families[0] : 'all';
+  return summary.activityCount === 1
+    ? translate(`widgets.playlist.counts.${kind}.one`)
+    : translate(`widgets.playlist.counts.${kind}.other`, {
+        count: String(summary.activityCount),
+      });
 }
 
 /** A distance with one decimal, as the locale writes it: "14,5" in Spanish, "14.5" in English. */
@@ -135,6 +137,6 @@ function distanceInWords(meters: number, context: TextContext, translate: Transl
 }
 
 /** "11,3 km", "7.0 mi". */
-function shortDistance(meters: number, context: TextContext): string {
+export function shortDistance(meters: number, context: TextContext): string {
   return `${oneDecimal(meters, context)} ${context.unitLabel(context.unit)}`;
 }
