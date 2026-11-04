@@ -8,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   SectionList,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import type { CanvasFormat, DesignLanguage, FontId, Layer } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { Text } from '@/ui/text';
 
 import { CHOICE_TITLES, ChoiceList } from './choice-list';
 import { layerText } from './editor-data';

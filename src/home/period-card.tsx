@@ -1,8 +1,7 @@
 import { router } from 'expo-router';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 
 import type { Activity } from '@/core/activity';
 import type { DateRange, LocalDate } from '@/core/dates';
@@ -26,11 +25,13 @@ import {
 import type { DistanceUnit } from '@/core/units';
 import { useActivitySource } from '@/data/activity-source';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
-import { colors, darkLabelInk } from '@/theme/colors';
+import { colors } from '@/theme/colors';
+import { AppIcon, type UiIconName } from '@/ui/app-icon';
 import { DateRangeField } from '@/ui/date-range-field';
 import { formatBucketLabels, formatChartValue, formatMetric, formatPeriodName } from '@/ui/format';
 import { SportGlyph } from '@/ui/sport-glyph';
 import { ErrorView } from '@/ui/state-views';
+import { Text } from '@/ui/text';
 import { useAsync } from '@/ui/use-async';
 
 import { PeriodLineChart } from './period-line-chart';
@@ -138,7 +139,7 @@ export function PeriodCard({
           }}
         >
           <StepButton
-            icon={{ ios: 'chevron.left', android: 'chevron_left' }}
+            icon="chevronLeft"
             accessibilityLabel={t('summary.previous')}
             onPress={() => step(-1)}
           />
@@ -157,7 +158,7 @@ export function PeriodCard({
             ) : null}
           </View>
           <StepButton
-            icon={{ ios: 'chevron.right', android: 'chevron_right' }}
+            icon="chevronRight"
             accessibilityLabel={t('summary.next')}
             disabled={isCurrent}
             onPress={() => step(1)}
@@ -314,7 +315,7 @@ function SportPage({
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <SportGlyph icon={sport} size={14} color={darkLabelInk.secondary} />
+        <SportGlyph icon={sport} size={14} color={colors.secondaryLabel} />
         <Text style={{ color: colors.secondaryLabel, fontSize: 13, fontWeight: '600' }}>
           {name.toLocaleUpperCase(locale)}
         </Text>
@@ -375,13 +376,14 @@ function SportPage({
   );
 }
 
+/** An arrow alone, in a touch target as big as the circle it had (decision of the user). */
 function StepButton({
   icon,
   accessibilityLabel,
   onPress,
   disabled = false,
 }: {
-  readonly icon: SymbolViewProps['name'];
+  readonly icon: UiIconName;
   readonly accessibilityLabel: string;
   readonly onPress: () => void;
   readonly disabled?: boolean;
@@ -397,14 +399,12 @@ function StepButton({
       style={({ pressed }) => ({
         width: 36,
         height: 36,
-        borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.tertiarySystemBackground,
         opacity: disabled ? 0.3 : pressed ? 0.7 : 1,
       })}
     >
-      <SymbolView name={icon} size={15} weight="semibold" tintColor={colors.label} />
+      <AppIcon name={icon} size={32} color={colors.label} />
     </Pressable>
   );
 }

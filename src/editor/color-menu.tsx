@@ -1,8 +1,7 @@
 import { Canvas, LinearGradient, Path, Rect, Skia, vec } from '@shopify/react-native-skia';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, {
   type SharedValue,
@@ -22,6 +21,8 @@ import {
 } from '@/core/color-menu';
 import { useColorFavorites } from '@/data/color-favorites';
 import { colors } from '@/theme/colors';
+import { AppIcon, type UiIconName } from '@/ui/app-icon';
+import { Text } from '@/ui/text';
 
 import { FLOATING_INK } from './round-button';
 
@@ -97,11 +98,7 @@ export function ColorMenu({
         contentContainerStyle={{ gap: SWATCH_GAP, alignItems: 'center' }}
       >
         {onEyedropper === undefined ? null : (
-          <RoundIcon
-            icon={{ ios: 'eyedropper', android: 'colorize' }}
-            label={t('colorMenu.eyedropper')}
-            onPress={onEyedropper}
-          />
+          <RoundIcon icon="eyedropper" label={t('colorMenu.eyedropper')} onPress={onEyedropper} />
         )}
         {specials.map((special) => (
           <Swatch
@@ -138,7 +135,7 @@ export function ColorMenu({
           />
         ))}
         <RoundIcon
-          icon={{ ios: 'plus', android: 'add' }}
+          icon="add"
           label={t('colorMenu.addFavorite')}
           disabled={
             chosen === null ||
@@ -278,7 +275,7 @@ function RoundIcon({
   onPress,
   disabled = false,
 }: {
-  readonly icon: SymbolViewProps['name'];
+  readonly icon: UiIconName;
   readonly label: string;
   readonly onPress: () => void;
   readonly disabled?: boolean;
@@ -300,7 +297,7 @@ function RoundIcon({
         opacity: disabled ? 0.35 : pressed ? 0.7 : 1,
       })}
     >
-      <SymbolView name={icon} size={18} weight="semibold" tintColor={FLOATING_INK} />
+      <AppIcon name={icon} size={20} color={FLOATING_INK} />
     </Pressable>
   );
 }

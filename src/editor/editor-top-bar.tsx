@@ -24,25 +24,21 @@ export function EditorTopBar(props: EditorTopBarProps) {
   const { t } = useTranslation();
   return (
     <View accessibilityRole="toolbar" style={{ gap: TOP_BAR_GAP }}>
+      <RoundButton icon="close" label={t('editor.close')} onPress={props.onClose} />
       <RoundButton
-        icon={{ ios: 'xmark', android: 'close' }}
-        label={t('editor.close')}
-        onPress={props.onClose}
-      />
-      <RoundButton
-        icon={{ ios: 'arrow.uturn.backward', android: 'undo' }}
+        icon="undo"
         label={t('editor.undo')}
         onPress={props.onUndo}
         disabled={!props.canUndo}
       />
       <RoundButton
-        icon={{ ios: 'arrow.uturn.forward', android: 'redo' }}
+        icon="redo"
         label={t('editor.redo')}
         onPress={props.onRedo}
         disabled={!props.canRedo}
       />
       <RoundButton
-        icon={{ ios: 'arrow.counterclockwise', android: 'restart_alt' }}
+        icon="restart"
         label={t('editor.restore')}
         onPress={props.onStartOver}
         disabled={!props.canStartOver}

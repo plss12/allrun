@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { floatingSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { Text } from '@/ui/text';
 
 const DONE_BUTTON_HEIGHT = 44;
 

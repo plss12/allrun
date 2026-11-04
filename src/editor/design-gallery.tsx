@@ -1,9 +1,8 @@
 import { FlashList } from '@shopify/flash-list';
 import type { SkImage } from '@shopify/react-native-skia';
-import { SymbolView } from 'expo-symbols';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newCollage } from '@/core/collage';
@@ -21,7 +20,9 @@ import { isSaved, saveDesign, type SavedTemplate, templatesFor } from '@/core/us
 import { newTemplateId } from '@/data/template-store';
 import type { UserTemplates } from '@/data/user-templates';
 import { colors } from '@/theme/colors';
+import { AppIcon } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
+import { Text } from '@/ui/text';
 
 import type { DesignChoice } from './design-choice';
 import { disposeLater, inParagraphArena } from './paragraph-arena';
@@ -437,12 +438,7 @@ function DeleteButton({
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <SymbolView
-        name={{ ios: 'xmark', android: 'close' }}
-        size={13}
-        weight="bold"
-        tintColor="#FFFFFF"
-      />
+      <AppIcon name="close" size={16} color="#FFFFFF" />
     </Pressable>
   );
 }
@@ -544,10 +540,10 @@ function SaveTile({
       {busy ? (
         <ActivityIndicator />
       ) : (
-        <SymbolView
-          name={saved ? { ios: 'checkmark', android: 'check' } : { ios: 'plus', android: 'add' }}
+        <AppIcon
+          name={saved ? 'check' : 'add'}
           size={24}
-          tintColor={saved ? colors.secondaryLabel : colors.tint}
+          color={saved ? colors.secondaryLabel : colors.tint}
         />
       )}
       <Text

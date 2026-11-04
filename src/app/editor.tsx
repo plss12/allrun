@@ -3,7 +3,7 @@ import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { NotificationFeedbackType, notificationAsync } from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -107,6 +107,12 @@ import { Eyedropper } from '@/editor/eyedropper';
 import { snapshotDesign } from '@/editor/eyedropper-snapshot';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import { DataSheet } from '@/editor/data-sheet';
+import {
+  ADD_BUTTON_WIDTH,
+  BOTTOM_BUTTON_SIZE,
+  BOTTOM_PAIR_GAP,
+  EDGE,
+} from '@/editor/editor-layout';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
 import { EditorTopBar } from '@/editor/editor-top-bar';
 import { alertNoPhotosPermission, ExportBar } from '@/editor/export-bar';
@@ -145,6 +151,7 @@ import { usePhotoPicker } from '@/photos/use-photo-picker';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
 import { ErrorView, LoadingView } from '@/ui/state-views';
+import { Text } from '@/ui/text';
 import { useAsync } from '@/ui/use-async';
 
 /** The chosen photo and its two copies (see `photo-plan.ts`). */
@@ -163,13 +170,6 @@ interface EditorPhoto {
   readonly exportUri: string | null;
 }
 
-/** Room between the screen's safe area and the floating controls, in points. */
-const EDGE = 12;
-/**
- * How far up the icons of saving and exporting go, in points: Apple's draw an arrow over a tray, with
- * their weight low in their box, so they looked low in their circles.
- */
-const ARROW_TRAY_LIFT = Platform.OS === 'ios' ? 2 : 0;
 /** The room left between a widget being edited and the panel of its options, in points. */
 const PANEL_GAP = 16;
 /** How the canvas rises over the panel of a widget's options, and settles back. */
@@ -178,13 +178,6 @@ const LIFT_TIMING = {
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 } as const;
-/** The bottom row: the photo, "+", "Aa" and export. */
-const BOTTOM_BUTTON_SIZE = 52;
-/**
- * "+", the main thing to do, stands out by being wider, never taller: every button of the row is
- * as tall as the others.
- */
-const ADD_BUTTON_WIDTH = 84;
 
 export default function Editor() {
   const { t } = useTranslation();
@@ -1392,7 +1385,7 @@ function EditorWorkspace({
         // The eyedropper's way out, where the close button was.
         <View style={{ position: 'absolute', top: insets.top + EDGE, left: EDGE }}>
           <RoundButton
-            icon={{ ios: 'xmark', android: 'close' }}
+            icon="close"
             label={t('colorMenu.cancelEyedropper')}
             onPress={closeEyedropper}
           />
@@ -1501,7 +1494,7 @@ function EditorWorkspace({
                 away (a tap on the empty canvas still opens the background). Here rather than over
                 the canvas, where it kept widgets from being moved. */}
             <RoundButton
-              icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+              icon="photos"
               label={t(
                 firstEmptySlot !== undefined || (photo === null && design.collage === null)
                   ? 'editor.choosePhoto'
@@ -1532,8 +1525,8 @@ function EditorWorkspace({
             </RoundButton>
           </View>
           <PillButton
-            icon={{ ios: 'plus', android: 'add' }}
-            iconSize={28}
+            icon="add"
+            iconSize={30}
             label={t('editor.addLayer')}
             onPress={() => setSheetOpen(true)}
             disabled={!canAddLayer(template)}
@@ -1546,24 +1539,22 @@ function EditorWorkspace({
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'flex-end',
-              gap: 8,
+              gap: BOTTOM_PAIR_GAP,
             }}
           >
             <RoundButton
-              icon={{ ios: 'square.and.arrow.down', android: 'download' }}
+              icon="save"
               label={t('export.save')}
               onPress={saveNow}
               disabled={savingNow}
               size={BOTTOM_BUTTON_SIZE}
-              iconLift={ARROW_TRAY_LIFT}
             />
             <PillButton
-              icon={{ ios: 'square.and.arrow.up', android: 'ios_share' }}
+              icon="export"
               label={t('editor.export')}
               onPress={startExport}
               accent
               height={BOTTOM_BUTTON_SIZE}
-              iconLift={ARROW_TRAY_LIFT}
             />
           </View>
         </View>
@@ -1638,7 +1629,7 @@ function EditorWorkspace({
                 </View>
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   <ActionTile
-                    icon={{ ios: 'trash', android: 'delete' }}
+                    icon="trash"
                     label={t('editor.removePhoto')}
                     onPress={
                       design.collage === null ? removePhoto : () => removeCellPhoto(toolsCell)
@@ -1649,7 +1640,7 @@ function EditorWorkspace({
                     destructive
                   />
                   <ActionTile
-                    icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+                    icon="photos"
                     label={t(
                       (design.collage === null ? photo === null : canvasCells[toolsCell] === null)
                         ? 'editor.choosePhoto'
@@ -1660,7 +1651,7 @@ function EditorWorkspace({
                     }
                   />
                   <ActionTile
-                    icon={{ ios: 'arrow.counterclockwise', android: 'restart_alt' }}
+                    icon="restart"
                     label={t('editor.resetPhoto')}
                     onPress={() =>
                       change((current) =>
@@ -1677,7 +1668,7 @@ function EditorWorkspace({
                     }
                   />
                   <ActionTile
-                    icon={{ ios: 'paintbrush.fill', android: 'format_paint' }}
+                    icon="paint"
                     label={t('editor.background')}
                     onPress={() => setBackgroundMenu(true)}
                   />

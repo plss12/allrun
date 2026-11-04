@@ -15,9 +15,11 @@ import { loadStockPhotos } from '@/editor/stock-photos';
 import { colors } from '@/theme/colors';
 import { LaunchScreen } from '@/ui/launch-screen';
 import { logError } from '@/ui/log';
+import { loadInterfaceFonts } from '@/ui/text';
 
 // The app is always dark (ADR 009): routes, charts and photos stand out on it. `app.json` asks for
-// it in native builds; this also applies it in Expo Go, so semantic colors resolve to dark.
+// it in native builds; this also applies it in Expo Go, for what the system draws (alerts, keyboard,
+// the date picker).
 Appearance.setColorScheme('dark');
 
 // The native launch screen stays until ours is on screen, which looks the same (see
@@ -38,6 +40,14 @@ export default function RootLayout() {
   // Our launch screen stays until the editor's fonts are loaded, so no screen waits for them later
   // (opening an activity used to); the app loads under it meanwhile.
   const [launching, setLaunching] = useState(true);
+  // The screens mount once their text has its faces, under the launch screen: laid out with the
+  // system's font, they would jump when Inter came. A failure leaves the system's.
+  const [facesLoaded, setFacesLoaded] = useState(false);
+  useEffect(() => {
+    loadInterfaceFonts()
+      .catch((error: unknown) => logError('Could not load the interface fonts', error))
+      .finally(() => setFacesLoaded(true));
+  }, []);
   useEffect(() => {
     const timeout = setTimeout(() => setLaunching(false), MAX_LAUNCH_WAIT_MS);
     loadEditorFonts()
@@ -63,19 +73,21 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ActivitySourceProvider>
           <TemplateStoreProvider>
-            <Stack
-              screenOptions={{
-                contentStyle: { backgroundColor: colors.systemBackground },
-                // Each screen has its own bar on top (see `ui/top-bar.tsx`).
-                headerShown: false,
-              }}
-            >
-              <Stack.Screen name="index" options={{ title: t('home.title') }} />
-              <Stack.Screen name="select" options={{ title: '' }} />
-              {/* The editor is full screen, with its own floating controls (ADR 009); it rises
-                  as a modal and closes with its own button, which asks before losing edits. */}
-              <Stack.Screen name="editor" options={{ presentation: 'fullScreenModal' }} />
-            </Stack>
+            {facesLoaded || !launching ? (
+              <Stack
+                screenOptions={{
+                  contentStyle: { backgroundColor: colors.systemBackground },
+                  // Each screen has its own bar on top (see `ui/top-bar.tsx`).
+                  headerShown: false,
+                }}
+              >
+                <Stack.Screen name="index" options={{ title: t('home.title') }} />
+                <Stack.Screen name="select" options={{ title: '' }} />
+                {/* The editor is full screen, with its own floating controls (ADR 009); it rises
+                    as a modal and closes with its own button, which asks before losing edits. */}
+                <Stack.Screen name="editor" options={{ presentation: 'fullScreenModal' }} />
+              </Stack>
+            ) : null}
           </TemplateStoreProvider>
         </ActivitySourceProvider>
         {launching ? <LaunchScreen onShown={() => SplashScreen.hide()} /> : null}

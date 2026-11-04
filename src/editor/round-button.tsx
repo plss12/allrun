@@ -1,13 +1,16 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import type { ReactNode } from 'react';
-import { Pressable, Text, View, type ViewStyle } from 'react-native';
+import { Pressable, View, type ViewStyle } from 'react-native';
 
 import { roundSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { AppIcon, type UiIconName } from '@/ui/app-icon';
+import { Text } from '@/ui/text';
 
 export const FLOATING_INK = '#FFFFFF';
 /** Diameter of a floating button: Apple's minimum touch target. */
 export const ROUND_BUTTON_SIZE = 44;
+/** How much of a round button its icon's box takes: 24 pt in the usual one, as Material's. */
+const ICON_SHARE = 0.55;
 /**
  * Controls that hide without unmounting: under the new architecture `display: 'none'` drops the
  * native views too, and showing them again reloaded their images (the sport's icon came late).
@@ -48,10 +51,9 @@ export function RoundButton({
   disabled = false,
   selected,
   size = ROUND_BUTTON_SIZE,
-  iconLift = 0,
   children,
 }: {
-  readonly icon?: SymbolViewProps['name'];
+  readonly icon?: UiIconName;
   /** What the button does, for screen readers (the icon says it to the eye). */
   readonly label: string;
   readonly onPress: () => void;
@@ -59,8 +61,6 @@ export function RoundButton({
   /** Whether a menu it opens is open; leave it out for plain buttons. */
   readonly selected?: boolean;
   readonly size?: number;
-  /** How far up its icon goes, in points, for one whose weight isn't in its middle. */
-  readonly iconLift?: number;
   readonly children?: ReactNode;
 }) {
   return (
@@ -84,9 +84,7 @@ export function RoundButton({
       })}
     >
       {icon === undefined ? null : (
-        <View style={{ transform: [{ translateY: -iconLift }] }}>
-          <SymbolView name={icon} size={size * 0.45} weight="semibold" tintColor={FLOATING_INK} />
-        </View>
+        <AppIcon name={icon} size={Math.round(size * ICON_SHARE)} color={FLOATING_INK} />
       )}
       {children}
     </Pressable>
@@ -99,7 +97,7 @@ export function RoundButton({
  */
 export function PillButton({
   icon,
-  iconSize = 22,
+  iconSize = 28,
   label,
   showLabel = false,
   onPress,
@@ -107,9 +105,8 @@ export function PillButton({
   accent = false,
   height,
   minWidth,
-  iconLift = 0,
 }: {
-  readonly icon: SymbolViewProps['name'];
+  readonly icon: UiIconName;
   readonly iconSize?: number;
   readonly label: string;
   /** Whether the word shows next to the icon (it is always read to screen readers). */
@@ -119,8 +116,6 @@ export function PillButton({
   readonly accent?: boolean;
   readonly height: number;
   readonly minWidth?: number;
-  /** How far up its icon goes, in points, for one whose weight isn't in its middle. */
-  readonly iconLift?: number;
 }) {
   const ink = accent ? colors.onTint : FLOATING_INK;
   return (
@@ -144,9 +139,7 @@ export function PillButton({
         opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
       })}
     >
-      <View style={{ transform: [{ translateY: -iconLift }] }}>
-        <SymbolView name={icon} size={iconSize} weight="semibold" tintColor={ink} />
-      </View>
+      <AppIcon name={icon} size={iconSize} color={ink} />
       {showLabel ? (
         <Text
           numberOfLines={1}

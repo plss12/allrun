@@ -8,7 +8,6 @@ import {
   type Transforms3d,
 } from '@shopify/react-native-skia';
 import { ImpactFeedbackStyle, impactAsync } from 'expo-haptics';
-import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import {
@@ -61,6 +60,7 @@ import {
 } from '@/core/photo-placement';
 import { CANVAS_FORMATS, type Template } from '@/core/template';
 import { colors } from '@/theme/colors';
+import { AppIcon } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
 
 import {
@@ -818,7 +818,7 @@ export function EditorCanvas({
             trashStyle,
           ]}
         >
-          <SymbolView name={{ ios: 'trash', android: 'delete' }} size={24} tintColor="#FFFFFF" />
+          <AppIcon name="trash" size={24} color="#FFFFFF" />
         </Animated.View>
       )}
     </View>

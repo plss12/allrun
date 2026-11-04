@@ -1,10 +1,11 @@
 import { NotificationFeedbackType, notificationAsync } from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Linking, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, View } from 'react-native';
 
 import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
+import { Text } from '@/ui/text';
 
 import { ACTION_TILE_HEIGHT, ActionTile } from './action-tile';
 import { copyImage, saveToPhotos, shareImage } from './export-actions';
@@ -83,11 +84,7 @@ export function ExportBar({
         >
           {t('export.error')}
         </Text>
-        <ActionTile
-          icon={{ ios: 'arrow.clockwise', android: 'refresh' }}
-          label={t('common.retry')}
-          onPress={onRetry}
-        />
+        <ActionTile icon="refresh" label={t('common.retry')} onPress={onRetry} />
       </View>
     );
   }
@@ -131,27 +128,19 @@ export function ExportBar({
     <View style={{ flexDirection: 'row', gap: 6 }}>
       <ActionTile icon="instagram" label={t('export.story')} onPress={onStory} disabled={working} />
       <ActionTile
-        icon={{ ios: 'square.and.arrow.up', android: 'share' }}
+        icon="export"
         label={t('export.share')}
         onPress={() => void share()}
         disabled={working}
       />
       <ActionTile
-        icon={
-          done === 'saved'
-            ? { ios: 'checkmark', android: 'check' }
-            : { ios: 'square.and.arrow.down', android: 'download' }
-        }
+        icon={done === 'saved' ? 'check' : 'save'}
         label={done === 'saved' ? t('export.saved') : t('export.save')}
         onPress={() => void save()}
         disabled={working}
       />
       <ActionTile
-        icon={
-          done === 'copied'
-            ? { ios: 'checkmark', android: 'check' }
-            : { ios: 'doc.on.doc', android: 'content_copy' }
-        }
+        icon={done === 'copied' ? 'check' : 'copy'}
         label={done === 'copied' ? t('export.copied') : t('export.copy')}
         onPress={() => void copy()}
         disabled={working}

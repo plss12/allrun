@@ -1,7 +1,6 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, {
   type SharedValue,
@@ -16,6 +15,8 @@ import { layerColor } from '@/core/layer-style';
 import type { Layer } from '@/core/template';
 import { floatingSurface, roundSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { AppIcon, type UiIconName } from '@/ui/app-icon';
+import { Text } from '@/ui/text';
 
 import { BRAND_GEOMETRY } from './brand/geometry.generated';
 import { TOP_BAR_GAP } from './editor-top-bar';
@@ -99,7 +100,7 @@ export function WidgetColumn({
           </View>
         ) : null}
         <RoundButton
-          icon={{ ios: 'cellularbars', android: 'signal_cellular_alt' }}
+          icon="size"
           label={t('editor.size')}
           onPress={() => toggle('size')}
           selected={tool === 'size'}
@@ -107,11 +108,7 @@ export function WidgetColumn({
       </View>
       {/* The color always second, whatever the widget; its own tool comes after it. */}
       <RoundButton
-        icon={
-          tools.color === 'opacity' || tools.color === 'corners'
-            ? { ios: 'circle.lefthalf.filled', android: 'opacity' }
-            : undefined
-        }
+        icon={tools.color === 'opacity' || tools.color === 'corners' ? 'opacity' : undefined}
         label={t(
           tools.color === 'opacity'
             ? 'style.opacity'
@@ -128,9 +125,7 @@ export function WidgetColumn({
       </RoundButton>
       {tools.lettering === null ? null : (
         <RoundButton
-          icon={
-            tools.lettering === 'line' ? { ios: 'lineweight', android: 'line_weight' } : undefined
-          }
+          icon={tools.lettering === 'line' ? 'lineWidth' : undefined}
           label={t(tools.lettering === 'line' ? 'style.width' : 'editor.lettering')}
           onPress={() => toggle('lettering')}
           selected={tool === 'lettering'}
@@ -149,7 +144,7 @@ export function WidgetColumn({
       {/* A picture's own action, where a text has its letters. */}
       {layer.kind === 'image' && actions.onEdit !== undefined ? (
         <RoundButton
-          icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }}
+          icon="photos"
           label={t('editor.changePhoto')}
           onPress={() => {
             onToolChange(null);
@@ -165,7 +160,7 @@ export function WidgetColumn({
           </View>
         ) : null}
         <RoundButton
-          icon={{ ios: 'ellipsis', android: 'more_horiz' }}
+          icon="more"
           label={t('editor.more')}
           onPress={() => {
             onToolChange(null);
@@ -230,7 +225,7 @@ function MoreMenu({
   const { t } = useTranslation();
   const rows: {
     readonly key: string;
-    readonly icon: SymbolViewProps['name'];
+    readonly icon: UiIconName;
     readonly label: string;
     readonly onPress: () => void;
     readonly disabled?: boolean;
@@ -241,35 +236,35 @@ function MoreMenu({
       : [
           {
             key: 'edit',
-            icon: { ios: 'character.cursor.ibeam', android: 'edit' } as const,
+            icon: 'edit' as const,
             label: t('editor.editText'),
             onPress: actions.onEdit,
           },
         ]),
     {
       key: 'duplicate',
-      icon: { ios: 'plus.square.on.square', android: 'content_copy' },
+      icon: 'duplicate',
       label: t('editor.duplicate'),
       onPress: actions.onDuplicate,
       disabled: !actions.canDuplicate,
     },
     {
       key: 'front',
-      icon: { ios: 'square.3.layers.3d.top.filled', android: 'flip_to_front' },
+      icon: 'bringToFront',
       label: t('editor.bringToFront'),
       onPress: actions.onBringToFront,
       disabled: !actions.canBringToFront,
     },
     {
       key: 'back',
-      icon: { ios: 'square.3.layers.3d.bottom.filled', android: 'flip_to_back' },
+      icon: 'sendToBack',
       label: t('editor.sendToBack'),
       onPress: actions.onSendToBack,
       disabled: !actions.canSendToBack,
     },
     {
       key: 'remove',
-      icon: { ios: 'trash', android: 'delete' },
+      icon: 'trash',
       label: t('editor.remove'),
       onPress: actions.onRemove,
       destructive: true,
@@ -303,7 +298,7 @@ function MoreMenu({
               opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
             })}
           >
-            <SymbolView name={row.icon} size={20} tintColor={ink} />
+            <AppIcon name={row.icon} size={22} color={ink} />
             <Text
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}

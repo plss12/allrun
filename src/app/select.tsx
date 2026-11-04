@@ -1,7 +1,8 @@
+import { BlurTargetView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { z } from 'zod';
 
 import { INITIAL_FORMAT } from '@/core/editor-document';
@@ -19,6 +20,7 @@ import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 import { ErrorView, LoadingView } from '@/ui/state-views';
 import { useDisplaySettings } from '@/ui/settings';
+import { Text } from '@/ui/text';
 import { GlassTabs, TOP_BAR_HEIGHT, TopBar, useTopBarRoom } from '@/ui/top-bar';
 
 const TABS = ['photo', 'designs', 'stickers'] as const;
@@ -57,6 +59,7 @@ function Selection({
   readonly raw: ReturnType<typeof useLocalSearchParams>;
 }) {
   const { t } = useTranslation();
+  const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const [tab, setTab] = useState<Tab>('photo');
   const [stickersOpened, setStickersOpened] = useState(false);
   const [designsOpened, setDesignsOpened] = useState(false);
@@ -93,33 +96,35 @@ function Selection({
     );
   return (
     <View style={{ flex: 1 }}>
-      <KeptMounted hidden={tab !== 'photo'} style={StyleSheet.absoluteFill}>
-        <PhotoBrowser
-          onPick={openEditor}
-          onNoPhoto={() => openEditor()}
-          top={top}
-          topInset={topInset}
-        />
-      </KeptMounted>
-      {stickersOpened ? (
-        <KeptMounted hidden={tab !== 'stickers'} style={StyleSheet.absoluteFill}>
-          <StickerGallery stickerData={stickerData} top={top} topInset={topInset} />
-        </KeptMounted>
-      ) : null}
-      {designsOpened ? (
-        <KeptMounted hidden={tab !== 'designs'} style={StyleSheet.absoluteFill}>
-          <DesignsTab
-            stickerData={stickerData}
+      <BlurTargetView ref={blurTarget} style={StyleSheet.absoluteFill}>
+        <KeptMounted hidden={tab !== 'photo'} style={StyleSheet.absoluteFill}>
+          <PhotoBrowser
+            onPick={openEditor}
+            onNoPhoto={() => openEditor()}
             top={top}
             topInset={topInset}
-            onChoose={openDesign}
           />
         </KeptMounted>
-      ) : null}
+        {stickersOpened ? (
+          <KeptMounted hidden={tab !== 'stickers'} style={StyleSheet.absoluteFill}>
+            <StickerGallery stickerData={stickerData} top={top} topInset={topInset} />
+          </KeptMounted>
+        ) : null}
+        {designsOpened ? (
+          <KeptMounted hidden={tab !== 'designs'} style={StyleSheet.absoluteFill}>
+            <DesignsTab
+              stickerData={stickerData}
+              top={top}
+              topInset={topInset}
+              onChoose={openDesign}
+            />
+          </KeptMounted>
+        ) : null}
+      </BlurTargetView>
       <TopBar
         left={
           <RoundButton
-            icon={{ ios: 'chevron.left', android: 'arrow_back' }}
+            icon="back"
             label={t('editor.back')}
             size={TOP_BAR_HEIGHT}
             onPress={() => router.back()}
@@ -139,6 +144,7 @@ function Selection({
             }
           }}
           width={260}
+          blurTarget={blurTarget}
         />
       </TopBar>
     </View>

@@ -9,4 +9,24 @@ module.exports = defineConfig([
   {
     ignores: ['dist/*', '.claude/skills/*'],
   },
+  // The app looks the same on every phone (ADR 013): its own icons and letter, never the system's.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/ui/text.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-native',
+              importNames: ['Text'],
+              message: 'Use Text from @/ui/text: the same letter on every phone.',
+            },
+            { name: 'expo-symbols', message: 'Use AppIcon from @/ui/app-icon: the same icons.' },
+          ],
+        },
+      ],
+    },
+  },
 ]);

@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { Text } from '@/ui/text';
 
 /** Centered spinner for the first load of a screen. */
 export function LoadingView() {

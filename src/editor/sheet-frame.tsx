@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
+import { Text } from '@/ui/text';
 
 /** Title bar with a close button on the left. */
 export function SheetFrame({

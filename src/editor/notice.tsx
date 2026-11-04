@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Text, View } from 'react-native';
+import { AccessibilityInfo, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { floatingSurface } from '@/theme/card-surface';
+import { Text } from '@/ui/text';
 
 import { FLOATING_INK } from './round-button';
 

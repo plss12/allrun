@@ -1,7 +1,8 @@
 import { Canvas, Circle, Line, LinearGradient, Path, Skia, vec } from '@shopify/react-native-skia';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { lineChartPoints, peakIndex } from '@/core/line-chart';
+import { Text } from '@/ui/text';
 
 /** Width of the column of values on the left. */
 const AXIS_WIDTH = 46;

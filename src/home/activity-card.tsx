@@ -2,7 +2,7 @@ import { BlurMask, Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import type { Activity } from '@/core/activity';
 import { sportIcon } from '@/core/activity-block';
@@ -13,9 +13,10 @@ import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy
 import { type Box, largestFit, projectRoutes, routeSpan } from '@/core/route-projection';
 import type { DistanceUnit } from '@/core/units';
 import { cardSurface } from '@/theme/card-surface';
-import { colors, darkLabelInk } from '@/theme/colors';
+import { colors } from '@/theme/colors';
 import { formatMetric, formatRelativeDay } from '@/ui/format';
 import { SportGlyph } from '@/ui/sport-glyph';
+import { INTERFACE_FACES, Text } from '@/ui/text';
 
 /** Room around the route inside its box, so its line never touches the card's edge. */
 const ROUTE_INSET = 6;
@@ -25,12 +26,12 @@ const HEADER = 32;
 /** Cards are wider than tall, so two and a half fit on a screen. */
 const ASPECT = 3 / 4;
 /** Monospaced digits, as AURA writes its data: columns of numbers line up. */
-const DATA_FONT = Platform.select({ ios: 'Menlo', default: 'monospace' });
+const DATA_FONT = INTERFACE_FACES.mono;
 const DATA_SIZE = 14;
 const DATA_LINE = 19;
 /**
- * Width of a character of the data, as a share of its size: monospaced fonts (Menlo, Droid Sans
- * Mono) all measure about 0.6, so the data's corner is known before it is laid out.
+ * Width of a character of the data, as a share of its size (Space Mono's): so the data's corner is
+ * known before it is laid out.
  */
 const CHAR_WIDTH = 0.61;
 /** Room kept between the data and the route. */
@@ -118,7 +119,7 @@ export function ActivityCard({
           <SportGlyph
             icon={sportIcon(activity)}
             size={routeHeight * 0.45}
-            color={darkLabelInk.tertiary}
+            color={colors.tertiaryLabel}
           />
         </View>
       ) : (
@@ -152,7 +153,7 @@ export function ActivityCard({
         >
           {day}
         </Text>
-        <SportGlyph icon={sportIcon(activity)} size={20} color={darkLabelInk.secondary} />
+        <SportGlyph icon={sportIcon(activity)} size={20} color={colors.secondaryLabel} />
       </View>
       <View style={{ position: 'absolute', left: PADDING, bottom: PADDING }}>
         {data.map((text, i) => (

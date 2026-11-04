@@ -1,6 +1,6 @@
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { type ReactNode, useEffect } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { type ComponentRef, type ReactNode, type RefObject, useEffect } from 'react';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   ReduceMotion,
   useAnimatedStyle,
@@ -9,14 +9,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { roundSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { tabsWidth } from '@/ui/tabs-layout';
+import { Text } from '@/ui/text';
 
 /**
  * The bar on top of the screens with tabs: part of the screen, not the native header. On iOS a
  * SwiftUI control in the header jumped as a screen came in, for it learns its height after it is
  * drawn, and in a box of a fixed size it was cut off; going back, it also showed twice. Here it
- * moves with its screen, and lists scroll under its glass as they did under the header's.
+ * moves with its screen, and lists scroll under its glass.
  */
 
 /** Height of the bar and of the round buttons beside its tabs, which line up with them. */
@@ -32,6 +33,10 @@ const TAB_SPRING = {
   mass: 0.7,
   reduceMotion: ReduceMotion.System,
 } as const;
+/** The tabs' glass: how much it blurs (1 to 100), its tint, and its edge. */
+const GLASS_BLUR = 40;
+const GLASS_TINT = 'linear-gradient(180deg, rgba(80, 80, 86, 0.43) 0%, rgba(30, 30, 34, 0.5) 100%)';
+const GLASS_EDGE = 'inset 0 0 0 1px rgba(255, 255, 255, 0.18)';
 /** What a list passing under the bar fades into, so that the status bar stays readable. */
 const TOP_FADE = 'linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0))';
 
@@ -91,19 +96,50 @@ export function TopBar({
   );
 }
 
-/** What the tabs lie on: the system's glass where there is one, or the app's floating surface. */
-function TabsGround({ width, children }: { readonly width: number; readonly children: ReactNode }) {
-  const size = { width, height: TOP_BAR_HEIGHT };
-  return Platform.OS === 'ios' && isLiquidGlassAvailable() ? (
-    <GlassView
-      glassEffectStyle="regular"
-      colorScheme="dark"
-      style={{ ...size, borderRadius: TOP_BAR_HEIGHT / 2 }}
+/** What a list behind the tabs is, for Android to blur it (iOS blurs whatever is behind). */
+export type BlurTarget = RefObject<ComponentRef<typeof View> | null>;
+
+/**
+ * The glass the tabs lie on, ours and not the system's (only some iPhones have Liquid Glass): what
+ * is behind, blurred, under a translucent grey lit from above, with an edge that catches the light.
+ * Under Android 12 there is no blur, only the translucent grey.
+ */
+function TabsGround({
+  width,
+  blurTarget,
+  children,
+}: {
+  readonly width: number;
+  readonly blurTarget: BlurTarget;
+  readonly children: ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        width,
+        height: TOP_BAR_HEIGHT,
+        borderRadius: TOP_BAR_HEIGHT / 2,
+        overflow: 'hidden',
+      }}
     >
+      <BlurView
+        blurTarget={blurTarget}
+        blurMethod="dimezisBlurViewSdk31Plus"
+        tint="dark"
+        intensity={GLASS_BLUR}
+        style={StyleSheet.absoluteFill}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          ...StyleSheet.absoluteFill,
+          borderRadius: TOP_BAR_HEIGHT / 2,
+          experimental_backgroundImage: GLASS_TINT,
+          boxShadow: GLASS_EDGE,
+        }}
+      />
       {children}
-    </GlassView>
-  ) : (
-    <View style={{ ...size, ...roundSurface(TOP_BAR_HEIGHT) }}>{children}</View>
+    </View>
   );
 }
 
@@ -112,13 +148,17 @@ export function GlassTabs({
   values,
   selectedIndex,
   onChange,
-  width,
+  width: wanted,
+  blurTarget,
 }: {
   readonly values: readonly string[];
   readonly selectedIndex: number;
   readonly onChange: (index: number) => void;
   readonly width: number;
+  /** What the glass blurs: the screen's content, in a `BlurTargetView` beside the bar. */
+  readonly blurTarget: BlurTarget;
 }) {
+  const width = tabsWidth(wanted, useWindowDimensions().width);
   const tabWidth = (width - 2 * CAPSULE_INSET) / values.length;
   const position = useSharedValue(selectedIndex * tabWidth);
   useEffect(() => {
@@ -126,7 +166,7 @@ export function GlassTabs({
   }, [position, selectedIndex, tabWidth]);
   const capsule = useAnimatedStyle(() => ({ transform: [{ translateX: position.get() }] }));
   return (
-    <TabsGround width={width}>
+    <TabsGround width={width} blurTarget={blurTarget}>
       <Animated.View
         style={[
           {
@@ -155,6 +195,8 @@ export function GlassTabs({
           >
             <Text
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
               maxFontSizeMultiplier={1.2}
               style={{ color: colors.label, fontSize: 17, fontWeight: '500' }}
             >

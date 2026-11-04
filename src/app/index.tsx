@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { BlurTargetView } from 'expo-blur';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Activity } from '@/core/activity';
@@ -8,13 +9,15 @@ import type { PeriodKind } from '@/core/periods';
 import { familiesOf } from '@/core/summary';
 import { useActivitySource } from '@/data/activity-source';
 import { BrandMark } from '@/editor/brand/brand-art';
-import { KeptMounted, RoundButton } from '@/editor/round-button';
+import { FLOATING_INK, KeptMounted, RoundButton } from '@/editor/round-button';
 import { ActivityCard } from '@/home/activity-card';
 import { PeriodCard } from '@/home/period-card';
 import { type SportFilter, SportFilterMenu } from '@/home/sport-filter-menu';
 import { colors } from '@/theme/colors';
 import { useDisplaySettings } from '@/ui/settings';
+import { SportGlyph } from '@/ui/sport-glyph';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
+import { Text } from '@/ui/text';
 import { todayLocal } from '@/ui/today';
 import { GlassTabs, TOP_BAR_HEIGHT, TopBar, useTopBarRoom, useTopBarTop } from '@/ui/top-bar';
 import { useAsync } from '@/ui/use-async';
@@ -50,6 +53,7 @@ function useListRoom() {
 export default function Home() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('activities');
+  const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const [summariesDue, setSummariesDue] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setSummariesDue(true), SUMMARIES_AFTER_MS);
@@ -57,20 +61,23 @@ export default function Home() {
   }, []);
   return (
     <>
-      <KeptMounted hidden={tab !== 'activities'} style={StyleSheet.absoluteFill}>
-        <Activities active={tab === 'activities'} />
-      </KeptMounted>
-      {summariesDue || tab === 'summaries' ? (
-        <KeptMounted hidden={tab !== 'summaries'} style={StyleSheet.absoluteFill}>
-          <Summaries />
+      <BlurTargetView ref={blurTarget} style={StyleSheet.absoluteFill}>
+        <KeptMounted hidden={tab !== 'activities'} style={StyleSheet.absoluteFill}>
+          <Activities active={tab === 'activities'} />
         </KeptMounted>
-      ) : null}
+        {summariesDue || tab === 'summaries' ? (
+          <KeptMounted hidden={tab !== 'summaries'} style={StyleSheet.absoluteFill}>
+            <Summaries />
+          </KeptMounted>
+        ) : null}
+      </BlurTargetView>
       <TopBar left={<BrandMark height={22} />}>
         <GlassTabs
           values={TABS.map((option) => t(`home.tabs.${option}`))}
           selectedIndex={TABS.indexOf(tab)}
           onChange={(index) => setTab(TABS[index])}
           width={230}
+          blurTarget={blurTarget}
         />
       </TopBar>
     </>
@@ -113,16 +120,17 @@ function Activities({ active }: { readonly active: boolean }) {
       {/* Beside the tabs, only with the activities on screen: the summaries have no use for it. */}
       {active ? (
         <View style={{ position: 'absolute', top: barTop, right: 8 }}>
+          {/* With a sport chosen, its icon says which one is on. */}
           <RoundButton
-            icon={
-              shown === 'all'
-                ? { ios: 'line.3.horizontal.decrease.circle', android: 'filter_list' }
-                : { ios: 'line.3.horizontal.decrease.circle.fill', android: 'filter_list' }
+            icon={shown === 'all' ? 'filter' : undefined}
+            label={
+              shown === 'all' ? t('home.filter') : `${t('home.filter')}, ${t(`families.${shown}`)}`
             }
-            label={t('home.filter')}
             size={TOP_BAR_HEIGHT}
             onPress={() => setFilterOpen(true)}
-          />
+          >
+            {shown === 'all' ? null : <SportGlyph icon={shown} size={24} color={FLOATING_INK} />}
+          </RoundButton>
         </View>
       ) : null}
     </>

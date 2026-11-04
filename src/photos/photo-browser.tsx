@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { addListener, presentPermissionsPicker } from 'expo-media-library';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -23,6 +23,7 @@ import { formatRelativeDay } from '@/ui/format';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
+import { Text } from '@/ui/text';
 import { dayOfMoment, todayLocal } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
 

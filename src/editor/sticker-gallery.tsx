@@ -1,8 +1,7 @@
 import * as Haptics from 'expo-haptics';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { type ReactNode, useDeferredValue, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Linking, Modal, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Linking, Modal, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DEFAULT_FONT } from '@/core/default-layout';
@@ -14,9 +13,11 @@ import { useActivitySource } from '@/data/activity-source';
 import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
 import { usePhrases } from '@/data/phrases';
 import { colors } from '@/theme/colors';
+import { AppIcon, type UiIconName } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
 import { ErrorView, LoadingView } from '@/ui/state-views';
+import { Text } from '@/ui/text';
 import { toLocalTimestamp } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
 
@@ -53,10 +54,10 @@ const NO_LOOK: StickerLook = { font: null, color: null };
 const STICKER_FORMAT = 'story';
 
 /** A small line of how to use the stickers, with its icon. */
-function HowTo({ icon, text }: { readonly icon: SymbolViewProps['name']; readonly text: string }) {
+function HowTo({ icon, text }: { readonly icon: UiIconName; readonly text: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <SymbolView name={icon} size={14} tintColor={colors.secondaryLabel} />
+      <AppIcon name={icon} size={16} color={colors.secondaryLabel} />
       <Text numberOfLines={1} style={{ color: colors.secondaryLabel, fontSize: 12 }}>
         {text}
       </Text>
@@ -290,7 +291,7 @@ export function StickerGallery({
           </Text>
         </RoundButton>
         <RoundButton
-          icon={{ ios: 'arrow.counterclockwise', android: 'restart_alt' }}
+          icon="restart"
           label={t('stickers.reset')}
           disabled={look === NO_LOOK}
           onPress={() => {
@@ -299,11 +300,8 @@ export function StickerGallery({
           }}
         />
         <View style={{ flex: 1, alignItems: 'flex-end', gap: 4 }}>
-          <HowTo icon={{ ios: 'doc.on.doc', android: 'content_copy' }} text={t('stickers.tap')} />
-          <HowTo
-            icon={{ ios: 'square.and.arrow.down', android: 'download' }}
-            text={t('stickers.longPress')}
-          />
+          <HowTo icon="copy" text={t('stickers.tap')} />
+          <HowTo icon="save" text={t('stickers.longPress')} />
         </View>
       </View>
     </>

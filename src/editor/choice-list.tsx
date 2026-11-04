@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   type ScrollViewInstance,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -16,6 +15,7 @@ import type { ChosenWords } from '@/core/template-edit';
 import { usePhrases } from '@/data/phrases';
 import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { INTERFACE_FACES, Text } from '@/ui/text';
 import { todayLocal } from '@/ui/today';
 
 import { SheetFrame } from './sheet-frame';
@@ -192,7 +192,13 @@ function OwnPhrase({
         accessibilityLabel={t('gallery.ownPhrase')}
         maxLength={MAX_CHAT_LENGTH}
         returnKeyType="done"
-        style={{ flex: 1, color: colors.label, fontSize: 17, paddingVertical: 8 }}
+        style={{
+          flex: 1,
+          color: colors.label,
+          fontFamily: INTERFACE_FACES.regular,
+          fontSize: 17,
+          paddingVertical: 8,
+        }}
       />
       <Pressable
         accessibilityRole="button"

@@ -1,7 +1,8 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { type ColorValue, Pressable, Text, View } from 'react-native';
+import { type ColorValue, Pressable, View } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { AppIcon, type UiIconName } from '@/ui/app-icon';
+import { Text } from '@/ui/text';
 
 /**
  * Height of the tiles under the canvas: actions and formats alike, so that space looks the same
@@ -10,17 +11,17 @@ import { colors } from '@/theme/colors';
 export const ACTION_TILE_HEIGHT = 76;
 
 /** Size of a tile's icon, in points. */
-const ICON_SIZE = 26;
+const ICON_SIZE = 28;
 
 /**
- * Instagram's camera beside the symbols: as tall as they look (a symbol of 26 pt draws about 22 pt
- * of ink) and with their stroke at that size, so no icon of the row looks heavier.
+ * Instagram's camera beside the icons: as tall as they look (one of 28 pt draws about 22 pt of ink)
+ * and with their stroke at that size, so no icon of the row looks heavier.
  */
 const GLYPH = { size: 22, stroke: 1.7 } as const;
 
 /**
- * A square-ish button with an icon over a short label, for the row under the canvas. The icon is a
- * symbol, or Instagram's camera (`instagram`), which no symbol set has.
+ * A square-ish button with an icon over a short label, for the row under the canvas. The icon is
+ * one of the app's, or Instagram's camera (`instagram`).
  */
 export function ActionTile({
   icon,
@@ -29,7 +30,7 @@ export function ActionTile({
   disabled = false,
   destructive = false,
 }: {
-  readonly icon: SymbolViewProps['name'] | 'instagram';
+  readonly icon: UiIconName | 'instagram';
   readonly label: string;
   readonly onPress: () => void;
   readonly disabled?: boolean;
@@ -57,7 +58,7 @@ export function ActionTile({
       })}
     >
       {icon === 'instagram' ? (
-        // In a symbol's box, so its label lines up with the others'.
+        // In an icon's box, so its label lines up with the others'.
         <View
           style={{
             width: ICON_SIZE,
@@ -69,7 +70,7 @@ export function ActionTile({
           <InstagramGlyph size={GLYPH.size} stroke={GLYPH.stroke} color={color} />
         </View>
       ) : (
-        <SymbolView name={icon} size={ICON_SIZE} tintColor={color} />
+        <AppIcon name={icon} size={ICON_SIZE} color={color} />
       )}
       <Text
         numberOfLines={1}

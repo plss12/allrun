@@ -1,10 +1,11 @@
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import type { DateRange, LocalDate } from '@/core/dates';
 import type { DateLimits } from '@/core/periods';
 import { colors } from '@/theme/colors';
+import { Text } from '@/ui/text';
 
 import { formatDate } from './format';
 import { fromLocalDate, toLocalDate } from './today';

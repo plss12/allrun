@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { type CanvasFormat, CANVAS_FORMATS } from '@/core/template';
 import { colors } from '@/theme/colors';
 
 import { floatingSurface } from '@/theme/card-surface';
+import { Text } from '@/ui/text';
 
 import { FLOATING_INK } from './round-button';
 

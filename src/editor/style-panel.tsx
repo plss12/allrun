@@ -1,7 +1,6 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { splitOpacity } from '@/core/color-menu';
@@ -31,6 +30,8 @@ import {
 import { isAppReplica, isDataWidget } from '@/core/activity-block';
 import { isSummaryDataWidget, isSummaryReplica } from '@/core/summary-block';
 import { colors } from '@/theme/colors';
+import { AppIcon, type UiIconName } from '@/ui/app-icon';
+import { Text } from '@/ui/text';
 
 import { ColorMenu, OpacityBar } from './color-menu';
 import { hasUnit } from './editor-data';
@@ -229,10 +230,10 @@ export function StylePanel({
 
 const ALIGN_ORDER: readonly TextStyle['align'][] = ['left', 'center', 'right'];
 
-const ALIGN_ICONS: Readonly<Record<TextStyle['align'], SymbolViewProps['name']>> = {
-  left: { ios: 'text.alignleft', android: 'format_align_left' },
-  center: { ios: 'text.aligncenter', android: 'format_align_center' },
-  right: { ios: 'text.alignright', android: 'format_align_right' },
+const ALIGN_ICONS: Readonly<Record<TextStyle['align'], UiIconName>> = {
+  left: 'alignLeft',
+  center: 'alignCenter',
+  right: 'alignRight',
 };
 
 /** How a text is written; options left out don't apply to the widget. */
@@ -266,7 +267,7 @@ function FormatRow({
   return (
     <Row>
       <IconToggle
-        icon={{ ios: 'bold', android: 'format_bold' }}
+        icon="bold"
         label={t('style.bold')}
         // A font without a bold face shows what it draws, and keeps it: heavy ones on, light off.
         selected={looksBold(font, bold)}
@@ -275,14 +276,14 @@ function FormatRow({
       />
       {/* Every font can slant: those without an italic have their letters leaned. */}
       <IconToggle
-        icon={{ ios: 'italic', android: 'format_italic' }}
+        icon="italic"
         label={t('style.italic')}
         selected={italic}
         onPress={() => onPatch({ italic: !italic })}
       />
       {uppercase === undefined ? null : (
         <IconToggle
-          icon={{ ios: 'textformat', android: 'match_case' }}
+          icon="caps"
           label={t('style.uppercase')}
           // A font with capitals only always writes in them: the option shows on, and stays.
           selected={uppercase || isCapsOnly(font)}
@@ -535,7 +536,7 @@ function CornersRow({
   const rounded = layer.rounded ?? false;
   return (
     <Row>
-      <RowIcon label={t('style.cornersLabel')} icon={{ ios: 'app', android: 'rounded_corner' }} />
+      <RowIcon label={t('style.cornersLabel')} icon="corners" />
       {[false, true].map((option) => (
         <Chip
           key={String(option)}
@@ -559,10 +560,7 @@ function BackdropRow({
   const { t } = useTranslation();
   return (
     <Row>
-      <RowIcon
-        label={t('style.backdrop')}
-        icon={{ ios: 'character.textbox', android: 'format_color_fill' }}
-      />
+      <RowIcon label={t('style.backdrop')} icon="backdrop" />
       {BACKDROPS.map((option) => (
         <Chip
           key={option}
@@ -576,16 +574,10 @@ function BackdropRow({
 }
 
 /** What a row of options is about, as an icon before them. */
-function RowIcon({
-  label,
-  icon,
-}: {
-  readonly label: string;
-  readonly icon: SymbolViewProps['name'];
-}) {
+function RowIcon({ label, icon }: { readonly label: string; readonly icon: UiIconName }) {
   return (
     <View accessible accessibilityLabel={label} style={{ width: 28, alignItems: 'center' }}>
-      <SymbolView name={icon} size={20} tintColor={colors.secondaryLabel} />
+      <AppIcon name={icon} size={22} color={colors.secondaryLabel} />
     </View>
   );
 }
@@ -687,7 +679,7 @@ function IconToggle({
   onPress,
   disabled = false,
 }: {
-  readonly icon?: SymbolViewProps['name'];
+  readonly icon?: UiIconName;
   readonly glyph?: ReactNode;
   readonly label: string;
   /** Spoken current value, for buttons that cycle through options. */
@@ -717,7 +709,7 @@ function IconToggle({
     >
       {glyph ??
         (icon === undefined ? null : (
-          <SymbolView name={icon} size={20} tintColor={selected ? colors.onTint : colors.label} />
+          <AppIcon name={icon} size={22} color={selected ? colors.onTint : colors.label} />
         ))}
     </Pressable>
   );

@@ -7,7 +7,6 @@ import {
   type KeyboardEvent,
   Platform,
   Pressable,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -23,6 +22,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { castsShadow } from '@/core/layer-style';
 import { type Layer, MAX_TEXT_LENGTH } from '@/core/template';
 import { colors } from '@/theme/colors';
+import { Text } from '@/ui/text';
 
 import { hasItalic, previewFamily, usePreviewFonts } from './fonts';
 import { TEXT_SIZE } from './template-scene';

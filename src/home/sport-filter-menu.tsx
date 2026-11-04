@@ -1,11 +1,12 @@
-import { SymbolView } from 'expo-symbols';
 import { useTranslation } from 'react-i18next';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 
 import type { SportFamily } from '@/core/sports';
 import { floatingSurface } from '@/theme/card-surface';
-import { colors, darkLabelInk } from '@/theme/colors';
+import { colors } from '@/theme/colors';
+import { AppIcon } from '@/ui/app-icon';
 import { SportGlyph } from '@/ui/sport-glyph';
+import { Text } from '@/ui/text';
 import { useTopBarRoom } from '@/ui/top-bar';
 
 /** What the filter shows: one family, or every activity. */
@@ -84,7 +85,7 @@ export function SportFilterMenu({
                 backgroundColor: pressed ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
               })}
             >
-              <SportGlyph icon={option} size={ICON_SIZE} color={darkLabelInk.primary} />
+              <SportGlyph icon={option} size={ICON_SIZE} color={colors.label} />
               <Text
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.5}
@@ -93,14 +94,7 @@ export function SportFilterMenu({
                 {option === 'all' ? t('summary.allSports') : t(`families.${option}`)}
               </Text>
               <View style={{ width: 18, alignItems: 'center' }}>
-                {selected ? (
-                  <SymbolView
-                    name={{ ios: 'checkmark', android: 'check' }}
-                    size={16}
-                    weight="semibold"
-                    tintColor={colors.label}
-                  />
-                ) : null}
+                {selected ? <AppIcon name="check" size={18} color={colors.label} /> : null}
               </View>
             </Pressable>
           );

@@ -1,12 +1,13 @@
 import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import type { CanvasFormat, CollageLayout, DesignLanguage } from '@/core/template';
 import type { DistanceUnit } from '@/core/units';
 import { SportGlyph, type SportIconName } from '@/ui/sport-glyph';
+import { Text } from '@/ui/text';
 
 import { CollageMenu } from './collage-menu';
 import { TOP_BAR_GAP } from './editor-top-bar';
@@ -98,11 +99,7 @@ export function EditorSideMenu({
   return (
     <View pointerEvents="box-none" style={{ alignItems: 'flex-end', gap: TOP_BAR_GAP + 4 }}>
       <View accessibilityRole="toolbar" style={{ flexDirection: 'row', gap: TOP_BAR_GAP }}>
-        <RoundButton
-          icon={{ ios: 'person.and.background.dotted', android: 'portrait' }}
-          label={t('editor.depth')}
-          onPress={onDepth}
-        />
+        <RoundButton icon="depth" label={t('editor.depth')} onPress={onDepth} />
         <View pointerEvents="box-none">
           {collagesOpen ? (
             // As wide as the row's three, from the depth to the designs, centered under them.
@@ -117,7 +114,7 @@ export function EditorSideMenu({
             </View>
           ) : null}
           <RoundButton
-            icon={{ ios: 'rectangle.split.2x2', android: 'auto_awesome_mosaic' }}
+            icon="collages"
             label={t('editor.collages')}
             onPress={() => {
               onFormatsOpenChange(false);
@@ -126,11 +123,7 @@ export function EditorSideMenu({
             selected={collagesOpen}
           />
         </View>
-        <RoundButton
-          icon={{ ios: 'square.split.bottomrightquarter', android: 'space_dashboard' }}
-          label={t('editor.designs')}
-          onPress={onDesigns}
-        />
+        <RoundButton icon="designs" label={t('editor.designs')} onPress={onDesigns} />
         <RoundButton label={t(open ? 'editor.hideMenu' : 'editor.showMenu')} onPress={toggle}>
           <MenuChevron up={open} />
         </RoundButton>
@@ -176,7 +169,7 @@ export function EditorSideMenu({
           <RoundButton
             label={t(sport === null ? 'editor.period' : 'editor.activity')}
             onPress={onActivity}
-            icon={sport === null ? { ios: 'calendar', android: 'calendar_month' } : undefined}
+            icon={sport === null ? 'calendar' : undefined}
           >
             {sport === null ? null : <SportGlyph icon={sport} size={22} color={FLOATING_INK} />}
           </RoundButton>
@@ -186,14 +179,17 @@ export function EditorSideMenu({
   );
 }
 
-/** The chevron's box and its two strokes: as wide and tall around the box's center either way. */
+/**
+ * The chevron's box and its two strokes, a point toward where it points: by its box, a chevron looks
+ * off toward its open side (the same rule as the icons, see `POINTING` in build-ui-icons.mjs).
+ */
 const CHEVRON = { width: 18, height: 18, stroke: 2.6 } as const;
-const CHEVRON_DOWN = Skia.Path.MakeFromSVGString('M3 6 L9 12 L15 6');
-const CHEVRON_UP = Skia.Path.MakeFromSVGString('M3 12 L9 6 L15 12');
+const CHEVRON_DOWN = Skia.Path.MakeFromSVGString('M3 7 L9 13 L15 7');
+const CHEVRON_UP = Skia.Path.MakeFromSVGString('M3 11 L9 5 L15 11');
 
 /**
- * The chevron that folds the menu, drawn here: the system's sits off the middle of its box, and
- * nothing in the app may look off center (the user's rule).
+ * The chevron that folds the menu, drawn here to flip it up and down in the same place: nothing in
+ * the app may look off center (the user's rule).
  */
 function MenuChevron({ up }: { readonly up: boolean }) {
   const path = up ? CHEVRON_UP : CHEVRON_DOWN;
@@ -246,24 +242,27 @@ function Item({
   return (
     <View pointerEvents="box-none" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       {showLabel ? (
-        <Animated.Text
+        <Animated.View
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(300)}
           pointerEvents="none"
-          importantForAccessibility="no"
+          importantForAccessibility="no-hide-descendants"
           accessibilityElementsHidden
-          maxFontSizeMultiplier={1.3}
-          style={{
-            color: FLOATING_INK,
-            fontSize: 17,
-            fontWeight: '600',
-            textShadowColor: 'rgba(0, 0, 0, 0.6)',
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 6,
-          }}
         >
-          {label}
-        </Animated.Text>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{
+              color: FLOATING_INK,
+              fontSize: 17,
+              fontWeight: '600',
+              textShadowColor: 'rgba(0, 0, 0, 0.6)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 6,
+            }}
+          >
+            {label}
+          </Text>
+        </Animated.View>
       ) : null}
       {children}
     </View>
