@@ -1,5 +1,4 @@
-import { BlurTargetView } from 'expo-blur';
-import { type ComponentRef, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,7 +52,6 @@ function useListRoom() {
 export default function Home() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('activities');
-  const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const [summariesDue, setSummariesDue] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setSummariesDue(true), SUMMARIES_AFTER_MS);
@@ -61,23 +59,20 @@ export default function Home() {
   }, []);
   return (
     <>
-      <BlurTargetView ref={blurTarget} style={StyleSheet.absoluteFill}>
-        <KeptMounted hidden={tab !== 'activities'} style={StyleSheet.absoluteFill}>
-          <Activities active={tab === 'activities'} />
+      <KeptMounted hidden={tab !== 'activities'} style={StyleSheet.absoluteFill}>
+        <Activities active={tab === 'activities'} />
+      </KeptMounted>
+      {summariesDue || tab === 'summaries' ? (
+        <KeptMounted hidden={tab !== 'summaries'} style={StyleSheet.absoluteFill}>
+          <Summaries />
         </KeptMounted>
-        {summariesDue || tab === 'summaries' ? (
-          <KeptMounted hidden={tab !== 'summaries'} style={StyleSheet.absoluteFill}>
-            <Summaries />
-          </KeptMounted>
-        ) : null}
-      </BlurTargetView>
+      ) : null}
       <TopBar left={<BrandMark height={22} />}>
         <GlassTabs
           values={TABS.map((option) => t(`home.tabs.${option}`))}
           selectedIndex={TABS.indexOf(tab)}
           onChange={(index) => setTab(TABS[index])}
           width={230}
-          blurTarget={blurTarget}
         />
       </TopBar>
     </>
@@ -150,6 +145,13 @@ function Gallery({ activities }: { readonly activities: readonly Activity[] }) {
       scrollIndicatorInsets={room.scrollIndicatorInsets}
       data={activities}
       keyExtractor={(activity) => activity.id}
+      // Each card holds a canvas, megabytes of GPU memory: those that fill the screen first, then
+      // a couple at a time, and those over two screens away are let go. Nearer ones stay on screen:
+      // on Android, a canvas taken off it destroys its surface, and has to draw again on coming back.
+      initialNumToRender={3}
+      maxToRenderPerBatch={2}
+      windowSize={5}
+      removeClippedSubviews={false}
       contentContainerStyle={{
         ...room.contentContainerStyle,
         paddingHorizontal: PADDING,

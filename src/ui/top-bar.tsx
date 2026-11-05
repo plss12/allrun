@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
-import { type ComponentRef, type ReactNode, type RefObject, useEffect } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { type ReactNode, useEffect } from 'react';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   ReduceMotion,
   useAnimatedStyle,
@@ -37,6 +37,7 @@ const TAB_SPRING = {
 const GLASS_BLUR = 40;
 const GLASS_TINT = 'linear-gradient(180deg, rgba(80, 80, 86, 0.43) 0%, rgba(30, 30, 34, 0.5) 100%)';
 const GLASS_EDGE = 'inset 0 0 0 1px rgba(255, 255, 255, 0.18)';
+const GLASS_WITHOUT_BLUR = 'rgba(14, 14, 16, 0.82)';
 /** What a list passing under the bar fades into, so that the status bar stays readable. */
 const TOP_FADE = 'linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0))';
 
@@ -96,23 +97,13 @@ export function TopBar({
   );
 }
 
-/** What a list behind the tabs is, for Android to blur it (iOS blurs whatever is behind). */
-export type BlurTarget = RefObject<ComponentRef<typeof View> | null>;
-
 /**
  * The glass the tabs lie on, ours and not the system's (only some iPhones have Liquid Glass): what
  * is behind, blurred, under a translucent grey lit from above, with an edge that catches the light.
- * Under Android 12 there is no blur, only the translucent grey.
+ * On Android, only the grey, darker to keep the tabs readable over a card: its blur copies the whole
+ * screen on every frame of a scroll, in a list already short of time on a modest phone.
  */
-function TabsGround({
-  width,
-  blurTarget,
-  children,
-}: {
-  readonly width: number;
-  readonly blurTarget: BlurTarget;
-  readonly children: ReactNode;
-}) {
+function TabsGround({ width, children }: { readonly width: number; readonly children: ReactNode }) {
   return (
     <View
       style={{
@@ -120,15 +111,12 @@ function TabsGround({
         height: TOP_BAR_HEIGHT,
         borderRadius: TOP_BAR_HEIGHT / 2,
         overflow: 'hidden',
+        backgroundColor: Platform.OS === 'ios' ? undefined : GLASS_WITHOUT_BLUR,
       }}
     >
-      <BlurView
-        blurTarget={blurTarget}
-        blurMethod="dimezisBlurViewSdk31Plus"
-        tint="dark"
-        intensity={GLASS_BLUR}
-        style={StyleSheet.absoluteFill}
-      />
+      {Platform.OS === 'ios' ? (
+        <BlurView tint="dark" intensity={GLASS_BLUR} style={StyleSheet.absoluteFill} />
+      ) : null}
       <View
         pointerEvents="none"
         style={{
@@ -149,14 +137,11 @@ export function GlassTabs({
   selectedIndex,
   onChange,
   width: wanted,
-  blurTarget,
 }: {
   readonly values: readonly string[];
   readonly selectedIndex: number;
   readonly onChange: (index: number) => void;
   readonly width: number;
-  /** What the glass blurs: the screen's content, in a `BlurTargetView` beside the bar. */
-  readonly blurTarget: BlurTarget;
 }) {
   const width = tabsWidth(wanted, useWindowDimensions().width);
   const tabWidth = (width - 2 * CAPSULE_INSET) / values.length;
@@ -166,7 +151,7 @@ export function GlassTabs({
   }, [position, selectedIndex, tabWidth]);
   const capsule = useAnimatedStyle(() => ({ transform: [{ translateX: position.get() }] }));
   return (
-    <TabsGround width={width} blurTarget={blurTarget}>
+    <TabsGround width={width}>
       <Animated.View
         style={[
           {
@@ -195,9 +180,7 @@ export function GlassTabs({
           >
             <Text
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}
-              maxFontSizeMultiplier={1.2}
+              maxFontSizeMultiplier={1.1}
               style={{ color: colors.label, fontSize: 17, fontWeight: '500' }}
             >
               {value}

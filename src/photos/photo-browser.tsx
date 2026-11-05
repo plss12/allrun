@@ -17,7 +17,7 @@ import {
   readPhotoAccess,
 } from '@/data/photo-library';
 import { KeptMounted } from '@/editor/round-button';
-import { cardSurface } from '@/theme/card-surface';
+import { smallCardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { formatRelativeDay } from '@/ui/format';
 import { logError } from '@/ui/log';
@@ -348,7 +348,7 @@ function AlbumList({
           onPress={() => onOpen(item)}
           style={({ pressed }) => ({ padding: 8, gap: 6, opacity: pressed ? 0.7 : 1 })}
         >
-          <View style={{ ...cardSurface(12), aspectRatio: 1, overflow: 'hidden' }}>
+          <View style={{ ...smallCardSurface(12), aspectRatio: 1, overflow: 'hidden' }}>
             <Image
               source={{ uri: item.coverId }}
               recyclingKey={item.coverId}

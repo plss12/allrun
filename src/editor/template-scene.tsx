@@ -330,6 +330,26 @@ export interface TemplateSceneProps {
     readonly matrix: SharedValue<Transforms3d>;
     readonly opacity: SharedValue<number>;
   } | null;
+  /**
+   * While a gesture lasts, textures of what it leaves still and of the widget it moves, instead of
+   * drawing them again on every frame (see `useGestureTextures`). The widgets are not drawn then.
+   */
+  readonly textures?: SceneTextures | null;
+}
+
+/** A texture of the scene and the rectangle of the scene it covers. */
+interface SceneTexture {
+  readonly image: SharedValue<SkImage | null>;
+  readonly rect: DrawRect;
+}
+
+/** The textures a gesture draws with: only those it needs. */
+export interface SceneTextures {
+  /** Everything under what moves, instead of the backdrop, the photos and the frame. */
+  readonly under: SceneTexture | null;
+  readonly over: SceneTexture | null;
+  /** The widget that moves, in its own coordinates, under the transform and opacity of `live`. */
+  readonly live: SceneTexture | null;
 }
 
 /** The two tones of the transparency checkerboard and the side of its squares (canvas pixels). */
@@ -369,6 +389,13 @@ function checkerPath(format: CanvasFormat): SkPath {
  * them smooth when scaled down instead of aliased.
  */
 const PHOTO_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear } as const;
+/** What stays still in a gesture is as sharp as the screen, one pixel to one pixel. */
+const TEXTURE_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.None } as const;
+/**
+ * The widget a gesture moves turns and shrinks: with mipmaps and more pixels than it shows (see
+ * `LIVE_TEXTURE_SHARPNESS` in `editor-canvas.tsx`), its edges don't saw-tooth meanwhile.
+ */
+const LIVE_TEXTURE_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear } as const;
 
 export function TemplateScene({
   format,
@@ -378,9 +405,27 @@ export function TemplateScene({
   collage = null,
   frame = null,
   live = null,
+  textures = null,
 }: TemplateSceneProps) {
   const canvas = CANVAS_FORMATS[format];
   const { width, height } = canvas;
+  if (textures !== null && textures.under !== null) {
+    return (
+      <Group>
+        <SceneImage texture={textures.under} />
+        {textures.live === null || live === null ? null : (
+          <Group transform={live.matrix}>
+            <SceneImage
+              texture={textures.live}
+              opacity={live.opacity}
+              sampling={LIVE_TEXTURE_SAMPLING}
+            />
+          </Group>
+        )}
+        {textures.over === null ? null : <SceneImage texture={textures.over} />}
+      </Group>
+    );
+  }
   return (
     <Group>
       {backdrop.kind === 'checker' || (backdrop.kind === 'color' && backdrop.onChecker === true) ? (
@@ -426,23 +471,71 @@ export function TemplateScene({
       {/* A layer's opacity fades it as a whole, drawn on its own Skia layer: a group's `opacity`
           only reaches shapes (paragraphs ignore it) and fades each shape and its shadow apart,
           letting the shadow show through. Opaque layers skip the extra layer. */}
-      {layers.map(({ layer, content }) =>
-        live !== null && live.id === layer.id ? (
-          <Group key={layer.id} transform={live.matrix} layer={<Paint opacity={live.opacity} />}>
-            {content}
-          </Group>
-        ) : (
-          <Group
-            key={layer.id}
-            transform={layerMatrix(layer.transform, canvas)}
-            layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
-          >
-            {content}
-          </Group>
-        ),
+      {textures?.over !== null && textures?.over !== undefined ? (
+        <SceneImage texture={textures.over} />
+      ) : textures !== null ? null : (
+        layers.map(({ layer, content, width, height }) =>
+          live !== null && live.id === layer.id ? (
+            <Group
+              key={layer.id}
+              transform={live.matrix}
+              clip={layerClip(width, height)}
+              layer={<Paint opacity={live.opacity} />}
+            >
+              {content}
+            </Group>
+          ) : (
+            <Group
+              key={layer.id}
+              transform={layerMatrix(layer.transform, canvas)}
+              clip={layerClip(width, height)}
+              layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
+            >
+              {content}
+            </Group>
+          ),
+        )
       )}
     </Group>
   );
+}
+
+/** A texture of a gesture in its place. */
+function SceneImage({
+  texture,
+  opacity,
+  sampling = TEXTURE_SAMPLING,
+}: {
+  readonly texture: SceneTexture;
+  readonly opacity?: SharedValue<number>;
+  readonly sampling?: typeof TEXTURE_SAMPLING | typeof LIVE_TEXTURE_SAMPLING;
+}) {
+  return (
+    <Image
+      image={texture.image}
+      rect={texture.rect}
+      fit="fill"
+      sampling={sampling}
+      opacity={opacity}
+    />
+  );
+}
+
+/** What a layer may draw past its box, in pixels before its scale: its shadow, at the most. */
+const LAYER_CLIP_MARGIN = 32;
+
+/**
+ * Where a layer draws: its box, centered on its origin, and room for its shadow. The widgets' shadows
+ * are image filters on Skia layers, which are as big as the clip: without this each one blurred the
+ * whole canvas, in every frame of a drag (53 ms a frame on a Samsung M32).
+ */
+export function layerClip(width: number, height: number) {
+  return {
+    x: -width / 2 - LAYER_CLIP_MARGIN,
+    y: -height / 2 - LAYER_CLIP_MARGIN,
+    width: width + 2 * LAYER_CLIP_MARGIN,
+    height: height + 2 * LAYER_CLIP_MARGIN,
+  };
 }
 
 /** Fills in and measures one layer, or `null` when it has nothing to show for this data. */
@@ -2809,4 +2902,56 @@ function BarsBody({
       })}
     </Group>
   );
+}
+
+/**
+ * Layers prepared once and kept while what they depend on stays the same: laying out a widget's texts
+ * takes milliseconds on a modest phone, and moving a widget doesn't change them, only where it goes.
+ * Time O(n) per call for the n layers, plus each layer that did change; space O(n).
+ */
+export class PreparedLayerCache {
+  private environment: readonly unknown[] = [];
+  private kept = new Map<
+    string,
+    { readonly signature: string; readonly image: unknown; readonly prepared: PreparedLayer | null }
+  >();
+
+  /** The layers of `template`, as `prepareLayers` gives them. */
+  prepare(template: Template, context: LayerContext): PreparedLayer[] {
+    const canvas = CANVAS_FORMATS[template.format];
+    const environment = [
+      template.format,
+      context.data,
+      context.fonts,
+      context.textContext.unit,
+      context.textContext.locale,
+      context.phrases,
+      context.emptySlots,
+    ];
+    if (environment.some((value, i) => value !== this.environment[i])) {
+      this.kept.clear();
+      this.environment = environment;
+    }
+    const next = new Map<
+      string,
+      {
+        readonly signature: string;
+        readonly image: unknown;
+        readonly prepared: PreparedLayer | null;
+      }
+    >();
+    const prepared = template.layers.flatMap((layer) => {
+      const signature = JSON.stringify({ ...layer, transform: null });
+      const image = layer.kind === 'image' ? context.images?.get(layer.image) : undefined;
+      const known = this.kept.get(layer.id);
+      const entry =
+        known?.signature === signature && known.image === image
+          ? known
+          : { signature, image, prepared: prepareLayer(layer, context, canvas) };
+      next.set(layer.id, entry);
+      return entry.prepared === null ? [] : [{ ...entry.prepared, layer }];
+    });
+    this.kept = next;
+    return prepared;
+  }
 }

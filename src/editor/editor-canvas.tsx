@@ -8,8 +8,8 @@ import {
   type Transforms3d,
 } from '@shopify/react-native-skia';
 import { ImpactFeedbackStyle, impactAsync } from 'expo-haptics';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { type ReactElement, useEffect, useState } from 'react';
+import { PixelRatio, View } from 'react-native';
 import {
   GestureDetector,
   useCompetingGestures,
@@ -63,15 +63,18 @@ import { colors } from '@/theme/colors';
 import { AppIcon } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
 
+import { type TextureRequest, useGestureTextures } from './gesture-textures';
 import {
   type DrawRect,
   type LayerContext,
+  layerClip,
   layerMatrix,
   photoMatrix,
   photoRect,
-  prepareLayers,
+  PreparedLayerCache,
   type SceneCollage,
   type SceneFrame,
+  type SceneTextures,
   TemplateScene,
 } from './template-scene';
 
@@ -155,6 +158,14 @@ const TARGET_LAYER = 2;
 
 /** Track Red, as a plain string the UI thread can use. */
 const ACCENT = colors.tint;
+
+/**
+ * How many times the pixels it takes on screen the texture of the widget that moves has: at just as
+ * many, its edges saw-toothed as it turned. Twice is sharp, also pinched somewhat bigger.
+ */
+const LIVE_TEXTURE_SHARPNESS = 2;
+/** The largest side of the texture of the widget that moves, in pixels. */
+const MAX_LIVE_TEXTURE = 2048;
 
 const IDENTITY: LayerTransform = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
 /** Strong ease-out for UI state changes. */
@@ -251,7 +262,8 @@ export function EditorCanvas({
   const displayHeight = canvas.height * ratio;
   const photoSize: Size | null =
     photo === null ? null : { width: photo.width(), height: photo.height() };
-  const layers = prepareLayers(template, layerContext);
+  const [layerCache] = useState(() => new PreparedLayerCache());
+  const layers = layerCache.prepare(template, layerContext);
   const boxes: LayerBox[] = layers.map(({ layer, width, height, hole, line }) => ({
     id: layer.id,
     transform: layer.transform,
@@ -330,6 +342,12 @@ export function EditorCanvas({
    * The cell under the fingers, its photo drawn from the shared placement until the gesture ends;
    * as with a layer, the end is one React update with the commit, so no stale frame shows.
    */
+  const [movingPhoto, setMovingPhoto] = useState(false);
+  const startPhotoMove = () => setMovingPhoto(true);
+  const finishPhotoMove = (moved: PhotoPlacement) => {
+    onPlacementChange(moved);
+    setMovingPhoto(false);
+  };
   const [movingCell, setMovingCell] = useState<number | null>(null);
   const startCellMove = (cell: number) => {
     setMovingCell(cell);
@@ -436,6 +454,9 @@ export function EditorCanvas({
       }
       target.set(TARGET_PHOTO);
       rawPlacement.set(livePlacement.get());
+      if (photoSize !== null) {
+        scheduleOnRN(startPhotoMove);
+      }
       return;
     }
     target.set(TARGET_LAYER);
@@ -538,7 +559,7 @@ export function EditorCanvas({
     if (target.get() === TARGET_CELL) {
       scheduleOnRN(finishCellMove, movingIndex.get(), liveCellPlacement.get());
     } else if (target.get() === TARGET_PHOTO && photoSize !== null) {
-      scheduleOnRN(onPlacementChange, livePlacement.get());
+      scheduleOnRN(finishPhotoMove, livePlacement.get());
     } else if (target.get() === TARGET_LAYER) {
       if (overTrash.get()) {
         scheduleOnRN(dropOnTrash, targetId.get());
@@ -686,6 +707,123 @@ export function EditorCanvas({
               rect: frameRect(selected.transform, selected.width, selected.height, frameInset),
             };
 
+  // What moves is drawn from textures for as long as the gesture lasts (see useGestureTextures).
+  const pixelRatio = PixelRatio.get();
+  const sceneSize = {
+    width: Math.round(displayWidth * pixelRatio),
+    height: Math.round(displayHeight * pixelRatio),
+  };
+  /** The rectangle of the scene a texture of the whole canvas covers, one pixel to one pixel. */
+  const sceneRect = {
+    x: 0,
+    y: 0,
+    width: sceneSize.width / (ratio * pixelRatio),
+    height: sceneSize.height / (ratio * pixelRatio),
+  };
+  const stillBackdrop =
+    background === null
+      ? ({ kind: 'checker' } as const)
+      : ({ kind: 'color', color: background.hex, onChecker: true } as const);
+  const stillScene = (children: ReactElement) => (
+    <Group transform={[{ scale: ratio * pixelRatio }]}>{children}</Group>
+  );
+  const movingLayerId = draggingId ?? resized?.id ?? null;
+  const movingLayer = layers.findIndex(({ layer }) => layer.id === movingLayerId);
+  const textureRequest = ((): TextureRequest | null => {
+    if (movingLayer >= 0) {
+      const { layer, content, width, height } = layers[movingLayer];
+      const clip = layerClip(width, height);
+      const scale = Math.min(
+        layer.transform.scale * ratio * pixelRatio * LIVE_TEXTURE_SHARPNESS,
+        MAX_LIVE_TEXTURE / Math.max(clip.width, clip.height),
+      );
+      const above = layers.slice(movingLayer + 1);
+      return {
+        key: `layer ${layer.id}`,
+        sceneSize,
+        under: stillScene(
+          <TemplateScene
+            format={template.format}
+            layers={layers.slice(0, movingLayer)}
+            backdrop={stillBackdrop}
+            photo={
+              photo === null || photoSize === null
+                ? null
+                : {
+                    image: photo,
+                    matrix: photoMatrix(drawPhoto(photoSize, canvas, placement)),
+                    rect: photoRect(drawPhoto(photoSize, canvas, placement)),
+                  }
+            }
+            collage={collage}
+            frame={frame}
+          />,
+        ),
+        over:
+          above.length === 0
+            ? null
+            : stillScene(
+                <TemplateScene
+                  format={template.format}
+                  layers={above}
+                  backdrop={{ kind: 'none' }}
+                  photo={null}
+                />,
+              ),
+        live: {
+          element: (
+            <Group transform={[{ scale }, { translateX: -clip.x }, { translateY: -clip.y }]}>
+              {content}
+            </Group>
+          ),
+          size: {
+            width: Math.max(1, Math.round(clip.width * scale)),
+            height: Math.max(1, Math.round(clip.height * scale)),
+          },
+        },
+      };
+    }
+    if (movingPhoto || movingCell !== null || adjusting === 'background') {
+      return {
+        key: movingCell !== null ? 'cell' : movingPhoto ? 'photo' : 'background',
+        sceneSize,
+        under: null,
+        over:
+          layers.length === 0
+            ? null
+            : stillScene(
+                <TemplateScene
+                  format={template.format}
+                  layers={layers}
+                  backdrop={{ kind: 'none' }}
+                  photo={null}
+                />,
+              ),
+        live: null,
+      };
+    }
+    return null;
+  })();
+  const gestureTextures = useGestureTextures(textureRequest);
+  const textures: SceneTextures | null =
+    textureRequest === null || gestureTextures.readyKey !== textureRequest.key
+      ? null
+      : {
+          under:
+            textureRequest.under === null
+              ? null
+              : { image: gestureTextures.under, rect: sceneRect },
+          over:
+            textureRequest.over === null ? null : { image: gestureTextures.over, rect: sceneRect },
+          live:
+            movingLayer < 0
+              ? null
+              : {
+                  image: gestureTextures.live,
+                  rect: layerClip(layers[movingLayer].width, layers[movingLayer].height),
+                },
+        };
+
   // Snap guides: a vertical line at the left edge, center or right edge, a horizontal one at the
   // top, center or bottom; hidden while not snapped.
   const verticalGuideX = useDerivedValue(
@@ -763,6 +901,7 @@ export function EditorCanvas({
                     ? { id: resized.id, matrix: resizedMatrix, opacity: resizedOpacity }
                     : null
               }
+              textures={textures}
             />
             <Line
               p1={verticalP1}

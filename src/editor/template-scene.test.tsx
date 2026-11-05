@@ -26,7 +26,7 @@ import {
 } from '@/core/template';
 import { FixtureActivitySource } from '@/sources/fixtures/fixture-source';
 import { makeActivity } from '@/test-utils/make-activity';
-import { alphaOutside, DRAWN_ALPHA } from '@/test-utils/skia-bounds';
+import { alphaOutside, DRAWN_ALPHA, SHADOW_ROOM } from '@/test-utils/skia-bounds';
 import { loadTestFonts } from '@/test-utils/skia-fonts';
 import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 
@@ -249,6 +249,96 @@ function countAbove(image: SkImage, alpha: number): number {
   }
   return count;
 }
+
+describe('PreparedLayerCache', () => {
+  const contextOf = (): LayerContext => ({
+    data: { mode: 'activity', activity, detail: null, place: null, zones: null },
+    fonts: interFonts(),
+    textContext: {
+      unit: 'km',
+      locale: 'en',
+      durationUnits: TEST_DURATION_UNITS,
+      unitLabel: testUnitLabel,
+    },
+    translate: (key) => key,
+  });
+  const moved = (template: Template): Template => ({
+    ...template,
+    layers: template.layers.map((layer) => ({
+      ...layer,
+      transform: { ...layer.transform, x: layer.transform.x / 2, scale: 2 },
+    })),
+  });
+
+  it('keeps what a layer draws when it only moves, and gives its new place', () => {
+    const template = defaultActivityTemplate(activity, 'story');
+    const context = contextOf();
+    const cache = new scene.PreparedLayerCache();
+    const before = cache.prepare(template, context);
+    const after = cache.prepare(moved(template), context);
+    expect(before.length).toBeGreaterThan(0);
+    after.forEach((layer, i) => {
+      expect(layer.content).toBe(before[i].content);
+      expect(layer.layer.transform.scale).toBe(2);
+    });
+  });
+
+  it('lays a layer out again when it changes, and only that one', () => {
+    const template = defaultActivityTemplate(activity, 'story');
+    const context = contextOf();
+    const cache = new scene.PreparedLayerCache();
+    const before = cache.prepare(template, context);
+    const changed = cache.prepare(
+      {
+        ...template,
+        layers: template.layers.map((layer, i) => (i === 0 ? { ...layer, opacity: 0.5 } : layer)),
+      },
+      context,
+    );
+    expect(changed[0].content).not.toBe(before[0].content);
+    changed.slice(1).forEach((layer, i) => expect(layer.content).toBe(before[i + 1].content));
+  });
+
+  it('lays them all out again with other data', () => {
+    const template = defaultActivityTemplate(activity, 'story');
+    const context = contextOf();
+    const cache = new scene.PreparedLayerCache();
+    const before = cache.prepare(template, context);
+    const after = cache.prepare(template, {
+      ...context,
+      textContext: { ...context.textContext, unit: 'mi' },
+    });
+    after.forEach((layer, i) => expect(layer.content).not.toBe(before[i].content));
+  });
+
+  it('gives what a layer draws as prepareLayers does', () => {
+    const template = defaultActivityTemplate(activity, 'story');
+    const context = contextOf();
+    const cached = new scene.PreparedLayerCache().prepare(template, context);
+    const plain = scene.prepareLayers(template, context);
+    expect(cached.map(({ layer, width, height }) => [layer.id, width, height])).toEqual(
+      plain.map(({ layer, width, height }) => [layer.id, width, height]),
+    );
+  });
+});
+
+describe('the clip of a layer', () => {
+  // A widget's shadow is an image filter on a Skia layer as big as the clip: clipped to its box, the
+  // blur costs what the widget takes, not the whole canvas, in every frame of a gesture.
+  it('has room for all that a widget may draw past its box, its shadow', () => {
+    const { x, y, width, height } = scene.layerClip(100, 60);
+    expect(-x - 50).toBeGreaterThanOrEqual(SHADOW_ROOM);
+    expect(-y - 30).toBeGreaterThanOrEqual(SHADOW_ROOM);
+    expect(width).toBe(100 - 2 * x - 100);
+    expect(height).toBe(60 - 2 * y - 60);
+  });
+
+  it('is centered on the layer, whose content is centered on its origin', () => {
+    const { x, y, width, height } = scene.layerClip(100, 60);
+    expect(x + width / 2).toBe(0);
+    expect(y + height / 2).toBe(0);
+  });
+});
 
 describe('a route on the diagonal', () => {
   // About 5 km straight to the north-east, in 200 points.

@@ -18,6 +18,8 @@ import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import type { CanvasFormat, DesignLanguage, FontId, Layer } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { CardGradient } from '@/ui/card-gradient';
+import { LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 
 import { CHOICE_TITLES, ChoiceList } from './choice-list';
@@ -33,8 +35,9 @@ import {
   GALLERY_PADDING,
   type GalleryPage,
   type GalleryWidget,
-  buildGallery,
-  type BuiltGallery,
+  type GalleryBuild,
+  type GallerySection,
+  startGalleryBuild,
   hintBottom,
 } from './widget-gallery';
 
@@ -132,40 +135,90 @@ export function galleryDataKey(data: LayerContext['data']): string {
       ].join(':');
 }
 
+/** How long a step of laying out a gallery keeps the JavaScript thread, in milliseconds. */
+const STEP_MS = 8;
+/** How long after the editor opens its gallery starts to be laid out: once it has settled. */
+const LAY_OUT_AHEAD_AFTER_MS = 600;
+
 /**
- * The gallery's sections while `open`, laid out once for each `key` (what it draws), not again
- * at each render; and nothing while closed. A gallery holds hundreds of native paragraphs: the
- * one replaced, or the one shown when it closes, is freed once the screen stops drawing it (see
- * `disposeLater`), so opening it again and again doesn't pile them up.
+ * The gallery's sections while `open`, laid out once for each `key` (what it draws), a little at a
+ * time so that the screen keeps responding, section by section the first time; and nothing while
+ * closed. A gallery holds hundreds of native paragraphs: the one replaced, or the one shown when it
+ * closes, is freed once the screen stops drawing it (see `disposeLater`), so opening it again and
+ * again doesn't pile them up.
  */
 export function useGallery(
   open: boolean,
   key: string,
-  build: () => BuiltGallery,
-): BuiltGallery['sections'] {
-  const [laidOut, setLaidOut] = useState<{
-    readonly key: string;
-    readonly gallery: BuiltGallery;
-  } | null>(null);
+  start: () => GalleryBuild,
+): readonly GallerySection[] {
+  const [sections, setSections] = useState<readonly GallerySection[]>([]);
+  /** The gallery the screen shows, which is freed only once another replaces it or it closes. */
+  const shown = useRef<GalleryBuild | null>(null);
   const wanted = open ? key : null;
-  const current =
-    wanted === (laidOut?.key ?? null)
-      ? laidOut
-      : wanted === null
-        ? null
-        : { key: wanted, gallery: build() };
-  if (current !== laidOut) {
-    setLaidOut(current);
+  // Closing lets go of it in this same render: nothing may draw it once it is being freed.
+  const [wantedBefore, setWantedBefore] = useState(wanted);
+  if (wanted !== wantedBefore) {
+    setWantedBefore(wanted);
+    if (wanted === null) {
+      setSections([]);
+    }
   }
-  // A render that lays out a new gallery is redone at once with it stored: what the screen shows
-  // is always the one stored, freed when replaced or when the sheet goes.
   useEffect(() => {
-    if (laidOut === null) {
+    if (wanted === null) {
       return undefined;
     }
-    return () => disposeLater(laidOut.gallery.dispose);
-  }, [laidOut]);
-  return current?.gallery.sections ?? [];
+    const build = start();
+    const previous = shown.current;
+    let timer: ReturnType<typeof setTimeout>;
+    const stepOn = () => {
+      const { sections: built, grew, done } = build.step(STEP_MS);
+      // The first time, section by section as they are ready. A change of look stays on the gallery
+      // shown until it can go whole: a list that grows again would lose its place.
+      if (done ? previous !== null || grew : grew && previous === null) {
+        setSections(built);
+        shown.current = build;
+        if (done && previous !== null) {
+          disposeLater(previous.dispose);
+        }
+      }
+      if (!done) {
+        timer = setTimeout(stepOn, 0);
+      }
+    };
+    timer = setTimeout(stepOn, 0);
+    return () => {
+      clearTimeout(timer);
+      if (shown.current !== build) {
+        disposeLater(build.dispose);
+      }
+    };
+    // The key says what it lays out.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted]);
+  // Closed, or gone: nothing draws it anymore.
+  useEffect(() => {
+    if (wanted !== null) {
+      return undefined;
+    }
+    const closed = shown.current;
+    shown.current = null;
+    if (closed !== null) {
+      disposeLater(closed.dispose);
+    }
+    return undefined;
+  }, [wanted]);
+  useEffect(
+    () => () => {
+      const last = shown.current;
+      shown.current = null;
+      if (last !== null) {
+        disposeLater(last.dispose);
+      }
+    },
+    [],
+  );
+  return sections;
 }
 
 /**
@@ -206,8 +259,15 @@ export function LayerSheet({
     }
   };
   const textSample = t('gallery.textSample');
+  // Laid out ahead of time, a little at a time, and kept while the editor is open: so that "+" shows
+  // it at once, and every time.
+  const [ahead, setAhead] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setAhead(true), LAY_OUT_AHEAD_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, []);
   const sections = useGallery(
-    visible,
+    visible || ahead,
     [
       galleryDataKey(layerContext.data),
       catalog.map((section) => section.widgets.map((widget) => widget.key).join(',')).join(';'),
@@ -221,7 +281,7 @@ export function LayerSheet({
       textSample,
     ].join('|'),
     () =>
-      buildGallery(
+      startGalleryBuild(
         catalog,
         format,
         font,
@@ -306,7 +366,7 @@ export function WidgetGalleryList({
   header,
   topInset = 0,
 }: {
-  readonly sections: BuiltGallery['sections'];
+  readonly sections: readonly GallerySection[];
   readonly layerContext: LayerContext;
   readonly onPress: (page: GalleryPage) => void;
   readonly onLongPress?: (page: GalleryPage) => void;
@@ -321,9 +381,15 @@ export function WidgetGalleryList({
       sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
       keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
       stickySectionHeadersEnabled={false}
-      initialNumToRender={8}
-      // Rows two screens away are let go: each tile draws on a canvas of its own.
-      windowSize={5}
+      // As many rows as fill the screen, then a few at a time: each tile is a canvas to create.
+      initialNumToRender={5}
+      maxToRenderPerBatch={4}
+      // Rows three screens away are let go, each tile being a canvas of its own. Nearer ones stay:
+      // on Android, taking a canvas off the screen destroys its surface, and it had to draw again
+      // each time it came back, so that tiles vanished and came back one by one.
+      windowSize={7}
+      removeClippedSubviews={false}
+      ListEmptyComponent={<LoadingView />}
       contentContainerStyle={{
         paddingHorizontal: GALLERY_PADDING,
         paddingTop: topInset,
@@ -529,6 +595,8 @@ function WidgetTile({
 }) {
   const { t } = useTranslation();
   const [shown, setShown] = useState(0);
+  /** Whether the pages beside the one shown have a canvas: since the finger first touches it. */
+  const [swiping, setSwiping] = useState(false);
   const several = widget.pages.length > 1;
   // Pages as wide as the inside of the card's edge, which is what the pager pages by.
   const pageWidth = width - 2 * CARD_BORDER;
@@ -549,9 +617,9 @@ function WidgetTile({
         ...cardSurface(14),
         width,
         height,
-        overflow: 'hidden',
       }}
     >
+      <CardGradient width={width} height={height} radius={14} />
       <ScrollView
         horizontal
         pagingEnabled
@@ -559,6 +627,7 @@ function WidgetTile({
         scrollEnabled={several}
         // The dot follows the finger, not only the end of the swipe.
         scrollEventThrottle={16}
+        onScrollBeginDrag={() => setSwiping(true)}
         onScroll={(event) =>
           setShown(pageAt(event.nativeEvent.contentOffset.x, pageWidth, widget.pages.length))
         }
@@ -584,9 +653,9 @@ function WidgetTile({
             })}
           >
             {
-              // Only the page shown and those beside it, which a swipe brings in, have a canvas:
-              // each one holds GPU memory, and a gallery has over a hundred pages.
-              Math.abs(i - shown) <= 1 ? (
+              // Only the page shown and, once swiping, those beside it, have a canvas: each one
+              // is slow to create and holds GPU memory, and a gallery has over a hundred pages.
+              Math.abs(i - shown) <= (swiping ? 1 : 0) ? (
                 <PageCanvas page={page} width={pageWidth} height={canvasHeight} />
               ) : null
             }

@@ -26,6 +26,7 @@ import type { DistanceUnit } from '@/core/units';
 import { useActivitySource } from '@/data/activity-source';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { CardGradient } from '@/ui/card-gradient';
 import { AppIcon, type UiIconName } from '@/ui/app-icon';
 import { DateRangeField } from '@/ui/date-range-field';
 import { formatBucketLabels, formatChartValue, formatMetric, formatPeriodName } from '@/ui/format';
@@ -40,6 +41,11 @@ import { PeriodLineChart } from './period-line-chart';
 const PAGE_HEIGHT = 262;
 const CHART_HEIGHT = 140;
 const PADDING = 16;
+/**
+ * The most characters of a total, unit included, that fit a third of the card at 22 pt on a screen
+ * of 360 pt ("287:36 h", 89 of its 90 pt); longer ones, rare, go at 18 pt.
+ */
+const MAX_FULL_SIZE_TOTAL = 8;
 
 /** A period and its sports, as a page of a period's card offers it. */
 export interface PeriodChoice {
@@ -100,15 +106,14 @@ export function PeriodCard({
     setPage(0);
   };
   const isCurrent = range.end >= today;
+  const [height, setHeight] = useState(0);
 
   return (
     <View
-      style={{
-        ...cardSurface(20),
-        width,
-        overflow: 'hidden',
-      }}
+      onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
+      style={{ ...cardSurface(20), width }}
     >
+      {height === 0 ? null : <CardGradient width={width} height={height} radius={20} />}
       {kind === 'custom' ? (
         <View style={{ padding: PADDING, paddingBottom: 0, gap: 12 }}>
           {/* Centered, as the other periods' names between their arrows. */}
@@ -223,6 +228,11 @@ function Pages({
         showsHorizontalScrollIndicator={false}
         data={pages}
         keyExtractor={(item) => item}
+        // Each page holds a chart's canvas: the one on screen and those beside it, no more.
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         // The dot follows the finger, not only the end of the swipe.
         scrollEventThrottle={16}
         onScroll={(event) =>
@@ -335,6 +345,8 @@ function SportPage({
                 value === null
                   ? null
                   : formatMetric(toDisplaySummaryMetric(metric, value, unit), locale);
+              const unitName = formatted?.unit ? ` ${t(`metricUnits.${formatted.unit}`)}` : '';
+              const length = (formatted?.value.length ?? 0) + unitName.length;
               return (
                 <View key={metric} style={{ flex: 1, gap: 2 }}>
                   <Text style={{ color: colors.secondaryLabel, fontSize: 12 }}>
@@ -343,21 +355,18 @@ function SportPage({
                   <Text
                     selectable
                     numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.6}
+                    maxFontSizeMultiplier={1}
                     style={{
                       color: colors.label,
-                      fontSize: 22,
+                      fontSize: length > MAX_FULL_SIZE_TOTAL ? 18 : 22,
                       fontWeight: '700',
                       fontVariant: ['tabular-nums'],
                     }}
                   >
                     {formatted === null ? '—' : formatted.value}
-                    {formatted?.unit ? (
-                      <Text
-                        style={{ fontSize: 14, fontWeight: '500' }}
-                      >{` ${t(`metricUnits.${formatted.unit}`)}`}</Text>
-                    ) : null}
+                    {unitName === '' ? null : (
+                      <Text style={{ fontSize: 14, fontWeight: '500' }}>{unitName}</Text>
+                    )}
                   </Text>
                 </View>
               );

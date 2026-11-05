@@ -25,9 +25,13 @@ export function summaryMetricValue(summary: PeriodSummary, metric: SummaryMetric
   }
 }
 
+/** Decimals of a distance total, in the unit shown: at 3,808 km they add nothing and don't fit. */
+const distanceTotalDigits = (amount: number): number =>
+  amount >= 1000 ? 0 : amount >= 100 ? 1 : 2;
+
 /**
- * Converts a summary total into display units, reusing the single-activity formatting (a total
- * distance looks like any distance). Activity counts are plain integers.
+ * Converts a summary total into display units, reusing the single-activity formatting, with fewer
+ * decimals on a long distance (`distanceTotalDigits`). Activity counts are plain integers.
  *
  * Time totals drop the seconds and read as hours (`272:14 h`): a year of training runs into the
  * hundreds of hours, and `272:13:57` is both too long for the canvas and needlessly precise.
@@ -40,8 +44,12 @@ export function toDisplaySummaryMetric(
   const context = { unit, sportFamily: 'run' } as const;
   switch (metric) {
     case 'totalDistance':
-    case 'longestDistance':
-      return toDisplayMetric('distance', value, context);
+    case 'longestDistance': {
+      const display = toDisplayMetric('distance', value, context);
+      return display.kind === 'number'
+        ? { ...display, fractionDigits: distanceTotalDigits(display.amount) }
+        : display;
+    }
     case 'totalMovingTime': {
       const minutes = Math.round(value / 60);
       const text = `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;

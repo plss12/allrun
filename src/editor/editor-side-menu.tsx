@@ -209,19 +209,21 @@ function MenuChevron({ up }: { readonly up: boolean }) {
   );
 }
 
-/** A few letters in place of a button's icon: the ratio, the unit, the language. */
+/**
+ * A few letters in place of a button's icon: the ratio, the unit, the language. Sizes chosen here,
+ * not with `adjustsFontSizeToFit`: smaller for the longest ratio, "1,91:1", which at 13 pt would
+ * touch the circle's edge.
+ */
 function ButtonText({ children }: { readonly children: string }) {
   return (
     <Text
       numberOfLines={1}
-      adjustsFontSizeToFit
       maxFontSizeMultiplier={1}
       style={{
         color: FLOATING_INK,
-        fontSize: 13,
+        fontSize: children.length > 4 ? 11 : 13,
         fontWeight: '700',
         fontVariant: ['tabular-nums'],
-        paddingHorizontal: 3,
       }}
     >
       {children}

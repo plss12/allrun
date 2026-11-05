@@ -15,6 +15,7 @@ export const INTERFACE_FACES = {
   bold: 'AllRun-Bold',
   italic: 'AllRun-Italic',
   mono: 'AllRun-Mono',
+  icons: 'AllRun-Icons',
 } as const;
 
 /**
@@ -30,6 +31,7 @@ export function loadInterfaceFonts(): Promise<void> {
     [INTERFACE_FACES.bold]: require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
     [INTERFACE_FACES.italic]: require('@expo-google-fonts/inter/400Regular_Italic/Inter_400Regular_Italic.ttf'),
     [INTERFACE_FACES.mono]: require('@expo-google-fonts/space-mono/400Regular/SpaceMono_400Regular.ttf'),
+    [INTERFACE_FACES.icons]: require('../../assets/fonts/allrun-icons.otf'),
   });
 }
 

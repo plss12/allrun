@@ -13,7 +13,7 @@ import { listedPhrases, wordsIn } from '@/core/phrases';
 import { type DesignLanguage, MAX_CHAT_LENGTH } from '@/core/template';
 import type { ChosenWords } from '@/core/template-edit';
 import { usePhrases } from '@/data/phrases';
-import { cardSurface } from '@/theme/card-surface';
+import { smallCardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { INTERFACE_FACES, Text } from '@/ui/text';
 import { todayLocal } from '@/ui/today';
@@ -135,7 +135,7 @@ export function ChoiceList({
                 : undefined
             }
             style={({ pressed }) => ({
-              ...cardSurface(14),
+              ...smallCardSurface(14),
               ...(isMarked ? { borderColor: colors.tint, borderWidth: 2 } : {}),
               paddingHorizontal: 18,
               paddingVertical: 16,
@@ -175,7 +175,7 @@ function OwnPhrase({
   return (
     <View
       style={{
-        ...cardSurface(14),
+        ...smallCardSurface(14),
         paddingHorizontal: 18,
         paddingVertical: 10,
         flexDirection: 'row',

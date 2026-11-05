@@ -51,6 +51,18 @@ describe('toDisplaySummaryMetric', () => {
     });
   });
 
+  it('gives a distance total fewer decimals as it grows, so that it fits at its full size', () => {
+    const digits = (meters: number, unit: 'km' | 'mi' = 'km') =>
+      toDisplaySummaryMetric('totalDistance', meters, unit);
+    expect(digits(99_990)).toMatchObject({ amount: 99.99, fractionDigits: 2 });
+    expect(digits(100_000)).toMatchObject({ amount: 100, fractionDigits: 1 });
+    expect(digits(999_900)).toMatchObject({ amount: 999.9, fractionDigits: 1 });
+    expect(digits(1_000_000)).toMatchObject({ amount: 1000, fractionDigits: 0 });
+    expect(digits(3_807_550)).toMatchObject({ amount: 3807.55, fractionDigits: 0 });
+    // By the amount shown, not by the meters: 1,000 km are only 621 miles.
+    expect(digits(1_000_000, 'mi')).toMatchObject({ unit: 'mi', fractionDigits: 1 });
+  });
+
   it('shows time totals as hours and minutes, without seconds', () => {
     expect(toDisplaySummaryMetric('totalMovingTime', 9600, 'km')).toEqual({
       kind: 'time',

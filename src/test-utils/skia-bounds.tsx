@@ -10,7 +10,7 @@ import type { PreparedLayer } from '@/editor/template-scene';
  * Room around a layer where only its drop shadow may reach (offset and blur), and the faintest
  * alpha counted as drawn.
  */
-const SHADOW_ROOM = 24;
+export const SHADOW_ROOM = 24;
 export const DRAWN_ALPHA = 8;
 
 /**

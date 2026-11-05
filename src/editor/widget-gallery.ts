@@ -147,6 +147,11 @@ export interface GallerySection {
 /** How a gallery draws its widgets; `restyle` gives them all a look (the stickers'). */
 export interface GalleryContext extends LayerContext {
   readonly restyle?: (layer: Layer) => Layer;
+  /**
+   * The variants already filled in and measured: a row of the data section is measured twice, the
+   * second time at its height, and the texts it lays out are the same.
+   */
+  readonly preparedItems?: Map<CatalogItem, PreparedLayer | null>;
 }
 
 /**
@@ -173,9 +178,102 @@ export function buildGallery(
   textSample: string,
 ): BuiltGallery {
   const { value, dispose } = inParagraphArena(() =>
-    gallerySections(catalog, format, font, context, screenWidth, textSample),
+    gallerySections(
+      catalog,
+      format,
+      font,
+      { ...context, preparedItems: new Map() },
+      screenWidth,
+      textSample,
+    ),
   );
   return { sections: value, dispose };
+}
+
+/** A gallery being laid out a little at a time (see `startGalleryBuild`). */
+export interface GalleryBuild {
+  /**
+   * Goes on for about `budgetMs`: at least one variant, or one section, however long it takes. Says
+   * the sections finished so far, whether this step added any, and whether it is all done.
+   */
+  readonly step: (budgetMs: number) => {
+    readonly sections: readonly GallerySection[];
+    readonly grew: boolean;
+    readonly done: boolean;
+  };
+  /** Frees what has been laid out, once nothing draws it anymore (see `inParagraphArena`). */
+  readonly dispose: () => void;
+}
+
+/**
+ * `buildGallery` a little at a time, for a screen that keeps responding while a modest phone lays
+ * out hundreds of texts, with each section on screen as soon as it is ready. Time and space as
+ * `buildGallery`, plus O(1) per step.
+ */
+export function startGalleryBuild(
+  catalog: readonly CatalogSection[],
+  format: CanvasFormat,
+  font: FontId,
+  context: GalleryContext,
+  screenWidth: number,
+  textSample: string,
+): GalleryBuild {
+  const preparedItems = new Map<CatalogItem, PreparedLayer | null>();
+  const shared: GalleryContext = { ...context, preparedItems };
+  const disposals: (() => void)[] = [];
+  const sections: GallerySection[] = [];
+  let section = 0;
+  let variant = 0;
+  // Those chosen from a list are measured with their phrases, as their section is put together.
+  const variantsOf = (at: number) =>
+    catalog[at].widgets.flatMap((widget) =>
+      chosenFrom(widget.variants[0]) === null ? widget.variants : [],
+    );
+  return {
+    step: (budgetMs) => {
+      const started = performance.now();
+      let grew = false;
+      const { dispose } = inParagraphArena(() => {
+        do {
+          if (section >= catalog.length) {
+            return;
+          }
+          const variants = variantsOf(section);
+          if (variant < variants.length) {
+            preparedItem(variants[variant], format, font, shared, textSample);
+            variant += 1;
+          } else {
+            sections.push(
+              ...gallerySections([catalog[section]], format, font, shared, screenWidth, textSample),
+            );
+            section += 1;
+            variant = 0;
+            grew = true;
+          }
+        } while (!grew && performance.now() - started < budgetMs);
+      });
+      disposals.push(dispose);
+      return { sections: [...sections], grew, done: section >= catalog.length };
+    },
+    dispose: () => disposals.forEach((dispose) => dispose()),
+  };
+}
+
+/** `prepareItem`, once per variant if the context keeps them. */
+function preparedItem(
+  item: CatalogItem,
+  format: CanvasFormat,
+  font: FontId,
+  context: GalleryContext,
+  textSample: string,
+): PreparedLayer | null {
+  const kept = context.preparedItems?.get(item);
+  if (kept !== undefined) {
+    return kept;
+  }
+  const prepared = prepareItem(item, format, font, context, textSample);
+  context.preparedItems?.set(item, prepared);
+  return prepared;
 }
 
 /**
@@ -468,7 +566,7 @@ function measureWidget(
   const canvasWidth = CANVAS_FORMATS[format].width;
   const seen = new Set<string>();
   const measured = widget.variants.flatMap((item) => {
-    const prepared = prepareItem(item, format, font, context, textSample);
+    const prepared = preparedItem(item, format, font, context, textSample);
     if (prepared === null) {
       return [];
     }

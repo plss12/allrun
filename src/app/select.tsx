@@ -1,6 +1,5 @@
-import { BlurTargetView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
-import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { z } from 'zod';
@@ -59,7 +58,6 @@ function Selection({
   readonly raw: ReturnType<typeof useLocalSearchParams>;
 }) {
   const { t } = useTranslation();
-  const blurTarget = useRef<ComponentRef<typeof View>>(null);
   const [tab, setTab] = useState<Tab>('photo');
   const [stickersOpened, setStickersOpened] = useState(false);
   const [designsOpened, setDesignsOpened] = useState(false);
@@ -96,31 +94,29 @@ function Selection({
     );
   return (
     <View style={{ flex: 1 }}>
-      <BlurTargetView ref={blurTarget} style={StyleSheet.absoluteFill}>
-        <KeptMounted hidden={tab !== 'photo'} style={StyleSheet.absoluteFill}>
-          <PhotoBrowser
-            onPick={openEditor}
-            onNoPhoto={() => openEditor()}
+      <KeptMounted hidden={tab !== 'photo'} style={StyleSheet.absoluteFill}>
+        <PhotoBrowser
+          onPick={openEditor}
+          onNoPhoto={() => openEditor()}
+          top={top}
+          topInset={topInset}
+        />
+      </KeptMounted>
+      {stickersOpened ? (
+        <KeptMounted hidden={tab !== 'stickers'} style={StyleSheet.absoluteFill}>
+          <StickerGallery stickerData={stickerData} top={top} topInset={topInset} />
+        </KeptMounted>
+      ) : null}
+      {designsOpened ? (
+        <KeptMounted hidden={tab !== 'designs'} style={StyleSheet.absoluteFill}>
+          <DesignsTab
+            stickerData={stickerData}
             top={top}
             topInset={topInset}
+            onChoose={openDesign}
           />
         </KeptMounted>
-        {stickersOpened ? (
-          <KeptMounted hidden={tab !== 'stickers'} style={StyleSheet.absoluteFill}>
-            <StickerGallery stickerData={stickerData} top={top} topInset={topInset} />
-          </KeptMounted>
-        ) : null}
-        {designsOpened ? (
-          <KeptMounted hidden={tab !== 'designs'} style={StyleSheet.absoluteFill}>
-            <DesignsTab
-              stickerData={stickerData}
-              top={top}
-              topInset={topInset}
-              onChoose={openDesign}
-            />
-          </KeptMounted>
-        ) : null}
-      </BlurTargetView>
+      ) : null}
       <TopBar
         left={
           <RoundButton
@@ -144,7 +140,6 @@ function Selection({
             }
           }}
           width={260}
-          blurTarget={blurTarget}
         />
       </TopBar>
     </View>

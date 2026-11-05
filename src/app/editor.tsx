@@ -171,6 +171,9 @@ interface EditorPhoto {
 }
 
 /** The room left between a widget being edited and the panel of its options, in points. */
+/** How long after a photo is chosen its export copy starts, in milliseconds. */
+const EXPORT_COPY_PAUSE_MS = 2500;
+
 const PANEL_GAP = 16;
 /** How the canvas rises over the panel of a widget's options, and settles back. */
 const LIFT_TIMING = {
@@ -471,6 +474,7 @@ function EditorWorkspace({
   const photo = design.photoId === null ? null : (photos.get(design.photoId) ?? null);
   /** The full-quality copy being prepared in the background, to wait for it when exporting. */
   const pendingExportCopy = useRef<{ id: number; uri: Promise<string> } | null>(null);
+  const skipExportPause = useRef<(() => void) | null>(null);
   /** Applies a change only if `id` is still the current photo. */
   const updatePhoto = (id: number, change: Partial<EditorPhoto>) =>
     setPhotos((current) => {
@@ -497,7 +501,15 @@ function EditorWorkspace({
       return;
     }
     try {
-      const exportCopy = preparePhoto(picked, 'export');
+      // After a moment: re-encoding a big photo takes every core for seconds, just as it is being
+      // looked at and moved. Exporting before that doesn't wait for the moment (`exportCopyOf`).
+      const exportCopy = new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, EXPORT_COPY_PAUSE_MS);
+        skipExportPause.current = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      }).then(() => preparePhoto(picked, 'export'));
       pendingExportCopy.current = { id, uri: exportCopy };
       updatePhoto(id, { exportUri: await exportCopy });
     } catch (error) {
@@ -663,6 +675,7 @@ function EditorWorkspace({
     if (current.exportUri !== null) {
       return current.exportUri;
     }
+    skipExportPause.current?.();
     const pending = pendingExportCopy.current;
     if (pending?.id === current.id) {
       try {

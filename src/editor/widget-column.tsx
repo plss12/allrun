@@ -2,11 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, {
-  type SharedValue,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
+import { type SharedValue, useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { FRAME_COLORS } from '@/core/image-layer';
@@ -21,6 +17,7 @@ import { Text } from '@/ui/text';
 import { BRAND_GEOMETRY } from './brand/geometry.generated';
 import { TOP_BAR_GAP } from './editor-top-bar';
 import { FLOATING_INK, ROUND_BUTTON_SIZE, RoundButton } from './round-button';
+import { SliderThumb } from './slider-thumb';
 import { type StyleTool, widgetTools } from './style-panel';
 
 /** A tool of the column: the size slider, or one whose options open in a panel. */
@@ -372,9 +369,8 @@ function SizeSlider({
     },
   });
 
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (1 - position.get()) * range }],
-  }));
+  const thumbX = useDerivedValue(() => ROUND_BUTTON_SIZE / 2);
+  const thumbY = useDerivedValue(() => SLIDER_PADDING + (1 - position.get()) * range);
 
   const percent = Math.round(sliderOfScale(scale) * 100);
   return (
@@ -408,22 +404,7 @@ function SizeSlider({
             backgroundColor: 'rgba(255, 255, 255, 0.3)',
           }}
         />
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              top: SLIDER_PADDING - THUMB / 2,
-              left: (ROUND_BUTTON_SIZE - THUMB) / 2,
-              width: THUMB,
-              height: THUMB,
-              borderRadius: THUMB / 2,
-              backgroundColor: FLOATING_INK,
-              boxShadow: '0 1px 4px rgba(0, 0, 0, 0.4)',
-            },
-            thumbStyle,
-          ]}
-        />
+        <SliderThumb width={ROUND_BUTTON_SIZE} height={height} size={THUMB} x={thumbX} y={thumbY} />
       </View>
     </GestureDetector>
   );

@@ -46,7 +46,7 @@ import { renderSticker } from './sticker-image';
 import { FontRow } from './style-panel';
 import { Swatch } from './widget-column';
 import type { GalleryContext } from './widget-gallery';
-import { buildGallery, prepareItem } from './widget-gallery';
+import { prepareItem, startGalleryBuild } from './widget-gallery';
 
 const STICKER_ENCODING = exportEncoding(false);
 const NO_LOOK: StickerLook = { font: null, color: null };
@@ -181,7 +181,14 @@ export function StickerGallery({
       if (context === null) {
         throw new Error('The stickers are only laid out with their data');
       }
-      return buildGallery(catalog, STICKER_FORMAT, DEFAULT_FONT, context, window.width, textSample);
+      return startGalleryBuild(
+        catalog,
+        STICKER_FORMAT,
+        DEFAULT_FONT,
+        context,
+        window.width,
+        textSample,
+      );
     },
   );
 

@@ -110,7 +110,86 @@ const contextOf = (): LayerContext => ({
 const build = () =>
   gallery.buildGallery(activityCatalog(activity), 'story', 'inter', contextOf(), 393, 'Text');
 
+/** What a gallery shows, tile by tile. */
+const tilesOf = (sections: readonly import('./widget-gallery').GallerySection[]) =>
+  sections.map(({ id, rows }) => [
+    id,
+    rows.map(({ width, height, widgets }) => [
+      width,
+      height,
+      widgets.map(({ key, pages }) => [key, pages.map((page) => [page.key, page.scale])]),
+    ]),
+  ]);
+
+describe('startGalleryBuild', () => {
+  const startBuild = () =>
+    gallery.startGalleryBuild(
+      activityCatalog(activity),
+      'story',
+      'inter',
+      contextOf(),
+      393,
+      'Text',
+    );
+
+  it('ends up with the same gallery as building it at once, a section at a time', () => {
+    const whole = build();
+    const steps = startBuild();
+    let last = steps.step(1);
+    const seen = [last.sections.length];
+    while (!last.done) {
+      last = steps.step(1);
+      seen.push(last.sections.length);
+    }
+    expect(tilesOf(last.sections)).toEqual(tilesOf(whole.sections));
+    // It grows bit by bit, not all in the last step.
+    expect(new Set(seen).size).toBeGreaterThan(2);
+    whole.dispose();
+    steps.dispose();
+  });
+
+  it('never loses a section that is done, whatever the budget of a step', () => {
+    const steps = startBuild();
+    let last = steps.step(0);
+    while (!last.done) {
+      const before = last.sections.length;
+      last = steps.step(0);
+      expect(last.sections.length).toBeGreaterThanOrEqual(before);
+    }
+    steps.dispose();
+  });
+
+  it('frees every paragraph of all its steps', () => {
+    const { value, counts } = counting(() => {
+      const steps = startBuild();
+      while (!steps.step(5).done) {
+        // Until it is done.
+      }
+      return steps;
+    });
+    expect(counts.paragraphs).toBeGreaterThan(0);
+    value.dispose();
+    expect(counts.freedParagraphs).toBe(counts.paragraphs);
+  });
+});
+
 describe('buildGallery', () => {
+  it('lays out each variant once, though a row of data is measured twice', () => {
+    const catalog = activityCatalog(activity);
+    const variants = catalog.flatMap((section) => section.widgets.flatMap((w) => w.variants));
+    const prepared = new Map();
+    const context = { ...contextOf(), preparedItems: prepared };
+    const once = counting(() =>
+      gallery.gallerySections(catalog, 'story', 'inter', context, 393, 'Text'),
+    );
+    const again = counting(() =>
+      gallery.gallerySections(catalog, 'story', 'inter', context, 393, 'Text'),
+    );
+    expect(prepared.size).toBeGreaterThan(variants.length / 2);
+    // The second time only those chosen from a list are measured, with their phrases.
+    expect(again.counts.paragraphs).toBeLessThan(once.counts.paragraphs / 3);
+  });
+
   it("builds with the phone's builders, which have no dispose", () => {
     const { value, counts } = counting(build);
     expect(counts.builders).toBeGreaterThan(100);

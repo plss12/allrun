@@ -57,3 +57,7 @@ eye. Many Android phones are also 360 pt wide, narrower than any iPhone the rows
   card are few, and only visible cards are mounted.
 - A new icon is a line in the generator and a run of `npm run icons`.
 - `borderCurve: 'continuous'` only applies on iOS: rounded corners differ imperceptibly on Android.
+
+## Later
+
+ADR 014 keeps this look but draws the icons with a font instead of a canvas each, and stops blurring the top bar's glass on Android, which keeps its translucent grey, a little darker: on a modest phone, that blur cost on every frame of a scroll.

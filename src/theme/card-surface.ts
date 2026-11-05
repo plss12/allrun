@@ -7,25 +7,33 @@ import type { ViewStyle } from 'react-native';
 export const CARD_BORDER = 1;
 
 /** The cards' surface, lit from above, and their faint edge. */
-export const CARD_GRADIENT = 'linear-gradient(180deg, #2F2F34 0%, #19191C 100%)';
+export const CARD_GRADIENT_COLORS = ['#2F2F34', '#19191C'] as const;
+const CARD_GRADIENT = 'linear-gradient(180deg, #2F2F34 0%, #19191C 100%)';
+/** Halfway through the gradient: what a card shows until its `CardGradient` is drawn. */
+const CARD_FLAT = '#242428';
 export const CARD_EDGE = 'rgba(255, 255, 255, 0.08)';
 
 /**
- * The look of the app's cards (the activities, the summaries, the widgets of the gallery): a dark
- * surface lit from above, like the charts' fading areas, a faint edge and a soft shadow that lifts
- * it off the background. The app is always dark (ADR 009), so the colors are fixed.
+ * The look of the app's cards in a list that scrolls (the activities, the summaries, the widgets of
+ * the gallery): a dark surface with a faint edge, lit from above by the `CardGradient` that goes
+ * inside. The app is always dark (ADR 009), so the colors are fixed.
  *
- * The shadow is drawn outside the card, so it shows even when the card clips its content.
+ * No shadow, invisible on the black background, and no `overflow: 'hidden'` in these cards: on a
+ * Samsung M32, a blurred shadow and a clip per card made a frame take twice as long while scrolling.
  */
 export function cardSurface(radius: number): ViewStyle {
   return {
     borderRadius: radius,
     borderCurve: 'continuous',
-    experimental_backgroundImage: CARD_GRADIENT,
+    backgroundColor: CARD_FLAT,
     borderWidth: CARD_BORDER,
     borderColor: CARD_EDGE,
-    boxShadow: '0 8px 22px rgba(0, 0, 0, 0.5)',
   };
+}
+
+/** The same card with its gradient in a single view: for a few at a time, not for a long list. */
+export function smallCardSurface(radius: number): ViewStyle {
+  return { ...cardSurface(radius), experimental_backgroundImage: CARD_GRADIENT };
 }
 
 /** A button whose menu is open: the same surface, lit a little more. */

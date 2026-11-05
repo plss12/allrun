@@ -38,7 +38,7 @@ module that decodes photos with the platform (ImageIO on iOS, ImageDecoder on An
 HEIC in hardware) straight into a GPU buffer handed to Skia
 (`Skia.Image.MakeImageFromNativeBuffer`). It skips re-encoding and writing a file, so it is the
 fastest option. Estimated effort: one or two days including testing on both platforms. Keep it
-only if it is clearly faster on device.
+only if it is clearly faster on device. ADR 014 lists what else waits for that build.
 
 ## Alternatives discarded
 

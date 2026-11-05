@@ -1,4 +1,4 @@
-import { BlurMask, Canvas, Path, Skia } from '@shopify/react-native-skia';
+import { BlurMask, Path, Skia } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import { type Box, largestFit, projectRoutes, routeSpan } from '@/core/route-pro
 import type { DistanceUnit } from '@/core/units';
 import { cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { CardGradient } from '@/ui/card-gradient';
 import { formatMetric, formatRelativeDay } from '@/ui/format';
 import { SportGlyph } from '@/ui/sport-glyph';
 import { INTERFACE_FACES, Text } from '@/ui/text';
@@ -100,10 +101,35 @@ export function ActivityCard({
         ...cardSurface(20),
         width,
         height,
-        overflow: 'hidden',
         opacity: pressed ? 0.7 : 1,
       })}
     >
+      <CardGradient width={width} height={height} radius={20}>
+        {route === null ? null : (
+          <>
+            {/* A soft glow under the line, as the editor's glowing route. */}
+            <Path
+              path={route}
+              style="stroke"
+              strokeWidth={7}
+              strokeCap="round"
+              strokeJoin="round"
+              color="#FFFFFF"
+              opacity={0.35}
+            >
+              <BlurMask blur={6} style="normal" />
+            </Path>
+            <Path
+              path={route}
+              style="stroke"
+              strokeWidth={2.5}
+              strokeCap="round"
+              strokeJoin="round"
+              color="#FFFFFF"
+            />
+          </>
+        )}
+      </CardGradient>
       {route === null ? (
         <View
           style={{
@@ -122,30 +148,7 @@ export function ActivityCard({
             color={colors.tertiaryLabel}
           />
         </View>
-      ) : (
-        <Canvas style={{ position: 'absolute', width, height }}>
-          {/* A soft glow under the line, as the editor's glowing route. */}
-          <Path
-            path={route}
-            style="stroke"
-            strokeWidth={7}
-            strokeCap="round"
-            strokeJoin="round"
-            color="#FFFFFF"
-            opacity={0.35}
-          >
-            <BlurMask blur={6} style="normal" />
-          </Path>
-          <Path
-            path={route}
-            style="stroke"
-            strokeWidth={2.5}
-            strokeCap="round"
-            strokeJoin="round"
-            color="#FFFFFF"
-          />
-        </Canvas>
-      )}
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: PADDING }}>
         <Text
           numberOfLines={1}

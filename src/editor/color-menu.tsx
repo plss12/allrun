@@ -3,11 +3,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, {
-  type SharedValue,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
+import { type SharedValue, useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import {
@@ -25,6 +21,7 @@ import { AppIcon, type UiIconName } from '@/ui/app-icon';
 import { Text } from '@/ui/text';
 
 import { FLOATING_INK } from './round-button';
+import { SliderThumb } from './slider-thumb';
 
 /** A swatch of the favorites' row, and the room between them. */
 const SWATCH = 40;
@@ -329,6 +326,8 @@ function Checker({
 
 const BAR_HEIGHT = 32;
 const THUMB = 26;
+/** The height of the canvas of the thumb: the thumb and its shadow. */
+const THUMB_ROOM = THUMB + 8;
 
 function clampOpacity(value: number): number {
   'worklet';
@@ -403,9 +402,8 @@ export function OpacityBar({
       scheduleOnRN(finish, position.get());
     },
   });
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: barOf(position.get()) * range }],
-  }));
+  const thumbX = useDerivedValue(() => THUMB / 2 + barOf(position.get()) * range);
+  const thumbY = useDerivedValue(() => THUMB_ROOM / 2);
 
   const step = (delta: number) => onEnd(clampOpacity(Math.round((value + delta) * 10) / 10));
   return (
@@ -457,21 +455,14 @@ export function OpacityBar({
               </>
             ) : null}
           </View>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              {
-                position: 'absolute',
-                left: 0,
-                width: THUMB,
-                height: THUMB,
-                borderRadius: THUMB / 2,
-                backgroundColor: FLOATING_INK,
-                boxShadow: '0 1px 4px rgba(0, 0, 0, 0.5)',
-              },
-              thumbStyle,
-            ]}
-          />
+          {width > 0 ? (
+            <View
+              pointerEvents="none"
+              style={{ position: 'absolute', left: 0, top: (BAR_HEIGHT - THUMB_ROOM) / 2 }}
+            >
+              <SliderThumb width={width} height={THUMB_ROOM} size={THUMB} x={thumbX} y={thumbY} />
+            </View>
+          ) : null}
         </View>
       </GestureDetector>
       <Text

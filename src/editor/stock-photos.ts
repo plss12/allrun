@@ -42,9 +42,10 @@ let loadedStock: StockPhotos | null = null;
 let loadingStock: Promise<StockPhotos> | null = null;
 
 /**
- * Decodes the stock photos, once a session, all at once: one after another they took 6 s in Expo Go
- * on the iPhone, where each comes from Metro over the WiFi. A load that fails is tried again the next
- * time.
+ * Decodes the stock photos, once a session: their bytes all at once (one after another they took
+ * 6 s in Expo Go on the iPhone, where each comes from Metro over the WiFi), and then one photo per
+ * turn of the JavaScript thread, not to hold the first screens. A load that fails is tried again the
+ * next time.
  *
  * @throws Error when a photo can't be decoded.
  */
@@ -54,19 +55,19 @@ export function loadStockPhotos(): Promise<StockPhotos> {
   }
   loadingStock ??= (async () => {
     const names = Object.keys(STOCK_FILES) as StockPhoto[];
-    const images = await Promise.all(
-      names.map((name) =>
-        loadData(STOCK_FILES[name], (data) => Skia.Image.MakeImageFromEncoded(data)),
-      ),
+    const files = await Promise.all(
+      names.map((name) => loadData(STOCK_FILES[name], (data) => data)),
     );
     const photos: Partial<Record<StockPhoto, SkImage>> = {};
-    names.forEach((name, i) => {
-      const image = images[i];
+    for (const [i, name] of names.entries()) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const file = files[i];
+      const image = file === null ? null : Skia.Image.MakeImageFromEncoded(file);
       if (image === null) {
         throw new Error(`Could not decode the stock photo ${name}`);
       }
       photos[name] = image;
-    });
+    }
     // Every name was set above: the loop goes over all of them.
     loadedStock = photos as StockPhotos;
     return loadedStock;
