@@ -6,7 +6,8 @@ What is left, in order. Why each thing was decided is in `docs/decisions/`; what
 
 Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms or less, opening any screen or panel in under 300 ms with no frame over 100 ms.
 
-- Android builds with EAS, the first look at photos and permissions on Android.
+- The first look at the photos grid on Android, in the development build (permission prompt seen).
+- A release APK built in Ubuntu to measure for real: production numbers and memory without Expo Go.
 - Measure what hasn't been: launch, opening the editor, panels, typing, undo, export, sheets, collages, photos.
 - Known: opening the widget gallery (a canvas for each tile's gradient and page is the suspect), starting and ending a gesture (renders of `app/editor.tsx`), the size slider (23 ms, cause unknown), the Summaries tab, memory.
 - A gallery's other pages laid out only on swiping, with care for the dots (empty or repeated pages are discarded on measuring).

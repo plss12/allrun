@@ -11,7 +11,7 @@ App móvil (iOS + Android) para poner datos de Strava sobre tus fotos con libert
 - Stack: Expo SDK 58 + Expo Router + TypeScript `strict`; editor con `@shopify/react-native-skia` + gesture-handler + reanimated; Supabase; Zod; i18next (es/en); Sentry.
 - `npm start`: dev en Expo Go (iPhone) · `npm run start:build`: dev en la build propia (Android) · `npm test` · `npm run lint` (incluye Prettier) · `npm run format` · `npm run typecheck` · `npx expo export --platform ios --platform android`: build del bundle · `npm run icons`, `npm run brand`: generadores.
 - Comprobaciones: `npm run check:fast` mientras se itera (o `npx jest --findRelatedTests <ficheros>`) y `npm run check`, espejo exacto de la CI, una vez antes de pedir la prueba en el teléfono y antes del commit.
-- Builds con EAS (`eas.json`): `development` para trabajar con Metro y `preview` para medir sin herramientas de desarrollo. El SDK solo se sube cuando Expo Go ya lo soporte, porque el iPhone sigue probando en él; notas de la subida en `docs/decisions/001-stack.md`.
+- Builds: la de desarrollo de Android se compila en Ubuntu (WSL) con `scripts/build-android-wsl.sh`, solo al cambiar código nativo; en Windows, las rutas de C++ pasan del límite de 260 caracteres. EAS (`eas.json`) es para las builds finales y para iOS (decisión del usuario: cada intento son una hora). El iPhone sigue probando en Expo Go, así que el SDK solo se sube cuando Expo Go ya lo soporte; notas de la subida en `docs/decisions/001-stack.md`.
 
 ## Reglas por área
 
@@ -33,7 +33,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/i18n/`: i18next con textos en `locales/en.ts` (fuente de las claves) y `locales/es.ts`, que el compilador obliga a tener las mismas claves; las claves de `t()` están tipadas.
 - `src/test-utils/`: helpers de tests (`makeActivity`, `makeSummary`, escenas con CanvasKit).
 - `assets/images/stock/`: fotos de las miniaturas de los diseños (Pexels, origen en `SOURCES.md`; originales en `docs/Fotos`, fuera de git).
-- `scripts/`: generadores de marca e iconos.
+- `scripts/`: generadores de marca e iconos, y la build de Android.
 - `supabase/`: esquema (`migrations/`) y canje de tokens de Strava (`functions/`).
 - `docs/decisions/`: ADRs. Léelos antes de tocar fuentes de datos, cuentas, plantillas, gráficas o el editor.
 

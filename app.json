@@ -24,10 +24,6 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "output": "server",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
       [
@@ -63,6 +59,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "owner": "plss12",
+    "extra": {
+      "eas": {
+        "projectId": "eb232586-d530-4b6e-9def-f5eac837e75b"
+      }
     }
   }
 }
