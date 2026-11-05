@@ -341,9 +341,9 @@ describe('the clip of a layer', () => {
 });
 
 describe('a route on the diagonal', () => {
-  // About 5 km straight to the north-east, in 200 points.
+  // About 5 km straight to the north-east, in 1000 points: far more than it takes on screen.
   const diagonal = encodePolyline(
-    Array.from({ length: 200 }, (_, i) => [55.67 + i * 0.0002, 12.56 + i * 0.0003] as const),
+    Array.from({ length: 1000 }, (_, i) => [55.67 + i * 0.00004, 12.56 + i * 0.00006] as const),
   );
   const route = defaultActivityTemplate(activity, 'story').layers.find(
     (layer) => layer.kind === 'route',
@@ -383,7 +383,7 @@ describe('a route on the diagonal', () => {
     const [points] = line.routes;
     // Far fewer points than the route has, yet more than its two ends.
     expect(points.length / 2).toBeGreaterThan(10);
-    expect(points.length / 2).toBeLessThan(200);
+    expect(points.length / 2).toBeLessThan(500);
     for (let i = 0; i < points.length; i += 2) {
       expect(Math.abs(points[i])).toBeLessThanOrEqual(width / 2);
       expect(Math.abs(points[i + 1])).toBeLessThanOrEqual(height / 2);

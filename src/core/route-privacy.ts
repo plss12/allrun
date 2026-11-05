@@ -1,7 +1,13 @@
 import { haversineMeters, interpolate, type LatLng } from './geo';
 
-/** Default distance hidden at each end of a shared route. */
-export const DEFAULT_PRIVACY_TRIM_METERS = 200;
+/**
+ * Default distance hidden at each end of a route: none (the user's decision). Hiding them will be a
+ * setting of the user's profile, to turn on, kept with their account (`SUGGESTED_PRIVACY_TRIM_METERS`).
+ */
+export const DEFAULT_PRIVACY_TRIM_METERS = 0;
+
+/** Distance hidden at each end of a route once the user turns that on. */
+export const SUGGESTED_PRIVACY_TRIM_METERS = 200;
 
 /**
  * Hides the start and end of a route so a shared image doesn't reveal where the athlete lives.

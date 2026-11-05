@@ -1,4 +1,4 @@
-import { BlurMask, Path, Skia } from '@shopify/react-native-skia';
+import { Path, Skia } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -106,28 +106,14 @@ export function ActivityCard({
     >
       <CardGradient width={width} height={height} radius={20}>
         {route === null ? null : (
-          <>
-            {/* A soft glow under the line, as the editor's glowing route. */}
-            <Path
-              path={route}
-              style="stroke"
-              strokeWidth={7}
-              strokeCap="round"
-              strokeJoin="round"
-              color="#FFFFFF"
-              opacity={0.35}
-            >
-              <BlurMask blur={6} style="normal" />
-            </Path>
-            <Path
-              path={route}
-              style="stroke"
-              strokeWidth={2.5}
-              strokeCap="round"
-              strokeJoin="round"
-              color="#FFFFFF"
-            />
-          </>
+          <Path
+            path={route}
+            style="stroke"
+            strokeWidth={3}
+            strokeCap="round"
+            strokeJoin="round"
+            color="#FFFFFF"
+          />
         )}
       </CardGradient>
       {route === null ? (

@@ -37,7 +37,7 @@ streams for charts). As of October 2026:
     family, by modality or by both. Summaries put the triathlon sports first; walks and hikes
     count as `other` (changed on 2026-10-16 after user testing).
   - Any other `sport_type` falls back to a generic profile showing whatever fields are present.
-- Route privacy: "hide start/end of route" is on by default (~200 m) and adjustable, because the
+- Route privacy (changed 2026-11-05, the owner's decision): off by default, a setting of the user's profile to turn on, kept with their account. Originally: "hide start/end of route" is on by default (~200 m) and adjustable, because the
   API returns the full trace to the owner.
 - Request Strava's review as soon as there is a usable version, before the public launch.
 
