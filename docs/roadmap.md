@@ -48,6 +48,7 @@ Native work goes first on Android, where development builds are free. Then the i
 - Depth effect and image cutout, sharing a segmentation module.
 - **Native photo decoding** (ADR 004), approved: ImageIO on iOS and ImageDecoder on Android, straight into a GPU buffer for Skia (`Skia.Image.MakeImageFromNativeBuffer`). Opening a photo holds a frame of 110-150 ms today, its 2,048 px copy going up to the GPU, and HEIC is re-encoded first. **The stock photos too** (`loadStockPhotos`): about half of the first opening of Designs (500-690 ms) is putting them on the GPU, so it should go down to some 250-350 ms; the rest, drawing eleven thumbnails for the first time, stays. Keep it only if it measures clearly faster on both phones.
 - **Reanimated's `ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS` and `IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS`**, approved: an animated view's transform or opacity without committing the screen's tree (the editor's lift over a panel, the typing overlay, the spinners; the slider's thumb could go back to a view, 3-4 ms a frame less, ADR 014): the size slider, at 18 ms, should get within 16 ms.
+- **Wide color on Android**, the owner's rule: the screen decides, Display P3 if it has it, sRGB if not. The iPhone already draws, moves and exports in P3 (`SCREEN_COLOR_SPACE` in `editor/screen-color.ts`); Skia 2.14 draws every Android canvas with no color space, even on a P3 screen. Needs the window in wide color mode and Skia's Android canvas made in P3 when the screen is (a patch or a change upstream), and then `SCREEN_COLOR_SPACE` asks the screen instead of the system. Testing it needs an Android with a P3 screen (the M32 is likely sRGB). Also: a transparent PNG is exported in sRGB because Skia's P3 profile in a PNG isn't Apple's, which Instagram reads; worth checking then.
 - Sentry, and the Story button (to an Instagram story directly).
 
 ## 7. Publishing
@@ -62,4 +63,6 @@ Native work goes first on Android, where development builds are free. Then the i
 
 ## After the MVP
 
-Summary video, subscriptions (RevenueCat), route generator, race calendar, more data sources (COROS, Garmin, Suunto through their partner programs), new widgets.
+- Video (ADR 009): a flyover of an activity, and a fast replay of a summary's activities.
+- Exporting in high quality: today the image is always the canvas's size, 1080 px wide (Instagram's own, so no app rescales it; `core/export.ts`), about 2 megapixels against the 12 to 48 of a phone's photo. An option to save it larger, to print it or zoom in: twice that or the photo's own size, its widgets sharp (they are vectors) and the photo from its export copy (up to 4,096 px). Mind the memory and the time on a modest phone.
+- Subscriptions (RevenueCat), route generator, race calendar, more data sources (COROS, Garmin, Suunto through their partner programs), new widgets.
