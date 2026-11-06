@@ -2,19 +2,20 @@
 
 What is left, in order. Why each thing was decided is in `docs/decisions/`; what is done is in the code and the git history.
 
-## 1. Fluid on a modest phone (in progress, ADR 014)
+## 1. Fluid on a modest phone (done, ADR 014)
 
 Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms or less, opening any screen or panel in under 300 ms with no frame over 100 ms.
 
 - Measured in release (ADR 014, two rounds): launch, home and photos scroll, the home's and the selection's tabs, Summaries and its scroll, opening the editor, moving a photo, the widget gallery, Designs, Stickers, the size slider, the color and "Aa" panels, undo, the export bar, typing, collages with real photos, memory over several editor sessions.
 - Over the targets, each with its cost in ADR 014. Step 6 should fix the size slider (18 ms), opening a photo (110-150 ms) and half of the first opening of Designs (500-690 ms); step 2, the widget gallery's opening and closing. Starting a drag (about 40 ms, one frame) stays: its only fix risks the sharpness of the whole image while editing.
 - Low value, only if it shows: a gallery's other pages laid out only on swiping (JavaScript time, not frames), with care for the dots (empty or repeated pages are discarded on measuring).
-- A last pass on the iPhone, then this step is closed.
+- Closed on 2026-11-06, after a last pass on the iPhone.
+- Found after closing it: memory grows about 7 MB of native memory a session of the editor (ADR 014), the same before and after step 2's sheet. Find what keeps it (a heap snapshot of Hermes and the native objects of Skia that outlive their screen).
 
 ## 2. Closing the style between phones
 
-- **One sheet of our own, the same on both phones**, in place of React Native's `Modal` (the owner's decision, 2026-11-06), for the 6 sheets: today they are a card on iOS and full screen on Android. Its look is decided with the owner on seeing both phones, and its closing gesture must feel native. It also keeps the widget gallery mounted: its first opening in each editor session (0.6-1 s of long frames) and its closing (a frame of about 210 ms, Android destroying the tiles' surfaces) go away.
-- A cap for the system's largest text (`maxFontSizeMultiplier`).
+- Done: one sheet of our own for the 6 sheets, the same on both phones (ADR 015): a tall card, closed by dragging it down, tapping outside, its button or Android's back; the widget gallery stays mounted. To judge on both phones.
+- Done: the system's text size makes the app's text grow up to 1.3 times (`MAX_FONT_SCALE` in `ui/text.tsx`).
 - The widgets' selection frame: the owner dislikes it, with no better idea yet.
 
 ## 3. Finishing R4: selection and designs

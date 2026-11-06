@@ -127,8 +127,10 @@ Measured and within the targets: opening the editor (frames of 44-110 ms, once A
 cache has them), the color and "Aa" panels (140 and 75 ms in all), undo and redo, the export bar,
 copying the image, typing (17 ms a key), and collages with real photos: choosing a layout (one frame
 of 46 ms), putting a photo in a cell (35 ms), moving it in its cell (14 ms a frame); only opening the
-photo grid from an empty cell reaches 105 ms, a sheet like the others (roadmap, step 2). Memory levels off at about 570 MB after a few editor sessions, Designs and
-Stickers included, and goes up and down from there without growing.
+photo grid from an empty cell reaches 105 ms, a sheet like the others (roadmap, step 2). Memory grows slowly, as
+measured later over eight editor sessions with Designs and Stickers: about 7 MB of native memory a
+session (174 to 230 MB; the whole app, 546 to 639 MB), part of it given back with the app in the
+background. Over six sessions it had looked level. What keeps it is still to find (roadmap).
 
 Tried and discarded:
 
