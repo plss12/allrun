@@ -267,9 +267,10 @@ emit('icon-ios-tinted', iconSvg(MARK.white, COLORS.black, ICON_FILL, 'it'), {
   pngWidth: 1024,
   svgFile: false,
 });
-// Android adaptive icons are cropped to a circle of 66/108 of the canvas: the monogram's
-// diagonal must fit in it, which a 56% width does with some air.
-const ADAPTIVE_FILL = 0.56;
+// Android adaptive icons are cropped to a circle of 66/108 of the canvas: the monogram's diagonal
+// must fit in it. On a Samsung's shape, a 56% width left its feet almost on the edge and it looked
+// low, though it was centered; 48% leaves them air.
+const ADAPTIVE_FILL = 0.48;
 emit('android-icon-foreground', iconSvg(MARK.color, null, ADAPTIVE_FILL, 'af'), {
   dir: APP_OUT,
   pngWidth: 1024,
@@ -290,6 +291,10 @@ emit('splash-icon-dark', iconSvg(MARK.onBlack, null, 0.9, 'sd'), {
   pngWidth: 1024,
   svgFile: false,
 });
+// Android 12 and later always draw their own launch screen, with the icon cut to a circle, which cut
+// the monogram's feet: there it is blank, black, and the app's own launch screen, the monogram and
+// the name, is the first thing seen (the user's decision).
+emit('splash-blank', svg(1024, 1024, '', null), { dir: APP_OUT, pngWidth: 1024, svgFile: false });
 emit('favicon', iconSvg(MARK.color, COLORS.chalk, 0.8, 'fv', 48), {
   dir: APP_OUT,
   pngWidth: 48,

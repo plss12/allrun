@@ -2,7 +2,7 @@ import '@/i18n';
 
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Appearance } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -11,6 +11,7 @@ import { ActivitySourceProvider } from '@/data/activity-source';
 import { TemplateStoreProvider } from '@/data/user-templates';
 import { syncPhrases } from '@/data/phrases';
 import { loadEditorFonts } from '@/editor/fonts';
+import { ShaderWarmup } from '@/editor/shader-warmup';
 import { loadStockPhotos } from '@/editor/stock-photos';
 import { colors } from '@/theme/colors';
 import { LaunchScreen } from '@/ui/launch-screen';
@@ -35,11 +36,52 @@ SplashScreen.setOptions({ duration: 200, fade: true });
  */
 const MAX_LAUNCH_WAIT_MS = 8000;
 
+/**
+ * Shortest time our launch screen stays once it is on screen: its name fades in under the monogram
+ * and is read before it goes. In a build the fonts are ready in half a second, and it went before
+ * the name showed (the user's decision: it is always seen whole).
+ */
+const MIN_LAUNCH_SHOWN_MS = 1000;
+
+/**
+ * When the GPU's programs are made under the launch screen (see `ShaderWarmup`): once its name has
+ * faded in, which a busy UI thread would make stutter.
+ */
+const WARMUP_AFTER_MS = 600;
+
 export default function RootLayout() {
   const { t } = useTranslation();
   // Our launch screen stays until the editor's fonts are loaded, so no screen waits for them later
-  // (opening an activity used to); the app loads under it meanwhile.
-  const [launching, setLaunching] = useState(true);
+  // (opening an activity used to), and at least `MIN_LAUNCH_SHOWN_MS`; the app loads under it
+  // meanwhile.
+  const [fontsSettled, setFontsSettled] = useState(false);
+  const [shownLongEnough, setShownLongEnough] = useState(false);
+  const [warming, setWarming] = useState(false);
+  const warmupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const launching = !(fontsSettled && shownLongEnough);
+  // Ready, it still fades out before it goes (see `LaunchScreen`).
+  const [launchGone, setLaunchGone] = useState(false);
+  const onLaunchGone = useCallback(() => setLaunchGone(true), []);
+  const shownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onLaunchShown = () => {
+    if (shownTimer.current !== null) {
+      return;
+    }
+    SplashScreen.hide();
+    shownTimer.current = setTimeout(() => setShownLongEnough(true), MIN_LAUNCH_SHOWN_MS);
+    warmupTimer.current = setTimeout(() => setWarming(true), WARMUP_AFTER_MS);
+  };
+  useEffect(
+    () => () => {
+      if (shownTimer.current !== null) {
+        clearTimeout(shownTimer.current);
+      }
+      if (warmupTimer.current !== null) {
+        clearTimeout(warmupTimer.current);
+      }
+    },
+    [],
+  );
   // The screens mount once their text has its faces, under the launch screen: laid out with the
   // system's font, they would jump when Inter came. A failure leaves the system's.
   const [facesLoaded, setFacesLoaded] = useState(false);
@@ -49,12 +91,12 @@ export default function RootLayout() {
       .finally(() => setFacesLoaded(true));
   }, []);
   useEffect(() => {
-    const timeout = setTimeout(() => setLaunching(false), MAX_LAUNCH_WAIT_MS);
+    const timeout = setTimeout(() => setFontsSettled(true), MAX_LAUNCH_WAIT_MS);
     loadEditorFonts()
       .catch((error: unknown) => logError('Could not load the editor fonts at launch', error))
       .finally(() => {
         clearTimeout(timeout);
-        setLaunching(false);
+        setFontsSettled(true);
       });
     return () => clearTimeout(timeout);
   }, []);
@@ -90,7 +132,10 @@ export default function RootLayout() {
             ) : null}
           </TemplateStoreProvider>
         </ActivitySourceProvider>
-        {launching ? <LaunchScreen onShown={() => SplashScreen.hide()} /> : null}
+        {launching && warming ? <ShaderWarmup /> : null}
+        {launchGone ? null : (
+          <LaunchScreen leaving={!launching} onShown={onLaunchShown} onGone={onLaunchGone} />
+        )}
       </GestureHandlerRootView>
     </ThemeProvider>
   );

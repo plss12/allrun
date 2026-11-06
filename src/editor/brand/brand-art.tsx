@@ -45,7 +45,15 @@ const WORD_PALETTES: Readonly<Record<LogoTone, WordPalette>> = {
 
 interface BrandPaths {
   readonly stems: SkPath;
-  /** The stems with the lines between lanes cut out, for transparent lines. */
+  /**
+   * The stems with the whole track cut out, its lanes and the lines between them, for transparent
+   * lines. Left under the lanes, the stems' white showed along the lanes' smoothed edges.
+   */
+  readonly stemsOutsideTrack: SkPath;
+  /**
+   * The stems with only the lines between lanes cut out, for a monogram of one color: cut out of
+   * the lanes too, their edge against a lane of the same color would let the background through.
+   */
   readonly stemsWithoutGaps: SkPath;
   readonly lanes: SkPath;
   readonly lines: SkPath;
@@ -77,10 +85,15 @@ let cachedPaths: BrandPaths | null = null;
 function brandPaths(): BrandPaths {
   if (cachedPaths === null) {
     const stems = parse(BRAND_GEOMETRY.mark.stems);
+    const lanes = BRAND_GEOMETRY.mark.lanes.map(parse);
     cachedPaths = {
       stems,
+      stemsOutsideTrack: combine(
+        [stems, ...BRAND_GEOMETRY.mark.gaps.map(parse), ...lanes],
+        PathOp.Difference,
+      ),
       stemsWithoutGaps: combine([stems, ...BRAND_GEOMETRY.mark.gaps.map(parse)], PathOp.Difference),
-      lanes: combine(BRAND_GEOMETRY.mark.lanes.map(parse), PathOp.Union),
+      lanes: combine(lanes, PathOp.Union),
       lines: parse(BRAND_GEOMETRY.mark.lines),
       wordAll: parse(BRAND_GEOMETRY.wordmark.all),
       wordRun: parse(BRAND_GEOMETRY.wordmark.run),
@@ -95,7 +108,10 @@ function MarkShape({ palette }: { readonly palette: MarkPalette }) {
   if (palette.lines === null) {
     return (
       <Group>
-        <Path path={paths.stemsWithoutGaps} color={palette.stems} />
+        <Path
+          path={palette.stems === palette.lanes ? paths.stemsWithoutGaps : paths.stemsOutsideTrack}
+          color={palette.stems}
+        />
         <Path path={paths.lanes} color={palette.lanes} />
       </Group>
     );
