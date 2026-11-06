@@ -1,13 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  type ScrollViewInstance,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, type ScrollViewInstance, TextInput, View } from 'react-native';
 
 import { listedPhrases, wordsIn } from '@/core/phrases';
 import { type DesignLanguage, MAX_CHAT_LENGTH } from '@/core/template';
@@ -15,7 +8,8 @@ import type { ChosenWords } from '@/core/template-edit';
 import { usePhrases } from '@/data/phrases';
 import { smallCardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
-import { INTERFACE_FACES, Text } from '@/ui/text';
+import { Sheet, SheetScrollView } from '@/ui/sheet';
+import { INTERFACE_FACES, MAX_FONT_SCALE, Text } from '@/ui/text';
 import { todayLocal } from '@/ui/today';
 
 import { SheetFrame } from './sheet-frame';
@@ -101,7 +95,7 @@ export function ChoiceList({
   const scroll = useRef<ScrollViewInstance>(null);
   const scrolled = useRef(false);
   return (
-    <ScrollView
+    <SheetScrollView
       ref={scroll}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: GALLERY_PADDING, gap: GALLERY_GAP, paddingBottom: 32 }}
@@ -152,7 +146,7 @@ export function ChoiceList({
           </Pressable>
         );
       })}
-    </ScrollView>
+    </SheetScrollView>
   );
 }
 
@@ -191,6 +185,7 @@ function OwnPhrase({
         placeholderTextColor={colors.secondaryLabel}
         accessibilityLabel={t('gallery.ownPhrase')}
         maxLength={MAX_CHAT_LENGTH}
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
         returnKeyType="done"
         style={{
           flex: 1,
@@ -238,16 +233,7 @@ export function ChoiceSheet({
     setShown(words);
   }
   return (
-    <Modal
-      visible={words !== null}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      allowSwipeDismissal
-      // Android shows it full screen: drawn under the system bars, padded by their insets.
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={onClose}
-    >
+    <Sheet visible={words !== null} onClose={onClose}>
       {shown === null ? null : (
         <SheetFrame
           title={t(CHOICE_TITLES[shown.design])}
@@ -264,6 +250,6 @@ export function ChoiceSheet({
           />
         </SheetFrame>
       )}
-    </Modal>
+    </Sheet>
   );
 }

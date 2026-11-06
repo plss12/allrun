@@ -23,6 +23,7 @@ import type { UserTemplates } from '@/data/user-templates';
 import { colors } from '@/theme/colors';
 import { AppIcon } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
+import { SheetScrollView } from '@/ui/sheet';
 import { Text } from '@/ui/text';
 
 import type { DesignChoice } from './design-choice';
@@ -343,6 +344,8 @@ export function DesignGallery({
 
   return (
     <FlashList
+      // In a sheet, scrolled to its top, pulling down drags the sheet.
+      renderScrollComponent={SheetScrollView}
       data={rows}
       keyExtractor={(row) => row.key}
       getItemType={(row) => row.kind}

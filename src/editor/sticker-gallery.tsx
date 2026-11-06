@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { type ReactNode, useDeferredValue, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Linking, Modal, useWindowDimensions, View } from 'react-native';
+import { Alert, Linking, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DEFAULT_FONT } from '@/core/default-layout';
@@ -16,6 +16,7 @@ import { colors } from '@/theme/colors';
 import { AppIcon, type UiIconName } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
+import { Sheet } from '@/ui/sheet';
 import { ErrorView, LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 import { toLocalTimestamp } from '@/ui/today';
@@ -344,15 +345,7 @@ export function StickerGallery({
           </Dock>
         </View>
       )}
-      <Modal
-        visible={choosing !== null}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        allowSwipeDismissal
-        statusBarTranslucent
-        navigationBarTranslucent
-        onRequestClose={() => setChoosing(null)}
-      >
+      <Sheet visible={choosing !== null} onClose={() => setChoosing(null)}>
         {choosing === null ? null : (
           <SheetFrame
             title={t(CHOICE_TITLES[choosing.block.design])}
@@ -369,7 +362,7 @@ export function StickerGallery({
             />
           </SheetFrame>
         )}
-      </Modal>
+      </Sheet>
     </View>
   );
 }

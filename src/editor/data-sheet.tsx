@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { FlatList, Modal, ScrollView, useWindowDimensions } from 'react-native';
+import { FlatList, useWindowDimensions } from 'react-native';
 
 import type { PeriodKind } from '@/core/periods';
 import { useActivitySource } from '@/data/activity-source';
 import { ActivityCard } from '@/home/activity-card';
 import { type PeriodChoice, PeriodCard } from '@/home/period-card';
 import { useDisplaySettings } from '@/ui/settings';
+import { renderSheetScroll, Sheet, SheetScrollView } from '@/ui/sheet';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
 import { todayLocal } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
@@ -38,16 +39,7 @@ export function DataSheet({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      allowSwipeDismissal
-      // Android shows it full screen: drawn under the system bars, padded by their insets.
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={onClose}
-    >
+    <Sheet visible={visible} onClose={onClose}>
       <SheetFrame
         title={t(mode === 'activity' ? 'editor.chooseActivity' : 'editor.choosePeriod')}
         closeLabel={t('editor.close')}
@@ -59,7 +51,7 @@ export function DataSheet({
           <Periods onChoose={onChoosePeriod} />
         )}
       </SheetFrame>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -79,6 +71,8 @@ function Activities({ onChoose }: { readonly onChoose: (id: string) => void }) {
   }
   return (
     <FlatList
+      // Scrolled to its top, pulling down drags the sheet.
+      renderScrollComponent={renderSheetScroll}
       data={recent.data}
       keyExtractor={(activity) => activity.id}
       contentContainerStyle={{ padding: PADDING, gap: GAP, flexGrow: 1 }}
@@ -103,7 +97,7 @@ function Periods({ onChoose }: { readonly onChoose: (choice: PeriodChoice) => vo
   const { width } = useWindowDimensions();
   const today = todayLocal();
   return (
-    <ScrollView contentContainerStyle={{ padding: PADDING, gap: 16 }}>
+    <SheetScrollView contentContainerStyle={{ padding: PADDING, gap: 16 }}>
       {PERIODS.map((kind) => (
         <PeriodCard
           key={kind}
@@ -115,6 +109,6 @@ function Periods({ onChoose }: { readonly onChoose: (choice: PeriodChoice) => vo
           onChoose={onChoose}
         />
       ))}
-    </ScrollView>
+    </SheetScrollView>
   );
 }

@@ -155,6 +155,7 @@ import { type ColumnTool, WidgetColumn } from '@/editor/widget-column';
 import { usePhotoPicker } from '@/photos/use-photo-picker';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
+import { SheetHost } from '@/ui/sheet';
 import { ErrorView, LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 import { useAsync } from '@/ui/use-async';
@@ -199,7 +200,11 @@ export default function Editor() {
   if (!params.success) {
     return <ErrorView message={t('editor.error')} />;
   }
-  return <EditorScreen params={params.data} />;
+  return (
+    <SheetHost>
+      <EditorScreen params={params.data} />
+    </SheetHost>
+  );
 }
 
 function EditorScreen({ params }: { readonly params: EditorRequest }) {

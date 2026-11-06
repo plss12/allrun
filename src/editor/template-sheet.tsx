@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import { Modal } from 'react-native';
 
 import type { CanvasFormat, Template } from '@/core/template';
 import type { UserTemplates } from '@/data/user-templates';
+import { Sheet } from '@/ui/sheet';
 
 import type { DesignChoice } from './design-choice';
 import { DesignGallery } from './design-gallery';
@@ -36,16 +36,7 @@ export function TemplateSheet({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      allowSwipeDismissal
-      // Android shows it full screen: drawn under the system bars, padded by their insets.
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={onClose}
-    >
+    <Sheet visible={visible} onClose={onClose}>
       <SheetFrame title={t('templates.title')} closeLabel={t('editor.close')} onClose={onClose}>
         <DesignGallery
           context={layerContext}
@@ -56,6 +47,6 @@ export function TemplateSheet({
           onChoose={onChoose}
         />
       </SheetFrame>
-    </Modal>
+    </Sheet>
   );
 }

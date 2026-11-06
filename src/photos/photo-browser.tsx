@@ -22,6 +22,7 @@ import { colors } from '@/theme/colors';
 import { formatRelativeDay } from '@/ui/format';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
+import { SheetScrollView } from '@/ui/sheet';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 import { dayOfMoment, todayLocal } from '@/ui/today';
@@ -288,6 +289,8 @@ function PhotoGrid({
   ];
   return (
     <FlashList
+      // In a sheet, scrolled to its top, pulling down drags the sheet.
+      renderScrollComponent={SheetScrollView}
       data={items}
       numColumns={COLUMNS}
       keyExtractor={(item) => (item.kind === 'photo' ? item.photo.id : item.kind)}
@@ -345,6 +348,7 @@ function AlbumList({
   }
   return (
     <FlashList
+      renderScrollComponent={SheetScrollView}
       data={albums.data}
       numColumns={2}
       keyExtractor={(album) => album.id}

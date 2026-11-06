@@ -19,6 +19,7 @@ import { colors } from '@/theme/colors';
 import { logError } from '@/ui/log';
 import { ErrorView, LoadingView } from '@/ui/state-views';
 import { useDisplaySettings } from '@/ui/settings';
+import { SheetHost } from '@/ui/sheet';
 import { Text } from '@/ui/text';
 import { GlassTabs, TOP_BAR_HEIGHT, TopBar, useTopBarRoom } from '@/ui/top-bar';
 
@@ -46,7 +47,11 @@ export default function Select() {
   if (!params.success) {
     return <ErrorView message={t('editor.error')} />;
   }
-  return <Selection params={params.data} raw={raw} />;
+  return (
+    <SheetHost>
+      <Selection params={params.data} raw={raw} />
+    </SheetHost>
+  );
 }
 
 function Selection({

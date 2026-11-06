@@ -2,15 +2,7 @@ import type { ParseKeys } from 'i18next';
 import { Group, Paint } from '@shopify/react-native-skia';
 import { memo, type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Modal,
-  Platform,
-  Pressable,
-  SectionList,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, SectionList, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   useAnimatedScrollHandler,
   useDerivedValue,
@@ -25,6 +17,7 @@ import type { CanvasFormat, DesignLanguage, FontId, Layer } from '@/core/templat
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { CardGradient } from '@/ui/card-gradient';
+import { renderSheetScroll, Sheet } from '@/ui/sheet';
 import { LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 
@@ -253,16 +246,11 @@ export function LayerSheet({
     setChoosing(null);
     onClose();
   };
-  // iOS opens no keyboard nor the photo library while a sheet is on screen: free text and
-  // pictures start once it has slid away. Android has no dismiss callback, and no such limit.
-  const pending = useRef<(() => void) | null>(null);
+  // Free text and pictures start as the sheet closes: it is ours, not a native modal, so the
+  // keyboard and the photo library can come over it at once.
   const afterClosing = (start: () => void) => {
     close();
-    if (Platform.OS === 'ios') {
-      pending.current = start;
-    } else {
-      start();
-    }
+    start();
   };
   // The list is memoized: what it calls reads the latest props through these, so that the editor's
   // renders, which make new handlers and a new context each time, don't draw it again.
@@ -351,24 +339,17 @@ export function LayerSheet({
     </View>
   );
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      allowSwipeDismissal
-      // Android shows it full screen: drawn under the system bars, padded by their insets.
-      statusBarTranslucent
-      navigationBarTranslucent
-      // Android's back button leaves a list for the gallery first.
-      onRequestClose={() => (choosing === null ? close() : setChoosing(null))}
-      onDismiss={() => {
-        const start = pending.current;
-        pending.current = null;
-        start?.();
-      }}
+      onClose={close}
+      // Android's back leaves a list for the gallery first.
+      onBack={() => (choosing === null ? close() : setChoosing(null))}
+      // Kept with its tiles while the editor is open: opening it again shows it at once, where it
+      // was, and closing it doesn't destroy each tile's canvas (ADR 015).
+      keepMounted
     >
       {content}
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -399,6 +380,8 @@ export const WidgetGalleryList = memo(function WidgetGalleryList({
   const { t } = useTranslation();
   return (
     <SectionList
+      // In a sheet, scrolled to its top, pulling down drags the sheet.
+      renderScrollComponent={renderSheetScroll}
       ListHeaderComponent={header}
       sections={sections.map((section) => ({ id: section.id, data: section.rows }))}
       keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}

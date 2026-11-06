@@ -29,7 +29,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/data/`: proveedores de datos: fuente de actividades, plantillas del usuario, colores favoritos, frases y nombre del lugar.
 - `src/editor/`: lienzo Skia, widgets, galerías, gestos y exportación.
 - `src/home/`: inicio. `src/photos/`: la cuadrícula propia de fotos.
-- `src/ui/`: piezas comunes de interfaz: iconos, texto, barra superior, formato de datos y estados de carga y error.
+- `src/ui/`: piezas comunes de interfaz: iconos, texto, barra superior, hojas, formato de datos y estados de carga y error.
 - `src/i18n/`: i18next con textos en `locales/en.ts` (fuente de las claves) y `locales/es.ts`, que el compilador obliga a tener las mismas claves; las claves de `t()` están tipadas.
 - `src/test-utils/`: helpers de tests (`makeActivity`, `makeSummary`, escenas con CanvasKit).
 - `assets/images/stock/`: fotos de las miniaturas de los diseños (Pexels, origen en `SOURCES.md`; originales en `docs/Fotos`, fuera de git).

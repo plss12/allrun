@@ -16,7 +16,7 @@ paths:
 
 Capa `image`, `core/image-layer.ts`.
 
-- Se añaden desde la sección Fotos de la galería, con la tarjeta «Tu foto» (sin marco, con marco claro o con marco oscuro), que abre la fototeca al cerrarse la hoja (iOS no la abre con una hoja encima).
+- Se añaden desde la sección Fotos de la galería, con la tarjeta «Tu foto» (sin marco, con marco claro o con marco oscuro), que abre la fototeca a la vez que se cierra la hoja (la hoja es nuestra, ADR 015: nada nativo se lo impide).
 - El marco se elige en esa tarjeta: ninguno, claro o oscuro, en blanco y negro puros como las réplicas claras y oscuras (la alarma; Chalk y Night Ink se veían amarillento y azulado, decisión del usuario), con una sombra suave.
 - Como mucho 6 por diseño, igual que un collage, y las fotos de sus huecos cuentan (`MAX_IMAGES`, `canAddImage`; añadir, duplicar o llenar un hueco de más avisa). La foto de fondo sin collage no cuenta.
 - La capa solo guarda la clave de su foto: las fotos viven en el editor (`editor/use-pictures.ts`), una sola copia de hasta 2048 px que sirve para la pantalla y para exportar (una foto pegada nunca supera el lienzo), y solo las del diseño en pantalla están decodificadas; las que el deshacer quita se liberan y se decodifican de nuevo si vuelven.

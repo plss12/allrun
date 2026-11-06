@@ -126,14 +126,13 @@ export function TypingOverlay({ layer, origin, onChangeText, onDone }: TypingOve
     return () => subscriptions.forEach((subscription) => subscription.remove());
   }, [keyboardTop, reducedMotion]);
 
-  // On Android the field can start without a working keyboard, and nothing asks again:
-  // - New free text from the widget gallery: the field asks while the sheet is closing, its window
-  //   still has the focus, and no keyboard shows.
-  // - New free text from the text button: the keyboard shows, but the field loses its focus as the
-  //   controls step aside, and what is typed goes nowhere.
-  // A moment later, a field without focus asks for it again; a focused one with no keyboard begun
-  // to show asks again too. Not `Keyboard.isVisible()`: it turns true only once the keyboard is all
-  // the way up, which on the iPhone can be later than this check, and asking again then closed the
+  // On Android the field can start without a working keyboard, and nothing asks again: the keyboard
+  // shows, but the field loses its focus as the controls step aside, and what is typed goes nowhere
+  // (a new text, or editing one). When the sheets were React Native's `Modal`, a text from the
+  // widget gallery also asked while the sheet's window had the focus, and no keyboard showed. A
+  // moment later, a field without focus asks for it again; a focused one with no keyboard begun to
+  // show asks again too. Not `Keyboard.isVisible()`: it turns true only once the keyboard is all the
+  // way up, which on the iPhone can be later than this check, and asking again then closed the
   // keyboard and opened it once more.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -216,6 +215,8 @@ export function TypingOverlay({ layer, origin, onChangeText, onDone }: TypingOve
           ref={input}
           autoFocus
           multiline
+          // The text at the size it takes on the canvas, which the system's text size doesn't change.
+          maxFontSizeMultiplier={1}
           editable={!closing}
           maxLength={MAX_TEXT_LENGTH}
           value={layer.content}

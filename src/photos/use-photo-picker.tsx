@@ -1,15 +1,15 @@
 import { type ReactElement, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from 'react-native';
 
 import { SheetFrame } from '@/editor/sheet-frame';
+import { Sheet } from '@/ui/sheet';
 
 import { PhotoBrowser } from './photo-browser';
 
 /**
  * The app's own grid in a sheet, to choose a photo from inside the editor. `pick` opens it and
  * resolves with the photo's library id, or `null` if the user closes it; `sheet` goes in the
- * screen's tree. iOS opens no sheet over another: start it once any other has gone.
+ * screen's tree, inside its `SheetHost`.
  */
 export function usePhotoPicker(): {
   readonly pick: () => Promise<string | null>;
@@ -31,15 +31,7 @@ export function usePhotoPicker(): {
         setOpen(true);
       }),
     sheet: (
-      <Modal
-        visible={open}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        allowSwipeDismissal
-        statusBarTranslucent
-        navigationBarTranslucent
-        onRequestClose={() => finish(null)}
-      >
+      <Sheet visible={open} onClose={() => finish(null)}>
         <SheetFrame
           title={t('photos.choose')}
           closeLabel={t('editor.close')}
@@ -47,7 +39,7 @@ export function usePhotoPicker(): {
         >
           {open ? <PhotoBrowser onPick={finish} /> : null}
         </SheetFrame>
-      </Modal>
+      </Sheet>
     ),
   };
 }
