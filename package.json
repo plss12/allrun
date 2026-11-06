@@ -27,7 +27,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check --cache .",
     "check:fast": "npm run typecheck && npm run lint && jest --onlyChanged",
-    "check": "npm run lint && npm run format:check && npm run typecheck && jest --ci && npx expo-doctor && expo export --platform ios --platform android",
+    "check": "npm run lint && npm run format:check && npm run typecheck && jest --ci && npx expo-doctor && expo export --platform ios --platform android && npm run check:embed",
+    "check:embed": "expo export:embed --eager --platform android --dev false && expo export:embed --eager --platform ios --dev false",
     "brand": "node scripts/brand/build-brand.mjs",
     "icons": "node scripts/icons/build-sport-icons.mjs && node scripts/icons/build-ui-icons.mjs && node scripts/icons/build-icon-font.mjs"
   },

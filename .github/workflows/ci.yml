@@ -35,3 +35,6 @@ jobs:
       - run: npx expo-doctor
       # Bundle the JS for both platforms to catch build errors (native builds run on EAS)
       - run: npx expo export --platform ios --platform android
+      # Bundle as a native build embeds it, in production: `expo export` passed when the release
+      # build of Android failed on a module only that bundle resolves.
+      - run: npm run check:embed
