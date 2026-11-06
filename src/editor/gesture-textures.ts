@@ -46,6 +46,8 @@ function drawTexture(
   if (picture === null) {
     return true;
   }
+  // A surface made for this texture and freed at once. Kept for the next gesture, it saved making
+  // one, but every drag then left some 24 MB of the GPU's memory behind, never used again.
   const surface = Skia.Surface.MakeOffscreen(size.width, size.height);
   if (surface === null) {
     picture.dispose();
@@ -111,12 +113,34 @@ export function drawGestureTextures(
       }
       const { sceneSize } = request;
       const liveSize = request.live?.size ?? sceneSize;
+      // One texture per frame, so that no frame of the gesture pays for all of them: the scene
+      // draws in vector until they are ready.
       scheduleOnUI(() => {
-        const ok =
-          drawTexture(underPicture, sceneSize, under) &&
-          drawTexture(overPicture, sceneSize, over) &&
-          drawTexture(livePicture, liveSize, live);
-        scheduleOnRN(markReady, ok);
+        const steps = [
+          { picture: underPicture, size: sceneSize, texture: under },
+          { picture: overPicture, size: sceneSize, texture: over },
+          { picture: livePicture, size: liveSize, texture: live },
+        ];
+        let next = 0;
+        const step = () => {
+          // Those with nothing to draw take no frame.
+          while (next < steps.length && steps[next].picture === null) {
+            next += 1;
+          }
+          if (next === steps.length) {
+            scheduleOnRN(markReady, true);
+            return;
+          }
+          const { picture, size, texture } = steps[next];
+          next += 1;
+          if (!drawTexture(picture, size, texture)) {
+            steps.slice(next).forEach((left) => left.picture?.dispose());
+            scheduleOnRN(markReady, false);
+            return;
+          }
+          requestAnimationFrame(step);
+        };
+        step();
       });
     })
     .catch((error: unknown) => logError('Could not record a gesture', error));

@@ -35,6 +35,7 @@ import {
   chosenLayer,
   galleryDataKey,
   useGallery,
+  pageLabel,
   WidgetGalleryList,
 } from './layer-sheet';
 import { catalogFor, loadEditorData } from './load-editor-data';
@@ -319,7 +320,7 @@ export function StickerGallery({
         header={header}
         topInset={topInset}
         sections={sections}
-        layerContext={context}
+        label={(page) => pageLabel(page, context, (key) => t(key))}
         longPressLabel={t('stickers.longPress')}
         onPress={({ item }) => {
           const choice = choiceOf(item);

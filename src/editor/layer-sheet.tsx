@@ -1,16 +1,22 @@
 import type { ParseKeys } from 'i18next';
-import { Canvas, Group, Paint } from '@shopify/react-native-skia';
-import { type ReactElement, useEffect, useRef, useState } from 'react';
+import { Group, Paint } from '@shopify/react-native-skia';
+import { memo, type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   SectionList,
+  StyleSheet,
   useWindowDimensions,
   View,
 } from 'react-native';
+import Animated, {
+  useAnimatedScrollHandler,
+  useDerivedValue,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
 import { type PhraseKind, phraseLanguage, phraseWords } from '@/core/phrases';
@@ -258,6 +264,30 @@ export function LayerSheet({
       start();
     }
   };
+  // The list is memoized: what it calls reads the latest props through these, so that the editor's
+  // renders, which make new handlers and a new context each time, don't draw it again.
+  const latest = useRef({ layerContext, onAdd, onAddText, onAddImage, afterClosing });
+  useEffect(() => {
+    latest.current = { layerContext, onAdd, onAddText, onAddImage, afterClosing };
+  });
+  const label = useCallback(
+    (page: GalleryPage) => pageLabel(page, latest.current.layerContext, (key) => t(key)),
+    [t],
+  );
+  const onPress = useCallback((page: GalleryPage) => {
+    const { item } = page;
+    const now = latest.current;
+    const choice = choiceOf(item);
+    if (choice !== null) {
+      setChoosing(choice);
+    } else if (item.kind === 'text') {
+      now.afterClosing(now.onAddText);
+    } else if (item.kind === 'image') {
+      now.afterClosing(() => now.onAddImage(item));
+    } else {
+      now.onAdd(item);
+    }
+  }, []);
   const textSample = t('gallery.textSample');
   // Laid out ahead of time, a little at a time, and kept while the editor is open: so that "+" shows
   // it at once, and every time.
@@ -294,6 +324,32 @@ export function LayerSheet({
         textSample,
       ),
   );
+  // The gallery stays under a verse's or a quote's list, so that going back shows it at once.
+  const content = (
+    <View style={{ flex: 1 }}>
+      <SheetFrame title={t('editor.addLayer')} closeLabel={t('editor.close')} onClose={close}>
+        <WidgetGalleryList sections={sections} label={label} onPress={onPress} />
+      </SheetFrame>
+      {choosing !== null ? (
+        <View style={StyleSheet.absoluteFill}>
+          <SheetFrame
+            title={t(CHOICE_TITLES[choosing.block.design])}
+            closeLabel={t('editor.back')}
+            onClose={() => setChoosing(null)}
+          >
+            <ChoiceList
+              words={choosing.block}
+              language={language}
+              onChoose={(block) => {
+                setChoosing(null);
+                onAdd(chosenLayer(choosing.kind, block));
+              }}
+            />
+          </SheetFrame>
+        </View>
+      ) : null}
+    </View>
+  );
   return (
     <Modal
       visible={visible}
@@ -311,42 +367,7 @@ export function LayerSheet({
         start?.();
       }}
     >
-      {choosing !== null ? (
-        <SheetFrame
-          title={t(CHOICE_TITLES[choosing.block.design])}
-          closeLabel={t('editor.back')}
-          onClose={() => setChoosing(null)}
-        >
-          <ChoiceList
-            words={choosing.block}
-            language={language}
-            onChoose={(block) => {
-              setChoosing(null);
-              onAdd(chosenLayer(choosing.kind, block));
-            }}
-          />
-        </SheetFrame>
-      ) : (
-        <SheetFrame title={t('editor.addLayer')} closeLabel={t('editor.close')} onClose={close}>
-          <WidgetGalleryList
-            sections={sections}
-            layerContext={layerContext}
-            onPress={(page) => {
-              const { item } = page;
-              const choice = choiceOf(item);
-              if (choice !== null) {
-                setChoosing(choice);
-              } else if (item.kind === 'text') {
-                afterClosing(onAddText);
-              } else if (item.kind === 'image') {
-                afterClosing(() => onAddImage(item));
-              } else {
-                onAdd(item);
-              }
-            }}
-          />
-        </SheetFrame>
-      )}
+      {content}
     </Modal>
   );
 }
@@ -357,9 +378,9 @@ export function LayerSheet({
  * screen reader offers as an action named `longPressLabel`. `header` goes on top, scrolling with
  * the list, which starts `topInset` points down so that it can pass under a screen's header.
  */
-export function WidgetGalleryList({
+export const WidgetGalleryList = memo(function WidgetGalleryList({
   sections,
-  layerContext,
+  label,
   onPress,
   onLongPress,
   longPressLabel,
@@ -367,7 +388,8 @@ export function WidgetGalleryList({
   topInset = 0,
 }: {
   readonly sections: readonly GallerySection[];
-  readonly layerContext: LayerContext;
+  /** What a screen reader says for a page (see `pageLabel`). */
+  readonly label: (page: GalleryPage) => string;
   readonly onPress: (page: GalleryPage) => void;
   readonly onLongPress?: (page: GalleryPage) => void;
   readonly longPressLabel?: string;
@@ -382,12 +404,12 @@ export function WidgetGalleryList({
       keyExtractor={(row) => row.widgets.map((widget) => widget.key).join(' ')}
       stickySectionHeadersEnabled={false}
       // As many rows as fill the screen, then a few at a time: each tile is a canvas to create.
-      initialNumToRender={5}
-      maxToRenderPerBatch={4}
+      initialNumToRender={3}
+      maxToRenderPerBatch={1}
       // Rows three screens away are let go, each tile being a canvas of its own. Nearer ones stay:
       // on Android, taking a canvas off the screen destroys its surface, and it had to draw again
       // each time it came back, so that tiles vanished and came back one by one.
-      windowSize={7}
+      windowSize={3}
       removeClippedSubviews={false}
       ListEmptyComponent={<LoadingView />}
       contentContainerStyle={{
@@ -417,7 +439,7 @@ export function WidgetGalleryList({
               widget={widget}
               width={row.width}
               height={row.height}
-              label={(page) => pageLabel(page, layerContext, (key) => t(key))}
+              label={label}
               hint={
                 choiceOf(widget.pages[0].item) === null && widget.pages[0].item.kind !== 'image'
                   ? undefined
@@ -432,7 +454,7 @@ export function WidgetGalleryList({
       )}
     />
   );
-}
+});
 
 /**
  * What a screen reader says for a page: the widget's name and, for a text, what it shows ("Date,
@@ -440,7 +462,7 @@ export function WidgetGalleryList({
  * with a function of the keys alone: i18next's own `t`, inferring every key built here against
  * all the app's texts, grows too deep for the compiler.
  */
-function pageLabel(
+export function pageLabel(
   { item, prepared }: GalleryPage,
   context: LayerContext,
   t: (key: ParseKeys) => string,
@@ -569,12 +591,18 @@ function pageLabel(
   return parts.filter((part) => part !== '').join(', ');
 }
 
+/** The page of a pager `width` wide mostly on screen at `offset`, within its `count` pages. */
+function pageAt(offset: number, width: number, count: number): number {
+  'worklet';
+  return Math.min(count - 1, Math.max(0, Math.round(offset / width)));
+}
+
 /**
  * A widget's tile: its variants side by side, one page each, scrolled sideways, with a dot per
  * page under them. A tap adds the variant on the page; a widget chosen from a list says so with
  * its `hint` at the bottom.
  */
-function WidgetTile({
+const WidgetTile = memo(function WidgetTile({
   widget,
   width,
   height,
@@ -595,8 +623,10 @@ function WidgetTile({
 }) {
   const { t } = useTranslation();
   const [shown, setShown] = useState(0);
-  /** Whether the pages beside the one shown have a canvas: since the finger first touches it. */
+  /** Whether the pages beside the one shown are drawn: since the finger first touches it. */
   const [swiping, setSwiping] = useState(false);
+  /** The page under a finger, dimmed while pressed. */
+  const [pressed, setPressed] = useState<number | null>(null);
   const several = widget.pages.length > 1;
   // Pages as wide as the inside of the card's edge, which is what the pager pages by.
   const pageWidth = width - 2 * CARD_BORDER;
@@ -611,6 +641,25 @@ function WidgetTile({
     : several || hint !== undefined
       ? pageHeight - GALLERY_DOTS_HEIGHT
       : pageHeight;
+  // Where the pager is, read on the UI thread: the pages are drawn on the card's own canvas, and
+  // follow the finger there, frame by frame, without a render.
+  const offset = useSharedValue(0);
+  const shownOnUI = useSharedValue(0);
+  const count = widget.pages.length;
+  const onScroll = useAnimatedScrollHandler({
+    onBeginDrag: () => {
+      scheduleOnRN(setSwiping, true);
+    },
+    onScroll: (event) => {
+      offset.set(event.contentOffset.x);
+      const page = pageAt(event.contentOffset.x, pageWidth, count);
+      if (page !== shownOnUI.get()) {
+        shownOnUI.set(page);
+        scheduleOnRN(setShown, page);
+      }
+    },
+  });
+  const pagesAt = useDerivedValue(() => [{ translateX: -offset.get() }]);
   return (
     <View
       style={{
@@ -619,18 +668,36 @@ function WidgetTile({
         height,
       }}
     >
-      <CardGradient width={width} height={height} radius={14} />
-      <ScrollView
+      {/* One canvas for the card and its pages: each canvas costs the UI thread a texture to
+          create and a first draw, about 12 ms on a modest phone, and a screenful of tiles with a
+          canvas for the card and one more for its page held it for 300 ms and more on opening. */}
+      <CardGradient width={width} height={height} radius={14}>
+        <Group clip={{ x: 0, y: 0, width: pageWidth, height: pageHeight }}>
+          <Group transform={pagesAt}>
+            {widget.pages.map((page, i) =>
+              // The page shown and, once swiping, those beside it: a gallery has over a hundred.
+              Math.abs(i - shown) <= (swiping ? 1 : 0) ? (
+                <PageDrawing
+                  key={page.key}
+                  page={page}
+                  x={i * pageWidth}
+                  width={pageWidth}
+                  height={canvasHeight}
+                  dimmed={pressed === i}
+                />
+              ) : null,
+            )}
+          </Group>
+        </Group>
+      </CardGradient>
+      <Animated.ScrollView
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         scrollEnabled={several}
-        // The dot follows the finger, not only the end of the swipe.
+        // The canvas follows the finger, not only the end of the swipe.
         scrollEventThrottle={16}
-        onScrollBeginDrag={() => setSwiping(true)}
-        onScroll={(event) =>
-          setShown(pageAt(event.nativeEvent.contentOffset.x, pageWidth, widget.pages.length))
-        }
+        onScroll={onScroll}
       >
         {widget.pages.map((page, i) => (
           <Pressable
@@ -641,27 +708,17 @@ function WidgetTile({
             accessibilityElementsHidden={i !== shown}
             importantForAccessibility={i === shown ? 'auto' : 'no-hide-descendants'}
             onPress={() => onPress(page)}
+            onPressIn={() => setPressed(i)}
+            onPressOut={() => setPressed(null)}
             onLongPress={onLongPress === undefined ? undefined : () => onLongPress(page)}
             accessibilityActions={
               longPressLabel === undefined ? undefined : [{ name: 'save', label: longPressLabel }]
             }
             onAccessibilityAction={onLongPress === undefined ? undefined : () => onLongPress(page)}
-            style={({ pressed }) => ({
-              width: pageWidth,
-              height: pageHeight,
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            {
-              // Only the page shown and, once swiping, those beside it, have a canvas: each one
-              // is slow to create and holds GPU memory, and a gallery has over a hundred pages.
-              Math.abs(i - shown) <= (swiping ? 1 : 0) ? (
-                <PageCanvas page={page} width={pageWidth} height={canvasHeight} />
-              ) : null
-            }
-          </Pressable>
+            style={{ width: pageWidth, height: pageHeight }}
+          />
         ))}
-      </ScrollView>
+      </Animated.ScrollView>
       {hint !== undefined ? (
         <View
           pointerEvents="none"
@@ -718,32 +775,33 @@ function WidgetTile({
       ) : null}
     </View>
   );
-}
+});
 
-/** A variant drawn centered in its page, at its tile's scale. */
-function PageCanvas({
+/** How much a pressed page dims, as the app's buttons do. */
+const PRESSED_OPACITY = 0.6;
+
+/** A variant drawn centered in its page, which starts `x` points along the pager, at its tile's scale. */
+function PageDrawing({
   page,
+  x,
   width,
   height,
+  dimmed,
 }: {
   readonly page: GalleryPage;
+  readonly x: number;
   readonly width: number;
   readonly height: number;
+  readonly dimmed: boolean;
 }) {
   const { layer, content } = page.prepared;
+  const opacity = layer.opacity * (dimmed ? PRESSED_OPACITY : 1);
   return (
-    <Canvas style={{ width, height }}>
-      <Group
-        transform={[{ translateX: width / 2 }, { translateY: height / 2 }, { scale: page.scale }]}
-        layer={layer.opacity < 1 ? <Paint opacity={layer.opacity} /> : undefined}
-      >
-        {content}
-      </Group>
-    </Canvas>
+    <Group
+      transform={[{ translateX: x + width / 2 }, { translateY: height / 2 }, { scale: page.scale }]}
+      layer={opacity < 1 ? <Paint opacity={opacity} /> : undefined}
+    >
+      {content}
+    </Group>
   );
-}
-
-/** The page of a pager `width` wide mostly on screen at `offset`, within its `count` pages. */
-function pageAt(offset: number, width: number, count: number): number {
-  return Math.min(count - 1, Math.max(0, Math.round(offset / width)));
 }

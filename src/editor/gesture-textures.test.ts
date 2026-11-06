@@ -7,28 +7,39 @@ import { disposeLater } from './paragraph-arena';
 
 /** What the fake Skia has made so far, to tell whose textures are in the slots. */
 const made: { image: { readonly id: number; disposed: boolean } }[] = [];
+/** The offscreen surfaces it has made, and whether each was freed. */
+const surfacesMade: { readonly width: number; readonly height: number; disposed: boolean }[] = [];
 
 jest.mock('@shopify/react-native-skia', () => ({
   drawAsPicture: jest.fn(() => Promise.resolve({ dispose: jest.fn() })),
   Skia: {
     Surface: {
-      MakeOffscreen: jest.fn(() => ({
-        getCanvas: () => ({ drawPicture: jest.fn() }),
-        flush: jest.fn(),
-        dispose: jest.fn(),
-        makeImageSnapshot: () => {
-          const image = {
-            id: made.length,
-            disposed: false,
-            dispose() {
-              this.disposed = true;
-            },
-          };
-          made.push({ image });
-          return image;
-        },
-      })),
+      MakeOffscreen: jest.fn((width: number, height: number) => {
+        const surface = { width, height, disposed: false };
+        surfacesMade.push(surface);
+        return {
+          width: () => width,
+          height: () => height,
+          getCanvas: () => ({ drawPicture: jest.fn(), clear: jest.fn() }),
+          flush: jest.fn(),
+          dispose: () => {
+            surface.disposed = true;
+          },
+          makeImageSnapshot: () => {
+            const image = {
+              id: made.length,
+              disposed: false,
+              dispose() {
+                this.disposed = true;
+              },
+            };
+            made.push({ image });
+            return image;
+          },
+        };
+      }),
     },
+    Color: jest.fn(() => 0),
   },
 }));
 jest.mock('react-native-worklets', () => ({
@@ -39,15 +50,30 @@ jest.mock('react-native-reanimated', () => ({ useSharedValue: jest.fn() }));
 jest.mock('./paragraph-arena', () => ({ disposeLater: jest.fn() }));
 
 /** A shared value, as the UI thread sees it. */
-function slot(): SharedValue<SkImage | null> {
-  let value: SkImage | null = null;
+function slot<T>(): SharedValue<T | null> {
+  let value: T | null = null;
   return {
     get: () => value,
-    set: (next: SkImage | null) => {
+    set: (next: T | null) => {
       value = next;
     },
-  } as unknown as SharedValue<SkImage | null>;
+  } as unknown as SharedValue<T | null>;
 }
+
+/** The UI thread's frames asked for, run when a test says so. */
+const frames: (() => void)[] = [];
+globalThis.requestAnimationFrame = (run: FrameRequestCallback) => {
+  frames.push(() => run(0));
+  return frames.length;
+};
+const runFrame = () => {
+  frames.shift()?.();
+};
+const runFrames = () => {
+  while (frames.length > 0) {
+    runFrame();
+  }
+};
 
 const element = {} as ReactElement;
 const request = (key: string): TextureRequest => ({
@@ -63,16 +89,27 @@ const waiting = jest.mocked(disposeLater);
 const runFrees = () => {
   waiting.mock.calls.splice(0).forEach(([free]) => free());
 };
-/** Lets the recording of the pictures, which is asynchronous, finish. */
-const recorded = () => new Promise<void>((resolve) => setImmediate(() => resolve()));
+/** Lets the recording of the pictures, which is asynchronous, finish, without the frames after. */
+const recordedOnly = () => new Promise<void>((resolve) => setImmediate(() => resolve()));
+/** Lets the recording finish, and the frames that draw the textures pass. */
+const recorded = async () => {
+  await recordedOnly();
+  runFrames();
+};
 
 describe('the textures of a gesture', () => {
   let slots: TextureSlots;
   let gestures: { current: number };
   beforeEach(() => {
     made.length = 0;
+    surfacesMade.length = 0;
+    frames.length = 0;
     waiting.mockClear();
-    slots = { under: slot(), over: slot(), live: slot() };
+    slots = {
+      under: slot<SkImage>(),
+      over: slot<SkImage>(),
+      live: slot<SkImage>(),
+    };
     gestures = { current: 0 };
   });
 
@@ -139,5 +176,25 @@ describe('the textures of a gesture', () => {
     // Only the second one's two textures: the first never drew over them.
     expect(made).toHaveLength(2);
     expect(made.every(({ image }) => !image.disposed)).toBe(true);
+  });
+
+  // Every drag left the GPU's memory of surfaces kept for the next one behind: each is freed at once.
+  it('frees each surface as soon as its texture is drawn', async () => {
+    drawGestureTextures(request('a'), slots, gestures, jest.fn());
+    await recorded();
+    expect(surfacesMade).toHaveLength(2);
+    expect(surfacesMade.every((surface) => surface.disposed)).toBe(true);
+  });
+
+  it('draws one texture per frame, and is ready after the last', async () => {
+    const onReady = jest.fn();
+    drawGestureTextures(request('a'), slots, gestures, onReady);
+    await recordedOnly();
+    expect(made).toHaveLength(1);
+    runFrame();
+    expect(made).toHaveLength(2);
+    expect(onReady).not.toHaveBeenCalled();
+    runFrame();
+    expect(onReady).toHaveBeenCalledTimes(1);
   });
 });
