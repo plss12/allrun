@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { addListener, presentPermissionsPicker } from 'expo-media-library';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { AppState, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -26,6 +26,8 @@ import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 import { dayOfMoment, todayLocal } from '@/ui/today';
 import { useAsync } from '@/ui/use-async';
+
+import { allowStep, settingsAfterAsking } from './photo-access';
 
 /** Photos asked for at a time: a few screens' worth, read as the user scrolls. */
 const PAGE_SIZE = 120;
@@ -61,11 +63,22 @@ function usePhotoAccess(): {
   return {
     access,
     ask: () => {
-      if (access?.canAskAgain === true) {
-        void askPhotoAccess().then(setAccess).catch(failed);
-      } else {
-        void Linking.openSettings();
+      if (access === null) {
+        return;
       }
+      if (allowStep(access, Platform.OS) === 'settings') {
+        void Linking.openSettings();
+        return;
+      }
+      const asked = Date.now();
+      void askPhotoAccess()
+        .then((after) => {
+          setAccess(after);
+          if (settingsAfterAsking(after, Date.now() - asked)) {
+            void Linking.openSettings();
+          }
+        })
+        .catch(failed);
     },
   };
 }
@@ -476,7 +489,11 @@ export function PhotoBrowser({
   if (access.level === 'none') {
     return (
       <Framed top={{ header: top, inset: topInset }}>
-        <NoAccess canAskAgain={access.canAskAgain} onAsk={ask} onNoPhoto={onNoPhoto} />
+        <NoAccess
+          canAskAgain={allowStep(access, Platform.OS) === 'ask'}
+          onAsk={ask}
+          onNoPhoto={onNoPhoto}
+        />
       </Framed>
     );
   }
