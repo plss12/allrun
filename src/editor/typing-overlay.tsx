@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   TextInput,
+  type TextInputInstance,
   View,
 } from 'react-native';
 import Animated, {
@@ -58,6 +59,11 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 /** The text rising to the keyboard, and settling back on the canvas. */
 const RISE = { duration: 320, easing: EASE_OUT };
 const SETTLE = { duration: 260, easing: EASE_OUT };
+/**
+ * How long after typing starts the keyboard must have begun to show; if it hasn't, the field asks
+ * for it again (see `TypingOverlay`).
+ */
+const KEYBOARD_CHECK_MS = 500;
 /** iOS keyboard animation curve, to follow it when the event gives no curve of its own. */
 const KEYBOARD_EASING = Easing.bezier(0.38, 0.7, 0.125, 1);
 
@@ -76,6 +82,9 @@ export function TypingOverlay({ layer, origin, onChangeText, onDone }: TypingOve
   const previews = usePreviewFonts();
   const [closing, setClosing] = useState(false);
   const root = useRef<HostInstance>(null);
+  const input = useRef<TextInputInstance>(null);
+  /** Whether the keyboard has shown, or begun to, since typing started. */
+  const keyboardCame = useRef(Keyboard.isVisible());
   const { style } = layer;
   const editScale = Math.min(Math.max(origin.scale, MIN_SCALE), MAX_SCALE);
   const startScale = origin.scale / editScale;
@@ -107,9 +116,41 @@ export function TypingOverlay({ layer, origin, onChangeText, onDone }: TypingOve
       Platform.OS === 'ios'
         ? (['keyboardWillShow', 'keyboardWillHide'] as const)
         : (['keyboardDidShow', 'keyboardDidHide'] as const);
-    const subscriptions = [Keyboard.addListener(show, follow), Keyboard.addListener(hide, follow)];
+    const subscriptions = [
+      Keyboard.addListener(show, (event) => {
+        keyboardCame.current = true;
+        follow(event);
+      }),
+      Keyboard.addListener(hide, follow),
+    ];
     return () => subscriptions.forEach((subscription) => subscription.remove());
   }, [keyboardTop, reducedMotion]);
+
+  // On Android the field can start without a working keyboard, and nothing asks again:
+  // - New free text from the widget gallery: the field asks while the sheet is closing, its window
+  //   still has the focus, and no keyboard shows.
+  // - New free text from the text button: the keyboard shows, but the field loses its focus as the
+  //   controls step aside, and what is typed goes nowhere.
+  // A moment later, a field without focus asks for it again; a focused one with no keyboard begun
+  // to show asks again too. Not `Keyboard.isVisible()`: it turns true only once the keyboard is all
+  // the way up, which on the iPhone can be later than this check, and asking again then closed the
+  // keyboard and opened it once more.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const field = input.current;
+      if (field === null) {
+        return;
+      }
+      if (!field.isFocused()) {
+        field.focus();
+      } else if (!keyboardCame.current) {
+        // `focus` does nothing on a field already focused.
+        field.blur();
+        field.focus();
+      }
+    }, KEYBOARD_CHECK_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const finish = () => {
     if (closing) {
@@ -172,6 +213,7 @@ export function TypingOverlay({ layer, origin, onChangeText, onDone }: TypingOve
         style={[{ position: 'absolute', top: 0, left: 16, right: 16 }, textStyle]}
       >
         <TextInput
+          ref={input}
           autoFocus
           multiline
           editable={!closing}
