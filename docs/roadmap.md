@@ -6,17 +6,14 @@ What is left, in order. Why each thing was decided is in `docs/decisions/`; what
 
 Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms or less, opening any screen or panel in under 300 ms with no frame over 100 ms.
 
-- Measured in release (ADR 014): launch, home and photos scroll, opening the editor, moving a photo, the widget gallery (now kept mounted: instant from its second opening).
-- Starting a drag (about 40 ms on the UI thread) and frames during a gesture waiting on the GPU: the scene is drawn on each touch and again on the frame's callbacks.
-- Opening the Summaries tab (a 500 ms frame: every canvas of its cards is made at once) and its scroll (23-25 ms).
-- Still to measure in release: panels, typing, undo, export, sheets, collages, Stickers, Designs, the size slider, memory over a long session.
-- A gallery's other pages laid out only on swiping, with care for the dots (empty or repeated pages are discarded on measuring).
-- With a build: native photo decoding (ADR 004), and Reanimated's `ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS` and `IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS`.
-- A last pass on the iPhone.
+- Measured in release (ADR 014, two rounds): launch, home and photos scroll, the home's and the selection's tabs, Summaries and its scroll, opening the editor, moving a photo, the widget gallery, Designs, Stickers, the size slider, the color and "Aa" panels, undo, the export bar, typing, collages with real photos, memory over several editor sessions.
+- Over the targets, each with its cost in ADR 014. Step 6 should fix the size slider (18 ms), opening a photo (110-150 ms) and half of the first opening of Designs (500-690 ms); step 2, the widget gallery's opening and closing. Starting a drag (about 40 ms, one frame) stays: its only fix risks the sharpness of the whole image while editing.
+- Low value, only if it shows: a gallery's other pages laid out only on swiping (JavaScript time, not frames), with care for the dots (empty or repeated pages are discarded on measuring).
+- A last pass on the iPhone, then this step is closed.
 
 ## 2. Closing the style between phones
 
-- The 6 sheets are a card on iOS and full screen on Android: decide on seeing them; an own sheet with its closing gesture is the costly fix.
+- **One sheet of our own, the same on both phones**, in place of React Native's `Modal` (the owner's decision, 2026-11-06), for the 6 sheets: today they are a card on iOS and full screen on Android. Its look is decided with the owner on seeing both phones, and its closing gesture must feel native. It also keeps the widget gallery mounted: its first opening in each editor session (0.6-1 s of long frames) and its closing (a frame of about 210 ms, Android destroying the tiles' surfaces) go away.
 - A cap for the system's largest text (`maxFontSizeMultiplier`).
 - The widgets' selection frame: the owner dislikes it, with no better idea yet.
 
@@ -45,9 +42,11 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 
 ## 6. Milestone 5: native
 
-Native work goes first on Android, where development builds are free. Then the iOS part, tried a few times on the iPhone without paying (GitHub Actions macOS plus AltStore or SideStore with a free Apple ID), and the 99 € a year of Apple only to publish or use TestFlight (ADR 001).
+Native work goes first on Android, where development builds are free. Then the iOS part, tried a few times on the iPhone without paying (GitHub Actions macOS plus AltStore or SideStore with a free Apple ID), and the 99 € a year of Apple only to publish or use TestFlight (ADR 001). From here the iPhone no longer tests in Expo Go. Native code is fine as long as both phones get the same (the owner's rule): never something native on one phone only.
 
 - Depth effect and image cutout, sharing a segmentation module.
+- **Native photo decoding** (ADR 004), approved: ImageIO on iOS and ImageDecoder on Android, straight into a GPU buffer for Skia (`Skia.Image.MakeImageFromNativeBuffer`). Opening a photo holds a frame of 110-150 ms today, its 2,048 px copy going up to the GPU, and HEIC is re-encoded first. **The stock photos too** (`loadStockPhotos`): about half of the first opening of Designs (500-690 ms) is putting them on the GPU, so it should go down to some 250-350 ms; the rest, drawing eleven thumbnails for the first time, stays. Keep it only if it measures clearly faster on both phones.
+- **Reanimated's `ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS` and `IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS`**, approved: an animated view's transform or opacity without committing the screen's tree (the editor's lift over a panel, the typing overlay, the spinners; the slider's thumb could go back to a view, 3-4 ms a frame less, ADR 014): the size slider, at 18 ms, should get within 16 ms.
 - Sentry, and the Story button (to an Instagram story directly).
 
 ## 7. Publishing

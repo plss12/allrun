@@ -100,10 +100,59 @@ drawn twice in vector, the whole scene, before its textures take over: the swaps
 the CPU going through the scene. Drawing the textures as soon as a widget is selected, and using them
 once it moves, was tried and gave nothing measurable (40-50 ms still), with 19 MB of the GPU taken
 while anything is selected: undone. It would need the selected scene drawn from textures too, which
-risks the sharpness of the whole image while editing. Opening the Summaries tab draws every canvas of its cards at once (a 500 ms
-frame): a canvas hidden with opacity 0 never makes its surface, so all are made when it shows.
-`adb input swipe` sends only about 54 touches a second: a gesture's frame rate measured with it is
+risks the sharpness of the whole image while editing. Opening the Summaries tab held a frame of 500
+ms: solved in the second round, below. `adb input swipe` sends only about 54 touches a second: a gesture's frame rate measured with it is
 the injection's, not the app's.
+
+### A second round in a release build (2026-11-06)
+
+Measured the same way. Each change was kept only where it measured better and drew the same pixels:
+screenshots before and after were compared pixel by pixel.
+
+- **What hides without unmounting is never flattened** (`KeptMounted`, `collapsable={false}`). React
+  Native leaves a plain view out of the native tree and gives its children to its parent; hiding or
+  showing `KeptMounted` changed whether it was plain, and so moved its children from one native view
+  to another. A Skia canvas so moved loses its surface and makes it again: every change of the
+  home's tabs, both ways, held the UI thread 400-530 ms, and every change of the selection's tabs
+  too. Now a change of tab takes 13-24 ms, and Designs or Stickers, once opened, show again at once.
+  It costs 2.5 MB more of the GPU's memory, for the surfaces kept.
+- **A summary card is one canvas**: its gradient and its pages' charts, which follow the pager on
+  the UI thread, as a gallery's tiles do; the texts stay views in the pages, which say where the
+  charts go. Summaries scroll at 19 ms a frame (23-25 before).
+- **The tabs' capsule is drawn with Skia** (`GlassTabs`): an animated view made Reanimated commit the
+  tree of the whole screen on every frame of its spring, a sixth of the UI thread on opening Designs.
+  The first opening of Stickers went from 741 to 501 ms of long frames.
+
+Measured and within the targets: opening the editor (frames of 44-110 ms, once Android's shader
+cache has them), the color and "Aa" panels (140 and 75 ms in all), undo and redo, the export bar,
+copying the image, typing (17 ms a key), and collages with real photos: choosing a layout (one frame
+of 46 ms), putting a photo in a cell (35 ms), moving it in its cell (14 ms a frame); only opening the
+photo grid from an empty cell reaches 105 ms, a sheet like the others (roadmap, step 2). Memory levels off at about 570 MB after a few editor sessions, Designs and
+Stickers included, and goes up and down from there without growing.
+
+Tried and discarded:
+
+- **The stock photos on the GPU ahead of time**, drawn once out of sight so that their textures stay
+  in the UI thread's GPU context (which Skia never purges): the first Designs opening went from
+  500-690 ms to about 380 ms, but the photos take over a second to decode after launch, too long to
+  hold the launch screen; uploaded on the home screen, they made a frame of 100 ms there and took
+  35 MB of the GPU's memory in every session.
+- **Fewer rows kept around in the widget gallery** (`windowSize` 2): no measurable change on opening
+  or scrolling, and closing went from 230 to 200 ms.
+
+Still open, with what each costs:
+
+- **The first opening of Designs** in each visit to the selection: one frame of 500-690 ms, the first
+  draw of eleven thumbnails; half of it is putting their photos on the GPU (above).
+- **The widget gallery**: its first opening in an editor session is 600-1,000 ms of frames of 35-80
+  ms, each tile a canvas to create; closing it, by adding a widget or not, is a frame of about 210
+  ms, as Android destroys the surfaces of the twenty-odd tiles mounted. A sheet kept mounted would
+  avoid both: one of our own, the same on both phones, is planned (roadmap, step 2).
+- **The size slider**: 18 ms a frame (dragging a widget, 9). Its thumb's own canvas costs 3-4 ms of
+  each frame, measured by taking it away, and the rest is the widget's texture drawn at a size that
+  changes on every touch. The thumb can't go on the editor's canvas: its top is outside it.
+- **Opening a photo**: a frame of 110-150 ms when its 2,048 px copy goes up to the GPU (see decoding
+  photos natively, below; approved for the native milestone, roadmap step 6).
 
 `adjustsFontSizeToFit` is avoided where a text must keep its size or stay centered: on Android it
 shrinks the text even if it fits (11 % measured) and leaves it up and to the left of the box measured
@@ -116,8 +165,7 @@ before shrinking it. Sizes are chosen by the text's length, the same on both pho
   editor has frames of up to 140 ms, mostly creating its views.
 - **Reanimated's `ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS` and `IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS`**,
   which update an animated view without a commit, need a native build as well.
-- **The size slider** stays at 23 ms, whatever is on screen: neither the canvas, nor the thumb, nor the
-  other controls explain it. The cause is still unknown.
+- **The size slider**: see the second round above.
 - **A gallery's other pages** are still laid out before they are swiped to; only their drawings wait.
   Laying them out later needs to know if they have anything to show, which is what decides the dots.
 
