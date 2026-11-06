@@ -1,7 +1,15 @@
+import { Group } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Pressable, View } from 'react-native';
+import { type LayoutChangeEvent, PixelRatio, Pressable, View } from 'react-native';
+import Animated, {
+  type SharedValue,
+  useAnimatedScrollHandler,
+  useDerivedValue,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { Spinner } from '@/ui/spinner';
 import type { Activity } from '@/core/activity';
@@ -16,7 +24,15 @@ import {
   shiftPeriod,
   startCustomRange,
 } from '@/core/periods';
-import { bucketize, summarize, type SummaryPage, summaryPages } from '@/core/summary';
+import {
+  type BucketSize,
+  bucketize,
+  type PeriodSummary,
+  type SummaryBucket,
+  summarize,
+  type SummaryPage,
+  summaryPages,
+} from '@/core/summary';
 import {
   defaultSummaryMetrics,
   summaryHasDistance,
@@ -36,7 +52,7 @@ import { ErrorView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 import { useAsync } from '@/ui/use-async';
 
-import { PeriodLineChart } from './period-line-chart';
+import { PeriodChartDrawing, PeriodChartLabels } from './period-line-chart';
 
 /** Height of a page, the same while loading, on error or empty, so the list never jumps. */
 const PAGE_HEIGHT = 262;
@@ -71,11 +87,61 @@ function openSelection({ kind, range, families }: PeriodChoice, line: string): v
   });
 }
 
+/** A page of a period's card: one sport (or all), what it sums up and what its chart draws. */
+interface PeriodPage {
+  readonly sport: SummaryPage;
+  readonly summary: PeriodSummary;
+  readonly buckets: readonly SummaryBucket[];
+  readonly size: BucketSize;
+  readonly values: readonly number[];
+  readonly labels: readonly string[];
+  readonly valueText: (value: number) => string;
+}
+
+/** The pages of `kind`'s card over `range`, from its activities. */
+function periodPages(
+  kind: PeriodKind,
+  range: DateRange,
+  activities: readonly Activity[],
+  unit: DistanceUnit,
+  locale: string,
+): readonly PeriodPage[] {
+  const size = bucketForPeriod(kind, range);
+  return summaryPages(activities, range).map((sport): PeriodPage => {
+    const filter = sport === 'all' ? {} : { families: [sport] };
+    const summary = summarize(activities, range, filter);
+    const buckets = bucketize(activities, range, size, filter);
+    const quantity = summaryHasDistance(summary) ? 'distance' : 'time';
+    return {
+      sport,
+      summary,
+      buckets,
+      size,
+      values: buckets.map((bucket) =>
+        quantity === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds,
+      ),
+      labels: formatBucketLabels(buckets, size, locale),
+      valueText: (value) => formatChartValue(value, quantity, unit, locale),
+    };
+  });
+}
+
+/** The page under the pager at `offset`, of `count` pages `width` wide. */
+function pageAt(offset: number, width: number, count: number): number {
+  'worklet';
+  return Math.min(count - 1, Math.max(0, Math.round(offset / width)));
+}
+
 /**
  * A period's summary on the home screen: this week, month or year (stepping back with the
  * arrows) or a custom range, scrolling sideways through all sports and then each one done in
  * it. A page goes on to choose what to make with that period and sport, or does what `onChoose`
  * says (the editor choosing another period).
+ *
+ * One Skia canvas for the card: its gradient and its pages' charts, which follow the pager on the
+ * UI thread through a shared value, as a gallery's tiles do (ADR 014). A canvas per chart, on top
+ * of the card's, cost a surface and a first draw each, and the Summaries tab, a dozen of them at
+ * once, opened with a frame of half a second on a modest phone. The texts stay views, in the pages.
  */
 export function PeriodCard({
   kind,
@@ -100,21 +166,83 @@ export function PeriodCard({
       : periodContaining(kind, today),
   );
   const activities = useAsync(() => source.listInRange(range), `${range.start}/${range.end}`);
+  const pages = useMemo(
+    () =>
+      activities.status === 'success'
+        ? periodPages(kind, range, activities.data, unit, locale)
+        : null,
+    // `activities` is a new object on each render; its data only changes with the range.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [kind, range, activities.status === 'success' ? activities.data : null, unit, locale],
+  );
   const [page, setPage] = useState(0);
+  /** Whether the pages beside the one shown are drawn: since the finger first swipes. */
+  const [swiping, setSwiping] = useState(false);
+  /** The page under a finger, dimmed while pressed. */
+  const [pressed, setPressed] = useState<number | null>(null);
+  /** Where the pager is, read on the UI thread, for the charts to follow it frame by frame. */
+  const offset = useSharedValue(0);
+  const rangeKey = `${range.start}/${range.end}`;
   // A new period starts again on its first page.
-  const step = (direction: -1 | 1) => {
-    setRange(shiftPeriod(kind, range, direction));
+  const changeRange = (next: DateRange) => {
+    setRange(next);
     setPage(0);
+    setSwiping(false);
+    setPressed(null);
+    offset.set(0);
   };
+  const step = (direction: -1 | 1) => changeRange(shiftPeriod(kind, range, direction));
   const isCurrent = range.end >= today;
   const [height, setHeight] = useState(0);
+  /** How far down the card the pages start, edge included, once laid out. */
+  const [pagesTop, setPagesTop] = useState<number | null>(null);
+  /** Where each page's chart is in it, by period and sport, once laid out. */
+  const [chartAt, setChartAt] = useState<
+    Readonly<Record<string, { readonly x: number; readonly y: number }>>
+  >({});
+  // Pages as wide as the inside of the card's edge, which is what the pager pages by.
+  const pageWidth = width - 2 * CARD_BORDER;
+  const chartWidth = pageWidth - 2 * PADDING;
+  // On whole pixels, as the pager scrolls its pages and places them: the charts stay as sharp, and
+  // in step with their texts.
+  const pagesAt = useDerivedValue(() => [
+    { translateX: -Math.round(offset.get() * PIXEL_RATIO) / PIXEL_RATIO },
+  ]);
 
   return (
     <View
       onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
       style={{ ...cardSurface(20), width }}
     >
-      {height === 0 ? null : <CardGradient width={width} height={height} radius={20} />}
+      {height === 0 ? null : (
+        <CardGradient width={width} height={height} radius={20}>
+          {pages === null || pagesTop === null ? null : (
+            // The canvas starts inside the card's edge, as the pages do.
+            <Group
+              clip={{ x: 0, y: pagesTop - CARD_BORDER, width: pageWidth, height: PAGE_HEIGHT }}
+            >
+              <Group transform={pagesAt}>
+                {pages.map((one, i) => {
+                  const at = chartAt[`${rangeKey}/${one.sport}`];
+                  // The page shown and, once swiping, those beside it.
+                  return at === undefined || Math.abs(i - page) > (swiping ? 1 : 0) ? null : (
+                    <PeriodChartDrawing
+                      key={one.sport}
+                      values={one.values}
+                      labels={one.labels}
+                      width={chartWidth}
+                      height={CHART_HEIGHT}
+                      x={PixelRatio.roundToNearestPixel(i * pageWidth) + at.x}
+                      y={pagesTop - CARD_BORDER + at.y}
+                      opacity={pressed === i ? PRESSED_OPACITY : 1}
+                    />
+                  );
+                })}
+              </Group>
+            </Group>
+          )}
+        </CardGradient>
+      )}
       {kind === 'custom' ? (
         <View style={{ padding: PADDING, paddingBottom: 0, gap: 12 }}>
           {/* Centered, as the other periods' names between their arrows. */}
@@ -128,10 +256,7 @@ export function PeriodCard({
             limits={customRangeLimits(range, today)}
             labels={{ start: t('summary.from'), end: t('summary.to') }}
             locale={locale}
-            onChange={(end, date) => {
-              setRange(setCustomRangeDate(range, end, date, today));
-              setPage(0);
-            }}
+            onChange={(end, date) => changeRange(setCustomRangeDate(range, end, date, today))}
           />
         </View>
       ) : (
@@ -179,15 +304,25 @@ export function PeriodCard({
         <View style={{ height: PAGE_HEIGHT }}>
           <ErrorView message={t('summary.error')} onRetry={activities.retry} />
         </View>
-      ) : (
+      ) : pages === null ? null : (
         <Pages
           kind={kind}
           range={range}
-          activities={activities.data}
-          // Pages as wide as the inside of the card's edge, which is what the pager pages by.
-          width={width - 2 * CARD_BORDER}
+          pages={pages}
+          width={pageWidth}
           page={page}
           onPage={setPage}
+          onSwipe={() => setSwiping(true)}
+          onPressed={setPressed}
+          offset={offset}
+          onLayout={(event) => setPagesTop(event.nativeEvent.layout.y)}
+          onChartLayout={(sport, event) => {
+            const { x, y } = event.nativeEvent.layout;
+            const key = `${rangeKey}/${sport}`;
+            setChartAt((known) =>
+              known[key]?.x === x && known[key]?.y === y ? known : { ...known, [key]: { x, y } },
+            );
+          }}
           unit={unit}
           locale={locale}
           onChoose={onChoose}
@@ -197,63 +332,88 @@ export function PeriodCard({
   );
 }
 
+/** Device pixels in a point. */
+const PIXEL_RATIO = PixelRatio.get();
+
+/** How a page looks while a finger presses it, its chart too. */
+const PRESSED_OPACITY = 0.7;
+
 function Pages({
   kind,
   range,
-  activities,
+  pages,
   width,
   page,
   onPage,
+  onSwipe,
+  onPressed,
+  offset,
+  onLayout,
+  onChartLayout,
   unit,
   locale,
   onChoose,
 }: {
   readonly kind: PeriodKind;
   readonly range: DateRange;
-  readonly activities: readonly Activity[];
+  readonly pages: readonly PeriodPage[];
   readonly width: number;
   readonly page: number;
   readonly onPage: (page: number) => void;
+  readonly onSwipe: () => void;
+  readonly onPressed: (page: number | null) => void;
+  readonly offset: SharedValue<number>;
+  readonly onLayout: (event: LayoutChangeEvent) => void;
+  readonly onChartLayout: (sport: SummaryPage, event: LayoutChangeEvent) => void;
   readonly unit: DistanceUnit;
   readonly locale: string;
   readonly onChoose: (choice: PeriodChoice) => void;
 }) {
-  const pages = summaryPages(activities, range);
+  const count = pages.length;
+  const shownOnUI = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler({
+    onBeginDrag: () => {
+      scheduleOnRN(onSwipe);
+    },
+    // The dot and the chart follow the finger, not only the end of the swipe.
+    onScroll: (event) => {
+      offset.set(event.contentOffset.x);
+      const shown = pageAt(event.contentOffset.x, width, count);
+      if (shown !== shownOnUI.get()) {
+        shownOnUI.set(shown);
+        scheduleOnRN(onPage, shown);
+      }
+    },
+  });
   return (
-    <View>
-      <FlatList
+    <View onLayout={onLayout}>
+      <Animated.FlatList
         // A new period lays its pages out again from the first.
         key={`${range.start}/${range.end}`}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         data={pages}
-        keyExtractor={(item) => item}
-        // Each page holds a chart's canvas: the one on screen and those beside it, no more.
+        keyExtractor={(item) => item.sport}
+        // Its views only: the charts are on the card's canvas.
         initialNumToRender={1}
         maxToRenderPerBatch={1}
         windowSize={3}
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-        // The dot follows the finger, not only the end of the swipe.
         scrollEventThrottle={16}
-        onScroll={(event) =>
-          onPage(
-            Math.min(
-              pages.length - 1,
-              Math.max(0, Math.round(event.nativeEvent.contentOffset.x / width)),
-            ),
-          )
-        }
-        renderItem={({ item }) => (
+        onScroll={onScroll}
+        renderItem={({ item, index }) => (
           <SportPage
             kind={kind}
             range={range}
-            activities={activities}
-            sport={item}
+            page={item}
             width={width}
             unit={unit}
             locale={locale}
             onChoose={onChoose}
+            onPressIn={() => onPressed(index)}
+            onPressOut={() => onPressed(null)}
+            onChartLayout={(event) => onChartLayout(item.sport, event)}
           />
         )}
       />
@@ -265,7 +425,7 @@ function Pages({
         >
           {pages.map((item, i) => (
             <View
-              key={item}
+              key={item.sport}
               style={{
                 width: 6,
                 height: 6,
@@ -280,35 +440,32 @@ function Pages({
   );
 }
 
-/** One sport (or all) of the period: its name, its totals and its chart. */
+/** One sport (or all) of the period: its name, its totals and its chart's texts. */
 function SportPage({
   kind,
   range,
-  activities,
-  sport,
+  page,
   width,
   unit,
   locale,
   onChoose,
+  onPressIn,
+  onPressOut,
+  onChartLayout,
 }: {
   readonly kind: PeriodKind;
   readonly range: DateRange;
-  readonly activities: readonly Activity[];
-  readonly sport: SummaryPage;
+  readonly page: PeriodPage;
   readonly width: number;
   readonly unit: DistanceUnit;
   readonly locale: string;
   readonly onChoose: (choice: PeriodChoice) => void;
+  readonly onPressIn: () => void;
+  readonly onPressOut: () => void;
+  readonly onChartLayout: (event: LayoutChangeEvent) => void;
 }) {
   const { t } = useTranslation();
-  const filter = sport === 'all' ? {} : { families: [sport] };
-  const summary = summarize(activities, range, filter);
-  const size = bucketForPeriod(kind, range);
-  const buckets = bucketize(activities, range, size, filter);
-  const quantity = summaryHasDistance(summary) ? 'distance' : 'time';
-  const values = buckets.map((bucket) =>
-    quantity === 'distance' ? bucket.distanceMeters : bucket.movingTimeSeconds,
-  );
+  const { sport, summary } = page;
   const empty = summary.activityCount === 0;
   const name = t(sport === 'all' ? 'summary.allSports' : `families.${sport}`);
   return (
@@ -317,12 +474,14 @@ function SportPage({
       accessibilityLabel={name}
       disabled={empty}
       onPress={() => onChoose({ kind, range, families: sport === 'all' ? [] : [sport] })}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       style={({ pressed }) => ({
         width,
         height: PAGE_HEIGHT,
         padding: PADDING,
         gap: 12,
-        opacity: pressed ? 0.7 : 1,
+        opacity: pressed ? PRESSED_OPACITY : 1,
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -373,12 +532,13 @@ function SportPage({
               );
             })}
           </View>
-          <PeriodLineChart
-            values={values}
-            labels={formatBucketLabels(buckets, size, locale)}
-            valueText={(value) => formatChartValue(value, quantity, unit, locale)}
+          <PeriodChartLabels
+            values={page.values}
+            labels={page.labels}
+            valueText={page.valueText}
             width={width - 2 * PADDING}
             height={CHART_HEIGHT}
+            onLayout={onChartLayout}
           />
         </>
       )}
