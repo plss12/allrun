@@ -1,5 +1,7 @@
 import type { SkParagraph, SkParagraphBuilder } from '@shopify/react-native-skia';
 
+import { freeParagraphPicture } from './paragraph-picture';
+
 /**
  * Native paragraphs freed together (see `inParagraphArena`). Every text a block or a layer lays out
  * is a native paragraph, each telling Hermes it holds a megabyte, which its garbage collector frees
@@ -32,6 +34,7 @@ export function discardParagraph(paragraph: SkParagraph): void {
   if (at !== -1) {
     arena.splice(at, 1);
   }
+  freeParagraphPicture(paragraph);
   paragraph.dispose();
 }
 
@@ -62,6 +65,7 @@ export function inParagraphArena<T>(make: () => T): {
       value: make(),
       dispose: () => {
         for (const paragraph of arena.splice(0)) {
+          freeParagraphPicture(paragraph);
           paragraph.dispose();
         }
       },

@@ -10,7 +10,6 @@ import {
   LinearGradient,
   MipmapMode,
   Paint,
-  Paragraph,
   Path,
   Rect,
   RoundedRect,
@@ -105,6 +104,7 @@ import {
   type MountStrip,
 } from './mount-caption';
 import { discardParagraph, finishParagraph } from './paragraph-arena';
+import { ParagraphPicture } from './paragraph-picture';
 
 /**
  * A layer filled with data and measured, ready to draw. Its content is centered on (0, 0); the
@@ -1094,7 +1094,7 @@ function InstantWidget({
         <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
       )}
       {caption.map(({ paragraph, x, y }, i) => (
-        <Paragraph
+        <ParagraphPicture
           key={i}
           paragraph={paragraph}
           x={x}
@@ -1526,7 +1526,7 @@ function MountWidget({
         </Group>
       )}
       {marks.paragraphs.map(({ paragraph, x, y }, i) => (
-        <Paragraph
+        <ParagraphPicture
           key={i}
           paragraph={paragraph}
           x={x}
@@ -1544,7 +1544,7 @@ function MountWidget({
           ]}
         >
           {side.paragraphs.map(({ paragraph, at }, i) => (
-            <Paragraph
+            <ParagraphPicture
               key={i}
               paragraph={paragraph}
               x={at}
@@ -1976,7 +1976,12 @@ function buildFittedParagraph(
 function CenteredParagraph({ paragraph }: { readonly paragraph: SkParagraph }) {
   const width = Math.ceil(paragraph.getLongestLine()) + 1;
   return (
-    <Paragraph paragraph={paragraph} x={-width / 2} y={-paragraph.getHeight() / 2} width={width} />
+    <ParagraphPicture
+      paragraph={paragraph}
+      x={-width / 2}
+      y={-paragraph.getHeight() / 2}
+      width={width}
+    />
   );
 }
 
@@ -2260,7 +2265,7 @@ function ChartFrame({
   return (
     <Group transform={[{ translateX: -CHART_WIDTH / 2 }, { translateY: -totalHeight / 2 }]}>
       {header === null || header.title === null ? null : (
-        <Paragraph
+        <ParagraphPicture
           paragraph={header.title}
           x={alignedX(align, widthOf(header.title), CHART_WIDTH)}
           y={0}
@@ -2274,14 +2279,14 @@ function ChartFrame({
         return (
           <Group key={i}>
             {cell.label === null ? null : (
-              <Paragraph
+              <ParagraphPicture
                 paragraph={cell.label}
                 x={at(cell.label)}
                 y={header.cellsTop}
                 width={widthOf(cell.label)}
               />
             )}
-            <Paragraph
+            <ParagraphPicture
               paragraph={cell.value}
               x={at(cell.value)}
               y={header.cellsTop + cell.valueY}
@@ -2440,7 +2445,7 @@ function ZonesTable({
   const most = Math.max(...rows.map((row) => row.seconds));
   const middleOf = (i: number) => i * ZONE_ROW_HEIGHT + ZONE_ROW_HEIGHT / 2;
   const at = (paragraph: SkParagraph, x: number, i: number) => (
-    <Paragraph
+    <ParagraphPicture
       paragraph={paragraph}
       x={x}
       y={middleOf(i) - paragraph.getHeight() / 2}
@@ -2575,7 +2580,7 @@ function SplitRows({
   ) : undefined;
   /** A text starting at `x`, centered on `middle`. */
   const fromLeft = (paragraph: SkParagraph, x: number, middle: number, key: string) => (
-    <Paragraph
+    <ParagraphPicture
       key={key}
       paragraph={paragraph}
       x={x}
@@ -2704,7 +2709,7 @@ function preparePeriodLine({
               color={grid}
               strokeWidth={GRID_WIDTH}
             />
-            <Paragraph
+            <ParagraphPicture
               paragraph={tick}
               x={gridLeft - SCALE_GAP - widthOf(tick)}
               y={y - tick.getHeight() / 2}
@@ -2757,7 +2762,7 @@ function preparePeriodLine({
         <Circle cx={peakAt.x} cy={peakAt.y} r={halo} color={withAlpha(color, GRID_OPACITY)} />
       )}
       {peak === null || peakAt === null ? null : (
-        <Paragraph
+        <ParagraphPicture
           paragraph={peak}
           // Centered over its dot, but never past the chart's ends.
           x={Math.min(Math.max(peakAt.x - widthOf(peak) / 2, 0), CHART_WIDTH - widthOf(peak))}
@@ -2771,7 +2776,7 @@ function preparePeriodLine({
         }
         const width = widthOf(label);
         return (
-          <Paragraph
+          <ParagraphPicture
             key={`label-${i}`}
             paragraph={label}
             x={points[i].x - width / 2}
@@ -2873,10 +2878,15 @@ function BarsBody({
               { rotate: -Math.PI / 2 },
             ]}
           >
-            <Paragraph paragraph={paragraph} x={0} y={-paragraph.getHeight() / 2} width={width} />
+            <ParagraphPicture
+              paragraph={paragraph}
+              x={0}
+              y={-paragraph.getHeight() / 2}
+              width={width}
+            />
           </Group>
         ) : (
-          <Paragraph
+          <ParagraphPicture
             key={`text-${i}`}
             paragraph={paragraph}
             x={center - width / 2}
@@ -2891,7 +2901,7 @@ function BarsBody({
         }
         const width = Math.ceil(label.getLongestLine()) + 1;
         return (
-          <Paragraph
+          <ParagraphPicture
             key={`label-${i}`}
             paragraph={label}
             x={i * slot + slot / 2 - width / 2}

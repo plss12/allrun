@@ -5,7 +5,6 @@ import {
   Line,
   LinearGradient,
   Paint,
-  Paragraph,
   Path,
   Rect,
   RoundedRect,
@@ -83,6 +82,7 @@ import {
   textShadows,
 } from './scene-text';
 import { discardParagraph, finishParagraph } from './paragraph-arena';
+import { ParagraphPicture } from './paragraph-picture';
 
 /**
  * The mixed widgets of an activity (ADR 009): several of its data in one designed block, laid out
@@ -4696,11 +4696,17 @@ function BlockArt({
                   { scaleY: piece.stretch ?? 1 },
                 ]}
               >
-                <Paragraph paragraph={piece.paragraph} x={0} y={0} width={width} />
+                <ParagraphPicture paragraph={piece.paragraph} x={0} y={0} width={width} />
               </Group>
             </Group>
           ) : (
-            <Paragraph key={i} paragraph={piece.paragraph} x={piece.x} y={piece.y} width={width} />
+            <ParagraphPicture
+              key={i}
+              paragraph={piece.paragraph}
+              x={piece.x}
+              y={piece.y}
+              width={width}
+            />
           );
         return piece.turn === undefined ? (
           text
