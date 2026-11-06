@@ -16,7 +16,7 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 
 - Done: one sheet of our own for the 6 sheets, the same on both phones (ADR 015): a tall card, closed by dragging it down, tapping outside, its button or Android's back; the widget gallery stays mounted. To judge on both phones.
 - Done: the system's text size makes the app's text grow up to 1.3 times (`MAX_FONT_SCALE` in `ui/text.tsx`).
-- The widgets' selection frame: the owner dislikes it, with no better idea yet.
+- Done: the selected widget shows only four thin corners, as a camera's viewfinder, instead of the whole frame. The owner tried and turned down the frame, dimming the rest of the design (a black widget didn't stand out) and a halo along its shape.
 
 ## 3. Finishing R4: selection and designs
 

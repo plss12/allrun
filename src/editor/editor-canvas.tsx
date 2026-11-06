@@ -2,7 +2,7 @@ import {
   Canvas,
   Group,
   Line,
-  RoundedRect,
+  Path,
   Skia,
   type SkImage,
   type Transforms3d,
@@ -171,6 +171,8 @@ const IDENTITY: LayerTransform = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
 /** Strong ease-out for UI state changes. */
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const TRASH_TIMING = { duration: 150, easing: EASE_OUT, reduceMotion: ReduceMotion.System };
+/** How long each arm of the selected widget's corner marks is, in screen points. */
+const CORNER_ARM = 14;
 
 /** Position and rotation of a layer's selection frame (not its scale: the stroke stays thin). */
 function frameMatrix(transform: LayerTransform, canvas: Size): Transforms3d {
@@ -183,20 +185,37 @@ function frameMatrix(transform: LayerTransform, canvas: Size): Transforms3d {
 }
 
 /**
- * Path of a layer's selection frame, centered on the frame's origin: the scaled content grown by
- * `LAYER_MARGIN` with corners of that radius (the shape edge snapping measures), pulled in by
- * `inset` so a stroke of twice that width lies inside it, its outer edge on the frame's.
+ * Path of a layer's selection marks, centered on the frame's origin: only the four corners of the
+ * scaled content grown by `LAYER_MARGIN` (the shape edge snapping measures), as a camera's
+ * viewfinder, instead of a whole frame (the owner's decision). Each arm is `arm` long, or a third
+ * of the side when that is shorter, and the corners are pulled in by `inset` so a stroke of twice
+ * that width lies inside the shape.
  */
-function frameRect(transform: LayerTransform, width: number, height: number, inset: number) {
+function frameCorners(
+  transform: LayerTransform,
+  width: number,
+  height: number,
+  inset: number,
+  arm: number,
+) {
   'worklet';
   const grow = LAYER_MARGIN - inset;
-  const frameWidth = width * transform.scale + 2 * grow;
-  const frameHeight = height * transform.scale + 2 * grow;
-  return Skia.RRectXY(
-    Skia.XYWHRect(-frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight),
-    grow,
-    grow,
-  );
+  const right = (width * transform.scale) / 2 + grow;
+  const bottom = (height * transform.scale) / 2 + grow;
+  const across = Math.min(arm, (2 * right) / 3);
+  const down = Math.min(arm, (2 * bottom) / 3);
+  const builder = Skia.PathBuilder.Make();
+  for (const [x, y] of [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ]) {
+    builder.moveTo(x * right, y * (bottom - down));
+    builder.lineTo(x * right, y * bottom);
+    builder.lineTo(x * (right - across), y * bottom);
+  }
+  return builder.detach();
 }
 
 /**
@@ -660,15 +679,22 @@ export function EditorCanvas({
 
   // Strokes in screen points, whatever the canvas scale.
   const hairline = 1 / ratio;
-  const frameStroke = 3 * hairline;
+  const frameStroke = 4 * hairline;
   const guideStroke = 2 * hairline;
 
-  // Selection frame: the layer plus its margin (what snaps to the edges), drawn inside that
-  // shape; it follows the fingers while the selected layer is dragged.
+  // Selection marks: the corners of the layer plus its margin (what snaps to the edges), drawn
+  // inside that shape; they follow the fingers while the selected layer is dragged.
   const frameInset = frameStroke / 2;
+  const frameArm = CORNER_ARM * hairline;
   const liveFrameMatrix = useDerivedValue(() => frameMatrix(liveTransform.get(), canvas));
-  const liveFrameRect = useDerivedValue(() =>
-    frameRect(liveTransform.get(), dragged?.width ?? 0, dragged?.height ?? 0, frameInset),
+  const liveFramePath = useDerivedValue(() =>
+    frameCorners(
+      liveTransform.get(),
+      dragged?.width ?? 0,
+      dragged?.height ?? 0,
+      frameInset,
+      frameArm,
+    ),
   );
   // The selected layer at the size slider's scale, or the opacity bar's, while one is dragged.
   const selectedTransform = selected?.transform ?? IDENTITY;
@@ -683,8 +709,8 @@ export function EditorCanvas({
     adjusting === 'opacity' ? adjustedOpacity.get() : selectedOpacity,
   );
   const resizedFrameMatrix = useDerivedValue(() => frameMatrix(resizedTransform.get(), canvas));
-  const resizedFrameRect = useDerivedValue(() =>
-    frameRect(resizedTransform.get(), selectedWidth, selectedHeight, frameInset),
+  const resizedFramePath = useDerivedValue(() =>
+    frameCorners(resizedTransform.get(), selectedWidth, selectedHeight, frameInset, frameArm),
   );
   const resized =
     (adjusting === 'scale' || adjusting === 'opacity') && draggingId === null ? selected : null;
@@ -699,12 +725,18 @@ export function EditorCanvas({
     selected === null
       ? null
       : selected.id === draggingId
-        ? { matrix: liveFrameMatrix, rect: liveFrameRect }
+        ? { matrix: liveFrameMatrix, path: liveFramePath }
         : selected === resized
-          ? { matrix: resizedFrameMatrix, rect: resizedFrameRect }
+          ? { matrix: resizedFrameMatrix, path: resizedFramePath }
           : {
               matrix: frameMatrix(selected.transform, canvas),
-              rect: frameRect(selected.transform, selected.width, selected.height, frameInset),
+              path: frameCorners(
+                selected.transform,
+                selected.width,
+                selected.height,
+                frameInset,
+                frameArm,
+              ),
             };
 
   // What moves is drawn from textures for as long as the gesture lasts (see useGestureTextures).
@@ -919,17 +951,21 @@ export function EditorCanvas({
             />
             {selectionFrame === null ? null : (
               <Group transform={selectionFrame.matrix}>
-                {/* A dark edge under the white line keeps the frame visible on light photos. */}
-                <RoundedRect
-                  rect={selectionFrame.rect}
+                {/* A dark edge under the white line keeps the corners visible on light photos. */}
+                <Path
+                  path={selectionFrame.path}
                   style="stroke"
                   strokeWidth={frameStroke}
+                  strokeCap="round"
+                  strokeJoin="round"
                   color="rgba(0, 0, 0, 0.35)"
                 />
-                <RoundedRect
-                  rect={selectionFrame.rect}
+                <Path
+                  path={selectionFrame.path}
                   style="stroke"
-                  strokeWidth={1.5 * hairline}
+                  strokeWidth={2 * hairline}
+                  strokeCap="round"
+                  strokeJoin="round"
                   color="#FFFFFF"
                 />
               </Group>

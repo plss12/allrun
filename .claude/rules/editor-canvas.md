@@ -6,6 +6,10 @@ paths:
 
 # Lienzo: gestos, foto libre y collages
 
+## Selección
+
+- Un widget seleccionado lleva solo cuatro esquinas finas, como el visor de una cámara: blancas con un borde oscuro, de 14 pt (o un tercio del lado si es más corto), en las esquinas de su caja más su margen (`frameCorners` en `editor-canvas.tsx`); siguen al dedo mientras se mueve o cambia de tamaño. Decisión del usuario tras probar y descartar el marco redondeado entero («feo»), oscurecer lo demás (un widget negro no destacaba) y un halo con su forma («horrible»). Se dibujan en el lienzo, encima de la escena, y la imagen exportada nunca las lleva.
+
 ## Gestos
 
 - Durante un gesto (mover, pellizcar, girar, los deslizadores de tamaño y opacidad, mover una foto) lo que se queda quieto y el widget que se mueve se dibujan una vez en texturas del hilo de UI, y cada fotograma solo las pone en pantalla (`editor/gesture-textures.ts`, ADR 014): el coste ya no depende de cuántos widgets haya. La textura del widget que se mueve tiene el doble de píxeles que ocupa y mipmaps (con los justos, sus bordes salían con dientes de sierra al girarlo). Mientras se preparan, y al terminar, la escena dibuja en vector; exportar nunca las ve.
@@ -13,7 +17,7 @@ paths:
 - Cada widget va recortado a su caja y al hueco de su sombra (`layerClip`), porque sus sombras son filtros de imagen sobre capas tan grandes como el recorte, y los widgets ya preparados se guardan (`PreparedLayerCache`): moverlo no rehace sus textos. El pulgar de un deslizador es de Skia (`SliderThumb`), no una vista animada.
 - El valor vive en un _shared value_ en el hilo de UI y solo se confirma al soltar (`scheduleOnRN`): un `setState` por gesto, no por fotograma. La capa arrastrada se dibuja desde el _shared value_ solo mientras se arrastra; empezar y terminar el arrastre va en la misma actualización de React que la selección o el commit, para que nunca se vea un fotograma con una transformación vieja.
 - Medidas, toques e imantado salen de `prepareLayers` (`editor/template-scene.tsx`) y `core/layer-transform.ts`.
-- Una ruta (y las rutas del periodo) solo se agarra a menos de 22 pt de su línea (`HitLine`, con sus puntos aclarados cada 4 px): el resto de su caja, casi entera vacía en una ruta en diagonal, deja pasar los toques a la foto y a los widgets de debajo. Su marco de selección sigue siendo la caja, como en Instagram o Canva.
+- Una ruta (y las rutas del periodo) solo se agarra a menos de 22 pt de su línea (`HitLine`, con sus puntos aclarados cada 4 px): el resto de su caja, casi entera vacía en una ruta en diagonal, deja pasar los toques a la foto y a los widgets de debajo. Sus esquinas de selección siguen siendo las de la caja, como en Instagram o Canva (ver «Selección»).
 
 ## Foto libre
 
