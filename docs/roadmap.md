@@ -6,10 +6,10 @@ What is left, in order. Why each thing was decided is in `docs/decisions/`; what
 
 Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms or less, opening any screen or panel in under 300 ms with no frame over 100 ms.
 
-- The first look at the photos grid on Android, in the development build (permission prompt seen).
-- A release APK built in Ubuntu to measure for real: production numbers and memory without Expo Go.
-- Measure what hasn't been: launch, opening the editor, panels, typing, undo, export, sheets, collages, photos.
-- Known: opening the widget gallery (a canvas for each tile's gradient and page is the suspect), starting and ending a gesture (renders of `app/editor.tsx`), the size slider (23 ms, cause unknown), the Summaries tab, memory.
+- Measured in release (ADR 014): launch, home and photos scroll, opening the editor, moving a photo, the widget gallery (now kept mounted: instant from its second opening).
+- Starting a drag (about 40 ms on the UI thread) and frames during a gesture waiting on the GPU: the scene is drawn on each touch and again on the frame's callbacks.
+- Opening the Summaries tab (a 500 ms frame: every canvas of its cards is made at once) and its scroll (23-25 ms).
+- Still to measure in release: panels, typing, undo, export, sheets, collages, Stickers, Designs, the size slider, memory over a long session.
 - A gallery's other pages laid out only on swiping, with care for the dots (empty or repeated pages are discarded on measuring).
 - With a build: native photo decoding (ADR 004), and Reanimated's `ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS` and `IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS`.
 - A last pass on the iPhone.
@@ -17,7 +17,6 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 ## 2. Closing the style between phones
 
 - The 6 sheets are a card on iOS and full screen on Android: decide on seeing them; an own sheet with its closing gesture is the costly fix.
-- An own loading indicator instead of `ActivityIndicator`.
 - A cap for the system's largest text (`maxFontSizeMultiplier`).
 - The widgets' selection frame: the owner dislikes it, with no better idea yet.
 
@@ -56,6 +55,7 @@ Native work goes first on Android, where development builds are free. Then the i
 - Accounts: Apple and Google Play.
 - **Photo permission on Google Play**, the biggest risk: `READ_MEDIA_IMAGES` is only for apps whose core functionality needs broad access, with a declaration of why the Photo Picker isn't enough, and a custom picker doesn't qualify by itself. The fallback is the system picker on Android, which would make that screen differ from the iPhone's (ADR 013).
 - **EAS Update (`expo-updates`) in the first build that goes to the stores**: new designs, widgets without native code and fixes reach phones without a store release. A first version without it can never receive them. Check Apple's rule and Expo's plan limits when adding it.
+- EAS builds of Android die for lack of memory (Gradle's process vanishes while compiling C++): before the final builds, try the `large` builder (check its cost first) or limit the C++ compilers as `scripts/build-android-wsl.sh` does with ninja.
 - EAS environment variables (`EXPO_PUBLIC_SUPABASE_URL`, `_PUBLISHABLE_KEY`): without them the app silently stays on its built-in phrases.
 - Supabase's free plan pauses a project after a week of low activity: review the plan.
 - Native permission texts in both languages, the stores' listings and a privacy policy.

@@ -65,19 +65,60 @@ icons`; needs uv), not a Skia canvas each: a canvas is a texture to create and c
 - **A slider's thumb is drawn with Skia** (`SliderThumb`), not an animated view, which makes
   Reanimated commit the tree of the screen.
 
+### In a release build (2026-11-06)
+
+Measured on a release APK built in Ubuntu, compiled ahead of time as a store install is (`cmd package
+compile -m speed-profile`) and on a second launch: a fresh install runs interpreted, and Android's
+own shader cache starts empty, which made every number worse than a user sees. Traced with Perfetto
+(`Record View#draw()`, `postAndWait`, `shader_compile`) and sampled with simpleperf.
+
+- **Texts are pictures** (`editor/paragraph-picture.tsx`): Skia's `<Paragraph>` lays its paragraph
+  out again on every draw, on the UI thread, while the JavaScript thread may paint the same one
+  (`drawAsPicture` for a gesture's textures) or free it. The app closed once with a native crash in
+  `ParagraphCmd::draw`. Each text is recorded once into an `SkPicture`, which can't change and which
+  the UI thread keeps a reference to while it draws it. Opening the widget gallery drew in half the
+  time.
+- **A gallery tile is one canvas**: the card's gradient and its pages, which follow the pager on the
+  UI thread through a shared value; before, two canvases a tile and one more for each page swiped.
+- **The widget gallery's list** renders three rows first and then one row at a time, one screen ahead.
+  A sheet of our own on Android, kept mounted, made every opening after the first instant, but it set
+  the phones apart: undone (the user's rule: one app, the same on both, no native changes).
+- **Skia's programs are compiled under the launch screen** (`editor/shader-warmup.tsx`): Skia has no
+  persistent shader cache, and the first gallery of each run spent some 400 ms compiling. On a second
+  launch, the first opening went from 830-1,110 ms of long frames (one of 372 ms) to 610-800 ms (at
+  most 159 ms); the launch screen, which stays at least 1 s, hides it.
+- **A gesture's textures draw one per frame**, not all at once at its start. Keeping their surfaces
+  for the next gesture saved 20 ms of making one, but every drag left some 24 MB of the GPU's memory
+  behind, never used again (measured over three editor sessions): each is still made and freed at once.
+
+Tried and discarded: mounting a list's tiles one per frame (a run of 50 ms frames, worse), backing
+tiles with a `SurfaceView` (2.7 s of long frames against 2.1), keeping only the visible page of each
+summary (no change: the cost was each canvas's first draws on showing the tab).
+
+Still open: starting a drag holds the UI thread about 40 ms. In that first touch the canvas is
+drawn twice in vector, the whole scene, before its textures take over: the swaps are 5 ms, the rest is
+the CPU going through the scene. Drawing the textures as soon as a widget is selected, and using them
+once it moves, was tried and gave nothing measurable (40-50 ms still), with 19 MB of the GPU taken
+while anything is selected: undone. It would need the selected scene drawn from textures too, which
+risks the sharpness of the whole image while editing. Opening the Summaries tab draws every canvas of its cards at once (a 500 ms
+frame): a canvas hidden with opacity 0 never makes its surface, so all are made when it shows.
+`adb input swipe` sends only about 54 touches a second: a gesture's frame rate measured with it is
+the injection's, not the app's.
+
 `adjustsFontSizeToFit` is avoided where a text must keep its size or stay centered: on Android it
 shrinks the text even if it fits (11 % measured) and leaves it up and to the left of the box measured
 before shrinking it. Sizes are chosen by the text's length, the same on both phones.
 
 ## Not done yet
 
-- **Decoding photos natively, straight into a GPU buffer** (ADR 004) needs a development build, and
-  so does measuring anything with photos on Android: Expo Go refuses them there.
+- **Decoding photos natively, straight into a GPU buffer** (ADR 004) needs a native module. In a
+  release build, moving a photo already keeps its frames under 20 ms but two; opening one in the
+  editor has frames of up to 140 ms, mostly creating its views.
 - **Reanimated's `ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS` and `IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS`**,
   which update an animated view without a commit, need a native build as well.
 - **The size slider** stays at 23 ms, whatever is on screen: neither the canvas, nor the thumb, nor the
   other controls explain it. The cause is still unknown.
-- **A gallery's other pages** are still laid out before they are swiped to; only their canvases wait.
+- **A gallery's other pages** are still laid out before they are swiped to; only their drawings wait.
   Laying them out later needs to know if they have anything to show, which is what decides the dots.
 
 ## Alternatives discarded
