@@ -16,6 +16,11 @@ const ICON_SHARE = 0.55;
  * native views too, and showing them again reloaded their images (the sport's icon came late).
  * Hidden, they are see-through and let every touch through; shown, only their buttons take
  * touches, and the canvas gets the rest.
+ *
+ * Never flattened into its parent (`collapsable={false}`): React Native leaves out a plain view
+ * and gives its children to the parent, and hiding or showing this one made it plain or not,
+ * which moved its children from one native view to another. A Skia canvas moved so loses its
+ * surface and makes it again: each change of the home's tabs held a modest phone 400 ms.
  */
 export function KeptMounted({
   hidden,
@@ -28,6 +33,7 @@ export function KeptMounted({
 }) {
   return (
     <View
+      collapsable={false}
       pointerEvents={hidden ? 'none' : 'box-none'}
       importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
       accessibilityElementsHidden={hidden}
