@@ -2,9 +2,10 @@ import { FlashList } from '@shopify/flash-list';
 import type { SkImage } from '@shopify/react-native-skia';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Pressable, useWindowDimensions, View } from 'react-native';
+import { Alert, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Spinner } from '@/ui/spinner';
 import { newCollage } from '@/core/collage';
 import { READY_DESIGN_IDS, type ReadyDesignId } from '@/core/designs';
 import { isPhotoSlot } from '@/core/image-layer';
@@ -373,6 +374,9 @@ export function DesignGallery({
             <View style={{ height, marginHorizontal: -PADDING, marginBottom: GAP }}>
               <FlashList
                 horizontal
+                // Only the collages on screen: each is a scene of photos to draw, and the tab opens
+                // with all the row's drawn at once.
+                drawDistance={0}
                 data={collageTiles}
                 keyExtractor={(one) => one.key}
                 showsHorizontalScrollIndicator={false}
@@ -467,7 +471,7 @@ function YoursStart({
 }) {
   const { t } = useTranslation();
   if (status === 'loading') {
-    return <ActivityIndicator accessibilityLabel={t('common.loading')} style={{ height }} />;
+    return <Spinner accessibilityLabel={t('common.loading')} style={{ height }} />;
   }
   if (status === 'error') {
     return (
@@ -538,7 +542,7 @@ function SaveTile({
       })}
     >
       {busy ? (
-        <ActivityIndicator />
+        <Spinner />
       ) : (
         <AppIcon
           name={saved ? 'check' : 'add'}
@@ -547,9 +551,8 @@ function SaveTile({
         />
       )}
       <Text
+        // It breaks into lines rather than shrinking, which on Android shrank it even when it fit.
         numberOfLines={3}
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
         maxFontSizeMultiplier={1.3}
         importantForAccessibility="no"
         style={{

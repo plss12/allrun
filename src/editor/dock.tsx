@@ -6,6 +6,8 @@ import { floatingSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { Text } from '@/ui/text';
 
+import { DOCK_PADDING } from './editor-layout';
+
 const DONE_BUTTON_HEIGHT = 44;
 
 /** A floating panel of options, with a button to close it under them. */
@@ -18,7 +20,7 @@ export function Dock({
 }) {
   const { t } = useTranslation();
   return (
-    <View style={{ ...floatingSurface(24), padding: 10, gap: 10 }}>
+    <View style={{ ...floatingSurface(24), padding: DOCK_PADDING, gap: 10 }}>
       {children}
       <Pressable
         accessibilityRole="button"

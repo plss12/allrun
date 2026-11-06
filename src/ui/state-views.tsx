@@ -1,15 +1,17 @@
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { colors } from '@/theme/colors';
 import { Text } from '@/ui/text';
+
+import { Spinner } from './spinner';
 
 /** Centered spinner for the first load of a screen. */
 export function LoadingView() {
   const { t } = useTranslation();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <ActivityIndicator accessibilityLabel={t('common.loading')} />
+      <Spinner accessibilityLabel={t('common.loading')} />
     </View>
   );
 }

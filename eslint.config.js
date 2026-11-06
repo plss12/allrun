@@ -24,7 +24,20 @@ module.exports = defineConfig([
               message: 'Use Text from @/ui/text: the same letter on every phone.',
             },
             { name: 'expo-symbols', message: 'Use AppIcon from @/ui/app-icon: the same icons.' },
+            {
+              name: 'react-native',
+              importNames: ['ActivityIndicator'],
+              message: 'Use Spinner from @/ui/spinner: the same indicator on every phone.',
+            },
           ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXAttribute[name.name='adjustsFontSizeToFit']",
+          message:
+            'On Android it shrinks text even when it fits, and moves it off center: choose the size by the length of the text (see actionLabelSize).',
         },
       ],
     },

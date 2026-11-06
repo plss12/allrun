@@ -4,6 +4,8 @@ import { colors } from '@/theme/colors';
 import { AppIcon, type UiIconName } from '@/ui/app-icon';
 import { Text } from '@/ui/text';
 
+import { ACTION_TILE_PADDING } from './editor-layout';
+
 /**
  * Height of the tiles under the canvas: actions and formats alike, so that space looks the same
  * whichever it shows.
@@ -21,17 +23,20 @@ const GLYPH = { size: 22, stroke: 1.7 } as const;
 
 /**
  * A square-ish button with an icon over a short label, for the row under the canvas. The icon is
- * one of the app's, or Instagram's camera (`instagram`).
+ * one of the app's, or Instagram's camera (`instagram`). `labelSize` is its row's (see
+ * `actionLabelSize`).
  */
 export function ActionTile({
   icon,
   label,
+  labelSize,
   onPress,
   disabled = false,
   destructive = false,
 }: {
   readonly icon: UiIconName | 'instagram';
   readonly label: string;
+  readonly labelSize: number;
   readonly onPress: () => void;
   readonly disabled?: boolean;
   readonly destructive?: boolean;
@@ -47,7 +52,7 @@ export function ActionTile({
       style={({ pressed }) => ({
         flex: 1,
         height: ACTION_TILE_HEIGHT,
-        paddingHorizontal: 2,
+        paddingHorizontal: ACTION_TILE_PADDING,
         borderRadius: 14,
         borderCurve: 'continuous',
         alignItems: 'center',
@@ -74,12 +79,10 @@ export function ActionTile({
       )}
       <Text
         numberOfLines={1}
-        // Long words in some languages shrink a little rather than being cut off.
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
         importantForAccessibility="no"
-        maxFontSizeMultiplier={1.3}
-        style={{ color, fontSize: 12, fontWeight: '600' }}
+        // Its size fits the tile on the narrowest phone; the system's larger text would cut it.
+        maxFontSizeMultiplier={1}
+        style={{ color, fontSize: labelSize, fontWeight: '600' }}
       >
         {label}
       </Text>

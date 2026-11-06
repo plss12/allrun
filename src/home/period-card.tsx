@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 
+import { Spinner } from '@/ui/spinner';
 import type { Activity } from '@/core/activity';
 import type { DateRange, LocalDate } from '@/core/dates';
 import type { SportFamily } from '@/core/sports';
@@ -172,7 +173,7 @@ export function PeriodCard({
       )}
       {activities.status === 'loading' ? (
         <View style={{ height: PAGE_HEIGHT, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator accessibilityLabel={t('common.loading')} />
+          <Spinner accessibilityLabel={t('common.loading')} />
         </View>
       ) : activities.status === 'error' ? (
         <View style={{ height: PAGE_HEIGHT }}>

@@ -3,7 +3,7 @@ import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { NotificationFeedbackType, notificationAsync } from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -15,6 +15,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
+import { Spinner } from '@/ui/spinner';
 import type { Activity } from '@/core/activity';
 import { sportIcon } from '@/core/activity-block';
 import {
@@ -107,10 +108,14 @@ import { Eyedropper } from '@/editor/eyedropper';
 import { snapshotDesign } from '@/editor/eyedropper-snapshot';
 import { EditorCanvas } from '@/editor/editor-canvas';
 import { DataSheet } from '@/editor/data-sheet';
+import { photoToolLabels } from '@/editor/action-labels';
 import {
+  ACTION_TILE_GAP,
+  actionLabelSize,
   ADD_BUTTON_WIDTH,
   BOTTOM_BUTTON_SIZE,
   BOTTOM_PAIR_GAP,
+  DOCK_EDGE,
   EDGE,
 } from '@/editor/editor-layout';
 import { EditorSideMenu } from '@/editor/editor-side-menu';
@@ -1207,7 +1212,7 @@ function EditorWorkspace({
           const reach = layerVerticalReach(selected.transform, selectedSize, size, LAYER_MARGIN);
           return liftToClear(
             { top: canvasTop + reach.top * ratio, bottom: canvasTop + reach.bottom * ratio },
-            area.height - EDGE / 2 - dockHeight,
+            area.height - DOCK_EDGE - dockHeight,
             PANEL_GAP,
           );
         })()
@@ -1220,6 +1225,7 @@ function EditorWorkspace({
   /** The controls step aside while a widget is dragged or a text is typed. */
   const controlsShown = !dragging && !typing && eyedropper === null;
 
+  const photoToolsLabelSize = actionLabelSize(photoToolLabels((key) => t(key)));
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
       <ChoiceSheet
@@ -1370,8 +1376,8 @@ function EditorWorkspace({
                   justifyContent: 'center',
                 }}
               >
-                <ActivityIndicator
-                  size="large"
+                <Spinner
+                  size={36}
                   color="#FFFFFF"
                   accessibilityLabel={t(switching ? 'common.loading' : 'editor.loadingPhoto')}
                 />
@@ -1577,9 +1583,9 @@ function EditorWorkspace({
           onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}
           style={{
             position: 'absolute',
-            left: EDGE / 2,
-            right: EDGE / 2,
-            bottom: insets.bottom + EDGE / 2,
+            left: DOCK_EDGE,
+            right: DOCK_EDGE,
+            bottom: insets.bottom + DOCK_EDGE,
           }}
         >
           <Dock
@@ -1640,10 +1646,11 @@ function EditorWorkspace({
                     ))}
                   </Row>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+                <View style={{ flexDirection: 'row', gap: ACTION_TILE_GAP }}>
                   <ActionTile
                     icon="trash"
                     label={t('editor.removePhoto')}
+                    labelSize={photoToolsLabelSize}
                     onPress={
                       design.collage === null ? removePhoto : () => removeCellPhoto(toolsCell)
                     }
@@ -1654,6 +1661,7 @@ function EditorWorkspace({
                   />
                   <ActionTile
                     icon="photos"
+                    labelSize={photoToolsLabelSize}
                     label={t(
                       (design.collage === null ? photo === null : canvasCells[toolsCell] === null)
                         ? 'editor.choosePhoto'
@@ -1666,6 +1674,7 @@ function EditorWorkspace({
                   <ActionTile
                     icon="restart"
                     label={t('editor.resetPhoto')}
+                    labelSize={photoToolsLabelSize}
                     onPress={() =>
                       change((current) =>
                         design.collage === null
@@ -1683,6 +1692,7 @@ function EditorWorkspace({
                   <ActionTile
                     icon="paint"
                     label={t('editor.background')}
+                    labelSize={photoToolsLabelSize}
                     onPress={() => setBackgroundMenu(true)}
                   />
                 </View>
