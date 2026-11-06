@@ -86,11 +86,7 @@ export function SportFilterMenu({
               })}
             >
               <SportGlyph icon={option} size={ICON_SIZE} color={colors.label} />
-              <Text
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.5}
-                style={{ flex: 1, color: colors.label, fontSize: 17 }}
-              >
+              <Text numberOfLines={1} style={{ flex: 1, color: colors.label, fontSize: 17 }}>
                 {option === 'all' ? t('summary.allSports') : t(`families.${option}`)}
               </Text>
               <View style={{ width: 18, alignItems: 'center' }}>

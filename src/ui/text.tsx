@@ -75,13 +75,30 @@ function weightStyle(weight: TextStyle['fontWeight']): TextStyle {
 }
 
 /**
+ * The most the system's text size makes the app's text grow (the owner's decision): past it, the
+ * screens measured for 360 pt no longer hold their rows.
+ */
+export const MAX_FONT_SCALE = 1.3;
+
+/**
  * The interface's text: React Native's, writing `fontWeight` in the face of Inter it asks for (see
  * `INTERFACE_FACES`) unless it names a `fontFamily`, so it reads the same on every phone. The only
  * one to use: a lint rule keeps React Native's out. A text inside another doesn't inherit its weight,
- * so it says its own.
+ * so it says its own. It grows with the system's text size up to `MAX_FONT_SCALE`, unless it says
+ * a lower cap of its own.
  */
-export function Text({ style, ...props }: ComponentProps<typeof NativeText>) {
+export function Text({
+  style,
+  maxFontSizeMultiplier = MAX_FONT_SCALE,
+  ...props
+}: ComponentProps<typeof NativeText>) {
   const { fontFamily, fontWeight, fontStyle } = StyleSheet.flatten(style) ?? {};
   const own = fontStyle === 'italic' ? ITALIC : weightStyle(fontWeight);
-  return <NativeText {...props} style={[style, fontFamily === undefined ? own : OWN_FAMILY]} />;
+  return (
+    <NativeText
+      {...props}
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[style, fontFamily === undefined ? own : OWN_FAMILY]}
+    />
+  );
 }

@@ -69,7 +69,6 @@ export function DateRangeField({ range, limits, labels, locale, onChange }: Date
     >
       <Text
         numberOfLines={1}
-        maxFontSizeMultiplier={1.4}
         style={{
           color: editing === end ? colors.tint : colors.label,
           fontSize: 17,
