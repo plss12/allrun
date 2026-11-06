@@ -1,12 +1,8 @@
+import { Canvas, RoundedRect } from '@shopify/react-native-skia';
 import { BlurView } from 'expo-blur';
 import { type ReactNode, useEffect } from 'react';
 import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated, {
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import { ReduceMotion, useDerivedValue, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
@@ -131,7 +127,15 @@ function TabsGround({ width, children }: { readonly width: number; readonly chil
   );
 }
 
-/** Tabs on the glass, the chosen one in a darker capsule that slides to it. */
+/** The chosen tab's capsule. */
+const CAPSULE_COLOR = 'rgba(0, 0, 0, 0.55)';
+
+/**
+ * Tabs on the glass, the chosen one in a darker capsule that slides to it. The capsule is drawn
+ * with Skia, on a canvas of its own: an animated view makes Reanimated commit the tree of the whole
+ * screen on every frame of its spring, and under the Designs or Stickers gallery that took a
+ * modest phone's UI thread most of the time the tab took to show (ADR 014).
+ */
 export function GlassTabs({
   values,
   selectedIndex,
@@ -149,23 +153,25 @@ export function GlassTabs({
   useEffect(() => {
     position.set(withSpring(selectedIndex * tabWidth, TAB_SPRING));
   }, [position, selectedIndex, tabWidth]);
-  const capsule = useAnimatedStyle(() => ({ transform: [{ translateX: position.get() }] }));
+  const capsuleX = useDerivedValue(() => CAPSULE_INSET + position.get());
+  const capsuleHeight = TOP_BAR_HEIGHT - 2 * CAPSULE_INSET;
   return (
     <TabsGround width={width}>
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            top: CAPSULE_INSET,
-            bottom: CAPSULE_INSET,
-            left: CAPSULE_INSET,
-            width: tabWidth,
-            borderRadius: (TOP_BAR_HEIGHT - 2 * CAPSULE_INSET) / 2,
-            backgroundColor: 'rgba(0, 0, 0, 0.55)',
-          },
-          capsule,
-        ]}
-      />
+      <Canvas
+        pointerEvents="none"
+        accessible={false}
+        importantForAccessibility="no"
+        style={{ position: 'absolute', left: 0, top: 0, width, height: TOP_BAR_HEIGHT }}
+      >
+        <RoundedRect
+          x={capsuleX}
+          y={CAPSULE_INSET}
+          width={tabWidth}
+          height={capsuleHeight}
+          r={capsuleHeight / 2}
+          color={CAPSULE_COLOR}
+        />
+      </Canvas>
       <View
         accessibilityRole="tablist"
         style={{ flex: 1, flexDirection: 'row', paddingHorizontal: CAPSULE_INSET }}
