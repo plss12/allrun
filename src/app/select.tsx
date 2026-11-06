@@ -16,6 +16,7 @@ import { StickerGallery, type StickerData, useStickerData } from '@/editor/stick
 import { useUserTemplates } from '@/data/user-templates';
 import { PhotoBrowser } from '@/photos/photo-browser';
 import { colors } from '@/theme/colors';
+import { useCollectOnReturn } from '@/ui/collect-garbage';
 import { logError } from '@/ui/log';
 import { ErrorView, LoadingView } from '@/ui/state-views';
 import { useDisplaySettings } from '@/ui/settings';
@@ -64,6 +65,8 @@ function Selection({
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('photo');
+  // Back from the editor, what it left goes (see useCollectOnReturn).
+  useCollectOnReturn();
   const [stickersOpened, setStickersOpened] = useState(false);
   const [designsOpened, setDesignsOpened] = useState(false);
   // The lists scroll under the bar on top, whose glass takes on what passes beneath it.

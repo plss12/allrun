@@ -104,6 +104,32 @@ risks the sharpness of the whole image while editing. Opening the Summaries tab 
 ms: solved in the second round, below. `adb input swipe` sends only about 54 touches a second: a gesture's frame rate measured with it is
 the injection's, not the app's.
 
+### Memory that grew with every screen (2026-11-06)
+
+Measured later over more sessions, native memory grew with every screen opened and closed and never
+levelled off: the Stickers tab opened 50 times took the native heap from 113 to 232 MB. By parts, a
+visit kept about 3.4 MB, in proportion to what the screen mounts (0.7 the selection screen, 0.5 the
+Stickers header, 0.4 laying out its gallery, 0.6 the tiles' views, 1.2 their canvases).
+
+It was no leak but **collections too rare**: a screen's components hold native memory (Fabric's nodes,
+Skia's pictures, paragraphs and paths) behind small JavaScript objects, and Hermes, which only sees
+the small objects, seldom collected them, in React Native's runtime and in the UI thread's. Heap
+snapshots of a development build showed the unmounted screens' objects held only by React's
+DevTools, which a release build lacks; filling Hermes with garbage halved the growth, and a full
+collection of both runtimes made it level off (Stickers ×20: 147-152 MB over the last visits).
+
+**When a screen shows again, back from another, both runtimes are collected** (`useCollectOnReturn`
+in `ui/collect-garbage.ts`, on the home screen and the selection screen), a second after it shows:
+about 60 ms of the JavaScript thread and 12 ms of the UI thread, after the transition and the
+teardown of the screen left. Over sixteen full sessions (selection, Designs, Stickers, the editor and
+its gallery) the whole app holds 520-560 MB from the ninth on, instead of growing about 15 MB a
+session; native memory still creeps about 2 MB a session.
+
+Ruled out on the way, each measured: Skia 2.14.0 not releasing the Java `Surface` of each canvas
+(fixed on its 2.x branch; patched, no change), react-native-reanimated#11145 (worklets keeping
+components alive through captured callbacks; the reporter's patch, no change), and callbacks passed
+to the tiles' worklets by number instead of captured (no change).
+
 ### A second round in a release build (2026-11-06)
 
 Measured the same way. Each change was kept only where it measured better and drew the same pixels:
@@ -127,10 +153,8 @@ Measured and within the targets: opening the editor (frames of 44-110 ms, once A
 cache has them), the color and "Aa" panels (140 and 75 ms in all), undo and redo, the export bar,
 copying the image, typing (17 ms a key), and collages with real photos: choosing a layout (one frame
 of 46 ms), putting a photo in a cell (35 ms), moving it in its cell (14 ms a frame); only opening the
-photo grid from an empty cell reaches 105 ms, a sheet like the others (roadmap, step 2). Memory grows slowly, as
-measured later over eight editor sessions with Designs and Stickers: about 7 MB of native memory a
-session (174 to 230 MB; the whole app, 546 to 639 MB), part of it given back with the app in the
-background. Over six sessions it had looked level. What keeps it is still to find (roadmap).
+photo grid from an empty cell reaches 105 ms, a sheet like the others (roadmap, step 2). Memory is covered
+below, in its own section.
 
 Tried and discarded:
 

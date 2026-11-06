@@ -13,6 +13,7 @@ import { ActivityCard } from '@/home/activity-card';
 import { PeriodCard } from '@/home/period-card';
 import { type SportFilter, SportFilterMenu } from '@/home/sport-filter-menu';
 import { colors } from '@/theme/colors';
+import { useCollectOnReturn } from '@/ui/collect-garbage';
 import { useDisplaySettings } from '@/ui/settings';
 import { SportGlyph } from '@/ui/sport-glyph';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
@@ -53,6 +54,8 @@ export default function Home() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('activities');
   const [summariesDue, setSummariesDue] = useState(false);
+  // Back from the selection or the editor, what they left goes (see useCollectOnReturn).
+  useCollectOnReturn();
   useEffect(() => {
     const timer = setTimeout(() => setSummariesDue(true), SUMMARIES_AFTER_MS);
     return () => clearTimeout(timer);

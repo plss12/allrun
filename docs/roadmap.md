@@ -10,7 +10,7 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 - Over the targets, each with its cost in ADR 014. Step 6 should fix the size slider (18 ms), opening a photo (110-150 ms) and half of the first opening of Designs (500-690 ms); step 2, the widget gallery's opening and closing. Starting a drag (about 40 ms, one frame) stays: its only fix risks the sharpness of the whole image while editing.
 - Low value, only if it shows: a gallery's other pages laid out only on swiping (JavaScript time, not frames), with care for the dots (empty or repeated pages are discarded on measuring).
 - Closed on 2026-11-06, after a last pass on the iPhone.
-- Found after closing it: memory grows about 7 MB of native memory a session of the editor (ADR 014), the same before and after step 2's sheet. Find what keeps it (a heap snapshot of Hermes and the native objects of Skia that outlive their screen).
+- Found after closing it, and solved: memory grew with every screen opened and closed, from collections too rare in both JavaScript runtimes; a collection on coming back to a screen makes it level off (ADR 014). Native memory still creeps about 2 MB a full editor session: look at it again with the app bigger, before publishing.
 
 ## 2. Closing the style between phones
 
