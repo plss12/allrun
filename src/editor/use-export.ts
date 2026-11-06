@@ -6,7 +6,7 @@ import { type ExportEncoding, exportEncoding, exportFileName } from '@/core/expo
 import { logError } from '@/ui/log';
 import { toLocalTimestamp } from '@/ui/today';
 
-import { renderDesign, writeImage } from './export-image';
+import { exportColorSpace, renderDesign, writeImage } from './export-image';
 import type { ExportDesign } from './export-scene';
 
 /** The finished image: drawn, encoded and written to a file, ready to save, share or copy. */
@@ -35,7 +35,7 @@ export async function produceImage(design: ExportDesign): Promise<ExportedImage>
       cells.map((cell) => (cell === null ? null : { width: cell.width(), height: cell.height() })),
     ),
   );
-  const image = await renderDesign(design);
+  const image = await renderDesign(design, exportColorSpace(encoding));
   const uri = writeImage(image, encoding, exportFileName(encoding, toLocalTimestamp(new Date())));
   return { image, uri, encoding };
 }

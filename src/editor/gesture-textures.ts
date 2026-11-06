@@ -6,6 +6,13 @@ import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import { logError } from '@/ui/log';
 
 import { disposeLater } from './paragraph-arena';
+import { SCREEN_COLOR_SPACE } from './screen-color';
+
+/**
+ * The textures are in the canvas's color space, or a photo's colors change while a gesture lasts:
+ * in sRGB, the iPhone's P3 photos were clipped, duller until the finger lifted.
+ */
+const TEXTURE_COLOR_SPACE = SCREEN_COLOR_SPACE;
 
 /** A size in pixels of the device. */
 export interface PixelSize {
@@ -48,7 +55,9 @@ function drawTexture(
   }
   // A surface made for this texture and freed at once. Kept for the next gesture, it saved making
   // one, but every drag then left some 24 MB of the GPU's memory behind, never used again.
-  const surface = Skia.Surface.MakeOffscreen(size.width, size.height);
+  const surface = Skia.Surface.MakeOffscreen(size.width, size.height, {
+    colorSpace: TEXTURE_COLOR_SPACE,
+  });
   if (surface === null) {
     picture.dispose();
     return false;

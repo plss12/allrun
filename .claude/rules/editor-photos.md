@@ -10,7 +10,7 @@ paths:
 ## Copias y exportación
 
 - Skia dibuja una copia de editor (≤ 2048 px) y se prepara en segundo plano una de exportación (≤ 4096 px, calidad máxima), que empieza 2,5 s después de elegir la foto, salvo que se exporte antes (ADR 014); la colocación es relativa al lienzo, así que las dos copias quedan igual. Detalle y alternativas en `docs/decisions/004-photo-loading.md`.
-- Exportar: la misma escena del lienzo dibujada fuera de pantalla (`drawAsImage`) a 1080 px de ancho; JPEG 95 si es opaca, PNG si algo se transparenta (sin foto, o con la foto sin cubrir sobre fondo transparente: `isOpaque`). Guardar, compartir y copiar desde la fila bajo el lienzo; copiar es como el sticker llega a una historia de Instagram. Ver `docs/decisions/006-export.md`.
+- Exportar: la misma escena del lienzo dibujada fuera de pantalla (`renderDesign`) a 1080 px de ancho, en el espacio de color de la pantalla si es JPEG (`exportColorSpace`, `SCREEN_COLOR_SPACE` en `editor/screen-color.ts`: Display P3 en el iPhone, así sale como se edita, y Skia le pone el perfil P3 de Apple, el que lee Instagram) y en sRGB si es PNG (Skia le pondría su propio perfil P3, que Instagram no reconoce); JPEG 95 si es opaca, PNG si algo se transparenta (sin foto, o con la foto sin cubrir sobre fondo transparente: `isOpaque`). Guardar, compartir y copiar desde la fila bajo el lienzo; copiar es como el sticker llega a una historia de Instagram. Ver `docs/decisions/006-export.md`.
 
 ## Fotos del usuario sobre el diseño
 

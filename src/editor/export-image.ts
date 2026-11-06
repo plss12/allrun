@@ -1,16 +1,49 @@
-import { drawAsImage, ImageFormat, Skia, type SkImage } from '@shopify/react-native-skia';
+import {
+  ColorSpace,
+  type ColorSpaceValue,
+  drawAsPicture,
+  ImageFormat,
+  Skia,
+  type SkImage,
+} from '@shopify/react-native-skia';
 import { File, Paths } from 'expo-file-system';
 
 import type { ExportEncoding } from '@/core/export';
 import { CANVAS_FORMATS } from '@/core/template';
 
 import { type ExportDesign, exportScene } from './export-scene';
+import { SCREEN_COLOR_SPACE } from './screen-color';
 
-/** Draws a design off-screen at its export size (see `export-scene.tsx`). */
-export async function renderDesign(design: ExportDesign): Promise<SkImage> {
-  const image = await drawAsImage(exportScene(design), CANVAS_FORMATS[design.template.format]);
-  if (image === null) {
+/**
+ * The color space of an exported image: the screen's for a JPEG, so it looks as it was edited (on
+ * the iPhone, Display P3, its photos' colors whole; Skia writes Apple's own P3 profile in it, the
+ * one Instagram reads). A PNG stays sRGB: Skia writes its own P3 profile in one, which apps such as
+ * Instagram don't recognize.
+ */
+export function exportColorSpace(encoding: ExportEncoding): ColorSpaceValue {
+  return encoding.format === 'jpeg' ? SCREEN_COLOR_SPACE : ColorSpace.SRGB;
+}
+
+/** Draws a design off-screen at its export size (see `export-scene.tsx`), in `colorSpace`. */
+export async function renderDesign(
+  design: ExportDesign,
+  colorSpace: ColorSpaceValue,
+): Promise<SkImage> {
+  const { width, height } = CANVAS_FORMATS[design.template.format];
+  const picture = await drawAsPicture(exportScene(design));
+  const surface = Skia.Surface.MakeOffscreen(width, height, { colorSpace });
+  if (surface === null) {
+    picture.dispose();
     throw new Error(`Could not draw the ${design.template.format} design off-screen`);
+  }
+  surface.getCanvas().drawPicture(picture);
+  surface.flush();
+  // In the memory of the phone, not of its GPU: it is encoded and kept while the export bar is open.
+  const image = surface.makeImageSnapshot().makeNonTextureImage();
+  surface.dispose();
+  picture.dispose();
+  if (image === null) {
+    throw new Error(`Could not read the ${design.template.format} design drawn off-screen`);
   }
   return image;
 }

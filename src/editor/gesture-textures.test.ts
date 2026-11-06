@@ -7,15 +7,21 @@ import { disposeLater } from './paragraph-arena';
 
 /** What the fake Skia has made so far, to tell whose textures are in the slots. */
 const made: { image: { readonly id: number; disposed: boolean } }[] = [];
-/** The offscreen surfaces it has made, and whether each was freed. */
-const surfacesMade: { readonly width: number; readonly height: number; disposed: boolean }[] = [];
+/** The offscreen surfaces it has made: their color space, and whether each was freed. */
+const surfacesMade: {
+  readonly width: number;
+  readonly height: number;
+  readonly colorSpace: string | undefined;
+  disposed: boolean;
+}[] = [];
 
 jest.mock('@shopify/react-native-skia', () => ({
+  ColorSpace: { SRGB: 'srgb', DisplayP3: 'display-p3' },
   drawAsPicture: jest.fn(() => Promise.resolve({ dispose: jest.fn() })),
   Skia: {
     Surface: {
-      MakeOffscreen: jest.fn((width: number, height: number) => {
-        const surface = { width, height, disposed: false };
+      MakeOffscreen: jest.fn((width: number, height: number, options?: { colorSpace: string }) => {
+        const surface = { width, height, colorSpace: options?.colorSpace, disposed: false };
         surfacesMade.push(surface);
         return {
           width: () => width,
@@ -196,5 +202,22 @@ describe('the textures of a gesture', () => {
     expect(onReady).not.toHaveBeenCalled();
     runFrame();
     expect(onReady).toHaveBeenCalledTimes(1);
+  });
+
+  // On the iPhone the photo looked duller while a widget moved: its textures were sRGB, and the
+  // canvas and the photos are Display P3 there.
+  it.each([
+    ['ios', 'display-p3'],
+    ['android', 'srgb'],
+  ])('draws them on %s in the color space of its canvas, %s', async (os, colorSpace) => {
+    let isolated: typeof drawGestureTextures = drawGestureTextures;
+    jest.isolateModules(() => {
+      jest.doMock('react-native', () => ({ Platform: { OS: os } }));
+      ({ drawGestureTextures: isolated } =
+        jest.requireActual<typeof import('./gesture-textures')>('./gesture-textures'));
+    });
+    isolated(request('a'), slots, gestures, jest.fn());
+    await recorded();
+    expect(surfacesMade.map((surface) => surface.colorSpace)).toEqual([colorSpace, colorSpace]);
   });
 });
