@@ -287,7 +287,7 @@ describe('gallerySections', () => {
     expect(scaleOf('info-activityDate-time')).toBeGreaterThan(scaleOf('info-activityDate'));
   });
 
-  it('lays every tile two per row but the charts and a creative tile alone in its theme, which take the whole width', () => {
+  it('lays every tile two per row but the charts, the strip of film and a creative tile alone in its theme, which take the whole width', () => {
     const sections = gallery.gallerySections(
       activityCatalog(activity, ['elevation']),
       'story',
@@ -303,6 +303,7 @@ describe('gallerySections', () => {
         const wide =
           section.id === 'charts' ||
           row.widgets[0].key === 'logo-allrun-lockup' ||
+          row.widgets[0].key === 'image-filmStrip' ||
           (section.id === 'creative' && row.widgets.length === 1);
         expect(row.width).toBe(wide ? full : half);
       }
@@ -351,13 +352,19 @@ describe('gallerySections', () => {
     }
   });
 
-  it("lays the user's pictures out in a section of their own, two by two, the camera last", () => {
+  it("lays the user's pictures out in a section of their own, two by two, the strip alone and the camera and the crop together last", () => {
     const photos = activitySections().find((section) => section.id === 'photos');
-    expect((photos?.rows ?? []).map((row) => row.widgets.map((widget) => widget.key))).toEqual([
+    const rows = photos?.rows ?? [];
+    expect(rows.map((row) => row.widgets.map((widget) => widget.key))).toEqual([
       ['image', 'image-instant'],
       ['image-filmFrame', 'image-lightNegative'],
-      ['image-filmStrip', 'image-camera'],
+      ['image-filmStrip'],
+      ['image-camera', 'image-crop'],
     ]);
+    // The strip, wide by nature, takes its whole row, as tall as the pictures' over it.
+    const full = SCREEN - 2 * gallery.GALLERY_PADDING;
+    expect(rows[2]?.width).toBe(full);
+    expect(rows[2]?.height).toBe(rows[1]?.height);
   });
 
   it('lays the name and the monogram side by side, and both together under them, as wide', () => {

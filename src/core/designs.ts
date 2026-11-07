@@ -22,6 +22,7 @@ export const READY_DESIGN_IDS = [
   'lightNegative',
   'filmStrip',
   'camera',
+  'crop',
 ] as const;
 
 export type ReadyDesignId = (typeof READY_DESIGN_IDS)[number];
@@ -305,6 +306,17 @@ function camera(data: TemplateData, format: CanvasFormat): ReadyDesign {
   };
 }
 
+/**
+ * A phone's crop screen with its photo, the design's only widget: as big as the canvas in every
+ * format, its box a smaller canvas, over black where it is moved away from. Time and space O(1).
+ */
+function crop(data: TemplateData, format: CanvasFormat): ReadyDesign {
+  return {
+    template: design('crop', data, format, BLACK, [slot('photo-1', 'crop', 0.5, 0.5, 1)]),
+    alignRight: [],
+  };
+}
+
 const RECIPES: Readonly<
   Record<ReadyDesignId, (data: TemplateData, format: CanvasFormat) => ReadyDesign>
 > = {
@@ -314,6 +326,7 @@ const RECIPES: Readonly<
   lightNegative: (data, format) => centeredPiece('lightNegative', 'lightNegative', data, format),
   filmStrip,
   camera,
+  crop,
 };
 
 /** One of AllRun's designs laid out for `data` in `format`. Time and space O(1). */

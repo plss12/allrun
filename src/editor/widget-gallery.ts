@@ -1,6 +1,7 @@
 import { isDataWidget } from '@/core/activity-block';
 import { isSummaryDataWidget } from '@/core/summary-block';
 import { newLayer } from '@/core/default-layout';
+import { coversCanvas } from '@/core/image-layer';
 import {
   type CatalogItem,
   catalogItemKey,
@@ -83,9 +84,12 @@ function isPicture(widget: CatalogWidget): boolean {
   return widget.variants[0].kind === 'image';
 }
 
-/** Whether an item is the camera with its photo: as tall as a story, in a tile of its height. */
+/**
+ * Whether an item is as big as the canvas with its photo (the camera, the crop screen): as tall as a
+ * story, in a tile of its height.
+ */
 function framesItem(item: CatalogItem): boolean {
-  return item.kind === 'image' && item.mount === 'camera';
+  return item.kind === 'image' && coversCanvas(item.mount);
 }
 
 /**
@@ -108,12 +112,17 @@ function neededHeight(tile: GalleryWidget): number {
 const columnsFor = (id: CatalogSectionId): 1 | 2 => (id === 'charts' ? 1 : 2);
 
 /**
- * Whether a tile takes a whole row of a section of two, as tall as the others: the AllRun name
- * with its monogram, wide by nature, under the name and the monogram alone, so the logo's section
- * stays even.
+ * Whether a tile takes a whole row of a section of two, as tall as the others, wide by nature: the
+ * AllRun name with its monogram, under the name and the monogram alone, so the logo's section stays
+ * even; and the strip of film, so the two pieces as big as the canvas, alike, share the next row
+ * (the user's choice).
  */
 const spansRow = (widget: CatalogWidget): boolean =>
-  widget.variants.every((item) => item.kind === 'logo' && item.variant === 'lockup');
+  widget.variants.every(
+    (item) =>
+      (item.kind === 'logo' && item.variant === 'lockup') ||
+      (item.kind === 'image' && item.mount === 'filmStrip'),
+  );
 
 /** A variant of a widget, filled in and measured, as one page of its tile. */
 export interface GalleryPage {

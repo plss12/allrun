@@ -755,6 +755,7 @@ export const en = {
       lightNegative: 'Light negative',
       filmStrip: 'Film strip',
       camera: 'Camera',
+      crop: 'Crop',
     },
   },
   activityCharts: {

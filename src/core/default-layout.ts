@@ -1,5 +1,6 @@
 import type { Activity } from './activity';
 import { blockLettering, framesCanvas } from './activity-block';
+import { coversCanvas } from './image-layer';
 import type { NewLayer } from './layer-catalog';
 import { at, fitWidth, logoLayer, row, type Slot, slot, textStyle, WHITE } from './layout-kit';
 import { availableMetrics } from './metrics';
@@ -338,11 +339,12 @@ export function newLayer(
         opacity: 0.95,
       };
     case 'image':
-      // As big in every format as in a story, next to the other widgets; the camera, as the canvas.
+      // As big in every format as in a story, next to the other widgets; the camera and the crop
+      // screen, as the canvas.
       return {
         ...item,
         id,
-        transform: centered(item.mount === 'camera' ? 1 : layout.scale / LAYOUTS.story.scale),
+        transform: centered(coversCanvas(item.mount) ? 1 : layout.scale / LAYOUTS.story.scale),
         opacity: 1,
       };
     case 'activityBlock':

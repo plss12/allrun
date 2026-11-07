@@ -31,6 +31,8 @@ import type { Activity } from '@/core/activity';
 import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
 import {
   CAPTION_INK,
+  type CropFrame,
+  cropFrame,
   FRAME_COLORS,
   type ImageBox,
   imageBox,
@@ -58,7 +60,6 @@ import {
   CANVAS_FORMATS,
   type CanvasFormat,
   type FontId,
-  type ImageMount,
   type Layer,
   type Template,
 } from '@/core/template';
@@ -97,6 +98,8 @@ import {
 } from './scene-text';
 import { type CaptionText, instantCaption } from './instant-caption';
 import {
+  cropCaption,
+  type LetteredMount,
   MOUNT_ARROW as MOUNT_ARROW_MARK,
   mountCaption,
   type MountMarks,
@@ -917,6 +920,22 @@ function prepareLayer(
           ),
         };
       }
+      if (layer.mount === 'crop') {
+        const frame = cropFrame(canvas);
+        return {
+          layer,
+          ...canvas,
+          content: (
+            <CropWidget
+              box={mountBox('crop', canvas)}
+              frame={frame}
+              picture={picked?.image ?? null}
+              empty={empty}
+              pill={cropPill(fonts, cropCaption(data, textContext, translate), frame)}
+            />
+          ),
+        };
+      }
       if (layer.mount !== undefined) {
         const box = mountBox(layer.mount, canvas);
         const { sides, marks, strip } = mountCaption(layer.mount, data, textContext, translate);
@@ -1105,9 +1124,6 @@ function InstantWidget({
     </Group>
   );
 }
-
-/** A holder with its letters around its picture, as all are but the camera. */
-type LetteredMount = Exclude<ImageMount, 'camera'>;
 
 /** How each holder looks: its color, its letters and how they read along its sides. */
 const MOUNT_LOOKS: Readonly<
@@ -1464,6 +1480,175 @@ function CameraWidget({
       )}
       {view}
       {empty === 'hint' ? <EmptySign cx={0} cy={0} /> : null}
+    </Group>
+  );
+}
+
+/**
+ * How a crop screen looks, as a phone's: the dimming around its box, the box's edge, the thirds'
+ * grid, the handles at its corners (how long and thick), and the pill of its data with dark ink.
+ */
+const CROP_LOOK = {
+  dim: 'rgba(0, 0, 0, 0.55)',
+  edge: { color: 'rgba(255, 255, 255, 0.9)', width: 3 },
+  grid: { color: 'rgba(255, 255, 255, 0.43)', width: 2 },
+  handle: { color: '#FFFFFF', arm: 56, thickness: 8 },
+  pill: 'rgba(255, 255, 255, 0.92)',
+  ink: '#000000',
+} as const;
+
+/** The data of a crop screen's pill laid out, shrunk to fit its widest. */
+interface CropPill {
+  readonly paragraph: SkParagraph;
+  readonly width: number;
+}
+
+/**
+ * Lays out the pill's `text` (see `cropCaption`) in Inter bold, shrunk to fit the box's width with
+ * its room at both ends. Time O(1), laid out at most twice.
+ */
+function cropPill(fonts: SkTypefaceFontProvider, text: string, frame: CropFrame): CropPill {
+  const { size, padX, maxWidth } = frame.pill;
+  const layOut = (fontSize: number) => {
+    const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+    builder.pushStyle({
+      color: Skia.Color(CROP_LOOK.ink),
+      fontFamilies: fontFamiliesOf('inter'),
+      fontSize,
+      fontStyle: { weight: FontWeight.Bold },
+    });
+    builder.addText(text);
+    builder.pop();
+    const paragraph = finishParagraph(builder);
+    paragraph.layout(NO_WRAP_WIDTH);
+    return paragraph;
+  };
+  let paragraph = layOut(size);
+  const room = maxWidth - 2 * padX;
+  if (paragraph.getLongestLine() > room) {
+    const fit = room / paragraph.getLongestLine();
+    discardParagraph(paragraph);
+    paragraph = layOut(size * fit);
+  }
+  const width = Math.ceil(paragraph.getLongestLine()) + 1;
+  paragraph.layout(width);
+  return { paragraph, width };
+}
+
+/** A crop screen's shapes, made once per canvas size (see `cropPaths`). */
+interface CropPaths {
+  /** The dimming: the whole widget but its box. */
+  readonly dim: SkPath;
+  /** The two lines across and the two down that split the box in thirds. */
+  readonly grid: SkPath;
+  /** The four handles, each two bars along its corner's sides, just outside the box's edge. */
+  readonly handles: SkPath;
+}
+
+/** The crop screens' shapes made, by canvas size: a few formats, kept as the holders' are. */
+const cropPathCache = new Map<string, CropPaths>();
+
+/** A crop screen's shapes for the widget `rect` and its box `view`. Time and space O(1). */
+function cropPaths(rect: DrawRect, view: DrawRect): CropPaths {
+  const key = `${rect.width}x${rect.height}`;
+  const cached = cropPathCache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const dim = Skia.PathBuilder.Make();
+  dim.addRect(Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height));
+  dim.addRect(Skia.XYWHRect(view.x, view.y, view.width, view.height));
+  const grid = Skia.PathBuilder.Make();
+  const line = CROP_LOOK.grid.width;
+  for (const third of [1, 2]) {
+    const x = view.x + (view.width * third) / 3;
+    const y = view.y + (view.height * third) / 3;
+    grid.addRect(Skia.XYWHRect(x - line / 2, view.y, line, view.height));
+    grid.addRect(Skia.XYWHRect(view.x, y - line / 2, view.width, line));
+  }
+  const { arm, thickness: t } = CROP_LOOK.handle;
+  const handles = Skia.PathBuilder.Make();
+  const left = view.x - t;
+  const top = view.y - t;
+  const right = view.x + view.width + t;
+  const bottom = view.y + view.height + t;
+  for (const [x, inward] of [
+    [left, 1],
+    [right, -1],
+  ] as const) {
+    for (const [y, down] of [
+      [top, 1],
+      [bottom, -1],
+    ] as const) {
+      // Along the top or bottom, and along the side, from the outer corner inwards.
+      handles.addRect(
+        Skia.XYWHRect(inward > 0 ? x : x - arm - t, down > 0 ? y : y - t, arm + t, t),
+      );
+      handles.addRect(
+        Skia.XYWHRect(inward > 0 ? x : x - t, down > 0 ? y : y - arm - t, t, arm + t),
+      );
+    }
+  }
+  const paths = { dim: dim.detach(), grid: grid.detach(), handles: handles.detach() };
+  cropPathCache.set(key, paths);
+  return paths;
+}
+
+/**
+ * A phone's crop screen with its picture, as one piece: the picture covering it, dimmed around a
+ * box in the canvas's proportions, with the thirds' grid and the corners' handles, and the pill of
+ * its data under it. With no picture, the box shows the sign to fill it (`hint`) or nothing.
+ */
+function CropWidget({
+  box,
+  frame,
+  picture,
+  empty,
+  pill,
+}: {
+  readonly box: MountBox;
+  readonly frame: CropFrame;
+  readonly picture: SkImage | null;
+  readonly empty: 'hint' | 'blank' | null;
+  readonly pill: CropPill;
+}) {
+  const rect = box.picture;
+  const view = frame.window;
+  const paths = cropPaths(rect, view);
+  const pillWidth = pill.width + 2 * frame.pill.padX;
+  return (
+    <Group clip={rect}>
+      {empty === 'blank' ? null : empty === null && picture !== null ? (
+        <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
+      ) : (
+        <Rect {...rect} color={LOADING_PICTURE} />
+      )}
+      <Path path={paths.dim} color={CROP_LOOK.dim} fillType="evenOdd" />
+      <Path path={paths.grid} color={CROP_LOOK.grid.color} />
+      <Rect
+        {...view}
+        color={CROP_LOOK.edge.color}
+        style="stroke"
+        strokeWidth={CROP_LOOK.edge.width}
+      />
+      <Path path={paths.handles} color={CROP_LOOK.handle.color} />
+      {empty === 'hint' ? (
+        <EmptySign cx={view.x + view.width / 2} cy={view.y + view.height / 2} />
+      ) : null}
+      <RoundedRect
+        x={-pillWidth / 2}
+        y={frame.pill.y - frame.pill.height / 2}
+        width={pillWidth}
+        height={frame.pill.height}
+        r={frame.pill.height / 2}
+        color={CROP_LOOK.pill}
+      />
+      <ParagraphPicture
+        paragraph={pill.paragraph}
+        x={-pill.width / 2}
+        y={frame.pill.y - pill.paragraph.getHeight() / 2}
+        width={pill.width}
+      />
     </Group>
   );
 }

@@ -1,6 +1,7 @@
 import { cardMetrics, type MetricId, metricValue } from '@/core/metrics';
 import { formatPlace } from '@/core/place';
 import { periodTotals, summaryMetricValue } from '@/core/summary-metrics';
+import type { CanvasMount } from '@/core/image-layer';
 import type { ImageMount } from '@/core/template';
 import { formatActivityDate, formatShortRange } from '@/ui/format';
 
@@ -14,6 +15,9 @@ import {
   type TextContext,
 } from './editor-data';
 import { periodCount, shortDistance, type Translate } from './instant-caption';
+
+/** A holder with its letters around its picture, as all are but those as big as the canvas. */
+export type LetteredMount = Exclude<ImageMount, CanvasMount>;
 
 /** What a holder writes along one of its sides, spread along it. */
 export interface MountSide {
@@ -76,7 +80,7 @@ const stamped = (date: string) => date.split('/').join('-');
  *   and its dates, and its distance (its time without one) and how many activities.
  */
 export function mountCaption(
-  mount: Exclude<ImageMount, 'camera'>,
+  mount: LetteredMount,
   data: EditorData,
   context: TextContext,
   translate: Translate,
@@ -86,13 +90,41 @@ export function mountCaption(
     : periodText(mount, data, context, translate);
 }
 
+/** Between the data of a crop screen's pill. */
+const CROP_SEPARATOR = '  ·  ';
+
+/**
+ * What a crop screen writes in the pill under its box: an activity's first three data (`cardMetrics`:
+ * "11,3 km  ·  5:54/km  ·  1h 06min"), a period's first three totals. Time and space O(1).
+ */
+export function cropCaption(data: EditorData, context: TextContext, translate: Translate): string {
+  if (data.mode === 'activity') {
+    const { activity } = data;
+    return cardMetrics(activity)
+      .map((metric) =>
+        metric === 'distance'
+          ? shortDistance(metricValue(activity, 'distance') ?? 0, context)
+          : plainMetricText(activity, metric, context, 'tight'),
+      )
+      .join(CROP_SEPARATOR);
+  }
+  const { summary } = data;
+  return periodTotals(summary)
+    .map((metric) =>
+      metric === 'totalDistance'
+        ? shortDistance(summary.totalDistanceMeters, context)
+        : summaryTotalText(metric, summaryMetricValue(summary, metric) ?? 0, context, translate),
+    )
+    .join(CROP_SEPARATOR);
+}
+
 /** A strip's texts from its data, by importance: the first in the middle, between the others. */
 function stripOf(top: string, [main = '', left, right]: readonly string[]): MountStrip {
   return { top, left: left ?? null, main, right: right ?? null };
 }
 
 function activityText(
-  mount: Exclude<ImageMount, 'camera'>,
+  mount: LetteredMount,
   { activity, place }: ActivityData,
   context: TextContext,
   translate: Translate,
@@ -137,7 +169,7 @@ function activityText(
 }
 
 function periodText(
-  mount: Exclude<ImageMount, 'camera'>,
+  mount: LetteredMount,
   data: SummaryData,
   context: TextContext,
   translate: Translate,

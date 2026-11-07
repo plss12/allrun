@@ -15,6 +15,8 @@ import {
   isEmptySlot,
   isPhotoSlot,
   MAX_IMAGES,
+  coversCanvas,
+  cropFrame,
   mountBox,
   SAMPLE_IMAGE,
   setLayerImage,
@@ -210,7 +212,7 @@ describe('mountBox', () => {
       expect(rect.x + rect.width).toBeLessThanOrEqual(box.width / 2 + 1e-9);
       expect(rect.y + rect.height).toBeLessThanOrEqual(box.height / 2 + 1e-9);
     };
-    if (mount === 'camera') {
+    if (coversCanvas(mount)) {
       // As big as the canvas, seen through it: its photo covers it.
       expect(box).toMatchObject(CANVAS_FORMATS.story);
       expect(box.picture).toMatchObject(CANVAS_FORMATS.story);
@@ -250,6 +252,33 @@ describe('mountBox', () => {
         sides.forEach((side) => expect(overlap(hole, side)).toBe(false));
       }
     }
+  });
+});
+
+describe('cropFrame', () => {
+  it.each(Object.entries(CANVAS_FORMATS))(
+    "%s: a box in the canvas's proportions, the pill under it, both inside the canvas",
+    (_format, canvas) => {
+      const { window, pill } = cropFrame(canvas);
+      expect(window.width / window.height).toBeCloseTo(canvas.width / canvas.height);
+      // Centered across, smaller than the canvas, with room for its handles.
+      expect(window.x + window.width / 2).toBeCloseTo(0);
+      expect(window.width).toBeLessThanOrEqual(canvas.width * 0.72 + 1e-9);
+      const top = window.y;
+      const bottom = pill.y + pill.height / 2;
+      expect(pill.y - pill.height / 2).toBeGreaterThan(window.y + window.height);
+      // Room over and under them, past the handles that stick out of the box.
+      expect(top).toBeGreaterThanOrEqual(-canvas.height / 2 + 32);
+      expect(bottom).toBeLessThanOrEqual(canvas.height / 2 - 32);
+      // Both together in the middle, up and down.
+      expect(top + bottom).toBeCloseTo(0);
+      expect(pill.maxWidth).toBe(window.width);
+    },
+  );
+
+  it('knows which holders are as big as the canvas', () => {
+    expect(IMAGE_MOUNTS.filter((mount) => coversCanvas(mount))).toEqual(['camera', 'crop']);
+    expect(coversCanvas(undefined)).toBe(false);
   });
 });
 

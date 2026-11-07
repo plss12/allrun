@@ -70,6 +70,7 @@ import {
 } from '@/core/template';
 import {
   canAddImage,
+  coversCanvas,
   EDITOR_PHOTO,
   isEmptySlot,
   isImageLayer,
@@ -811,11 +812,29 @@ function EditorWorkspace({
    * Adds a picture of the user's in its frame (an instant photo with its caption), picked from
    * the library, on top of the others and selected; a design takes up to `MAX_IMAGES`. An instant
    * photo of where it was asks first to name the place (Android), and writes the date without it.
+   * A holder as big as the canvas (the camera, the crop screen) holds the canvas's own photo (see
+   * `coversCanvas`): with none, the one picked becomes it, in the same undo step.
    */
   const addPicture = ({ frame, caption, mount }: PictureLook) => {
     setSheetOpen(false);
     if (!canAddImage(template, cellPhotos)) {
       notice.show(t('editor.maxImages', { max: String(MAX_IMAGES) }));
+      return;
+    }
+    if (coversCanvas(mount)) {
+      const item = { kind: 'image', image: EDITOR_PHOTO, frame, mount } as const;
+      if (photo !== null) {
+        addLayerNow(item);
+        return;
+      }
+      const id = uniqueLayerId(template, catalogItemKey(item));
+      void pickPhoto((current) =>
+        editLayers(current, defaultTemplate, (layers) => placeLayer(layers, item, id)),
+      ).then((picked) => {
+        if (picked) {
+          selectLayer(id);
+        }
+      });
       return;
     }
     const pick = () =>
@@ -872,18 +891,19 @@ function EditorWorkspace({
     }
     addLayerNow(item);
   };
+  /** `current` with the widget `item` added as `id`, on top of the others. */
+  const placeLayer = (
+    current: Template,
+    item: Exclude<NewLayer, { kind: 'text' }>,
+    id: string,
+  ): Template => {
+    const added = addLayer(current, newLayer(item, id, current.format, designFont(current.layers)));
+    // As big as the canvas, it goes under the widgets there, not to hide them.
+    return item.kind === 'image' && coversCanvas(item.mount) ? moveLayer(added, id, 'back') : added;
+  };
   const addLayerNow = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     const id = uniqueLayerId(template, catalogItemKey(item));
-    edit((current) => {
-      const added = addLayer(
-        current,
-        newLayer(item, id, current.format, designFont(current.layers)),
-      );
-      // As big as the canvas, it goes under the widgets there, not to hide them.
-      return item.kind === 'image' && item.mount === 'camera'
-        ? moveLayer(added, id, 'back')
-        : added;
-    });
+    edit((current) => placeLayer(current, item, id));
     selectLayer(id);
     setSheetOpen(false);
   };
@@ -1078,29 +1098,39 @@ function EditorWorkspace({
     rotation: layer.transform.rotation,
   });
 
-  const pickPhoto = async () => {
+  /**
+   * Picks the canvas's photo from the grid, as one undo step with `alongWith` (a widget that comes
+   * with it). Resolves whether one was picked.
+   */
+  const pickPhoto = async (
+    alongWith: (design: EditorDesign) => EditorDesign = (design) => design,
+  ): Promise<boolean> => {
     setPhotoTools(false);
     const libraryId = await photoPicker.pick();
-    if (libraryId !== null) {
-      const id = nextPhotoId;
-      setNextPhotoId(id + 1);
-      setPhotos((current) =>
-        new Map(current).set(id, {
-          id,
-          libraryId,
-          picked: null,
-          editorUri: null,
-          editorReencoded: false,
-          exportUri: null,
-        }),
-      );
-      // A new photo starts centered and covering the canvas (user's choice), as one undo step.
-      change((current) => ({
+    if (libraryId === null) {
+      return false;
+    }
+    const id = nextPhotoId;
+    setNextPhotoId(id + 1);
+    setPhotos((current) =>
+      new Map(current).set(id, {
+        id,
+        libraryId,
+        picked: null,
+        editorUri: null,
+        editorReencoded: false,
+        exportUri: null,
+      }),
+    );
+    // A new photo starts centered and covering the canvas (user's choice), as one undo step.
+    change((current) =>
+      alongWith({
         ...setCellPlacement(setPhotoPlacement(current, COVER_PLACEMENT), 0, COVER_PLACEMENT),
         photoId: id,
-      }));
-      void loadChosenPhoto(id, libraryId);
-    }
+      }),
+    );
+    void loadChosenPhoto(id, libraryId);
+    return true;
   };
 
   /**

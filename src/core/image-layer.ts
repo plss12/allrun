@@ -236,14 +236,79 @@ function windowIn(band: number): BoxRect {
   return { x: -width / 2, y: -height / 2, width, height };
 }
 
+/** The holders as big as the canvas, seen through: the camera and the crop screen. */
+export type CanvasMount = Extract<ImageMount, 'camera' | 'crop'>;
+
+/**
+ * Whether a holder is as big as the canvas (see `CanvasMount`): it comes at the canvas's size in
+ * every format, and goes under the widgets already there, not to hide them. Added to a canvas, it
+ * holds the canvas's own photo (`EDITOR_PHOTO`, the first cell's in a collage; with none, the
+ * one picked for it becomes the canvas's), as a design's slot does: a photo of its own would hide that one under it (the user's
+ * choice). Removing it gives the photo back to the canvas.
+ */
+export function coversCanvas(mount: ImageMount | undefined): mount is CanvasMount {
+  return mount === 'camera' || mount === 'crop';
+}
+
+/**
+ * A crop screen's parts, in canvas pixels of 1080: how much of the canvas its box takes at most,
+ * and how much of it the box and the data under it take together; the room between them; and the
+ * pill of the data, its letters' size and the room around them.
+ */
+const CROP = {
+  share: 0.72,
+  room: 0.86,
+  gap: 48,
+  pill: { size: 38, padX: 40, padY: 24 },
+} as const;
+
+/** A crop screen laid out (see `cropFrame`): its box, and where the pill of its data goes. */
+export interface CropFrame {
+  /** The box, with the canvas's own proportions: a smaller canvas inside it. */
+  readonly window: BoxRect;
+  /** The pill under it: its middle's height, its height, its widest and its letters' size. */
+  readonly pill: {
+    readonly y: number;
+    readonly height: number;
+    readonly maxWidth: number;
+    readonly size: number;
+    readonly padX: number;
+  };
+}
+
+/**
+ * Where a crop screen as big as `canvas` puts its box and its data, around its middle: the box in
+ * the canvas's proportions, as big as it fits with the pill under it, both centered together.
+ * Time and space O(1).
+ */
+export function cropFrame(canvas: Size): CropFrame {
+  const { share, room, gap, pill } = CROP;
+  const pillHeight = pill.size + 2 * pill.padY;
+  const scale = Math.min(share, (room * canvas.height - gap - pillHeight) / canvas.height);
+  const width = canvas.width * scale;
+  const height = canvas.height * scale;
+  const top = -(height + gap + pillHeight) / 2;
+  return {
+    window: { x: -width / 2, y: top, width, height },
+    pill: {
+      y: top + height + gap + pillHeight / 2,
+      height: pillHeight,
+      maxWidth: width,
+      size: pill.size,
+      padX: pill.padX,
+    },
+  };
+}
+
 /**
  * The widget of a picture in its holder (see `IMAGE_MOUNTS`), as tall as `IMAGE_SIDE`, but the
- * camera, as big as the `canvas`. Time and space O(1).
+ * camera and the crop screen, as big as the `canvas`. Time and space O(1).
  */
 export function mountBox(mount: ImageMount, canvas: Size): MountBox {
   const height = IMAGE_SIDE;
   switch (mount) {
-    case 'camera': {
+    case 'camera':
+    case 'crop': {
       const picture = {
         x: -canvas.width / 2,
         y: -canvas.height / 2,

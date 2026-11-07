@@ -72,6 +72,7 @@ const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   lightNegative: ['forestTrail'],
   filmStrip: ['trackShoes'],
   camera: ['forestBridge'],
+  crop: ['trackShadow'],
 };
 
 /** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */

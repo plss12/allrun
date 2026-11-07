@@ -16,7 +16,7 @@ import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 import { es } from '@/i18n/locales/es';
 
 import type { EditorData } from './editor-data';
-import { mountCaption } from './mount-caption';
+import { cropCaption, mountCaption } from './mount-caption';
 import type { LayerContext } from './template-scene';
 
 jest.mock('@shopify/react-native-skia/lib/commonjs/Platform', () => ({
@@ -146,7 +146,7 @@ describe('a design with no photo chosen', () => {
   });
 });
 
-describe('the camera', () => {
+describe.each(['camera', 'crop'] as const)('the %s', (id) => {
   it.each([
     ['an activity', activity],
     ['a period', period],
@@ -154,7 +154,7 @@ describe('the camera', () => {
     const context = contextOf(data);
     const { readyTemplate } = jest.requireActual<typeof import('./ready-design')>('./ready-design');
     for (const format of FORMATS) {
-      const template = readyTemplate('camera', context, format);
+      const template = readyTemplate(id, context, format);
       expect(template.layers).toHaveLength(1);
       expect(isPhotoSlot(template.layers[0])).toBe(true);
       const [prepared] = scene().prepareLayers(template, context);
@@ -164,6 +164,21 @@ describe('the camera', () => {
       ]);
       expect(prepared.hole).toBeUndefined();
     }
+  });
+});
+
+describe('cropCaption', () => {
+  it("writes an activity's first three data, the distance first", () => {
+    const text = cropCaption(activity, textContext, translate as never);
+    const parts = text.split('·').map((part) => part.trim());
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toMatch(/km$/);
+  });
+
+  it('writes the totals of a period, without ever a lone "m" for minutes', () => {
+    const text = cropCaption(period, textContext, translate as never);
+    expect(text.split('·').length).toBeGreaterThan(1);
+    expect(text).not.toMatch(/\d+m\b/);
   });
 });
 

@@ -719,6 +719,7 @@ export const es: Translations = {
       lightNegative: 'Negativo claro',
       filmStrip: 'Tira de película',
       camera: 'Cámara',
+      crop: 'Recorte',
     },
   },
   activityCharts: {

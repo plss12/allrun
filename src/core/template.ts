@@ -219,10 +219,11 @@ export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
  * What holds a picture (see `mountBox`), the picture cut to fit it around its middle: a black 35 mm
  * frame with its data around it (`filmFrame`), a light strip of negative with perforations
  * (`lightNegative`), a dark strip of film with the same picture again in the frames beside it
- * (`filmStrip`), or the phone's camera as big as the canvas, seen through it (`camera`). The holder
- * and the data on it move as one piece.
+ * (`filmStrip`), the phone's camera as big as the canvas, seen through it (`camera`), or a phone's crop
+ * screen as big as the canvas, the picture dimmed around a smaller canvas with its data under it
+ * (`crop`). The holder and the data on it move as one piece.
  */
-export const IMAGE_MOUNTS = ['filmFrame', 'lightNegative', 'filmStrip', 'camera'] as const;
+export const IMAGE_MOUNTS = ['filmFrame', 'lightNegative', 'filmStrip', 'camera', 'crop'] as const;
 
 export type ImageMount = (typeof IMAGE_MOUNTS)[number];
 
