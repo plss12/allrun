@@ -1,24 +1,27 @@
-import { createContext, type ReactNode, use, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  use,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import type { SavedTemplate } from '@/core/user-templates';
-import { type AsyncState, useAsync } from '@/ui/use-async';
+import type { AsyncState } from '@/ui/use-async';
 
-import { FileTemplateStore, type TemplateStore } from './template-store';
+import { FileTemplateStore } from './template-store';
+import { type TemplatesList, templatesList } from './templates-list';
 
-const TemplateStoreContext = createContext<TemplateStore | null>(null);
+const TemplatesListContext = createContext<TemplatesList | null>(null);
 
-/** Provides where the user's templates are kept: local files until real login (ADR 003). */
+/**
+ * Provides the user's templates, one list for every screen (see `TemplatesList`), kept in local
+ * files until real login (ADR 003).
+ */
 export function TemplateStoreProvider({ children }: { readonly children: ReactNode }) {
-  const [store] = useState<TemplateStore>(() => new FileTemplateStore());
-  return <TemplateStoreContext value={store}>{children}</TemplateStoreContext>;
-}
-
-function useTemplateStore(): TemplateStore {
-  const store = use(TemplateStoreContext);
-  if (store === null) {
-    throw new Error('useUserTemplates must be used inside <TemplateStoreProvider>');
-  }
-  return store;
+  const [list] = useState(() => templatesList(new FileTemplateStore()));
+  return <TemplatesListContext value={list}>{children}</TemplatesListContext>;
 }
 
 /** The user's templates and how to change them. */
@@ -31,43 +34,16 @@ export type UserTemplates = AsyncState<readonly SavedTemplate[]> & {
 };
 
 /**
- * Loads the user's templates and keeps them up to date as they are saved and removed. Changes
- * show once the store has them, so the list never shows a template that wasn't kept.
+ * The user's templates, loaded the first time a screen asks, and up to date in every screen as
+ * any of them saves or removes one. Changes show once the store has them, so the list never shows
+ * a template that wasn't kept.
  */
 export function useUserTemplates(): UserTemplates {
-  const store = useTemplateStore();
-  const [attempt, setAttempt] = useState(0);
-  const loaded = useAsync(() => store.list(), `user-templates#${attempt}`);
-  /** The list after the changes made since it loaded; `null` until the first change. */
-  const [changed, setChanged] = useState<{
-    readonly attempt: number;
-    readonly templates: readonly SavedTemplate[];
-  } | null>(null);
-  const state: AsyncState<readonly SavedTemplate[]> =
-    changed?.attempt === attempt ? { status: 'success', data: changed.templates } : loaded;
-
-  /** Applies a change to the list as it is now. */
-  const update = (change: (templates: readonly SavedTemplate[]) => readonly SavedTemplate[]) =>
-    setChanged((current) => {
-      const base =
-        current?.attempt === attempt
-          ? current.templates
-          : loaded.status === 'success'
-            ? loaded.data
-            : [];
-      return { attempt, templates: change(base) };
-    });
-
-  return {
-    ...state,
-    retry: () => setAttempt((value) => value + 1),
-    save: async (saved) => {
-      await store.save(saved);
-      update((templates) => [saved, ...templates]);
-    },
-    remove: async (id) => {
-      await store.remove(id);
-      update((templates) => templates.filter(({ template }) => template.id !== id));
-    },
-  };
+  const list = use(TemplatesListContext);
+  if (list === null) {
+    throw new Error('useUserTemplates must be used inside <TemplateStoreProvider>');
+  }
+  const state = useSyncExternalStore(list.subscribe, list.get);
+  useEffect(() => list.load(), [list]);
+  return { ...state, retry: list.load, save: list.save, remove: list.remove };
 }
