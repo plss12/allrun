@@ -41,7 +41,10 @@ import {
 } from './widget-gallery';
 
 /** How a picture added from the gallery looks: its frame, and an instant photo's caption. */
-export type PictureLook = Pick<Extract<Layer, { kind: 'image' }>, 'frame' | 'caption' | 'mount'>;
+export type PictureLook = Pick<
+  Extract<Layer, { kind: 'image' }>,
+  'frame' | 'caption' | 'mount' | 'cover'
+>;
 
 interface LayerSheetProps {
   readonly visible: boolean;

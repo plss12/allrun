@@ -152,16 +152,19 @@ describe('activityCatalog', () => {
     expect(tileKeys(trail, 'photos')).toEqual([
       'image',
       'image-instant',
+      'image-camera',
+      'image-crop',
       'image-filmFrame',
       'image-lightNegative',
       'image-filmStrip',
-      'image-camera',
-      'image-crop',
+      'image-margins',
       'image-slides',
       'image-photobooth',
       'image-chat',
-      'image-margins',
+      'image-calendar',
     ]);
+    // The calendar's sheet in each of the brand's colors.
+    expect(variantKeys(trail, 'image-calendar')).toEqual(['image-calendar', 'image-calendar-ink']);
     // With two photos, the second page of the tile with one (three, the margins').
     expect(variantKeys(trail, 'image-chat')).toEqual(['image-chat', 'image-chat-pair']);
     expect(variantKeys(trail, 'image-margins')).toEqual(['image-margins', 'image-margins-pair']);

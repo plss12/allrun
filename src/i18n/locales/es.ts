@@ -729,6 +729,9 @@ export const es: Translations = {
       chatPair: 'Mensaje, dos fotos',
       margins: 'Márgenes',
       marginsPair: 'Márgenes, dos fotos',
+      calendar: 'Calendario',
+      calendarInk: 'Calendario oscuro',
+      polaroidDark: 'Polaroid oscura',
     },
   },
   activityCharts: {

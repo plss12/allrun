@@ -9,7 +9,7 @@ import {
 } from '@shopify/react-native-skia';
 import { ImpactFeedbackStyle, impactAsync } from 'expo-haptics';
 import { type ReactElement, useEffect, useState } from 'react';
-import { PixelRatio, View } from 'react-native';
+import { PixelRatio, Pressable, View } from 'react-native';
 import {
   GestureDetector,
   useCompetingGestures,
@@ -81,6 +81,13 @@ import {
 interface EditorCanvasProps {
   /** On-screen width; the height follows the template format. */
   readonly displayWidth: number;
+  /**
+   * The area the canvas goes in the middle of. Skia's view takes all of it, never changing size or
+   * place, and the scene is drawn placed and clipped inside it: on a change of format, a view that
+   * moved and shrank a frame before Skia drew it showed the old drawing in the new place (the
+   * user's recording, on the iPhone). Touches go to a view of the canvas's own size over it.
+   */
+  readonly area: { readonly width: number; readonly height: number };
   readonly template: Template;
   readonly layerContext: LayerContext;
   /** The photo, or `null` for none. */
@@ -257,6 +264,7 @@ function playHaptic(style: ImpactFeedbackStyle): void {
  */
 export function EditorCanvas({
   displayWidth,
+  area,
   template,
   layerContext,
   photo,
@@ -888,11 +896,17 @@ export function EditorCanvas({
     transform: [{ scale: reducedMotion ? 1 : 1 + 0.2 * trashProgress.get() }],
   }));
 
+  // The canvas's top-left corner in its area, where the scene is drawn and touched.
+  const left = (area.width - displayWidth) / 2;
+  const top = (area.height - displayHeight) / 2;
   return (
-    <View style={{ width: displayWidth, height: displayHeight }}>
-      <GestureDetector gesture={gesture}>
-        <Canvas style={{ width: displayWidth, height: displayHeight }}>
-          <Group transform={[{ scale: ratio }]}>
+    <View style={{ width: area.width, height: area.height }}>
+      <Canvas
+        pointerEvents="none"
+        style={{ position: 'absolute', left: 0, top: 0, width: area.width, height: area.height }}
+      >
+        <Group clip={{ x: left, y: top, width: displayWidth, height: displayHeight }}>
+          <Group transform={[{ translateX: left }, { translateY: top }, { scale: ratio }]}>
             <TemplateScene
               format={template.format}
               layers={layers}
@@ -977,7 +991,21 @@ export function EditorCanvas({
               </Group>
             )}
           </Group>
-        </Canvas>
+        </Group>
+      </Canvas>
+      {/* Around the canvas (a wide format leaves room over and under it), a tap lets go of the
+          selected widget (the user's choice). */}
+      <Pressable
+        accessible={false}
+        style={{ position: 'absolute', left: 0, top: 0, width: area.width, height: area.height }}
+        onPress={() => onSelect(null)}
+      />
+      <GestureDetector gesture={gesture}>
+        {/* Kept as a view of its own: an empty one would be flattened away. */}
+        <View
+          collapsable={false}
+          style={{ position: 'absolute', left, top, width: displayWidth, height: displayHeight }}
+        />
       </GestureDetector>
       {draggingId === null ? null : (
         <Animated.View
@@ -988,8 +1016,8 @@ export function EditorCanvas({
           style={[
             {
               position: 'absolute',
-              left: trashX - TRASH_SIZE / 2,
-              top: trashY - TRASH_SIZE / 2,
+              left: left + trashX - TRASH_SIZE / 2,
+              top: top + trashY - TRASH_SIZE / 2,
               width: TRASH_SIZE,
               height: TRASH_SIZE,
               borderRadius: TRASH_SIZE / 2,

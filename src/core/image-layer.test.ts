@@ -17,6 +17,7 @@ import {
   layerPictures,
   slidesBox,
   boothBox,
+  calendarBox,
   chatBox,
   fillsCanvas,
   marginsBox,
@@ -371,6 +372,19 @@ describe("a margins' page", () => {
   });
 });
 
+describe("a calendar's sheet", () => {
+  it('puts its band at its top, its day and weekday under it, its photo and its data at its foot', () => {
+    const box = calendarBox();
+    expect(box.band.y).toBeCloseTo(-box.height / 2);
+    expect(box.day).toBeGreaterThan(box.band.y + box.band.height);
+    expect(box.weekday).toBeGreaterThan(box.day);
+    expect(box.photo.y).toBeGreaterThan(box.weekday);
+    expect(box.photo.width / box.photo.height).toBeCloseTo(3 / 2);
+    expect(box.data).toBeGreaterThan(box.photo.y + box.photo.height);
+    expect(box.data).toBeLessThan(box.height / 2);
+  });
+});
+
 describe('a chat as one piece', () => {
   const inside =
     (box: { width: number; height: number }) =>
@@ -490,6 +504,11 @@ describe('mountBox', () => {
     if (mount === 'photobooth') {
       // Several windows of their own: see the tests of boothBox.
       expect(box).toMatchObject({ width: boothBox().width, height: boothBox().height });
+      return;
+    }
+    if (mount === 'calendar') {
+      // A sheet of its own: see the tests of calendarBox.
+      expect(box).toMatchObject({ width: calendarBox().width, height: calendarBox().height });
       return;
     }
     if (mount === 'margins' || mount === 'marginsPair') {

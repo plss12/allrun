@@ -387,13 +387,31 @@ function startingPoint(design: EditorDesign, start: DesignStart): EditorDesign {
 }
 
 /**
- * Whether Start over would change anything: all that isn't the settings or the photos. So it also
- * says whether there is anything to lose on leaving. Time O(s) for a design of size s.
+ * The widgets of `design` where they were before a change of format fitted them into the canvas
+ * (see `EditorDesign.fitted`), while they are still where it put them: the format is a setting,
+ * so what it moved is no edit. Time O(n) for n widgets.
+ */
+function asPlaced(design: EditorDesign): EditorDesign['layers'] {
+  return design.layers === null
+    ? null
+    : design.layers.map((layer) => {
+        const kept = design.fitted[layer.id];
+        return kept !== undefined && sameTransform(kept.fitted, layer.transform)
+          ? { ...layer, transform: kept.transform }
+          : layer;
+      });
+}
+
+/**
+ * Whether Start over would change anything: all that isn't the settings or the photos, a widget a
+ * change of format fitted into the canvas counted where it was (the user's report: on a design,
+ * a change of format asked whether to discard the changes). So it also says whether there is
+ * anything to lose on leaving. Time O(s) for a design of size s.
  */
 export function canStartOver(design: EditorDesign, start: DesignStart = EMPTY_START): boolean {
   const back = startingPoint(design, start);
   return !(
-    sameJson(design.layers, back.layers) &&
+    sameJson(asPlaced(design), back.layers) &&
     sameJson(design.photo, back.photo) &&
     sameJson(design.collage, back.collage) &&
     design.frame === back.frame &&

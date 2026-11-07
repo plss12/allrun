@@ -22,7 +22,14 @@ import { periodCount, shortDistance, type Translate } from './instant-caption';
  */
 export type LetteredMount = Exclude<
   ImageMount,
-  CanvasMount | 'slides' | 'photobooth' | 'chat' | 'chatPair' | 'margins' | 'marginsPair'
+  | CanvasMount
+  | 'slides'
+  | 'photobooth'
+  | 'chat'
+  | 'chatPair'
+  | 'margins'
+  | 'marginsPair'
+  | 'calendar'
 >;
 
 /** What a holder writes along one of its sides, spread along it. */
@@ -138,6 +145,57 @@ export function slidesCaption(
   translate: Translate,
 ): readonly string[] {
   return threeData(data, context, translate);
+}
+
+/** What a calendar's sheet writes: on its band, its day, under it, and at its foot. */
+export interface CalendarText {
+  readonly band: string;
+  readonly day: string;
+  readonly weekday: string;
+  readonly data: string;
+}
+
+/**
+ * What a calendar's sheet writes: an activity's month and year on its band, its day of the month
+ * huge, its weekday, and its three data at its foot. A period is written as one, a sheet of its
+ * own: its name on the band; its days (a week, any range), its month or its year huge; how many
+ * activities; and its totals. Only real data (the user's rule). Time and space O(1).
+ */
+export function calendarCaption(
+  data: EditorData,
+  context: TextContext,
+  translate: Translate,
+): CalendarText {
+  const line = threeData(data, context, translate).join(CROP_SEPARATOR);
+  if (data.mode === 'activity') {
+    const start = data.activity.startLocal;
+    const month = new Intl.DateTimeFormat(context.locale, {
+      month: 'long',
+      timeZone: 'UTC',
+    }).format(new Date(`${start}Z`));
+    return {
+      band: `${month} ${start.slice(0, 4)}`,
+      day: String(Number(start.slice(8, 10))),
+      weekday: formatActivityDate(start, context.locale, 'weekday'),
+      data: line,
+    };
+  }
+  const { start, end } = data.summary.range;
+  const day = (date: string) => String(Number(date.slice(8, 10)));
+  const big =
+    data.kind === 'month'
+      ? new Intl.DateTimeFormat(context.locale, { month: 'short', timeZone: 'UTC' })
+          .format(new Date(`${start}T00:00:00Z`))
+          .replace('.', '')
+      : data.kind === 'year'
+        ? start.slice(0, 4)
+        : `${day(start)}–${day(end)}`;
+  return {
+    band: periodName(data, context, translate),
+    day: big,
+    weekday: periodCount(data, translate),
+    data: line,
+  };
 }
 
 /** What a margins' page writes: its three data, and its three labels, the faded ones marked. */

@@ -12,6 +12,7 @@ import {
   DATE_FORMATS,
   HEART_RATE_ZONE_VIEWS,
   IMAGE_FRAMES,
+  BRAND_COVERS,
   IMAGE_MOUNTS,
   type ImageMount,
   INSTANT_CAPTIONS,
@@ -78,7 +79,7 @@ export type CatalogItem =
     >
   | Readonly<Pick<LayerOf<'activityBlock'>, 'kind' | 'block'>>
   | Readonly<Pick<LayerOf<'summaryBlock'>, 'kind' | 'block'>>
-  | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame' | 'caption' | 'mount'>>;
+  | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame' | 'caption' | 'mount' | 'cover'>>;
 
 /**
  * What a new layer is made from: a catalog item, with the typed content for free text, or a picture
@@ -91,7 +92,7 @@ export type NewLayer =
   | Readonly<
       Pick<
         LayerOf<'image'>,
-        'kind' | 'image' | 'frame' | 'caption' | 'mount' | 'slot' | 'extraImages'
+        'kind' | 'image' | 'frame' | 'caption' | 'mount' | 'slot' | 'extraImages' | 'cover'
       >
     >;
 
@@ -330,7 +331,10 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
         // As is, the default; an instant photo by its caption, where and how far the default; a
         // holder with one photo fewer than its tile's first page, `pair`.
         return item.mount !== undefined
-          ? [PAIRED_MOUNTS[item.mount] === undefined ? undefined : 'pair']
+          ? [
+              PAIRED_MOUNTS[item.mount] === undefined ? undefined : 'pair',
+              item.cover === 'ink' ? 'ink' : undefined,
+            ]
           : item.caption === undefined
             ? [item.frame === 'none' ? undefined : item.frame]
             : [
@@ -426,7 +430,19 @@ const IMAGE_ENTRIES: readonly Entry[] = [
     ),
   ),
   ...IMAGE_MOUNTS.flatMap((mount) =>
-    tileEntries('photos', [{ kind: 'image', image: SAMPLE_IMAGE, frame: 'none', mount }]),
+    tileEntries(
+      'photos',
+      // The calendar's sheet in each of the brand's colors, as the brand's covers go in pairs.
+      mount === 'calendar'
+        ? BRAND_COVERS.map((cover) => ({
+            kind: 'image',
+            image: SAMPLE_IMAGE,
+            frame: 'none',
+            mount,
+            ...(cover === 'red' ? {} : { cover }),
+          }))
+        : [{ kind: 'image', image: SAMPLE_IMAGE, frame: 'none', mount }],
+    ),
   ),
 ];
 

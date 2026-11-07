@@ -692,6 +692,52 @@ export function marginsBox(count: number, canvas: Size): MarginsBox {
 }
 
 /**
+ * A tear-off calendar's sheet (`calendar`), in canvas pixels of 1080: its size, the band of its
+ * month at its top, where the middles of its day and weekday go down it, its photo (3:2) and its
+ * data line at its foot.
+ */
+const CALENDAR = {
+  width: 640,
+  height: 1000,
+  band: 120,
+  day: 300,
+  weekday: 480,
+  photo: { top: 520, margin: 40 },
+  data: 940,
+} as const;
+
+/** A calendar's sheet laid out (see `calendarBox`), from its middle. */
+export interface CalendarBox extends Size {
+  readonly band: BoxRect;
+  readonly photo: BoxRect;
+  /** Where the middles of its texts go down it: the day, the weekday and the data. */
+  readonly day: number;
+  readonly weekday: number;
+  readonly data: number;
+}
+
+/** Where a calendar's sheet puts its parts, a square sheet (the user's choice). Time and space O(1). */
+export function calendarBox(): CalendarBox {
+  const { width, height, band, photo } = CALENDAR;
+  const top = -height / 2;
+  const photoWidth = width - 2 * photo.margin;
+  return {
+    width,
+    height,
+    band: { x: -width / 2, y: top, width, height: band },
+    photo: {
+      x: -photoWidth / 2,
+      y: top + photo.top,
+      width: photoWidth,
+      height: (photoWidth * 2) / 3,
+    },
+    day: top + CALENDAR.day,
+    weekday: top + CALENDAR.weekday,
+    data: top + CALENDAR.data,
+  };
+}
+
+/**
  * The windows of a holder of several (see `mountWindows`) on `canvas`, from its middle; `null`
  * for the rest.
  */
@@ -790,6 +836,19 @@ export function mountBox(mount: ImageMount, canvas: Size): MountBox {
         width: booth.width,
         height: booth.height,
         picture,
+        radius: 0,
+        holes: [],
+        sides: [none, none],
+        frames: [],
+      };
+    }
+    case 'calendar': {
+      const sheet = calendarBox();
+      const none = { ...sheet.photo, width: 0 };
+      return {
+        width: sheet.width,
+        height: sheet.height,
+        picture: sheet.photo,
         radius: 0,
         holes: [],
         sides: [none, none],

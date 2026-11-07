@@ -1,5 +1,13 @@
 import { emptyLayout, defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
-import { instantBox, mountBox, SAMPLE_IMAGE, slidesBox, boothBox, chatBox } from './image-layer';
+import {
+  boothBox,
+  calendarBox,
+  chatBox,
+  instantBox,
+  mountBox,
+  SAMPLE_IMAGE,
+  slidesBox,
+} from './image-layer';
 import { at, type TemplateData } from './layout-kit';
 import {
   CANVAS_FORMATS,
@@ -16,18 +24,22 @@ import {
  * thumbnails show our stock photos in those slots. Adding one is adding a recipe here.
  */
 export const READY_DESIGN_IDS = [
-  'messageOne',
-  'messageTwo',
+  // In the widget gallery's order, fifteen for full rows of three (the user's choice).
+  'polaroid',
+  'polaroidDark',
+  'camera',
+  'crop',
   'filmFrame',
   'lightNegative',
   'filmStrip',
-  'camera',
-  'crop',
-  'polaroid',
-  'slides',
-  'photobooth',
   'margins',
   'marginsPair',
+  'slides',
+  'photobooth',
+  'messageOne',
+  'messageTwo',
+  'calendar',
+  'calendarInk',
 ] as const;
 
 export type ReadyDesignId = (typeof READY_DESIGN_IDS)[number];
@@ -203,7 +215,7 @@ const POLAROID = { width: 0.55, height: 0.8, tilt: (-4 * Math.PI) / 180 } as con
  * the user chooses (the user's choice: a landscape behind, and another photo in the Polaroid).
  * Over black with no photo yet. Time and space O(1).
  */
-function polaroid(data: TemplateData, format: CanvasFormat): ReadyDesign {
+function polaroid(data: TemplateData, format: CanvasFormat, dark: boolean = false): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
   const box = instantBox();
   const scale = Math.min(
@@ -214,13 +226,14 @@ function polaroid(data: TemplateData, format: CanvasFormat): ReadyDesign {
     id: 'photo-1',
     kind: 'image',
     image: SAMPLE_IMAGE,
-    frame: 'light',
-    caption: 'place',
+    // The dark one with its date and data, which names no place, so it asks for nothing.
+    frame: dark ? 'dark' : 'light',
+    caption: dark ? 'data' : 'place',
     slot: true,
     transform: { x: 0.5, y: 0.5, scale, rotation: POLAROID.tilt },
     opacity: 1,
   };
-  return { template: design('polaroid', data, format, BLACK, [photo]) };
+  return { template: design(dark ? 'polaroidDark' : 'polaroid', data, format, BLACK, [photo]) };
 }
 
 /** Most of the canvas a slide viewer takes, wide and tall. */
@@ -293,6 +306,36 @@ function margins(
   };
 }
 
+/**
+ * A calendar's sheet over the canvas's photo: how much of the canvas it takes at most, wide and
+ * tall, and how much it leans, counterclockwise (3°), as one left on a table.
+ */
+const CALENDAR_ROOM = { width: 0.6, height: 0.8, tilt: (3 * Math.PI) / 180 } as const;
+
+/**
+ * A sheet torn off a calendar, in Track Red, its day huge over the photo (the user's choice: a
+ * square sheet), leaning over the canvas's photo, the background the user chooses. Over black with
+ * no photo yet. Time and space O(1).
+ */
+function calendar(data: TemplateData, format: CanvasFormat, ink: boolean = false): ReadyDesign {
+  const canvas = CANVAS_FORMATS[format];
+  const box = calendarBox();
+  const scale = Math.min(
+    (CALENDAR_ROOM.width * canvas.width) / box.width,
+    (CALENDAR_ROOM.height * canvas.height) / box.height,
+  );
+  const sheet = slot('photo-1', 'calendar', 0.5, 0.5, scale);
+  return {
+    template: design(ink ? 'calendarInk' : 'calendar', data, format, BLACK, [
+      {
+        ...sheet,
+        ...(ink ? { cover: 'ink' as const } : {}),
+        transform: { ...sheet.transform, rotation: CALENDAR_ROOM.tilt },
+      },
+    ]),
+  };
+}
+
 const RECIPES: Readonly<
   Record<ReadyDesignId, (data: TemplateData, format: CanvasFormat) => ReadyDesign>
 > = {
@@ -308,6 +351,9 @@ const RECIPES: Readonly<
   photobooth,
   margins: (data, format) => margins('margins', false, data, format),
   marginsPair: (data, format) => margins('marginsPair', true, data, format),
+  calendar,
+  calendarInk: (data, format) => calendar(data, format, true),
+  polaroidDark: (data, format) => polaroid(data, format, true),
 };
 
 /** One of AllRun's designs laid out for `data` in `format`. Time and space O(1). */

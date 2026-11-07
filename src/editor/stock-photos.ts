@@ -26,6 +26,18 @@ const STOCK_FILES = {
   trackShadow: require('../../assets/images/stock/track-shadow.jpg'),
   trackShoes: require('../../assets/images/stock/track-shoes.jpg'),
   woodlandPath: require('../../assets/images/stock/woodland-path.jpg'),
+  trailRidge: require('../../assets/images/stock/trail-ridge.jpg'),
+  foggyHill: require('../../assets/images/stock/foggy-hill.jpg'),
+  duskSilhouette: require('../../assets/images/stock/dusk-silhouette.jpg'),
+  muddyLegs: require('../../assets/images/stock/muddy-legs.jpg'),
+  sunriseCyclist: require('../../assets/images/stock/sunrise-cyclist.jpg'),
+  mountainRoad: require('../../assets/images/stock/mountain-road.jpg'),
+  seasideRide: require('../../assets/images/stock/seaside-ride.jpg'),
+  riversideRun: require('../../assets/images/stock/riverside-run.jpg'),
+  beachSunset: require('../../assets/images/stock/beach-sunset.jpg'),
+  shoreSplash: require('../../assets/images/stock/shore-splash.jpg'),
+  harbourSwim: require('../../assets/images/stock/harbour-swim.jpg'),
+  seaSwimmer: require('../../assets/images/stock/sea-swimmer.jpg'),
 } as const;
 
 export type StockPhoto = keyof typeof STOCK_FILES;
@@ -105,24 +117,32 @@ export function stockImages(stock: StockPhotos): ReadonlyMap<string, LayerImage>
   );
 }
 
-/** The stock photos of each holder's tile, one per window (see `windowCount`). */
+/**
+ * The stock photos of each holder's tile, one per window (see `windowCount`): every photo in one
+ * tile only, chosen by what it shows (the user's choice), the pieces of several with a theme.
+ */
 const MOUNT_PHOTOS: Readonly<Record<ImageMount, readonly StockPhoto[]>> = {
-  filmFrame: ['monoSprinter'],
+  camera: ['trailRidge'],
+  crop: ['duskSilhouette'],
+  // Black and white in the black frame.
+  filmFrame: ['monoStride'],
   lightNegative: ['forestTrail'],
-  filmStrip: ['trackShoes'],
-  camera: ['forestBridge'],
-  crop: ['trackShadow'],
-  slides: ['runway', 'woodlandPath', 'concreteWall'],
-  photobooth: ['monoStride', 'streetCrossing', 'stadiumField'],
+  filmStrip: ['sunriseCyclist'],
+  // A trail run, and a ride.
+  margins: ['muddyLegs', 'forestBridge', 'woodlandPath'],
+  marginsPair: ['seasideRide', 'mountainRoad'],
+  // A day at the sea, and a session on the track.
+  slides: ['harbourSwim', 'seaSwimmer', 'beachSunset'],
+  photobooth: ['trackShadow', 'trackShoes', 'runway'],
+  // The city.
   chat: ['streetCrossing'],
-  chatPair: ['forestBridge', 'trackShadow'],
-  margins: ['mountainRunner', 'woodlandPath', 'trackShoes'],
-  marginsPair: ['trackShadow', 'forestTrail'],
+  chatPair: ['brickWall', 'concreteWall'],
+  calendar: ['mountainRunner'],
 };
 const FRAME_PHOTOS: Readonly<Record<ImageFrame, StockPhoto>> = {
-  none: 'mountainRunner',
+  none: 'riversideRun',
   light: 'stadiumField',
-  dark: 'brickWall',
+  dark: 'monoSprinter',
 };
 
 /**
@@ -134,7 +154,7 @@ function tilePhotos(layer: Extract<Layer, { kind: 'image' }>): readonly StockPho
     return MOUNT_PHOTOS[layer.mount];
   }
   if (layer.caption !== undefined) {
-    return [layer.caption === 'place' ? 'forestBridge' : 'streetCrossing'];
+    return [layer.caption === 'place' ? 'foggyHill' : 'shoreSplash'];
   }
   return [FRAME_PHOTOS[layer.frame]];
 }

@@ -765,6 +765,9 @@ export const en = {
       chatPair: 'Message, two photos',
       margins: 'Margins',
       marginsPair: 'Margins, two photos',
+      calendar: 'Calendar',
+      calendarInk: 'Dark calendar',
+      polaroidDark: 'Dark Polaroid',
     },
   },
   activityCharts: {

@@ -859,7 +859,7 @@ function EditorWorkspace({
    * A holder as big as the canvas (the camera, the crop screen) holds the canvas's own photo (see
    * `coversCanvas`): with none, the one picked becomes it, in the same undo step.
    */
-  const addPicture = ({ frame, caption, mount }: PictureLook) => {
+  const addPicture = ({ frame, caption, mount, cover }: PictureLook) => {
     setSheetOpen(false);
     const count = mountWindows(mount);
     if (!canAddImage(template, cellPhotos, count)) {
@@ -871,6 +871,7 @@ function EditorWorkspace({
       frame,
       ...(caption === undefined ? {} : { caption }),
       ...(mount === undefined ? {} : { mount }),
+      ...(cover === undefined ? {} : { cover }),
     } as const;
     if (coversCanvas(mount)) {
       const item = { ...look, image: EDITOR_PHOTO };
@@ -1482,11 +1483,13 @@ function EditorWorkspace({
       >
         {displayWidth > 0 ? (
           <Animated.View
+            collapsable={false}
             pointerEvents={exporting ? 'none' : 'auto'}
             style={[{ overflow: 'hidden' }, liftStyle]}
           >
             <EditorCanvas
               displayWidth={displayWidth}
+              area={area ?? { width: displayWidth, height: displayHeight }}
               template={shownTemplate}
               layerContext={layerContext}
               photo={design.collage === null && !photoInSlot ? canvasImage : null}
@@ -1530,7 +1533,21 @@ function EditorWorkspace({
               trashLabel={t('editor.removeLayer')}
             />
             {eyedropper === null ? null : (
-              <Eyedropper image={eyedropper.image} displayWidth={displayWidth} onPick={pickColor} />
+              <View
+                style={{
+                  position: 'absolute',
+                  left: canvasLeft,
+                  top: canvasTop,
+                  width: displayWidth,
+                  height: displayHeight,
+                }}
+              >
+                <Eyedropper
+                  image={eyedropper.image}
+                  displayWidth={displayWidth}
+                  onPick={pickColor}
+                />
+              </View>
             )}
             {switching || (photo !== null && canvasImage === null) ? (
               <View

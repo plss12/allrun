@@ -225,22 +225,25 @@ export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
  * strip of three, a datum on a piece of tape over it and its date at its foot (`photobooth`), or a
  * chat in dark mode, its date over a sent photo and the message with two data under it, with one
  * photo (`chat`) or two (`chatPair`), or a page as big as the canvas, its photos the whole of it
- * between two bands with texts turned in them, three photos (`margins`) or two (`marginsPair`):
- * those with more than one picture, see `windowCount`. The holder and the data on it move as one
- * piece.
+ * between two bands with texts turned in them, three photos (`margins`) or two (`marginsPair`), or
+ * a sheet of a tear-off calendar, its day huge over the photo (`calendar`): those with more than one
+ * picture, see `windowCount`. The holder and the data on it move as one piece.
  */
 export const IMAGE_MOUNTS = [
+  // In the gallery's order (the user's choice): the camera and the crop screen, the films, those of
+  // several photos, and the chat with the calendar.
+  'camera',
+  'crop',
   'filmFrame',
   'lightNegative',
   'filmStrip',
-  'camera',
-  'crop',
+  'margins',
+  'marginsPair',
   'slides',
   'photobooth',
   'chat',
   'chatPair',
-  'margins',
-  'marginsPair',
+  'calendar',
 ] as const;
 
 export type ImageMount = (typeof IMAGE_MOUNTS)[number];
@@ -805,6 +808,8 @@ export const layerSchema = z.discriminatedUnion('kind', [
      * `windowCount`): the first window's is `image`. Each a key as `image` is; empty, none chosen.
      */
     extraImages: z.array(z.string()).optional(),
+    /** The brand's color a holder is printed in (the calendar's sheet); absent, Track Red. */
+    cover: z.enum(BRAND_COVERS).optional(),
     frame: z.enum(IMAGE_FRAMES),
     /**
      * An instant photo's caption (see `INSTANT_CAPTIONS`): the picture, cut square, in a Polaroid's

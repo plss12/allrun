@@ -366,6 +366,23 @@ describe('start over, to how the canvas started', () => {
   const chosen = applyDesign(INITIAL_DESIGN, design, []);
   const start = designStart(chosen);
 
+  it('counts a change of format as no edit, though it fitted a widget into the new canvas', () => {
+    // A piece as tall as the story: on a wide canvas it is shrunk to fit.
+    const sizeOf = () => ({ width: 500, height: 1400 });
+    const wide = setFormat(chosen, 'landscape', sizeOf);
+    expect(wide.layers?.[0].transform.scale).toBeLessThan(1);
+    expect(canStartOver(wide, start)).toBe(false);
+    // Moved by hand after it, it is an edit again.
+    const moved = {
+      ...wide,
+      layers: (wide.layers ?? []).map((layer) => ({
+        ...layer,
+        transform: { ...layer.transform, x: 0.3 },
+      })),
+    };
+    expect(canStartOver(moved, start)).toBe(true);
+  });
+
   it('has nothing to do while the design is as it opened', () => {
     expect(canStartOver(chosen, start)).toBe(false);
     expect(startOver(chosen, start)).toBe(chosen);

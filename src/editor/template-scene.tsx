@@ -36,6 +36,8 @@ import {
   layerPictures,
   type BoothBox,
   boothBox,
+  type CalendarBox,
+  calendarBox,
   type ChatBox,
   chatBox,
   type MarginsBox,
@@ -110,6 +112,8 @@ import {
 import { type CaptionText, instantCaption } from './instant-caption';
 import {
   boothCaption,
+  calendarCaption,
+  type CalendarText,
   marginsCaption,
   type MarginsText,
   type BoothText,
@@ -926,6 +930,30 @@ function prepareLayer(
           ),
         };
       }
+      if (layer.mount === 'calendar') {
+        const box = calendarBox();
+        const look = CALENDAR_LOOK[layer.cover ?? 'red'];
+        return {
+          layer,
+          width: box.width,
+          height: box.height,
+          content: (
+            <CalendarWidget
+              box={box}
+              picture={picked?.image ?? null}
+              empty={empty}
+              ink={look}
+              texts={calendarTexts(
+                fonts,
+                calendarCaption(data, textContext, translate),
+                box,
+                look,
+                textContext.locale,
+              )}
+            />
+          ),
+        };
+      }
       if (layer.mount === 'margins' || layer.mount === 'marginsPair') {
         const box = marginsBox(layer.mount === 'margins' ? 3 : 2, canvas);
         const photos = layerPictures(layer).map((key) => {
@@ -1663,6 +1691,142 @@ function CameraWidget({
       )}
       {view}
       {empty === 'hint' ? <EmptySign cx={0} cy={0} /> : null}
+    </Group>
+  );
+}
+
+/**
+ * How a calendar's sheet looks: its paper, its ink, and its brand's color (the band and the
+ * weekday), in Track Red or Night Ink (`cover`), as the brand's covers go in pairs.
+ */
+const CALENDAR_PAPER = '#FAF8F3';
+const CALENDAR_INK = '#1A1A1A';
+const CALENDAR_LOOK = { red: '#C94A2E', ink: '#141B2D' } as const;
+
+/** A calendar's sheet's texts: each line's font, size, color and capitals. */
+const CALENDAR_TYPE = {
+  band: { font: 'inter' as FontId, size: 38, bold: true },
+  day: { font: 'anton' as FontId, size: 300, bold: false },
+  weekday: { font: 'inter' as FontId, size: 40, bold: true },
+  data: { font: 'inter' as FontId, size: 30, bold: false },
+} as const;
+
+/** A calendar's sheet's texts laid out, each centered across it at its height. */
+interface CalendarLines {
+  readonly lines: readonly PlacedParagraph[];
+}
+
+/**
+ * Lays out a calendar's sheet's texts (see `calendarCaption`), in capitals but its day, each
+ * centered across it and shrunk to fit its width with room at its ends. Time O(1).
+ */
+function calendarTexts(
+  fonts: SkTypefaceFontProvider,
+  text: CalendarText,
+  box: CalendarBox,
+  brand: string,
+  locale: string,
+): CalendarLines {
+  const room = box.width - 2 * 40;
+  const line = (
+    words: string,
+    type: { readonly font: FontId; readonly size: number; readonly bold: boolean },
+    color: string,
+    middle: number,
+  ): PlacedParagraph[] => {
+    if (words === '') {
+      return [];
+    }
+    const layOut = (size: number) => {
+      const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+      builder.pushStyle({
+        color: Skia.Color(color),
+        fontFamilies: fontFamiliesOf(type.font),
+        fontSize: size,
+        fontStyle: {
+          weight: drawsBold(type.font, type.bold) ? FontWeight.Bold : FontWeight.Normal,
+        },
+      });
+      builder.addText(words.toLocaleUpperCase(locale));
+      builder.pop();
+      const paragraph = finishParagraph(builder);
+      paragraph.layout(NO_WRAP_WIDTH);
+      return paragraph;
+    };
+    let paragraph = layOut(type.size);
+    if (paragraph.getLongestLine() > room) {
+      const fit = room / paragraph.getLongestLine();
+      discardParagraph(paragraph);
+      paragraph = layOut(type.size * fit);
+    }
+    const width = Math.ceil(paragraph.getLongestLine()) + 1;
+    paragraph.layout(width);
+    return [{ paragraph, x: -width / 2, y: middle - paragraph.getHeight() / 2 }];
+  };
+  return {
+    lines: [
+      ...line(text.band, CALENDAR_TYPE.band, '#FFFFFF', box.band.y + box.band.height / 2),
+      ...line(text.day, CALENDAR_TYPE.day, CALENDAR_INK, box.day),
+      ...line(text.weekday, CALENDAR_TYPE.weekday, brand, box.weekday),
+      ...line(text.data, CALENDAR_TYPE.data, CALENDAR_INK, box.data),
+    ],
+  };
+}
+
+/**
+ * A tear-off calendar's sheet with its photo, as one piece: its paper lifted off what is under it
+ * by a shadow, its band of the brand's color with the month, the day huge, the weekday, the photo
+ * and the data. Its photo not chosen shows the sign to fill it (`hint`) or only the paper.
+ */
+function CalendarWidget({
+  box,
+  picture,
+  empty,
+  ink,
+  texts,
+}: {
+  readonly box: CalendarBox;
+  readonly picture: SkImage | null;
+  readonly empty: 'hint' | 'blank' | null;
+  readonly ink: string;
+  readonly texts: CalendarLines;
+}) {
+  const rect = box.photo;
+  return (
+    <Group>
+      <Group
+        layer={
+          <Paint>
+            <DropShadow />
+          </Paint>
+        }
+      >
+        <Rect
+          x={-box.width / 2}
+          y={-box.height / 2}
+          width={box.width}
+          height={box.height}
+          color={CALENDAR_PAPER}
+        />
+      </Group>
+      <Rect {...box.band} color={ink} />
+      {empty === 'blank' ? null : empty === null && picture !== null ? (
+        <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
+      ) : (
+        <Rect {...rect} color={LOADING_PICTURE} />
+      )}
+      {empty === 'hint' ? (
+        <EmptySign cx={rect.x + rect.width / 2} cy={rect.y + rect.height / 2} />
+      ) : null}
+      {texts.lines.map(({ paragraph, x, y }, i) => (
+        <ParagraphPicture
+          key={i}
+          paragraph={paragraph}
+          x={x}
+          y={y}
+          width={Math.ceil(paragraph.getLongestLine()) + 1}
+        />
+      ))}
     </Group>
   );
 }

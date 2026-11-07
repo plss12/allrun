@@ -45,21 +45,15 @@ const COLLAGES: readonly {
   readonly layout: CollageLayout;
   readonly photos: readonly StockPhoto[];
 }[] = [
-  { layout: 'two', photos: ['stadiumField', 'brickWall'] },
-  { layout: 'three', photos: ['runway', 'concreteWall', 'monoStride'] },
-  { layout: 'four', photos: ['forestBridge', 'trackShadow', 'monoSprinter', 'trackShoes'] },
+  // A theme each, none repeated (the user's choice): a ride, the sea, the city, the trail, the track.
+  { layout: 'two', photos: ['seasideRide', 'mountainRoad'] },
+  { layout: 'three', photos: ['beachSunset', 'shoreSplash', 'harbourSwim'] },
+  { layout: 'four', photos: ['riversideRun', 'brickWall', 'concreteWall', 'streetCrossing'] },
   {
     layout: 'six',
-    photos: [
-      'forestTrail',
-      'streetCrossing',
-      'trackShadow',
-      'forestBridge',
-      'monoSprinter',
-      'trackShoes',
-    ],
+    photos: ['foggyHill', 'trailRidge', 'muddyLegs', 'forestBridge', 'woodlandPath', 'forestTrail'],
   },
-  { layout: 'oneTwo', photos: ['woodlandPath', 'trackShoes', 'streetCrossing'] },
+  { layout: 'oneTwo', photos: ['stadiumField', 'trackShadow', 'trackShoes'] },
 ];
 
 const COLLAGE_FRAMES: readonly ImageFrame[] = ['none', 'light', 'dark'];
@@ -69,35 +63,46 @@ const COLLAGE_FRAMES: readonly ImageFrame[] = ['none', 'light', 'dark'];
  * `OVER_A_PHOTO`) has that one first.
  */
 const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
-  messageOne: ['streetCrossing'],
-  messageTwo: ['forestBridge', 'trackShadow'],
-  filmFrame: ['monoSprinter'],
+  // Each its piece's photos in the widget gallery, and a landscape behind those over one, none
+  // twice in a row of three.
+  polaroid: ['beachSunset', 'foggyHill'],
+  polaroidDark: ['riversideRun', 'shoreSplash'],
+  camera: ['trailRidge'],
+  crop: ['duskSilhouette'],
+  filmFrame: ['monoStride'],
   lightNegative: ['forestTrail'],
-  filmStrip: ['trackShoes'],
-  camera: ['forestBridge'],
-  crop: ['trackShadow'],
-  polaroid: ['forestBridge', 'woodlandPath'],
-  slides: ['mountainRunner', 'forestBridge', 'trackShoes'],
-  photobooth: ['forestBridge', 'mountainRunner', 'trackShadow', 'trackShoes'],
-  margins: ['mountainRunner', 'forestBridge', 'trackShoes'],
-  marginsPair: ['trackShadow', 'woodlandPath'],
+  filmStrip: ['sunriseCyclist'],
+  margins: ['muddyLegs', 'forestBridge', 'woodlandPath'],
+  marginsPair: ['seasideRide', 'mountainRoad'],
+  slides: ['harbourSwim', 'seaSwimmer', 'beachSunset'],
+  photobooth: ['stadiumField', 'trackShadow', 'trackShoes', 'runway'],
+  messageOne: ['streetCrossing'],
+  messageTwo: ['brickWall', 'concreteWall'],
+  calendar: ['mountainRoad', 'mountainRunner'],
+  calendarInk: ['stadiumField', 'monoSprinter'],
 };
 
 /** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */
 const SAVED_PHOTOS: readonly StockPhoto[] = [
-  'monoSprinter',
-  'forestBridge',
+  'riversideRun',
+  'foggyHill',
+  'seasideRide',
+  'beachSunset',
   'trackShoes',
-  'streetCrossing',
-  'trackShadow',
-  'forestTrail',
+  'mountainRunner',
 ];
 
 /**
  * AllRun's designs whose thumbnail shows a photo of the canvas behind their slots, as they are made
  * to be used (a landscape behind the Polaroid); the others show their own background.
  */
-const OVER_A_PHOTO: ReadonlySet<string> = new Set(['allrun-polaroid', 'allrun-photobooth']);
+const OVER_A_PHOTO: ReadonlySet<string> = new Set([
+  'allrun-polaroid',
+  'allrun-photobooth',
+  'allrun-calendar',
+  'allrun-calendarInk',
+  'allrun-polaroidDark',
+]);
 
 /**
  * The stock photos `names` of a design: the one over its canvas, if its thumbnail shows one (see

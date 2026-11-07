@@ -16,7 +16,7 @@ import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 import { es } from '@/i18n/locales/es';
 
 import type { EditorData } from './editor-data';
-import { boothCaption, cropCaption, mountCaption } from './mount-caption';
+import { boothCaption, calendarCaption, cropCaption, mountCaption } from './mount-caption';
 import type { LayerContext } from './template-scene';
 
 jest.mock('@shopify/react-native-skia/lib/commonjs/Platform', () => ({
@@ -171,6 +171,24 @@ describe.each(['camera', 'crop'] as const)('the %s', (id) => {
       ]);
       expect(prepared.hole).toBeUndefined();
     }
+  });
+});
+
+describe('calendarCaption', () => {
+  it("writes an activity's month and year, its day, its weekday and its data", () => {
+    const text = calendarCaption(activity, textContext, translate as never);
+    const start = makeActivity().startLocal;
+    expect(text.band).toContain(start.slice(0, 4));
+    expect(text.day).toBe(String(Number(start.slice(8, 10))));
+    expect(text.weekday.length).toBeGreaterThan(0);
+    expect(text.data.split('·')).toHaveLength(3);
+  });
+
+  it('writes a period as a sheet of its own: its name, its days and how many activities', () => {
+    const text = calendarCaption(period, textContext, translate as never);
+    expect(text.band).toBe(es.thisWeek);
+    expect(text.day).toMatch(/^\d{1,2}–\d{1,2}$/);
+    expect(text.weekday.length).toBeGreaterThan(0);
   });
 });
 
