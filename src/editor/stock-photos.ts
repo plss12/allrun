@@ -1,7 +1,7 @@
 import { loadData, Skia, type SkImage } from '@shopify/react-native-skia';
 import { useEffect, useState } from 'react';
 
-import type { ImageFrame, ImageMount, Layer } from '@/core/template';
+import type { ImageMount, Layer } from '@/core/template';
 import { logError } from '@/ui/log';
 
 import type { LayerImage } from './template-scene';
@@ -139,11 +139,11 @@ const MOUNT_PHOTOS: Readonly<Record<ImageMount, readonly StockPhoto[]>> = {
   chatPair: ['brickWall', 'concreteWall'],
   calendar: ['mountainRunner'],
 };
-const FRAME_PHOTOS: Readonly<Record<ImageFrame, StockPhoto>> = {
-  none: 'riversideRun',
-  light: 'stadiumField',
-  dark: 'monoSprinter',
-};
+/**
+ * The photo of "Your photo"'s tile, the same in its three pages, as is and in each frame, so they
+ * compare (the user's choice).
+ */
+const PICTURE_PHOTO: StockPhoto = 'riversideRun';
 
 /**
  * The stock photos of a tile of a picture, one per window: a different one each, for variety (the
@@ -156,7 +156,7 @@ function tilePhotos(layer: Extract<Layer, { kind: 'image' }>): readonly StockPho
   if (layer.caption !== undefined) {
     return [layer.caption === 'place' ? 'foggyHill' : 'shoreSplash'];
   }
-  return [FRAME_PHOTOS[layer.frame]];
+  return [PICTURE_PHOTO];
 }
 
 /** A widget of the gallery with its stock photos, if it is a picture; any other, as it is. */
