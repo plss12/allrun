@@ -1,6 +1,7 @@
 import { makeActivity } from '@/test-utils/make-activity';
 
-import { formatPlace, startOf } from './place';
+import { readyDesign } from './designs';
+import { namesPlace, formatPlace, startOf } from './place';
 import { encodePolyline } from './polyline';
 
 describe('startOf', () => {
@@ -33,5 +34,15 @@ describe('formatPlace', () => {
     expect(formatPlace({ ...seville, city: null }, 'city')).toBe('Andalucía');
     expect(formatPlace({ city: null, region: null, country: 'España' }, 'city')).toBe('España');
     expect(formatPlace({ city: null, region: null, country: null }, 'city')).toBeNull();
+  });
+});
+
+describe('namesPlace', () => {
+  const data = { mode: 'activity', activity: makeActivity() } as const;
+
+  it('tells the designs that write the place from the others', () => {
+    expect(namesPlace(readyDesign('polaroid', data, 'story').template.layers)).toBe(true);
+    expect(namesPlace(readyDesign('crop', data, 'story').template.layers)).toBe(false);
+    expect(namesPlace(readyDesign('messageOne', data, 'story').template.layers)).toBe(false);
   });
 });

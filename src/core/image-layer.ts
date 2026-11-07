@@ -102,18 +102,32 @@ export function withEmptySlots(layers: readonly Layer[]): Layer[] {
 }
 
 /**
- * `layers` with their empty slots filled in order with `pictures`; those left over stay out. Time
- * O(n) for n layers.
+ * `layers` with their empty slots filled in order with `pictures`; those left over stay out. A slot
+ * that keeps the canvas's photo (see `keepsCanvasPhoto`) takes the first other one, and the canvas's
+ * goes on to the next slot that takes it, if any. Time O(n·p) for n layers and p pictures.
  */
 export function fillSlots(layers: readonly Layer[], pictures: readonly string[]): Layer[] {
-  let next = 0;
+  const left = [...pictures];
   return layers.map((layer) => {
-    if (!isPhotoSlot(layer) || layer.image !== SAMPLE_IMAGE || next >= pictures.length) {
+    if (!isPhotoSlot(layer) || layer.image !== SAMPLE_IMAGE) {
       return layer;
     }
-    next += 1;
-    return { ...layer, image: pictures[next - 1] };
+    const at = left.findIndex((key) => layer.keepsCanvasPhoto !== true || key !== EDITOR_PHOTO);
+    if (at === -1) {
+      return layer;
+    }
+    const [image] = left.splice(at, 1);
+    return { ...layer, image };
   });
+}
+
+/**
+ * Whether a design leaves the canvas's photo as its background: none of its slots takes it, as
+ * none does in a design without slots, or with only slots that keep it (the Polaroid's). Time O(n)
+ * for n layers.
+ */
+export function leavesCanvasPhoto(layers: readonly Layer[]): boolean {
+  return layers.filter(isPhotoSlot).every((layer) => layer.keepsCanvasPhoto === true);
 }
 
 /** A rectangle inside a widget centered on (0, 0). */
@@ -393,6 +407,15 @@ export function mountBox(mount: ImageMount, canvas: Size): MountBox {
 export function instantFrame(frame: ImageFrame): Exclude<ImageFrame, 'none'> {
   return frame === 'dark' ? 'dark' : 'light';
 }
+
+/**
+ * The frame of an instant photo: a white and a black faded with time, as an old print's (the user's
+ * choice), not the pure ones of a picture's frame (see `FRAME_COLORS`).
+ */
+export const INSTANT_COLORS: Readonly<Record<Exclude<ImageFrame, 'none'>, string>> = {
+  light: '#EDE8DC',
+  dark: '#262321',
+};
 
 /** The ink of a caption on a frame: black on white, white on black. */
 export const CAPTION_INK: Readonly<Record<Exclude<ImageFrame, 'none'>, string>> = {

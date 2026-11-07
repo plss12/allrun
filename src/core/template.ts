@@ -798,6 +798,11 @@ export const layerSchema = z.discriminatedUnion('kind', [
      * within it (see `slotBox`). A picture in a holder is always one (see `isPhotoSlot`).
      */
     slot: z.boolean().optional(),
+    /**
+     * A slot that never takes the canvas's photo, which stays as the design's background: the
+     * Polaroid's, over the landscape (see `fillSlots`).
+     */
+    keepsCanvasPhoto: z.boolean().optional(),
   }),
   z.object({
     ...layerBase,

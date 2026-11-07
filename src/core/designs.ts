@@ -1,5 +1,5 @@
 import { emptyLayout, defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
-import { IMAGE_SIDE, mountBox, SAMPLE_IMAGE, SLOT_PICTURE } from './image-layer';
+import { IMAGE_SIDE, instantBox, mountBox, SAMPLE_IMAGE, SLOT_PICTURE } from './image-layer';
 import { at, type TemplateData, textStyle } from './layout-kit';
 import {
   CANVAS_FORMATS,
@@ -23,6 +23,7 @@ export const READY_DESIGN_IDS = [
   'filmStrip',
   'camera',
   'crop',
+  'polaroid',
 ] as const;
 
 export type ReadyDesignId = (typeof READY_DESIGN_IDS)[number];
@@ -317,6 +318,38 @@ function crop(data: TemplateData, format: CanvasFormat): ReadyDesign {
   };
 }
 
+/**
+ * A Polaroid over the canvas's photo: how much of the canvas's width it takes, the most of its
+ * height, and how much it leans, counterclockwise (4°), as one dropped on a table.
+ */
+const POLAROID = { width: 0.55, height: 0.8, tilt: (-4 * Math.PI) / 180 } as const;
+
+/**
+ * An instant photo with its place under it, leaning, over the canvas's own photo, which stays as
+ * the background (the user's choice: a landscape behind, and another photo in the Polaroid), so
+ * its slot keeps it (see `keepsCanvasPhoto`). Over black with no photo yet. Time and space O(1).
+ */
+function polaroid(data: TemplateData, format: CanvasFormat): ReadyDesign {
+  const canvas = CANVAS_FORMATS[format];
+  const box = instantBox();
+  const scale = Math.min(
+    (POLAROID.width * canvas.width) / box.width,
+    (POLAROID.height * canvas.height) / box.height,
+  );
+  const photo: Layer = {
+    id: 'photo-1',
+    kind: 'image',
+    image: SAMPLE_IMAGE,
+    frame: 'light',
+    caption: 'place',
+    slot: true,
+    keepsCanvasPhoto: true,
+    transform: { x: 0.5, y: 0.5, scale, rotation: POLAROID.tilt },
+    opacity: 1,
+  };
+  return { template: design('polaroid', data, format, BLACK, [photo]), alignRight: [] };
+}
+
 const RECIPES: Readonly<
   Record<ReadyDesignId, (data: TemplateData, format: CanvasFormat) => ReadyDesign>
 > = {
@@ -327,6 +360,7 @@ const RECIPES: Readonly<
   filmStrip,
   camera,
   crop,
+  polaroid,
 };
 
 /** One of AllRun's designs laid out for `data` in `format`. Time and space O(1). */

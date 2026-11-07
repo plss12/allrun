@@ -14,6 +14,7 @@ import {
   instantFrame,
   isEmptySlot,
   isPhotoSlot,
+  leavesCanvasPhoto,
   MAX_IMAGES,
   coversCanvas,
   cropFrame,
@@ -156,6 +157,20 @@ describe('the slots of a design', () => {
     ).toEqual([slot('a', 'x'), slot('b', 'kept'), slot('c', SAMPLE_IMAGE)]);
     expect(fillSlots([slot('a', SAMPLE_IMAGE)], ['x', 'y'])).toEqual([slot('a', 'x')]);
     expect(fillSlots([sticker], ['x'])).toEqual([sticker]);
+  });
+
+  it("never give a slot that keeps the canvas's photo that photo, which stays as the background", () => {
+    const polaroid = { ...slot('p', SAMPLE_IMAGE), keepsCanvasPhoto: true } as Layer;
+    expect(fillSlots([polaroid], [EDITOR_PHOTO])).toEqual([polaroid]);
+    expect(fillSlots([polaroid], [EDITOR_PHOTO, 'x'])).toEqual([{ ...polaroid, image: 'x' }]);
+    // The photo goes on to the next slot that takes it.
+    expect(fillSlots([polaroid, slot('a', SAMPLE_IMAGE)], [EDITOR_PHOTO, 'x'])).toEqual([
+      { ...polaroid, image: 'x' },
+      slot('a', EDITOR_PHOTO),
+    ]);
+    expect(leavesCanvasPhoto([polaroid])).toBe(true);
+    expect(leavesCanvasPhoto([polaroid, slot('a', SAMPLE_IMAGE)])).toBe(false);
+    expect(leavesCanvasPhoto([sticker])).toBe(true);
   });
 
   it('are read back from a saved template, and an unknown holder is refused', () => {

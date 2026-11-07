@@ -56,7 +56,7 @@ import {
   liftToClear,
 } from '@/core/layer-transform';
 import { COVER_PLACEMENT, samePlacement, type Size } from '@/core/photo-placement';
-import { startOf } from '@/core/place';
+import { namesPlace, startOf } from '@/core/place';
 import { setLayerColor, setLayerOpacity } from '@/core/layer-style';
 import {
   type CanvasFormat,
@@ -104,6 +104,7 @@ import { usePhrases } from '@/data/phrases';
 import type { DistanceUnit } from '@/core/units';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
+import { galleryData } from '@/editor/gallery-place';
 import { ColorMenu } from '@/editor/color-menu';
 import { Eyedropper } from '@/editor/eyedropper';
 import { snapshotDesign } from '@/editor/eyedropper-snapshot';
@@ -302,6 +303,12 @@ function EditorWorkspace({
     loaded.mode === 'activity' && placeLookup.status === 'known'
       ? { ...loaded, place: placeLookup.place }
       : loaded;
+  /** What the galleries draw: the place, or a sample of it until the user allows naming it. */
+  const shownData = galleryData(loaded, placeLookup, {
+    city: t('gallery.placeSample.city'),
+    region: t('gallery.placeSample.region'),
+    country: t('gallery.placeSample.country'),
+  });
   const defaultTemplate: DefaultTemplate = (format) =>
     emptyLayout(
       data.mode === 'activity'
@@ -350,6 +357,24 @@ function EditorWorkspace({
   /** The widgets' texts, in the design's language. */
   const widgetT = design.language === null ? t : i18n.getFixedT(design.language);
   const template = layoutTemplate(defaultTemplate, design);
+  /**
+   * Whether the canvas has a design that writes the place (the Polaroid's) while naming it needs
+   * the user's permission (Android): it is asked for then, once, as when such a widget is added; a
+   * refusal leaves the date in its place.
+   */
+  const placeWanted =
+    loaded.mode === 'activity' &&
+    placeLookup.status === 'needsPermission' &&
+    namesPlace(template.layers);
+  const askedForDesign = useRef(false);
+  useEffect(() => {
+    if (placeWanted && loaded.mode === 'activity' && !askedForDesign.current) {
+      askedForDesign.current = true;
+      void askPlace(loaded.activity);
+    }
+    // Only when a design comes to want it: asking again on each render would repeat the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeWanted]);
   /** Applies a change of the design as one undo step (none when it changes nothing). */
   const change = (next: (current: EditorDesign) => EditorDesign) =>
     setHistory((current) => commit(current, next(current.present)));
@@ -860,12 +885,40 @@ function EditorWorkspace({
 
   /**
    * Shows another picture in the image layer `id`, as one undo step. In a slot with the editor's
-   * photo, it replaces that photo: the slot would give the canvas back the one it took.
+   * photo, it replaces that photo: the slot would give the canvas back the one it took. In a slot
+   * that keeps the canvas's photo (the Polaroid's) over a canvas with none, the photo goes behind it
+   * too, so the design shows whole with one photo (the user's choice); another background is then
+   * chosen as always.
    */
   const changePicture = (id: string) => {
     const layer = template.layers.find((candidate) => candidate.id === id);
     if (layer !== undefined && isImageLayer(layer) && layer.image === EDITOR_PHOTO) {
       void pickPhoto();
+      return;
+    }
+    if (
+      layer !== undefined &&
+      isImageLayer(layer) &&
+      layer.keepsCanvasPhoto === true &&
+      photo === null &&
+      design.collage === null
+    ) {
+      void (async () => {
+        try {
+          setPhotoTools(false);
+          const libraryId = await photoPicker.pick();
+          if (libraryId === null) {
+            return;
+          }
+          const image = await pictures.add(libraryId);
+          setCanvasPhoto(libraryId, (current) =>
+            editLayers(current, defaultTemplate, (layers) => setLayerImage(layers, id, image)),
+          );
+        } catch (error) {
+          logError('Could not open the photo library', error);
+          notice.show(t('editor.photoError'));
+        }
+      })();
       return;
     }
     pickPicture((image) => edit((current) => setLayerImage(current, id, image)));
@@ -1031,8 +1084,14 @@ function EditorWorkspace({
     }
   };
 
-  /** The first slot of the design with no photo, which the bottom row's photo button fills. */
-  const firstEmptySlot = template.layers.find((layer) => isEmptySlot(layer, photo !== null));
+  /**
+   * The first slot of the design with no photo, which the bottom row's photo button fills; but one
+   * that keeps the canvas's photo (the Polaroid's), which its own sign fills: the button chooses
+   * the background then.
+   */
+  const firstEmptySlot = template.layers.find(
+    (layer) => isEmptySlot(layer, photo !== null) && layer.keepsCanvasPhoto !== true,
+  );
 
   /** Opens the photo's tools and the background (the bottom row's photo button). */
   const openPhotoTools = () => {
@@ -1110,6 +1169,15 @@ function EditorWorkspace({
     if (libraryId === null) {
       return false;
     }
+    setCanvasPhoto(libraryId, alongWith);
+    return true;
+  };
+
+  /**
+   * Makes the photo `libraryId` of the library, already chosen, the canvas's, as one undo step with
+   * `alongWith` (see `pickPhoto`).
+   */
+  const setCanvasPhoto = (libraryId: string, alongWith: (design: EditorDesign) => EditorDesign) => {
     const id = nextPhotoId;
     setNextPhotoId(id + 1);
     setPhotos((current) =>
@@ -1130,7 +1198,6 @@ function EditorWorkspace({
       }),
     );
     void loadChosenPhoto(id, libraryId);
-    return true;
   };
 
   /**
@@ -1280,22 +1347,8 @@ function EditorWorkspace({
         catalog={catalog}
         format={template.format}
         font={designFont(template.layers)}
-        layerContext={
-          // Until the user allows naming the place, the gallery shows it with a sample name.
-          placeLookup.status === 'needsPermission' && data.mode === 'activity'
-            ? {
-                ...galleryContext,
-                data: {
-                  ...data,
-                  place: {
-                    city: t('gallery.placeSample.city'),
-                    region: t('gallery.placeSample.region'),
-                    country: t('gallery.placeSample.country'),
-                  },
-                },
-              }
-            : galleryContext
-        }
+        // Until the user allows naming the place, the gallery shows it with a sample name.
+        layerContext={{ ...galleryContext, data: shownData }}
         language={language}
         stock={stock}
         onAdd={addNewLayer}
@@ -1327,7 +1380,7 @@ function EditorWorkspace({
         onClose={() => setTemplatesOpen(false)}
         format={design.format}
         design={template}
-        layerContext={layerContext}
+        layerContext={{ ...layerContext, data: shownData }}
         stock={stock}
         userTemplates={userTemplates}
         onChoose={chooseDesign}

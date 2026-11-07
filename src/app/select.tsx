@@ -10,6 +10,7 @@ import { KeptMounted, RoundButton } from '@/editor/round-button';
 import type { EditorRequest } from '@/editor/editor-params';
 import type { DesignChoice } from '@/editor/design-choice';
 import { DesignGallery } from '@/editor/design-gallery';
+import { galleryData } from '@/editor/gallery-place';
 import { useEditorFonts } from '@/editor/fonts';
 import { useStockPhotos } from '@/editor/stock-photos';
 import { StickerGallery, type StickerData, useStickerData } from '@/editor/sticker-gallery';
@@ -159,7 +160,7 @@ function Selection({
  * editor opens in. Choosing one opens the editor with it, its slots empty.
  */
 function DesignsTab({
-  stickerData: { data },
+  stickerData: { data, place },
   top,
   topInset,
   onChoose,
@@ -184,7 +185,11 @@ function DesignsTab({
   return (
     <DesignGallery
       context={{
-        data: data.data,
+        data: galleryData(data.data, place, {
+          city: t('gallery.placeSample.city'),
+          region: t('gallery.placeSample.region'),
+          country: t('gallery.placeSample.country'),
+        }),
         fonts,
         textContext: {
           unit,

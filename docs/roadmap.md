@@ -20,7 +20,7 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 
 ## 3. Finishing R4: selection and designs
 
-- The rest of AllRun's designs, decided and built one at a time with the owner. Built: Crop. Yes so far: Polaroid, Poster, Day, Dark film, Margins, Photobooth. In doubt: Band, Route, Receipt, Music. Out: Duo.
+- The rest of AllRun's designs, decided and built one at a time with the owner. Built: Crop, Polaroid. Yes so far: Poster, Day, Dark film, Margins, Photobooth. In doubt: Band, Route, Receipt, Music. Out: Duo.
 - Designs with dates: an AllRun design can carry a start and an end date, inside the app, and shows or hides by itself (seasonal ones, such as Christmas).
 - Filters (R4e): Zoom Blur, Motion Blur, Portra, Mono, Ink, with Skia (color matrices, runtime shaders) so the export matches; one filter for the whole design, collages too. A one-finger sideways swipe always changes the filter, as on Instagram, and photos move with two fingers. This overturns "dragging an empty area frames the photo" (ADR 009, ADR 011) and the one-finger move in collage cells: update them then.
 - An ADR for R4.

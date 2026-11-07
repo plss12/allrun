@@ -5,7 +5,7 @@ import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { type SharedValue, useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { FRAME_COLORS } from '@/core/image-layer';
+import { FRAME_COLORS, INSTANT_COLORS, instantFrame } from '@/core/image-layer';
 import { scaleOfSlider, sliderOfScale } from '@/core/layer-transform';
 import { layerColor } from '@/core/layer-style';
 import type { Layer } from '@/core/template';
@@ -183,7 +183,10 @@ function swatchOf(layer: Layer): string {
     return LOGO_TONE_INK[layer.tone];
   }
   if (layer.kind === 'image') {
-    // Without a frame, the ring alone.
+    // Without a frame, the ring alone; an instant photo's, in its faded colors.
+    if (layer.caption !== undefined) {
+      return INSTANT_COLORS[instantFrame(layer.frame)];
+    }
     return layer.frame === 'none' ? 'transparent' : FRAME_COLORS[layer.frame];
   }
   return layerColor(layer) ?? FLOATING_INK;

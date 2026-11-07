@@ -1,6 +1,7 @@
 import type { Activity } from './activity';
 import type { LatLng } from './geo';
 import { decodePolyline } from './polyline';
+import type { Layer } from './template';
 
 /** Where an activity was done, as a geocoder names it; any part may be unknown. */
 export interface Place {
@@ -39,4 +40,18 @@ export function formatPlace(place: Place, format: PlaceFormat): string | null {
   const second =
     format === 'cityRegion' ? place.region : format === 'cityCountry' ? place.country : null;
   return second === null || second === first ? first : `${first}, ${second}`;
+}
+
+/**
+ * Whether `layers` write where the activity was done: the place's text, the location replica or an
+ * instant photo with its place under it. On Android naming it needs a permission, asked for when
+ * such a widget or a design with one is chosen. Time O(n) for n layers.
+ */
+export function namesPlace(layers: readonly Layer[]): boolean {
+  return layers.some(
+    (layer) =>
+      (layer.kind === 'info' && layer.field === 'activityPlace') ||
+      (layer.kind === 'activityBlock' && layer.block.design === 'location') ||
+      (layer.kind === 'image' && layer.caption === 'place'),
+  );
 }

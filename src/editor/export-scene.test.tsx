@@ -14,7 +14,7 @@ import {
 } from '@shopify/react-native-skia/lib/commonjs/headless';
 
 import { defaultActivityTemplate, newLayer } from '@/core/default-layout';
-import { imageBox, instantBox } from '@/core/image-layer';
+import { imageBox, INSTANT_COLORS, instantBox } from '@/core/image-layer';
 import { COVER_PLACEMENT, type PhotoPlacement } from '@/core/photo-placement';
 import { CANVAS_FORMATS, type ImageFrame, type Template } from '@/core/template';
 import { makeActivity } from '@/test-utils/make-activity';
@@ -255,9 +255,12 @@ describe('an instant photo', () => {
     const middle = box.picture.y + box.picture.height / 2;
     expect(at(box.picture.x + 3, middle)).toEqual([255, 0, 0, 255]);
     expect(at(box.picture.x + box.picture.width - 3, middle)).toEqual([255, 0, 0, 255]);
-    // White around it, the band under it included (no fonts here: no caption drawn).
-    expect(at(box.picture.x - 5, middle)).toEqual([255, 255, 255, 255]);
-    expect(at(0, box.caption.y + box.caption.height / 2)).toEqual([255, 255, 255, 255]);
-    expect(at(0, box.picture.y - 5)).toEqual([255, 255, 255, 255]);
+    // The faded white of an old print around it, the band under it included (no fonts here: no
+    // caption drawn).
+    const hex = INSTANT_COLORS.light;
+    const faded = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).concat(255);
+    expect(at(box.picture.x - 5, middle)).toEqual(faded);
+    expect(at(0, box.caption.y + box.caption.height / 2)).toEqual(faded);
+    expect(at(0, box.picture.y - 5)).toEqual(faded);
   });
 });

@@ -756,6 +756,7 @@ export const en = {
       filmStrip: 'Film strip',
       camera: 'Camera',
       crop: 'Crop',
+      polaroid: 'Polaroid',
     },
   },
   activityCharts: {

@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '@/ui/spinner';
 import { newCollage } from '@/core/collage';
 import { READY_DESIGN_IDS, type ReadyDesignId } from '@/core/designs';
-import { isPhotoSlot } from '@/core/image-layer';
+import { isPhotoSlot, leavesCanvasPhoto } from '@/core/image-layer';
 import {
   CANVAS_FORMATS,
   type CanvasFormat,
@@ -64,7 +64,10 @@ const COLLAGES: readonly {
 
 const COLLAGE_FRAMES: readonly ImageFrame[] = ['none', 'light', 'dark'];
 
-/** The stock photos in the slots of AllRun's designs. */
+/**
+ * The stock photos of AllRun's designs, in their slots; a design that leaves the canvas's photo as
+ * its background (see `leavesCanvasPhoto`) has that one first.
+ */
 const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   messageOne: ['streetCrossing'],
   messageTwo: ['forestBridge', 'trackShadow'],
@@ -73,6 +76,7 @@ const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   filmStrip: ['trackShoes'],
   camera: ['forestBridge'],
   crop: ['trackShadow'],
+  polaroid: ['forestBridge', 'woodlandPath'],
 };
 
 /** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */
@@ -85,8 +89,25 @@ const SAVED_PHOTOS: readonly StockPhoto[] = [
   'forestTrail',
 ];
 
-/** `template` with the photos `names` in its slots, by the keys of `images`. */
-function withStock(template: Template, names: readonly StockPhoto[]): Template {
+/**
+ * The stock photos `names` of a design: the one over its canvas, if it shows the canvas's photo,
+ * and those of its slots.
+ */
+function stockOf(
+  template: Template,
+  names: readonly StockPhoto[],
+): { readonly canvas: readonly StockPhoto[]; readonly slots: readonly StockPhoto[] } {
+  if (!template.layers.some(isPhotoSlot)) {
+    return { canvas: names, slots: [] };
+  }
+  return leavesCanvasPhoto(template.layers)
+    ? { canvas: names.slice(0, 1), slots: names.slice(1) }
+    : { canvas: [], slots: names };
+}
+
+/** `template` with its stock photos `names` in its slots (see `stockOf`), by their keys. */
+function withStock(template: Template, all: readonly StockPhoto[]): Template {
+  const names = stockOf(template, all).slots;
   let next = 0;
   return {
     ...template,
@@ -271,8 +292,9 @@ export function DesignGallery({
     key: template.id,
     label: t(`templates.ready.${id}`),
     template,
-    // With slots, those show the photos; without any, it goes over the canvas.
-    photos: template.layers.some(isPhotoSlot) ? [] : photosOf(READY_PHOTOS[id]),
+    // With slots, those show the photos; without any, or with only some that leave it, one goes
+    // over the canvas.
+    photos: photosOf(stockOf(template, READY_PHOTOS[id]).canvas),
     choice: { kind: 'ready', id },
   }));
   const savedTiles = laidOut.value.saved.map(({ one, template }, i): Tile => ({
@@ -280,7 +302,7 @@ export function DesignGallery({
     label: t('templates.saved', { number: i + 1 }),
     template,
     // With slots, those show the photos: over the canvas, one would hide the design.
-    photos: template.layers.some(isPhotoSlot) ? [] : photosOf(SAVED_PHOTOS),
+    photos: photosOf(stockOf(template, SAVED_PHOTOS).canvas),
     choice: { kind: 'saved', template: one.template },
     saved: one,
   }));

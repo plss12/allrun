@@ -45,6 +45,13 @@ export function usePictures(
    * @throws Error when the photo can't be read.
    */
   readonly pick: (copy?: PhotoCopy) => Promise<string | null>;
+  /**
+   * A new picture of the photo `id` of the library, already chosen: its key, its copy prepared in
+   * the background (see `pick`).
+   *
+   * @throws Error when the photo can't be read.
+   */
+  readonly add: (id: string, copy?: PhotoCopy) => Promise<string>;
 } {
   const [pictures, setPictures] = useState<ReadonlyMap<string, Picture>>(new Map());
   const [decoded, setDecoded] = useState<ReadonlyMap<string, SkImage>>(new Map());
@@ -73,9 +80,10 @@ export function usePictures(
 
   const pick = async (copy: PhotoCopy = 'editor'): Promise<string | null> => {
     const id = await choose();
-    if (id === null) {
-      return null;
-    }
+    return id === null ? null : add(id, copy);
+  };
+
+  const add = async (id: string, copy: PhotoCopy = 'editor'): Promise<string> => {
     const picked = await pickedPhoto(id);
     const key = `picture-${nextKey.current}`;
     nextKey.current += 1;
@@ -163,5 +171,5 @@ export function usePictures(
       });
     }
   }
-  return { images, pick };
+  return { images, pick, add };
 }

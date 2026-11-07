@@ -720,6 +720,7 @@ export const es: Translations = {
       filmStrip: 'Tira de película',
       camera: 'Cámara',
       crop: 'Recorte',
+      polaroid: 'Polaroid',
     },
   },
   activityCharts: {

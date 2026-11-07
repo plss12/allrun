@@ -34,6 +34,7 @@ import {
   type CropFrame,
   cropFrame,
   FRAME_COLORS,
+  INSTANT_COLORS,
   type ImageBox,
   imageBox,
   type InstantBox,
@@ -972,8 +973,9 @@ function prepareLayer(
           content: (
             <InstantWidget
               box={box}
-              frame={FRAME_COLORS[frame]}
+              frame={INSTANT_COLORS[frame]}
               picture={picked?.image ?? null}
+              empty={empty}
               caption={caption}
             />
           ),
@@ -1077,17 +1079,20 @@ function PictureWidget({
 
 /**
  * An instant photo: a Polaroid's frame with the picture cut square in it and its caption under
- * it, lifted off the photo by a shadow.
+ * it, lifted off the photo by a shadow. As a design's slot with no picture, the sign to fill it
+ * (`hint`) or only its frame (`blank`, in the image).
  */
 function InstantWidget({
   box,
   frame,
   picture,
+  empty,
   caption,
 }: {
   readonly box: InstantBox;
   readonly frame: string;
   readonly picture: SkImage | null;
+  readonly empty: 'hint' | 'blank' | null;
   readonly caption: readonly PlacedParagraph[];
 }) {
   const rect = box.picture;
@@ -1106,12 +1111,15 @@ function InstantWidget({
         height={box.height}
         color={frame}
       />
-      {picture === null ? (
-        <Rect {...rect} color={LOADING_PICTURE} />
-      ) : (
+      {empty === 'blank' ? null : empty === null && picture !== null ? (
         // Cut square around its middle, as an instant camera frames it.
         <Image image={picture} rect={rect} fit="cover" sampling={PHOTO_SAMPLING} />
+      ) : (
+        <Rect {...rect} color={LOADING_PICTURE} />
       )}
+      {empty === 'hint' ? (
+        <EmptySign cx={rect.x + rect.width / 2} cy={rect.y + rect.height / 2} />
+      ) : null}
       {caption.map(({ paragraph, x, y }, i) => (
         <ParagraphPicture
           key={i}
