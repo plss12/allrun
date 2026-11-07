@@ -13,7 +13,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import type { CatalogItem, CatalogSection, NewLayer } from '@/core/layer-catalog';
 import { type PhraseKind, phraseLanguage, phraseWords } from '@/core/phrases';
 import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
-import type { CanvasFormat, DesignLanguage, FontId, Layer } from '@/core/template';
+import type { DesignLanguage, FontId, Layer } from '@/core/template';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { CardGradient } from '@/ui/card-gradient';
@@ -51,8 +51,7 @@ interface LayerSheetProps {
   readonly catalog: readonly CatalogSection[];
   /** The design's language: its verses, quotes and phrases are listed in it. */
   readonly language: DesignLanguage;
-  /** Format and font of the design: each widget is drawn as it will be added. */
-  readonly format: CanvasFormat;
+  /** Font of the design: each widget is drawn in it, in the galleries' format (`GALLERY_FORMAT`). */
   readonly font: FontId;
   readonly layerContext: LayerContext;
   /** The stock photos its tiles of pictures show, once decoded. */
@@ -232,7 +231,6 @@ export function useGallery(
 export function LayerSheet({
   visible,
   catalog,
-  format,
   font,
   layerContext,
   language,
@@ -292,7 +290,6 @@ export function LayerSheet({
     [
       galleryDataKey(layerContext.data),
       catalog.map((section) => section.widgets.map((widget) => widget.key).join(',')).join(';'),
-      format,
       font,
       layerContext.textContext.unit,
       layerContext.textContext.locale,
@@ -304,7 +301,6 @@ export function LayerSheet({
     () =>
       startGalleryBuild(
         catalog,
-        format,
         font,
         {
           ...layerContext,

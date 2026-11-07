@@ -7,7 +7,7 @@ import {
   type EditorDesign,
   INITIAL_DESIGN,
 } from '@/core/editor-document';
-import { COLLAGE_LAYOUTS, IMAGE_FRAMES, templateSchema } from '@/core/template';
+import { COLLAGE_LAYOUTS, IMAGE_FRAMES, type Template, templateSchema } from '@/core/template';
 import { logError } from '@/ui/log';
 
 import { readyTemplate } from './ready-design';
@@ -46,7 +46,11 @@ export function parseDesignChoice(param: string | undefined): DesignChoice | nul
 }
 
 /**
- * `design` started again from a choice of the gallery (see `applyDesign`).
+ * `design` started again from a choice of the gallery (see `applyDesign`). A design over a color of
+ * its own, AllRun's or the user's, takes the canvas's photo away, so it shows over its color as in
+ * its tile (the user's choice: the chat over black went over the photo being edited); but a
+ * collage, whose cells hold the photos. One over the canvas's photo keeps it, and with none shows
+ * transparency.
  *
  * @param context - What AllRun's designs are laid out for.
  * @param pictures - The photos that go on, by their keys, for its slots.
@@ -60,14 +64,26 @@ export function applyChoice(
   switch (choice.kind) {
     case 'collage':
       return applyCollage(design, choice.layout, choice.frame);
-    case 'ready':
-      return applyDesign(design, readyTemplate(choice.id, context, design.format), pictures);
+    case 'ready': {
+      const template = readyTemplate(choice.id, context, design.format);
+      return withoutPhotoUnder(template, applyDesign(design, template, pictures));
+    }
     case 'saved':
-      return {
+      return withoutPhotoUnder(choice.template, {
         ...applyDesign(design, choice.template, pictures),
         format: choice.template.format,
-      };
+      });
   }
+}
+
+/**
+ * `applied`, the design `template` was applied to, without the canvas's photo if `template` goes
+ * over a color of its own and isn't a collage (see `applyChoice`).
+ */
+function withoutPhotoUnder(template: Template, applied: EditorDesign): EditorDesign {
+  return template.background.kind === 'color' && template.collage === undefined
+    ? { ...applied, photoId: null }
+    : applied;
 }
 
 /**

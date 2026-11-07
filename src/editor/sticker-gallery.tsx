@@ -52,9 +52,6 @@ import { prepareItem, startGalleryBuild } from './widget-gallery';
 
 const STICKER_ENCODING = exportEncoding(false);
 const NO_LOOK: StickerLook = { font: null, color: null };
-/** The design a sticker is laid out for: the tallest canvas, so none is cramped. */
-const STICKER_FORMAT = 'story';
-
 /** A small line of how to use the stickers, with its icon. */
 function HowTo({ icon, text }: { readonly icon: UiIconName; readonly text: string }) {
   return (
@@ -183,14 +180,7 @@ export function StickerGallery({
       if (context === null) {
         throw new Error('The stickers are only laid out with their data');
       }
-      return startGalleryBuild(
-        catalog,
-        STICKER_FORMAT,
-        DEFAULT_FONT,
-        context,
-        window.width,
-        textSample,
-      );
+      return startGalleryBuild(catalog, DEFAULT_FONT, context, window.width, textSample);
     },
   );
 
@@ -203,7 +193,7 @@ export function StickerGallery({
       return;
     }
     const { value: prepared, dispose } = inParagraphArena(() =>
-      prepareItem(item, STICKER_FORMAT, DEFAULT_FONT, context, textSample),
+      prepareItem(item, DEFAULT_FONT, context, textSample),
     );
     try {
       if (prepared === null) {

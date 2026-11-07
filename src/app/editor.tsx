@@ -31,6 +31,7 @@ import {
   type DefaultTemplate,
   editLayers,
   type EditorDesign,
+  type LayerSize,
   setCollageLayout,
   INITIAL_DESIGN,
   layoutTemplate,
@@ -1032,36 +1033,48 @@ function EditorWorkspace({
     startAgain(() => setCollageLayout(design, layout));
   };
 
-  /** Another format: the widgets keep their relative places, inside the canvas if they were. */
-  const chooseFormat = (format: CanvasFormat) => {
-    // Each widget measured in the formats it is placed from and goes to, so that what fitted the
-    // canvas still does, and comes back as it was.
-    const formats = [
-      ...new Set([
-        template.format,
-        format,
-        ...Object.values(design.fitted).map((one) => one.format),
-      ]),
-    ];
-    const measured = inParagraphArena(
+  /** The widgets of `measured` measured in each of `formats`, as the scene draws them there. */
+  const layerSizes = (measured: Template, formats: readonly CanvasFormat[]): LayerSize => {
+    const sizes = inParagraphArena(
       () =>
         new Map(
-          formats.map((inFormat) => [
+          [...new Set(formats)].map((inFormat) => [
             inFormat,
             new Map(
-              prepareLayers({ ...template, format: inFormat }, layerContext).map(
+              prepareLayers({ ...measured, format: inFormat }, layerContext).map(
                 ({ layer, width, height }) => [layer.id, { width, height }] as const,
               ),
             ),
           ]),
         ),
     );
-    measured.dispose();
-    changeSetting((current) =>
-      setFormat(current, format, (id, inFormat) => measured.value.get(inFormat)?.get(id)),
-    );
+    sizes.dispose();
+    return (id, inFormat) => sizes.value.get(inFormat)?.get(id);
+  };
+
+  /** Another format: the widgets keep their relative places, inside the canvas if they were. */
+  const chooseFormat = (format: CanvasFormat) => {
+    // Each widget measured in the formats it is placed from and goes to, so that what fitted the
+    // canvas still does, and comes back as it was.
+    const sizeOf = layerSizes(template, [
+      template.format,
+      format,
+      ...Object.values(design.fitted).map((one) => one.format),
+    ]);
+    changeSetting((current) => setFormat(current, format, sizeOf));
     // The menu stays open, as the collages' does, until the user closes it (the user's choice).
   };
+
+  /**
+   * Start over, in the format chosen since: the widgets it brings back measured in the format the
+   * canvas started in and in this one, to fit them as a change of format would.
+   */
+  const startOverNow = () =>
+    change((current) =>
+      startOver(current, canvasStart, (back) =>
+        layerSizes(layoutTemplate(defaultTemplate, back), [back.format, current.format]),
+      ),
+    );
 
   /** Opens the keyboard to type a text. */
   const startTyping = (draft: TextDraft) => {
@@ -1426,7 +1439,6 @@ function EditorWorkspace({
       <LayerSheet
         visible={sheetOpen}
         catalog={catalog}
-        format={template.format}
         font={designFont(template.layers)}
         // Until the user allows naming the place, the gallery shows it with a sample name.
         layerContext={{ ...galleryContext, data: shownData }}
@@ -1459,7 +1471,6 @@ function EditorWorkspace({
       <TemplateSheet
         visible={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
-        format={design.format}
         design={template}
         layerContext={{ ...layerContext, data: shownData }}
         stock={stock}
@@ -1602,7 +1613,7 @@ function EditorWorkspace({
             onClose={close}
             onUndo={() => setHistory(undo)}
             onRedo={() => setHistory(redo)}
-            onStartOver={() => change((current) => startOver(current, canvasStart))}
+            onStartOver={startOverNow}
             canUndo={canUndo(history)}
             canRedo={canRedo(history)}
             canStartOver={canStartOver(design, canvasStart)}

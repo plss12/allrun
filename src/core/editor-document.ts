@@ -37,6 +37,8 @@ export type EditorLayers = Template['layers'] | null;
  * are by then.
  */
 export interface DesignStart {
+  /** The format its widgets were placed in: Start over fits them into the one chosen since. */
+  readonly format: CanvasFormat;
   readonly layers: EditorLayers;
   readonly photo: PhotoPlacement;
   readonly collage: Collage | null;
@@ -357,6 +359,7 @@ export function setLayerTransform(
 /** How a canvas with `design` starts (see `DesignStart`). Time O(n) for n layers. */
 export function designStart(design: EditorDesign): DesignStart {
   return {
+    format: design.format,
     layers: design.layers === null ? null : withEmptySlots(design.layers),
     photo: design.photo,
     collage: design.collage,
@@ -370,9 +373,9 @@ export function designStart(design: EditorDesign): DesignStart {
 export const EMPTY_START: DesignStart = designStart(INITIAL_DESIGN);
 
 /**
- * What Start over goes back to: how the canvas started, with its settings (see `EditorDesign`) and
- * photos as they are: those in slots go on in them; the canvas's and the cells' stay where they are.
- * Time O(n) for n layers.
+ * What Start over goes back to: how the canvas started, in the format it started in, with its other
+ * settings (see `EditorDesign`) and photos as they are: those in slots go on in them; the canvas's
+ * and the cells' stay where they are. Time O(n) for n layers.
  */
 function startingPoint(design: EditorDesign, start: DesignStart): EditorDesign {
   const inSlots = slotPictures(design.layers ?? []).filter((image) => image !== SAMPLE_IMAGE);
@@ -383,6 +386,7 @@ function startingPoint(design: EditorDesign, start: DesignStart): EditorDesign {
     ...design,
     ...start,
     layers: start.layers === null ? null : fillSlots(start.layers, pictures),
+    fitted: {},
   };
 }
 
@@ -420,11 +424,26 @@ export function canStartOver(design: EditorDesign, start: DesignStart = EMPTY_ST
 }
 
 /**
- * Start over (see `startingPoint`). Returns `design` itself when there is nothing to start over, so
- * it records no undo step.
+ * Start over (see `startingPoint`), in the format chosen since: its widgets fitted into it as a change
+ * of format would fit them (see `setFormat`), measured by `measure` (the user's report: they came back
+ * where they were in the format the canvas started in). So it leaves the design as it would be,
+ * untouched, after that change of format. Returns `design` itself when there is nothing to start
+ * over, so it records no undo step. Time O(n) for n layers, plus measuring them.
  */
-export function startOver(design: EditorDesign, start: DesignStart = EMPTY_START): EditorDesign {
-  return canStartOver(design, start) ? startingPoint(design, start) : design;
+export function startOver(
+  design: EditorDesign,
+  start: DesignStart = EMPTY_START,
+  measure?: (back: EditorDesign) => LayerSize,
+): EditorDesign {
+  if (!canStartOver(design, start)) {
+    return design;
+  }
+  const back = startingPoint(design, start);
+  return setFormat(
+    back,
+    design.format,
+    back.format === design.format ? undefined : measure?.(back),
+  );
 }
 
 function sameTransform(a: LayerTransform, b: LayerTransform): boolean {

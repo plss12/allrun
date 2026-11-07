@@ -82,7 +82,24 @@ function watermark(data: TemplateData, format: CanvasFormat): readonly Layer[] {
     : layers;
 }
 
-/** A design over a color of its own, with the widgets `layers`. */
+/**
+ * A design over the canvas's photo, with the widgets `layers`: with the background of a new canvas
+ * (`newTemplate`), the photo's color where it leaves room, and transparency with no photo (the
+ * user's choice: over black, it looked like a design with a black background).
+ */
+function overThePhoto(
+  id: ReadyDesignId,
+  data: TemplateData,
+  format: CanvasFormat,
+  layers: readonly Layer[],
+): Template {
+  return newTemplate({ id: `allrun-${id}`, mode: data.mode, format, layers: [...layers] });
+}
+
+/**
+ * A design over a color of its own, with the widgets `layers`: choosing it takes the canvas's photo
+ * away (see `applyChoice`).
+ */
 function design(
   id: ReadyDesignId,
   data: TemplateData,
@@ -213,7 +230,7 @@ const POLAROID = { width: 0.55, height: 0.8, tilt: (-4 * Math.PI) / 180 } as con
 /**
  * An instant photo with its place under it, leaning, over the canvas's own photo, the background
  * the user chooses (the user's choice: a landscape behind, and another photo in the Polaroid).
- * Over black with no photo yet. Time and space O(1).
+ * Over transparency with no photo yet. Time and space O(1).
  */
 function polaroid(data: TemplateData, format: CanvasFormat, dark: boolean = false): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
@@ -233,7 +250,7 @@ function polaroid(data: TemplateData, format: CanvasFormat, dark: boolean = fals
     transform: { x: 0.5, y: 0.5, scale, rotation: POLAROID.tilt },
     opacity: 1,
   };
-  return { template: design(dark ? 'polaroidDark' : 'polaroid', data, format, BLACK, [photo]) };
+  return { template: overThePhoto(dark ? 'polaroidDark' : 'polaroid', data, format, [photo]) };
 }
 
 /** Most of the canvas a slide viewer takes, wide and tall. */
@@ -263,8 +280,8 @@ const BOOTH_ROOM = { width: 0.46, height: 0.8, tilt: (-3 * Math.PI) / 180 } as c
 
 /**
  * A photobooth's strip with three photos, leaning, over the canvas's own photo, the background the
- * user chooses, as the Polaroid's; its datum on the tape, its date at its foot. Over black with no
- * photo yet. Time and space O(1).
+ * user chooses, as the Polaroid's; its datum on the tape, its date at its foot. Over transparency
+ * with no photo yet. Time and space O(1).
  */
 function photobooth(data: TemplateData, format: CanvasFormat): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
@@ -282,7 +299,7 @@ function photobooth(data: TemplateData, format: CanvasFormat): ReadyDesign {
     transform: { x: 0.5, y: 0.5, scale, rotation: BOOTH_ROOM.tilt },
     opacity: 1,
   };
-  return { template: design('photobooth', data, format, BLACK, [strip]) };
+  return { template: overThePhoto('photobooth', data, format, [strip]) };
 }
 
 /** The margins' bands' paper: a white just off white, as the user's reference. */
@@ -314,8 +331,8 @@ const CALENDAR_ROOM = { width: 0.6, height: 0.8, tilt: (3 * Math.PI) / 180 } as 
 
 /**
  * A sheet torn off a calendar, in Track Red, its day huge over the photo (the user's choice: a
- * square sheet), leaning over the canvas's photo, the background the user chooses. Over black with
- * no photo yet. Time and space O(1).
+ * square sheet), leaning over the canvas's photo, the background the user chooses. Over
+ * transparency with no photo yet. Time and space O(1).
  */
 function calendar(data: TemplateData, format: CanvasFormat, ink: boolean = false): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
@@ -326,7 +343,7 @@ function calendar(data: TemplateData, format: CanvasFormat, ink: boolean = false
   );
   const sheet = slot('photo-1', 'calendar', 0.5, 0.5, scale);
   return {
-    template: design(ink ? 'calendarInk' : 'calendar', data, format, BLACK, [
+    template: overThePhoto(ink ? 'calendarInk' : 'calendar', data, format, [
       {
         ...sheet,
         ...(ink ? { cover: 'ink' as const } : {}),

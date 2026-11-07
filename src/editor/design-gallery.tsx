@@ -32,10 +32,14 @@ import { readyTemplate } from './ready-design';
 import { type StockPhoto, stockImages, type StockPhotos } from './stock-photos';
 import { type LayerContext, prepareLayers } from './template-scene';
 import { TemplateThumbnail } from './template-thumbnail';
+import { packRows } from './tile-rows';
+import { GALLERY_FORMAT } from './widget-gallery';
 
 /** Room around and between the thumbnails, in points. */
 const PADDING = 16;
 const GAP = 12;
+/** Thumbnails per row: AllRun's fifteen designs fill their rows. */
+const COLUMNS = 3;
 
 /**
  * The collages, in the order of the Collages panel, with the stock photos that suit their cells:
@@ -60,7 +64,7 @@ const COLLAGE_FRAMES: readonly ImageFrame[] = ['none', 'light', 'dark'];
 
 /**
  * The stock photos of AllRun's designs, in their slots; one shown over a photo of the canvas (see
- * `OVER_A_PHOTO`) has that one first.
+ * `stockOf`) has that one first.
  */
 const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   // Each its piece's photos in the widget gallery, and a landscape behind those over one, none
@@ -82,31 +86,11 @@ const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   calendarInk: ['stadiumField', 'monoSprinter'],
 };
 
-/** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */
-const SAVED_PHOTOS: readonly StockPhoto[] = [
-  'riversideRun',
-  'foggyHill',
-  'seasideRide',
-  'beachSunset',
-  'trackShoes',
-  'mountainRunner',
-];
-
 /**
- * AllRun's designs whose thumbnail shows a photo of the canvas behind their slots, as they are made
- * to be used (a landscape behind the Polaroid); the others show their own background.
- */
-const OVER_A_PHOTO: ReadonlySet<string> = new Set([
-  'allrun-polaroid',
-  'allrun-photobooth',
-  'allrun-calendar',
-  'allrun-calendarInk',
-  'allrun-polaroidDark',
-]);
-
-/**
- * The stock photos `names` of a design: the one over its canvas, if its thumbnail shows one (see
- * `OVER_A_PHOTO`; any design without slots), and those of its slots.
+ * The stock photos `names` of a design: the one over its canvas, if its thumbnail shows one, and
+ * those of its slots. A design over the canvas's photo (without a color of its own: the Polaroid)
+ * shows a landscape behind its slots, as it is made to be used; one over its color, its color; any
+ * design without slots, a photo over its canvas.
  */
 function stockOf(
   template: Template,
@@ -115,7 +99,7 @@ function stockOf(
   if (!template.layers.some(isPhotoSlot)) {
     return { canvas: names, slots: [] };
   }
-  return OVER_A_PHOTO.has(template.id)
+  return template.background.kind !== 'color'
     ? { canvas: names.slice(0, 1), slots: names.slice(1) }
     : { canvas: [], slots: names };
 }
@@ -155,27 +139,33 @@ interface Tile {
 /** A row of the list. */
 type Row =
   | { readonly kind: 'title'; readonly key: string; readonly title: string }
+  | { readonly kind: 'subtitle'; readonly key: string; readonly title: string }
   | { readonly kind: 'collages'; readonly key: string }
   | { readonly kind: 'tiles'; readonly key: string; readonly tiles: readonly Tile[] }
   | { readonly kind: 'yours'; readonly key: string; readonly tiles: readonly Tile[] };
 
-/** `items` in rows of `columns`. Time and space O(n). */
-function inRows<T>(items: readonly T[], columns: number): readonly (readonly T[])[] {
-  return Array.from({ length: Math.ceil(items.length / columns) }, (_, row) =>
-    items.slice(row * columns, (row + 1) * columns),
-  );
+/**
+ * Columns a design of `format` takes: a wide one, the whole row, to show big (the user's choice:
+ * in one column it was a thin strip); the rest, one.
+ */
+function spanOf(format: CanvasFormat): number {
+  const canvas = CANVAS_FORMATS[format];
+  return canvas.width > canvas.height ? COLUMNS : 1;
 }
+
+/** The formats in the order the user's designs go in: tall to wide, as `CANVAS_FORMATS`. */
+const FORMAT_ORDER = Object.keys(CANVAS_FORMATS) as CanvasFormat[];
 
 interface DesignGalleryProps {
   readonly context: LayerContext;
-  /** The format to show designs in; a user's own always go in theirs. */
-  readonly format: CanvasFormat;
-  /** Whether a user's design of any format shows, each in its own (where no format is chosen yet). */
-  readonly anyFormat?: boolean;
   /** The stock photos, once decoded. */
   readonly stock: StockPhotos | null;
   readonly userTemplates: UserTemplates;
-  /** The design on the canvas, which the first tile of Yours saves; absent, no such tile. */
+  /**
+   * The design on the canvas: the first tile of Yours saves it, and Yours shows only the user's
+   * designs of its format. Absent (the selection screen's tab, before any format is chosen), all
+   * of them, each in its own.
+   */
   readonly current?: Template;
   readonly onChoose: (choice: DesignChoice) => void;
   /** Goes over the gallery, scrolling with it. */
@@ -186,16 +176,16 @@ interface DesignGalleryProps {
 
 /**
  * The Designs gallery (ADR 009), the same in the selection screen's tab and in the editor's sheet:
- * Collages (every layout without a frame, then with a white one, then with a black one, in one row
- * that scrolls sideways, for AllRun's to show without scrolling down), Designs (AllRun's, with the
- * user's data) and Yours, each drawn with our stock photos (see `stock-photos.ts`). Only the tiles
- * on screen are mounted; AllRun's and the user's widgets are laid
- * out once, for what they show, and freed when the gallery goes.
+ * Yours (first, with the tile that saves the current design, the user's choice; a wide one two
+ * columns wide), Collages (every layout without a frame, then with a white one, then with a black
+ * one, in one row that scrolls sideways, for AllRun's to show without scrolling down) and Designs
+ * (AllRun's, with the user's data), each drawn with our stock photos (see `stock-photos.ts`).
+ * Collages and AllRun's are drawn in `GALLERY_FORMAT` whatever the canvas, and fit it once chosen;
+ * the user's, each in its own. Only the tiles on screen are mounted; AllRun's and the user's
+ * widgets are laid out once, for what they show, and freed when the gallery goes.
  */
 export function DesignGallery({
   context,
-  format,
-  anyFormat = false,
   stock,
   userTemplates,
   current,
@@ -206,16 +196,21 @@ export function DesignGallery({
   const { t } = useTranslation();
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const columns = format === 'landscape' ? 2 : 3;
-  const width = Math.floor((window.width - 2 * PADDING - (columns - 1) * GAP) / columns);
-  const height = (width * CANVAS_FORMATS[format].height) / CANVAS_FORMATS[format].width;
+  const width = Math.floor((window.width - 2 * PADDING - (COLUMNS - 1) * GAP) / COLUMNS);
+  const height =
+    (width * CANVAS_FORMATS[GALLERY_FORMAT].height) / CANVAS_FORMATS[GALLERY_FORMAT].width;
+  /** The width of a thumbnail `span` columns wide. */
+  const spanWidth = (span: number) => span * width + (span - 1) * GAP;
 
   const saved =
     userTemplates.status !== 'success'
       ? []
-      : anyFormat
-        ? userTemplates.data.filter(({ template }) => template.mode === context.data.mode)
-        : templatesFor(userTemplates.data, format, context.data.mode);
+      : current === undefined
+        ? userTemplates.data
+            .filter(({ template }) => template.mode === context.data.mode)
+            // Newest first, as in the editor (`templatesFor`).
+            .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+        : templatesFor(userTemplates.data, current.format, context.data.mode);
   const savedKey = saved.map(({ template }) => template.id).join(',');
   const dataKey = [
     JSON.stringify(
@@ -225,7 +220,6 @@ export function DesignGallery({
     ),
     context.textContext.unit,
     context.textContext.locale,
-    format,
     stock === null ? 'loading' : 'ready',
     savedKey,
   ].join('|');
@@ -237,15 +231,19 @@ export function DesignGallery({
       // Thumbnails fill their slots, whatever the canvas behind the sheet does with its own.
       emptySlots: undefined,
     };
+    // The user's designs show their photos' places with the "+" of the canvas, never our photos:
+    // the same ones in all of them looked repetitive (the user's choice).
+    const unfilled: LayerContext = { ...context, images: new Map(), emptySlots: 'hint' };
     return inParagraphArena(() => ({
       ready: READY_DESIGN_IDS.map((id) => {
-        const template = withStock(readyTemplate(id, context, format), READY_PHOTOS[id]);
+        const template = withStock(readyTemplate(id, context, GALLERY_FORMAT), READY_PHOTOS[id]);
         return { id, template, layers: prepareLayers(template, shown) };
       }),
-      saved: saved.map((one) => {
-        const template = withStock(one.template, SAVED_PHOTOS);
-        return { one, template, layers: prepareLayers(template, shown) };
-      }),
+      saved: saved.map((one) => ({
+        one,
+        template: one.template,
+        layers: prepareLayers(one.template, unfilled),
+      })),
     }));
     // The context is recreated on every render; the key says what it lays out.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -292,7 +290,7 @@ export function DesignGallery({
       const base = newTemplate({
         id: `collage-${layout}-${frame}`,
         mode: context.data.mode,
-        format,
+        format: GALLERY_FORMAT,
         layers: [],
       });
       return {
@@ -321,8 +319,8 @@ export function DesignGallery({
     key: template.id,
     label: t('templates.saved', { number: i + 1 }),
     template,
-    // With slots, those show the photos: over the canvas, one would hide the design.
-    photos: photosOf(stockOf(template, SAVED_PHOTOS).canvas),
+    // No photo: the canvas's place shows as transparency, unless the design has a color there.
+    photos: [],
     choice: { kind: 'saved', template: one.template },
     saved: one,
   }));
@@ -337,53 +335,93 @@ export function DesignGallery({
       : false;
   const showSave = current !== undefined && userTemplates.status === 'success';
 
+  // Yours starts with the tile that saves the current design, as big as one of its format, as the
+  // first of them; or says why there is none yet.
+  const yoursStart = showSave || savedTiles.length === 0;
+  const startFormat = current?.format ?? GALLERY_FORMAT;
+  const tileSpan = (one: Tile) => spanOf(one.template.format);
+  // The user's designs by format, each format's together, not to mix heights in a row (the user's
+  // choice: mixed, they looked a mess); in the editor there is only the canvas's.
+  const formatGroups = FORMAT_ORDER.map((format) =>
+    savedTiles.filter((one) => one.template.format === format),
+  ).filter((group) => group.length > 0);
+  // Each format's under its proportions where they may be several (the tab), to tell them apart.
+  const yoursRows: readonly Row[] =
+    formatGroups.length === 0
+      ? yoursStart
+        ? [{ kind: 'yours', key: 'yours-start', tiles: [] }]
+        : []
+      : formatGroups.flatMap((group, i) => {
+          const { format } = group[0].template;
+          return [
+            ...(current === undefined
+              ? [
+                  {
+                    kind: 'subtitle',
+                    key: `yours-${format}`,
+                    title: t(`formatRatios.${format}`),
+                  } as const,
+                ]
+              : []),
+            ...packRows(
+              group,
+              tileSpan,
+              COLUMNS,
+              i === 0 && yoursStart ? spanOf(startFormat) : 0,
+            ).map((tiles, j): Row => ({
+              kind: i === 0 && j === 0 && yoursStart ? 'yours' : 'tiles',
+              key: `yours-${format}-${j}`,
+              tiles,
+            })),
+          ];
+        });
   const rows: readonly Row[] = [
+    { kind: 'title', key: 'title-yours', title: t('templates.yours') },
+    ...yoursRows,
     { kind: 'title', key: 'title-collages', title: t('templates.collages') },
     { kind: 'collages', key: 'collages' },
     { kind: 'title', key: 'title-ready', title: t('templates.allrun') },
-    ...inRows(readyTiles, columns).map((tiles, i): Row => ({
+    ...packRows(readyTiles, tileSpan, COLUMNS).map((tiles, i): Row => ({
       kind: 'tiles',
       key: `ready-${i}`,
       tiles,
     })),
-    { kind: 'title', key: 'title-yours', title: t('templates.yours') },
-    ...(showSave || savedTiles.length === 0
-      ? [{ kind: 'yours', key: 'yours-0', tiles: savedTiles.slice(0, columns - 1) } as const]
-      : []),
-    ...inRows(savedTiles.slice(showSave || savedTiles.length === 0 ? columns - 1 : 0), columns).map(
-      (tiles, i): Row => ({ kind: 'tiles', key: `yours-${i + 1}`, tiles }),
-    ),
   ];
 
-  const tile = (one: Tile) => (
-    <View key={one.key} style={{ width }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={one.label}
-        onPress={() => onChoose(one.choice)}
-        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      >
-        {/* Square corners: rounded ones would cut the corners of a design's frame. */}
-        <TemplateThumbnail
-          template={one.template}
-          layers={layersOf(one)}
-          photos={one.photos}
-          loading={stock === null}
-          width={width}
-        />
-      </Pressable>
-      {one.saved === undefined ? null : (
-        <DeleteButton
-          label={t('templates.delete')}
-          onPress={() => {
-            if (one.saved !== undefined) {
-              confirmRemove(one.saved);
-            }
-          }}
-        />
-      )}
-    </View>
-  );
+  const tile = (one: Tile) => {
+    const tileWidth = spanWidth(tileSpan(one));
+    return (
+      <View key={one.key} style={{ width: tileWidth }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={one.label}
+          onPress={() => onChoose(one.choice)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          {/* Square corners: rounded ones would cut the corners of a design's frame. */}
+          <TemplateThumbnail
+            template={one.template}
+            layers={layersOf(one)}
+            photos={one.photos}
+            // A user's design waits for no photo: what it leaves empty is transparency or its "+".
+            loading={one.saved === undefined && stock === null}
+            emptyHints={one.saved !== undefined}
+            width={tileWidth}
+          />
+        </Pressable>
+        {one.saved === undefined ? null : (
+          <DeleteButton
+            label={t('templates.delete')}
+            onPress={() => {
+              if (one.saved !== undefined) {
+                confirmRemove(one.saved);
+              }
+            }}
+          />
+        )}
+      </View>
+    );
+  };
 
   return (
     <FlashList
@@ -415,6 +453,20 @@ export function DesignGallery({
             </Text>
           );
         }
+        if (row.kind === 'subtitle') {
+          return (
+            <Text
+              accessibilityRole="header"
+              style={{
+                color: colors.secondaryLabel,
+                fontSize: 13,
+                paddingBottom: 8,
+              }}
+            >
+              {row.title}
+            </Text>
+          );
+        }
         if (row.kind === 'collages') {
           return (
             <View style={{ height, marginHorizontal: -PADDING, marginBottom: GAP }}>
@@ -437,8 +489,11 @@ export function DesignGallery({
           <View style={{ flexDirection: 'row', gap: GAP, paddingBottom: GAP }}>
             {row.kind === 'yours' ? (
               <YoursStart
-                width={width}
-                height={height}
+                width={spanWidth(spanOf(startFormat))}
+                height={
+                  (spanWidth(spanOf(startFormat)) * CANVAS_FORMATS[startFormat].height) /
+                  CANVAS_FORMATS[startFormat].width
+                }
                 showSave={showSave}
                 saved={alreadySaved}
                 saving={saving}

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { z } from 'zod';
 
-import { INITIAL_FORMAT } from '@/core/editor-document';
 import { editorParamsSchema } from '@/editor/editor-params';
 import { KeptMounted, RoundButton } from '@/editor/round-button';
 import type { EditorRequest } from '@/editor/editor-params';
@@ -156,8 +155,8 @@ function Selection({
 }
 
 /**
- * The Designs tab: the gallery for the data the screen loaded for its stickers, in the format the
- * editor opens in. Choosing one opens the editor with it, its slots empty.
+ * The Designs tab: the gallery for the data the screen loaded for its stickers. Choosing one opens
+ * the editor with it, its slots empty.
  */
 function DesignsTab({
   stickerData: { data, place },
@@ -203,8 +202,6 @@ function DesignsTab({
         },
         translate: (key, values) => t(key, values),
       }}
-      format={INITIAL_FORMAT}
-      anyFormat
       stock={stock}
       userTemplates={userTemplates}
       onChoose={onChoose}

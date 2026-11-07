@@ -22,7 +22,7 @@ import {
   TextAlign,
   type Transforms3d,
 } from '@shopify/react-native-skia';
-import type { ReactElement } from 'react';
+import { createContext, type ReactElement, use } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity-charts';
@@ -260,6 +260,23 @@ const LOADING_CELL = '#3A3A3C';
 /** The sign on an empty cell, on the canvas: a plus on a dark circle, in canvas pixels. */
 const EMPTY_HINT = { radius: 56, length: 52, thickness: 7 } as const;
 
+/**
+ * How many times bigger the scene draws the sign of an empty photo (see `EMPTY_HINT`): 1 on the
+ * canvas; more in a thumbnail, where at the canvas's size it was a dot (see `emptyHintScale`).
+ */
+export const EmptyHintScale = createContext(1);
+
+/** Smallest radius of an empty photo's sign in a thumbnail, at the canvas's level, in points. */
+const THUMBNAIL_HINT_RADIUS = 10;
+
+/**
+ * The `EmptyHintScale` of a scene drawn `ratio` points per canvas pixel: its sign at least
+ * `THUMBNAIL_HINT_RADIUS` points in radius, never smaller than on the canvas.
+ */
+export function emptyHintScale(ratio: number): number {
+  return Math.max(1, THUMBNAIL_HINT_RADIUS / (EMPTY_HINT.radius * ratio));
+}
+
 /** One cell of a collage. */
 function CollageCellScene({ cell }: { readonly cell: SceneCell }) {
   const { clip } = cell;
@@ -287,7 +304,10 @@ function CollageCellScene({ cell }: { readonly cell: SceneCell }) {
 
 /** The sign to fill an empty place with a photo, on the canvas: never in the image. */
 function EmptySign({ cx, cy }: { readonly cx: number; readonly cy: number }) {
-  const { radius, length, thickness } = EMPTY_HINT;
+  const scale = use(EmptyHintScale);
+  const radius = EMPTY_HINT.radius * scale;
+  const length = EMPTY_HINT.length * scale;
+  const thickness = EMPTY_HINT.thickness * scale;
   return (
     <Group>
       <Circle cx={cx} cy={cy} r={radius} color="rgba(0, 0, 0, 0.45)" />
@@ -332,7 +352,11 @@ export interface TemplateSceneProps {
         readonly opacity?: SharedValue<number>;
         readonly onChecker?: boolean;
       }
-    | { readonly kind: 'checker' }
+    | {
+        readonly kind: 'checker';
+        /** The side of its squares, in canvas pixels; by default `CHECKER_SQUARE`. */
+        readonly square?: number;
+      }
     | { readonly kind: 'none' };
   /**
    * The photo over the backdrop, or `null` for none (see {@link photoMatrix} and
@@ -380,30 +404,37 @@ const CHECKER_DARK = '#1C1C1E';
 const CHECKER_LIGHT = '#2C2C2E';
 const CHECKER_SQUARE = 40;
 
-/** The light squares of the checkerboard of each format, built once. */
-const checkerPaths = new Map<CanvasFormat, SkPath>();
+/** Smallest side of the checkerboard's squares in a thumbnail, on screen, in points. */
+const THUMBNAIL_CHECKER_SQUARE = 10;
 
-function checkerPath(format: CanvasFormat): SkPath {
-  const cached = checkerPaths.get(format);
+/**
+ * The side of the checkerboard's squares, in canvas pixels, of a scene drawn `ratio` points per
+ * canvas pixel: at least `THUMBNAIL_CHECKER_SQUARE` points on screen, never smaller than on the
+ * canvas. In a thumbnail, the canvas's squares were so small that it looked black, like a black
+ * background (the user's report).
+ */
+export function checkerSquare(ratio: number): number {
+  return Math.max(CHECKER_SQUARE, Math.round(THUMBNAIL_CHECKER_SQUARE / ratio));
+}
+
+/** The light squares of the checkerboard of each format and size of square, built once. */
+const checkerPaths = new Map<string, SkPath>();
+
+function checkerPath(format: CanvasFormat, square: number): SkPath {
+  const key = `${format}|${square}`;
+  const cached = checkerPaths.get(key);
   if (cached !== undefined) {
     return cached;
   }
   const { width, height } = CANVAS_FORMATS[format];
   const builder = Skia.PathBuilder.Make();
-  for (let row = 0; row * CHECKER_SQUARE < height; row++) {
-    for (let column = row % 2; column * CHECKER_SQUARE < width; column += 2) {
-      builder.addRect(
-        Skia.XYWHRect(
-          column * CHECKER_SQUARE,
-          row * CHECKER_SQUARE,
-          CHECKER_SQUARE,
-          CHECKER_SQUARE,
-        ),
-      );
+  for (let row = 0; row * square < height; row++) {
+    for (let column = row % 2; column * square < width; column += 2) {
+      builder.addRect(Skia.XYWHRect(column * square, row * square, square, square));
     }
   }
   const path = builder.detach();
-  checkerPaths.set(format, path);
+  checkerPaths.set(key, path);
   return path;
 }
 
@@ -454,7 +485,13 @@ export function TemplateScene({
       {backdrop.kind === 'checker' || (backdrop.kind === 'color' && backdrop.onChecker === true) ? (
         <Group clip={{ x: 0, y: 0, width, height }}>
           <Rect x={0} y={0} width={width} height={height} color={CHECKER_DARK} />
-          <Path path={checkerPath(format)} color={CHECKER_LIGHT} />
+          <Path
+            path={checkerPath(
+              format,
+              backdrop.kind === 'checker' ? (backdrop.square ?? CHECKER_SQUARE) : CHECKER_SQUARE,
+            )}
+            color={CHECKER_LIGHT}
+          />
         </Group>
       ) : null}
       {backdrop.kind === 'color' ? (

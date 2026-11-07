@@ -85,14 +85,7 @@ function tileOf(kind: PhraseKind, context: LayerContext, screen = 393) {
     context.data.mode === 'activity'
       ? activityCatalog(activity)
       : summaryCatalog(context.data.summary, 'day');
-  const sections = galleryModule().gallerySections(
-    catalog,
-    'story',
-    'inter',
-    context,
-    screen,
-    'Text',
-  );
+  const sections = galleryModule().gallerySections(catalog, 'inter', context, screen, 'Text');
   const rows = sections.flatMap((section) => section.rows);
   for (const row of rows) {
     for (const widget of row.widgets) {

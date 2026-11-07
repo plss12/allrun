@@ -383,6 +383,20 @@ describe('start over, to how the canvas started', () => {
     expect(canStartOver(moved, start)).toBe(true);
   });
 
+  it('fits the widgets it brings back into the format chosen since, as a change of format would', () => {
+    // A piece as tall as the story, opened there; edited, and then on a wide canvas.
+    const sizeOf = () => ({ width: 500, height: 1400 });
+    const edited = setBackground(chosen, { kind: 'transparent' });
+    const wide = setFormat(edited, 'landscape', sizeOf);
+    const back = startOver(wide, start, () => sizeOf);
+    // As the untouched design is after the same change of format, not as it was in the story.
+    expect(back).toEqual(setFormat(chosen, 'landscape', sizeOf));
+    expect(back.layers?.[0].transform.scale).toBeLessThan(1);
+    expect(canStartOver(back, start)).toBe(false);
+    // Back on the story, it is as it opened.
+    expect(setFormat(back, 'story', sizeOf).layers).toEqual(chosen.layers);
+  });
+
   it('has nothing to do while the design is as it opened', () => {
     expect(canStartOver(chosen, start)).toBe(false);
     expect(startOver(chosen, start)).toBe(chosen);

@@ -4,7 +4,13 @@ import { backgroundColor } from '@/core/design-background';
 import { CANVAS_FORMATS, type Template } from '@/core/template';
 
 import { sceneCollage, sceneFrame, scenePhoto } from './export-scene';
-import { type PreparedLayer, TemplateScene } from './template-scene';
+import {
+  checkerSquare,
+  EmptyHintScale,
+  emptyHintScale,
+  type PreparedLayer,
+  TemplateScene,
+} from './template-scene';
 
 /** Where a thumbnail's photo goes while it is decoded: as a picture's while it is. */
 const LOADING_PHOTO = '#3A3A3C';
@@ -19,6 +25,7 @@ export function TemplateThumbnail({
   layers,
   photos,
   loading,
+  emptyHints = false,
   width,
 }: {
   readonly template: Template;
@@ -28,6 +35,8 @@ export function TemplateThumbnail({
   readonly photos: readonly SkImage[];
   /** Whether its photos are on their way: what they leave empty is its place, not transparency. */
   readonly loading: boolean;
+  /** Whether a collage's empty cells show their "+", as on the canvas (a user's design). */
+  readonly emptyHints?: boolean;
   /** Width on screen, in points. */
   readonly width: number;
 }) {
@@ -38,24 +47,26 @@ export function TemplateThumbnail({
   return (
     <Canvas style={{ width, height: canvas.height * ratio }}>
       <Group transform={[{ scale: ratio }]}>
-        <TemplateScene
-          format={template.format}
-          layers={layers}
-          backdrop={
-            color !== null
-              ? { kind: 'color', color }
-              : loading
-                ? { kind: 'color', color: LOADING_PHOTO }
-                : { kind: 'checker' }
-          }
-          photo={
-            template.collage !== undefined || photos.length === 0
-              ? null
-              : scenePhoto(template, photos[0])
-          }
-          collage={sceneCollage(template, photos, false)}
-          frame={sceneFrame(template)}
-        />
+        <EmptyHintScale value={emptyHintScale(ratio)}>
+          <TemplateScene
+            format={template.format}
+            layers={layers}
+            backdrop={
+              color !== null
+                ? { kind: 'color', color }
+                : loading
+                  ? { kind: 'color', color: LOADING_PHOTO }
+                  : { kind: 'checker', square: checkerSquare(ratio) }
+            }
+            photo={
+              template.collage !== undefined || photos.length === 0
+                ? null
+                : scenePhoto(template, photos[0])
+            }
+            collage={sceneCollage(template, photos, emptyHints)}
+            frame={sceneFrame(template)}
+          />
+        </EmptyHintScale>
       </Group>
     </Canvas>
   );

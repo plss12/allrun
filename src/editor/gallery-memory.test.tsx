@@ -108,7 +108,7 @@ const contextOf = (): LayerContext => ({
 
 /** The gallery of an activity, on an iPhone's width. */
 const build = () =>
-  gallery.buildGallery(activityCatalog(activity), 'story', 'inter', contextOf(), 393, 'Text');
+  gallery.buildGallery(activityCatalog(activity), 'inter', contextOf(), 393, 'Text');
 
 /** What a gallery shows, tile by tile. */
 const tilesOf = (sections: readonly import('./widget-gallery').GallerySection[]) =>
@@ -123,14 +123,7 @@ const tilesOf = (sections: readonly import('./widget-gallery').GallerySection[])
 
 describe('startGalleryBuild', () => {
   const startBuild = () =>
-    gallery.startGalleryBuild(
-      activityCatalog(activity),
-      'story',
-      'inter',
-      contextOf(),
-      393,
-      'Text',
-    );
+    gallery.startGalleryBuild(activityCatalog(activity), 'inter', contextOf(), 393, 'Text');
 
   it('ends up with the same gallery as building it at once, a section at a time', () => {
     const whole = build();
@@ -179,12 +172,8 @@ describe('buildGallery', () => {
     const variants = catalog.flatMap((section) => section.widgets.flatMap((w) => w.variants));
     const prepared = new Map();
     const context = { ...contextOf(), preparedItems: prepared };
-    const once = counting(() =>
-      gallery.gallerySections(catalog, 'story', 'inter', context, 393, 'Text'),
-    );
-    const again = counting(() =>
-      gallery.gallerySections(catalog, 'story', 'inter', context, 393, 'Text'),
-    );
+    const once = counting(() => gallery.gallerySections(catalog, 'inter', context, 393, 'Text'));
+    const again = counting(() => gallery.gallerySections(catalog, 'inter', context, 393, 'Text'));
     expect(prepared.size).toBeGreaterThan(variants.length / 2);
     // The second time only those chosen from a list are measured, with their phrases.
     expect(again.counts.paragraphs).toBeLessThan(once.counts.paragraphs / 3);

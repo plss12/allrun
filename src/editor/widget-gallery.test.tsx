@@ -91,7 +91,6 @@ function summaryData(kind: 'week' | 'year'): SummaryData {
 const activitySections = () =>
   gallery.gallerySections(
     activityCatalog(activity),
-    'story',
     'inter',
     contextFor(activityData),
     SCREEN,
@@ -131,7 +130,6 @@ describe('gallerySections', () => {
           false,
           withDetail && parsed.laps.length > 1,
         ),
-        'story',
         'inter',
         contextFor(data),
         SCREEN,
@@ -144,7 +142,6 @@ describe('gallerySections', () => {
     rowKeys(
       gallery.gallerySections(
         summaryCatalog(summaryData(kind).summary, kind === 'week' ? 'day' : 'month'),
-        'story',
         'inter',
         contextFor(summaryData(kind)),
         SCREEN,
@@ -249,7 +246,6 @@ describe('gallerySections', () => {
     const detail = parseStravaDetail(JSON.parse(JSON.stringify(streams)), detailed);
     const sections = gallery.gallerySections(
       activityCatalog(activity, ['splits'], false, false, true),
-      'story',
       'inter',
       contextFor({ ...activityData, detail }),
       SCREEN,
@@ -290,7 +286,6 @@ describe('gallerySections', () => {
   it('lays every tile two per row but the charts and a creative tile alone in its theme, which take the whole width', () => {
     const sections = gallery.gallerySections(
       activityCatalog(activity, ['elevation']),
-      'story',
       'inter',
       contextFor(activityData),
       SCREEN,
@@ -364,20 +359,42 @@ describe('gallerySections', () => {
     ]);
   });
 
-  it('makes the row of the pieces laid out for the canvas lower on a wide canvas, where they are wide', () => {
-    const rowOf = (format: 'story' | 'landscape') =>
-      gallery
-        .gallerySections(
-          activityCatalog(activity, ['elevation']),
-          format,
-          'inter',
-          contextFor(activityData),
-          SCREEN,
-          'Text',
-        )
-        .find((section) => section.id === 'photos')
-        ?.rows.find((row) => row.widgets.some((widget) => widget.key === 'image-camera'));
-    expect(rowOf('landscape')?.height ?? 0).toBeLessThan(rowOf('story')?.height ?? 0);
+  it('draws the calendar as tall as the chat beside it, in a row only as tall as the chat needs', () => {
+    const rows = activitySections().find((section) => section.id === 'photos')?.rows ?? [];
+    const row = rows.find((candidate) =>
+      candidate.widgets.some((widget) => widget.key === 'image-calendar'),
+    );
+    const tallOf = (key: string) => {
+      const page = row?.widgets.find((widget) => widget.key === key)?.pages[0];
+      return page === undefined ? NaN : page.prepared.height * page.scale;
+    };
+    // Raised to the tallest pieces' row, the calendar came out huge and the chat had room over
+    // and under it (the user's report).
+    const full = SCREEN - 2 * gallery.GALLERY_PADDING;
+    const half = Math.floor((full - gallery.GALLERY_GAP) / 2);
+    expect(row?.height ?? Infinity).toBeLessThan(Math.round(half * 1.5));
+    expect(tallOf('image-calendar')).toBeLessThanOrEqual(tallOf('image-chat') * 1.05);
+  });
+
+  it('fits every picture in its tile over its hint, each as big as its row lets it', () => {
+    const photos = activitySections().find((section) => section.id === 'photos');
+    for (const row of photos?.rows ?? []) {
+      for (const widget of row.widgets) {
+        // A piece measured lower beside a taller one (the calendar by the chat) was left small, or
+        // stuck out under the hint.
+        const room = row.height - gallery.GALLERY_DOTS_HEIGHT * (widget.pages.length > 1 ? 1 : 0);
+        const overHint = room - gallery.GALLERY_HINT_HEIGHT;
+        for (const page of widget.pages) {
+          const drawn = {
+            width: page.prepared.width * page.scale,
+            height: page.prepared.height * page.scale,
+          };
+          expect(drawn.height).toBeLessThanOrEqual(overHint);
+          // Not left small either: it fills its tile's width or its height.
+          expect(Math.max(drawn.width / row.width, drawn.height / overHint)).toBeGreaterThan(0.7);
+        }
+      }
+    }
   });
 
   it('lays the name and the monogram side by side, and both together under them, as wide', () => {
@@ -416,7 +433,6 @@ describe('gallerySections', () => {
       pagesOf(
         gallery.gallerySections(
           data.mode === 'summary' ? summaryCatalog(data.summary, data.bucketSize) : [],
-          'story',
           'inter',
           contextFor(data),
           SCREEN,

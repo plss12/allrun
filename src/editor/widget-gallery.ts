@@ -1,6 +1,7 @@
 import { isDataWidget } from '@/core/activity-block';
 import { isSummaryDataWidget } from '@/core/summary-block';
 import { newLayer } from '@/core/default-layout';
+import { INITIAL_FORMAT } from '@/core/editor-document';
 import { fillsCanvas } from '@/core/image-layer';
 import {
   type CatalogItem,
@@ -33,6 +34,13 @@ import { type LayerContext, type PreparedLayer, prepareLayers } from './template
  * The widget gallery of "Add element": every item of the catalog made into the layer it adds,
  * filled with the user's data and measured, ready to draw in a tile.
  */
+
+/**
+ * The format every gallery draws in, the widgets' and the designs', whatever the canvas (the user's
+ * choice): always as they first show, choosing an activity. What is chosen fits the canvas when it
+ * goes on it, so no gallery tells formats apart.
+ */
+export const GALLERY_FORMAT: CanvasFormat = INITIAL_FORMAT;
 
 /** Room around and between the tiles, in points. */
 export const GALLERY_PADDING = 16;
@@ -86,7 +94,7 @@ function isPicture(widget: CatalogWidget): boolean {
 
 /**
  * Whether an item is as big as the canvas with its photo (the camera, the crop screen), or as tall
- * (the slide viewer, the photobooth's strip, a chat): in a tile as tall as a story, for it to read.
+ * (the slide viewer, the photobooth's strip, a chat): in a taller tile, for it to read.
  */
 function framesItem(item: CatalogItem): boolean {
   return (
@@ -167,7 +175,7 @@ export interface GalleryContext extends LayerContext {
 
 /**
  * The catalog as rows of tiles for a screen `screenWidth` points wide, each variant drawn as it
- * would be added to a design of `format` in `font`. Variants writing the same text as an earlier
+ * would be added to a design in `font` (in `GALLERY_FORMAT`). Variants writing the same text as an earlier
  * one of their tile (a period's formats, all "2026" for a year) are left out, and so are items
  * with nothing to show. Each page of a mixed widget, a chart, a date or a period's name fills its
  * own page, as big as it fits (a data widget up to a cap, see `MAX_CANVAS_SPAN`), so none is left
@@ -182,7 +190,6 @@ export interface GalleryContext extends LayerContext {
  */
 export function buildGallery(
   catalog: readonly CatalogSection[],
-  format: CanvasFormat,
   font: FontId,
   context: GalleryContext,
   screenWidth: number,
@@ -191,7 +198,6 @@ export function buildGallery(
   const { value, dispose } = inParagraphArena(() =>
     gallerySections(
       catalog,
-      format,
       font,
       { ...context, preparedItems: new Map() },
       screenWidth,
@@ -223,7 +229,6 @@ export interface GalleryBuild {
  */
 export function startGalleryBuild(
   catalog: readonly CatalogSection[],
-  format: CanvasFormat,
   font: FontId,
   context: GalleryContext,
   screenWidth: number,
@@ -251,11 +256,11 @@ export function startGalleryBuild(
           }
           const variants = variantsOf(section);
           if (variant < variants.length) {
-            preparedItem(variants[variant], format, font, shared, textSample);
+            preparedItem(variants[variant], font, shared, textSample);
             variant += 1;
           } else {
             sections.push(
-              ...gallerySections([catalog[section]], format, font, shared, screenWidth, textSample),
+              ...gallerySections([catalog[section]], font, shared, screenWidth, textSample),
             );
             section += 1;
             variant = 0;
@@ -273,7 +278,6 @@ export function startGalleryBuild(
 /** `prepareItem`, once per variant if the context keeps them. */
 function preparedItem(
   item: CatalogItem,
-  format: CanvasFormat,
   font: FontId,
   context: GalleryContext,
   textSample: string,
@@ -282,7 +286,7 @@ function preparedItem(
   if (kept !== undefined) {
     return kept;
   }
-  const prepared = prepareItem(item, format, font, context, textSample);
+  const prepared = prepareItem(item, font, context, textSample);
   context.preparedItems?.set(item, prepared);
   return prepared;
 }
@@ -299,7 +303,6 @@ export interface BuiltGallery {
 /** The gallery's rows, section by section (see `buildGallery`). */
 export function gallerySections(
   catalog: readonly CatalogSection[],
-  format: CanvasFormat,
   font: FontId,
   context: GalleryContext,
   screenWidth: number,
@@ -318,7 +321,6 @@ export function gallerySections(
       measureTile(
         widget,
         { width: tileWidth, height: tileHeight, capWidth: width },
-        format,
         font,
         context,
         textSample,
@@ -338,12 +340,8 @@ export function gallerySections(
         : grows || isPicture(widget)
           ? tallest
           : height;
-    /**
-     * How tall the tile of each piece laid out for the canvas is (see `framesItem`): as its pages
-     * need in this format, between the usual tiles and a story's (the user's choice: on a wide
-     * canvas those pieces are wide too, and a story's tile left most of it empty).
-     */
-    const framingHeights = new Map<GalleryWidget, number>();
+    /** The height each tile was measured at, to measure it again in a taller row. */
+    const measuredHeights = new Map<GalleryWidget, number>();
     const tiles = section.widgets.flatMap((widget) => {
       const wide = columns > 1 && spansRow(widget);
       const tileWidth = wide ? full : width;
@@ -351,13 +349,14 @@ export function gallerySections(
       if (first === null) {
         return [];
       }
-      if (!framesItem(widget.variants[0])) {
-        return [{ tile: first, wide }];
-      }
-      const fitted = Math.min(heightOf(widget), Math.max(height, neededHeight(first)));
+      // A tall piece only as tall as it needs (the chat, wider than the camera): its row, with
+      // the calendar, was left with room over and under both (the user's report).
+      const needed = framesItem(widget.variants[0])
+        ? Math.min(heightOf(widget), Math.max(height, neededHeight(first)))
+        : heightOf(widget);
       const tile =
-        fitted === heightOf(widget) ? first : (measure(widget, tileWidth, fitted) ?? first);
-      framingHeights.set(tile, fitted);
+        needed === heightOf(widget) ? first : (measure(widget, tileWidth, needed) ?? first);
+      measuredHeights.set(tile, needed);
       return [{ tile, wide }];
     });
     // The creative tiles go by themes: each theme starts a row, so a tile only shares one with
@@ -398,17 +397,29 @@ export function gallerySections(
           return null;
         }
         const wide = measure(source, full, heightOf(source));
-        return wide === null ? null : { width: full, tiles: [wide] };
+        if (wide === null) {
+          return null;
+        }
+        measuredHeights.set(wide, heightOf(source));
+        return { width: full, tiles: [wide] };
       });
     }
     const rows = groups.map(({ width: rowWidth, tiles }): GalleryRow => {
       if (!grows) {
-        const pictures = tiles.some((tile) => tile.pages[0].item.kind === 'image');
-        const framing = tiles.flatMap((tile) => framingHeights.get(tile) ?? []);
+        // As tall as its tallest tile (a chat beside the calendar), and each tile drawn as big as
+        // the row lets it: one measured lower beside a taller one was left small, or stuck out
+        // under its hint.
+        const rowHeight = Math.max(...tiles.map((tile) => measuredHeights.get(tile) ?? height));
         return {
           width: rowWidth,
-          height: framing.length > 0 ? Math.max(...framing) : pictures ? tallest : height,
-          widgets: tiles,
+          height: rowHeight,
+          widgets: tiles.map((tile) => {
+            if ((measuredHeights.get(tile) ?? rowHeight) === rowHeight) {
+              return tile;
+            }
+            const widget = section.widgets.find((candidate) => candidate.key === tile.key);
+            return (widget === undefined ? null : measure(widget, rowWidth, rowHeight)) ?? tile;
+          }),
         };
       }
       // As tall as its tallest widget needs, between the usual tiles and square ones.
@@ -548,21 +559,19 @@ export function readsInTile(tile: GalleryWidget): boolean {
 function measureTile(
   widget: CatalogWidget,
   size: { width: number; height: number; capWidth: number },
-  format: CanvasFormat,
   font: FontId,
   context: GalleryContext,
   textSample: string,
 ): GalleryWidget | null {
   const kind = chosenFrom(widget.variants[0]);
   if (kind === null) {
-    return measureWidget(widget, size, format, font, context, textSample);
+    return measureWidget(widget, size, font, context, textSample);
   }
   let first: GalleryWidget | null = null;
   for (const phrase of listedPhrases(context.phrases ?? BUILT_IN_PHRASES, kind, todayLocal())) {
     const tile = measureWidget(
       { ...widget, variants: widget.variants.map((item) => withPhrase(item, phrase.id)) },
       size,
-      format,
       font,
       context,
       textSample,
@@ -586,15 +595,14 @@ function measureTile(
 function measureWidget(
   widget: CatalogWidget,
   { width, height, capWidth }: { width: number; height: number; capWidth: number },
-  format: CanvasFormat,
   font: FontId,
   context: GalleryContext,
   textSample: string,
 ): GalleryWidget | null {
-  const canvasWidth = CANVAS_FORMATS[format].width;
+  const canvasWidth = CANVAS_FORMATS[GALLERY_FORMAT].width;
   const seen = new Set<string>();
   const measured = widget.variants.flatMap((item) => {
-    const prepared = preparedItem(item, format, font, context, textSample);
+    const prepared = preparedItem(item, font, context, textSample);
     if (prepared === null) {
       return [];
     }
@@ -648,16 +656,20 @@ function measureWidget(
 /** An item of the catalog, filled in and measured, or `null` with nothing to show. */
 export function prepareItem(
   item: CatalogItem,
-  format: CanvasFormat,
   font: FontId,
   context: GalleryContext,
   textSample: string,
 ): PreparedLayer | null {
   const pick: NewLayer = item.kind === 'text' ? { kind: 'text', content: textSample } : item;
-  const added = newLayer(pick, catalogItemKey(item), format, font);
+  const added = newLayer(pick, catalogItemKey(item), GALLERY_FORMAT, font);
   const layer = context.restyle?.(added) ?? added;
   const [prepared] = prepareLayers(
-    newTemplate({ id: 'gallery', mode: context.data.mode, format, layers: [layer] }),
+    newTemplate({
+      id: 'gallery',
+      mode: context.data.mode,
+      format: GALLERY_FORMAT,
+      layers: [layer],
+    }),
     context,
   );
   return prepared ?? null;
