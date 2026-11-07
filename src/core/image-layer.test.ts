@@ -18,6 +18,8 @@ import {
   slidesBox,
   boothBox,
   chatBox,
+  fillsCanvas,
+  marginsBox,
   mountWindows,
   windowAt,
   withoutPicture,
@@ -332,6 +334,43 @@ describe("a photobooth's strip", () => {
   });
 });
 
+describe("a margins' page", () => {
+  it.each([
+    ['three photos', 3],
+    ['two photos', 2],
+  ])(
+    'fills the canvas with %s the whole height between its bands, its texts at thirds',
+    (_name, count) => {
+      const canvas = CANVAS_FORMATS.story;
+      const box = marginsBox(count, canvas);
+      expect(box.wide).toBe(false);
+      expect(box.windows).toHaveLength(count);
+      expect(box.windows[0].y).toBeCloseTo(-canvas.height / 2);
+      const last = box.windows[count - 1];
+      expect(last.y + last.height).toBeCloseTo(canvas.height / 2);
+      // The bands as wide as each other, the data in the left one and the labels in the right one.
+      expect(box.windows[0].x + canvas.width / 2).toBeCloseTo(
+        canvas.width / 2 - (box.windows[0].x + box.windows[0].width),
+      );
+      expect(box.data.map((at) => at.y)).toEqual(box.labels.map((at) => at.y));
+      expect(box.data[0].x).toBeLessThan(box.windows[0].x);
+      expect(box.labels[0].x).toBeGreaterThan(box.windows[0].x + box.windows[0].width);
+      expect(fillsCanvas(count === 3 ? 'margins' : 'marginsPair')).toBe(true);
+      expect(coversCanvas(count === 3 ? 'margins' : 'marginsPair')).toBe(false);
+    },
+  );
+
+  it('lays its photos in a row between bands over and under them on a wide canvas', () => {
+    const canvas = CANVAS_FORMATS.landscape;
+    const box = marginsBox(3, canvas);
+    expect(box.wide).toBe(true);
+    expect(box.windows[0].x).toBeCloseTo(-canvas.width / 2);
+    expect(box.windows[2].x + box.windows[2].width).toBeCloseTo(canvas.width / 2);
+    expect(box.data[0].y).toBeLessThan(box.windows[0].y);
+    expect(box.labels[0].y).toBeGreaterThan(box.windows[0].y + box.windows[0].height);
+  });
+});
+
 describe('a chat as one piece', () => {
   const inside =
     (box: { width: number; height: number }) =>
@@ -390,6 +429,26 @@ describe('a chat as one piece', () => {
   });
 });
 
+describe('a strip of film on a wide canvas', () => {
+  it('is laid up it, its upright frames one under another, its holes at its sides', () => {
+    const box = mountBox('filmStrip', CANVAS_FORMATS.landscape);
+    expect(box.upright).toBe(true);
+    expect(box.height).toBeGreaterThan(box.width);
+    expect(box.picture.width / box.picture.height).toBeCloseTo(3 / 4);
+    const [over, under] = box.frames;
+    expect(over.y + over.height).toBeLessThanOrEqual(box.picture.y);
+    expect(under.y).toBeGreaterThanOrEqual(box.picture.y + box.picture.height);
+    // At most 30% of the frames beside it shows, at its ends.
+    expect((over.y + over.height + box.height / 2) / over.height).toBeLessThanOrEqual(0.3 + 1e-9);
+    for (const hole of box.holes) {
+      expect(
+        hole.x + hole.width <= box.picture.x || hole.x >= box.picture.x + box.picture.width,
+      ).toBe(true);
+    }
+    expect(mountBox('filmStrip', CANVAS_FORMATS.story).upright).toBeUndefined();
+  });
+});
+
 describe('slotBox', () => {
   it('fills the place of a slot with a vertical photo of a phone', () => {
     const box = slotBox({ width: 3024, height: 4032 }, 'none');
@@ -431,6 +490,11 @@ describe('mountBox', () => {
     if (mount === 'photobooth') {
       // Several windows of their own: see the tests of boothBox.
       expect(box).toMatchObject({ width: boothBox().width, height: boothBox().height });
+      return;
+    }
+    if (mount === 'margins' || mount === 'marginsPair') {
+      // As big as the canvas: see the tests of marginsBox.
+      expect(box).toMatchObject(CANVAS_FORMATS.story);
       return;
     }
     if (mount === 'chat' || mount === 'chatPair') {

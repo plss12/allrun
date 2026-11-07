@@ -43,8 +43,8 @@ export function formatPlace(place: Place, format: PlaceFormat): string | null {
 }
 
 /**
- * Whether `layers` write where the activity was done: the place's text, the location replica or an
- * instant photo with its place under it. On Android naming it needs a permission, asked for when
+ * Whether `layers` write where the activity was done: the place's text, the location replica, an
+ * instant photo with its place under it or the margins' page. On Android naming it needs a permission, asked for when
  * such a widget or a design with one is chosen. Time O(n) for n layers.
  */
 export function namesPlace(layers: readonly Layer[]): boolean {
@@ -52,6 +52,7 @@ export function namesPlace(layers: readonly Layer[]): boolean {
     (layer) =>
       (layer.kind === 'info' && layer.field === 'activityPlace') ||
       (layer.kind === 'activityBlock' && layer.block.design === 'location') ||
-      (layer.kind === 'image' && layer.caption === 'place'),
+      (layer.kind === 'image' &&
+        (layer.caption === 'place' || layer.mount === 'margins' || layer.mount === 'marginsPair')),
   );
 }

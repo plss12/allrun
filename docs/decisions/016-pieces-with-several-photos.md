@@ -2,7 +2,7 @@
 
 Date: 2026-11-07
 
-Status: accepted. Extends the image layer of ADR 009 and the designs' slots of ADR 007. Used by the slide viewer, the photobooth's strip and the chat with two photos.
+Status: accepted. Extends the image layer of ADR 009 and the designs' slots of ADR 007. Used by the slide viewer, the photobooth's strip, the chat with two photos and the margins' page.
 
 ## Context
 

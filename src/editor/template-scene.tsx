@@ -38,6 +38,8 @@ import {
   boothBox,
   type ChatBox,
   chatBox,
+  type MarginsBox,
+  marginsBox,
   type SlidesBox,
   slidesBox,
   FRAME_COLORS,
@@ -108,6 +110,8 @@ import {
 import { type CaptionText, instantCaption } from './instant-caption';
 import {
   boothCaption,
+  marginsCaption,
+  type MarginsText,
   type BoothText,
   cropCaption,
   slidesCaption,
@@ -922,6 +926,35 @@ function prepareLayer(
           ),
         };
       }
+      if (layer.mount === 'margins' || layer.mount === 'marginsPair') {
+        const box = marginsBox(layer.mount === 'margins' ? 3 : 2, canvas);
+        const photos = layerPictures(layer).map((key) => {
+          const one = images?.get(key);
+          return {
+            picture: one?.image ?? null,
+            empty:
+              emptySlots !== undefined && (key === SAMPLE_IMAGE || one === undefined)
+                ? emptySlots
+                : null,
+          };
+        });
+        return {
+          layer,
+          ...canvas,
+          content: (
+            <MarginsWidget
+              box={box}
+              photos={photos}
+              texts={marginsTexts(
+                fonts,
+                marginsCaption(data, textContext, translate),
+                box,
+                textContext.locale,
+              )}
+            />
+          ),
+        };
+      }
       if (layer.mount === 'chat' || layer.mount === 'chatPair') {
         const box = chatBox(layer.mount === 'chatPair', canvas);
         const photos = layerPictures(layer).map((key) => {
@@ -1391,7 +1424,10 @@ function mountSides(
   });
 }
 
-/** A holder's texts around its window laid out, and the arrow of its main datum, if it has one. */
+/**
+ * A holder's texts around its window laid out, and the arrow of its main datum, if it has one; for a
+ * holder laid up the canvas (`upright`), as across it, drawn turned a quarter.
+ */
 interface LaidOutMarks {
   readonly paragraphs: readonly PlacedParagraph[];
   readonly arrow: {
@@ -1413,6 +1449,29 @@ function mountMarks(
   strip: MountStrip | undefined,
   locale: string,
 ): LaidOutMarks {
+  if (box.upright === true) {
+    // Laid up the canvas: its texts are laid out as across it, and drawn turned a quarter.
+    const { picture } = box;
+    return mountMarks(
+      fonts,
+      mount,
+      {
+        ...box,
+        width: box.height,
+        height: box.width,
+        picture: {
+          x: picture.y,
+          y: -(picture.x + picture.width),
+          width: picture.height,
+          height: picture.width,
+        },
+        upright: false,
+      },
+      marks,
+      strip,
+      locale,
+    );
+  }
   const look = MOUNT_LOOKS[mount];
   const { x: left, y: top, width } = box.picture;
   const right = left + width;
@@ -1543,7 +1602,7 @@ const mountPaths = new Map<string, SkPath>();
  * because a picture over a hole lets the background through along its edge.
  */
 function mountPath(mount: LetteredMount, box: MountBox, open: boolean): SkPath {
-  const key = `${mount}-${open}`;
+  const key = `${mount}-${open}-${box.upright === true}`;
   const cached = mountPaths.get(key);
   if (cached !== undefined) {
     return cached;
@@ -1604,6 +1663,142 @@ function CameraWidget({
       )}
       {view}
       {empty === 'hint' ? <EmptySign cx={0} cy={0} /> : null}
+    </Group>
+  );
+}
+
+/**
+ * How a margins' page looks: its bands' paper, and the ink of its texts, dark or faded (AllRun's name
+ * and the place, around the date: the user's choice, for both bands to look alike), in Barlow
+ * Condensed with room between the letters.
+ */
+const MARGINS_LOOK = {
+  paper: '#F5F5F3',
+  ink: '#181818',
+  faded: '#969696',
+  font: 'barlowCondensed' as FontId,
+  tracking: 0.12,
+} as const;
+
+/** A text of a margins' page laid out, where its middle goes and how it turns. */
+interface MarginsLine {
+  readonly paragraph: SkParagraph;
+  readonly width: number;
+  readonly x: number;
+  readonly y: number;
+  readonly turn: number;
+}
+
+/**
+ * Lays out a margins' page's texts in capitals, each in the middle of its place, shrunk to fit the
+ * length its band has for it: turned to read up the left band and down the right one, level in the
+ * bands of a wide canvas. Time O(1).
+ */
+function marginsTexts(
+  fonts: SkTypefaceFontProvider,
+  text: MarginsText,
+  box: MarginsBox,
+  locale: string,
+): readonly MarginsLine[] {
+  const line = (
+    words: string,
+    color: string,
+    at: { readonly x: number; readonly y: number },
+    turn: number,
+  ): MarginsLine[] => {
+    if (words === '') {
+      return [];
+    }
+    const layOut = (size: number) => {
+      const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+      builder.pushStyle({
+        color: Skia.Color(color),
+        fontFamilies: fontFamiliesOf(MARGINS_LOOK.font),
+        fontSize: size,
+        letterSpacing: size * MARGINS_LOOK.tracking,
+      });
+      builder.addText(words.toLocaleUpperCase(locale));
+      builder.pop();
+      const paragraph = finishParagraph(builder);
+      paragraph.layout(NO_WRAP_WIDTH);
+      return paragraph;
+    };
+    let paragraph = layOut(box.size);
+    if (paragraph.getLongestLine() > box.length) {
+      const fit = box.length / paragraph.getLongestLine();
+      discardParagraph(paragraph);
+      paragraph = layOut(box.size * fit);
+    }
+    const width = Math.ceil(paragraph.getLongestLine()) + 1;
+    paragraph.layout(width);
+    return [{ paragraph, width, x: at.x, y: at.y, turn }];
+  };
+  const up = box.wide ? 0 : -Math.PI / 2;
+  const down = box.wide ? 0 : Math.PI / 2;
+  return [
+    ...text.data.flatMap((words, i) => line(words, MARGINS_LOOK.ink, box.data[i], up)),
+    ...text.labels.flatMap(({ text: words, faded }, i) =>
+      line(words, faded ? MARGINS_LOOK.faded : MARGINS_LOOK.ink, box.labels[i], down),
+    ),
+  ];
+}
+
+/**
+ * A margins' page with its photos, as one piece as big as the canvas: its paper, a photo in each
+ * place, the whole height between the bands (in a row on a wide canvas), and the texts turned in
+ * them. A place with no photo shows the sign to fill it (`hint`) or only the paper (`blank`).
+ */
+function MarginsWidget({
+  box,
+  photos,
+  texts,
+}: {
+  readonly box: MarginsBox;
+  readonly photos: readonly {
+    readonly picture: SkImage | null;
+    readonly empty: 'hint' | 'blank' | null;
+  }[];
+  readonly texts: readonly MarginsLine[];
+}) {
+  return (
+    <Group>
+      <Rect
+        x={-box.width / 2}
+        y={-box.height / 2}
+        width={box.width}
+        height={box.height}
+        color={MARGINS_LOOK.paper}
+      />
+      {box.windows.map((window, i) => {
+        const photo = photos[i];
+        return photo === undefined || photo.empty === 'blank' ? null : photo.empty === null &&
+          photo.picture !== null ? (
+          <Image
+            key={i}
+            image={photo.picture}
+            rect={window}
+            fit="cover"
+            sampling={PHOTO_SAMPLING}
+          />
+        ) : (
+          <Rect key={i} {...window} color={LOADING_PICTURE} />
+        );
+      })}
+      {box.windows.map((window, i) =>
+        photos[i]?.empty === 'hint' ? (
+          <EmptySign key={i} cx={window.x + window.width / 2} cy={window.y + window.height / 2} />
+        ) : null,
+      )}
+      {texts.map(({ paragraph, width, x, y, turn }, i) => (
+        <Group key={i} transform={[{ translateX: x }, { translateY: y }, { rotate: turn }]}>
+          <ParagraphPicture
+            paragraph={paragraph}
+            x={-width / 2}
+            y={-paragraph.getHeight() / 2}
+            width={width}
+          />
+        </Group>
+      ))}
     </Group>
   );
 }
@@ -2311,20 +2506,22 @@ function MountWidget({
               ) : null}
             </Group>
           ))}
-      {marks.arrow === null ? null : (
-        <Group transform={[{ translateY: marks.arrow.y }]}>
-          <Path path={arrowPath(marks.arrow.x, marks.arrow.size)} color={look.ink} />
-        </Group>
-      )}
-      {marks.paragraphs.map(({ paragraph, x, y }, i) => (
-        <ParagraphPicture
-          key={i}
-          paragraph={paragraph}
-          x={x}
-          y={y}
-          width={Math.ceil(paragraph.getLongestLine()) + 1}
-        />
-      ))}
+      <Group transform={box.upright === true ? [{ rotate: Math.PI / 2 }] : []}>
+        {marks.arrow === null ? null : (
+          <Group transform={[{ translateY: marks.arrow.y }]}>
+            <Path path={arrowPath(marks.arrow.x, marks.arrow.size)} color={look.ink} />
+          </Group>
+        )}
+        {marks.paragraphs.map(({ paragraph, x, y }, i) => (
+          <ParagraphPicture
+            key={i}
+            paragraph={paragraph}
+            x={x}
+            y={y}
+            width={Math.ceil(paragraph.getLongestLine()) + 1}
+          />
+        ))}
+      </Group>
       {sides.map((side, index) => (
         <Group
           key={index}

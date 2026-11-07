@@ -22,7 +22,7 @@ import { periodCount, shortDistance, type Translate } from './instant-caption';
  */
 export type LetteredMount = Exclude<
   ImageMount,
-  CanvasMount | 'slides' | 'photobooth' | 'chat' | 'chatPair'
+  CanvasMount | 'slides' | 'photobooth' | 'chat' | 'chatPair' | 'margins' | 'marginsPair'
 >;
 
 /** What a holder writes along one of its sides, spread along it. */
@@ -138,6 +138,50 @@ export function slidesCaption(
   translate: Translate,
 ): readonly string[] {
   return threeData(data, context, translate);
+}
+
+/** What a margins' page writes: its three data, and its three labels, the faded ones marked. */
+export interface MarginsText {
+  readonly data: readonly string[];
+  readonly labels: readonly { readonly text: string; readonly faded: boolean }[];
+}
+
+/**
+ * What a margins' page writes in its bands, in order down them (across them on a wide canvas): the
+ * three data, the time over the distance over the pace as the user's reference has them; and
+ * AllRun's name and the place, faded, around the date (a period's name and dates around its name).
+ * A label with nothing to write is left out. Time and space O(1).
+ */
+export function marginsCaption(
+  data: EditorData,
+  context: TextContext,
+  translate: Translate,
+): MarginsText {
+  const [first = '', second = '', third = ''] = threeData(data, context, translate);
+  if (data.mode === 'activity') {
+    const place = data.place === null ? null : formatPlace(data.place, 'cityRegion');
+    return {
+      data: [third, first, second],
+      labels: [
+        { text: BRAND_NAME, faded: true },
+        {
+          text: formatActivityDate(data.activity.startLocal, context.locale, 'numeric')
+            .split('/')
+            .join('·'),
+          faded: false,
+        },
+        { text: place ?? '', faded: true },
+      ],
+    };
+  }
+  return {
+    data: [third, first, second],
+    labels: [
+      { text: BRAND_NAME, faded: true },
+      { text: formatShortRange(data.summary.range, context.locale), faded: false },
+      { text: periodName(data, context, translate), faded: true },
+    ],
+  };
 }
 
 /** What a photobooth's strip writes: on its tape, and at its foot. */

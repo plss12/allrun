@@ -26,6 +26,8 @@ export const READY_DESIGN_IDS = [
   'polaroid',
   'slides',
   'photobooth',
+  'margins',
+  'marginsPair',
 ] as const;
 
 export type ReadyDesignId = (typeof READY_DESIGN_IDS)[number];
@@ -144,16 +146,24 @@ const STRIP_TILT = (2 * Math.PI) / 180;
 const STRIP = { width: 0.8, height: 0.82 } as const;
 
 /**
- * A strip of film across a black canvas, leaning, its ends off the canvas (but in a wide canvas,
- * where it is too low to reach them). Time and space O(1).
+ * A strip of film across a black canvas, leaning, its ends off the canvas; on a wide canvas the
+ * strip is laid up it (see `mountBox`), so its ends still go off it, at the top and the foot (the
+ * user's choice: across a wide canvas they never reached its sides). Time and space O(1).
  */
 function filmStrip(data: TemplateData, format: CanvasFormat): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
   const box = mountBox('filmStrip', canvas);
-  const scale = Math.min(
-    (STRIP.width * canvas.width) / box.picture.width,
-    (STRIP.height * canvas.height) / box.height,
-  );
+  // Its frame along the canvas's length, the strip across its breadth.
+  const scale =
+    box.upright === true
+      ? Math.min(
+          (STRIP.width * canvas.height) / box.picture.height,
+          (STRIP.height * canvas.width) / box.width,
+        )
+      : Math.min(
+          (STRIP.width * canvas.width) / box.picture.width,
+          (STRIP.height * canvas.height) / box.height,
+        );
   const strip = slot('photo-1', 'filmStrip', 0.5, 0.5, scale);
   return {
     template: design('filmStrip', data, format, BLACK, [
@@ -262,6 +272,27 @@ function photobooth(data: TemplateData, format: CanvasFormat): ReadyDesign {
   return { template: design('photobooth', data, format, BLACK, [strip]) };
 }
 
+/** The margins' bands' paper: a white just off white, as the user's reference. */
+const MARGINS_PAPER = '#F5F5F3';
+
+/**
+ * A page as big as the canvas, its photos the whole height between two bands with the data and
+ * the labels turned in them (the user's reference), three photos or two (`pair`). Time and space
+ * O(1).
+ */
+function margins(
+  id: ReadyDesignId,
+  pair: boolean,
+  data: TemplateData,
+  format: CanvasFormat,
+): ReadyDesign {
+  return {
+    template: design(id, data, format, MARGINS_PAPER, [
+      slot('photo-1', pair ? 'marginsPair' : 'margins', 0.5, 0.5, 1),
+    ]),
+  };
+}
+
 const RECIPES: Readonly<
   Record<ReadyDesignId, (data: TemplateData, format: CanvasFormat) => ReadyDesign>
 > = {
@@ -275,6 +306,8 @@ const RECIPES: Readonly<
   polaroid,
   slides,
   photobooth,
+  margins: (data, format) => margins('margins', false, data, format),
+  marginsPair: (data, format) => margins('marginsPair', true, data, format),
 };
 
 /** One of AllRun's designs laid out for `data` in `format`. Time and space O(1). */

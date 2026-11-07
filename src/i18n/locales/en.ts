@@ -763,6 +763,8 @@ export const en = {
       photobooth: 'Photobooth',
       chat: 'Message',
       chatPair: 'Message, two photos',
+      margins: 'Margins',
+      marginsPair: 'Margins, two photos',
     },
   },
   activityCharts: {

@@ -1,7 +1,7 @@
 import { isDataWidget } from '@/core/activity-block';
 import { isSummaryDataWidget } from '@/core/summary-block';
 import { newLayer } from '@/core/default-layout';
-import { coversCanvas } from '@/core/image-layer';
+import { fillsCanvas } from '@/core/image-layer';
 import {
   type CatalogItem,
   catalogItemKey,
@@ -91,7 +91,7 @@ function isPicture(widget: CatalogWidget): boolean {
 function framesItem(item: CatalogItem): boolean {
   return (
     item.kind === 'image' &&
-    (coversCanvas(item.mount) ||
+    (fillsCanvas(item.mount) ||
       item.mount === 'slides' ||
       item.mount === 'photobooth' ||
       item.mount === 'chat' ||
@@ -343,10 +343,27 @@ export function gallerySections(
         : grows || isPicture(widget)
           ? tallest
           : height;
+    /**
+     * How tall the tile of each piece laid out for the canvas is (see `framesItem`): as its pages
+     * need in this format, between the usual tiles and a story's (the user's choice: on a wide
+     * canvas those pieces are wide too, and a story's tile left most of it empty).
+     */
+    const framingHeights = new Map<GalleryWidget, number>();
     const tiles = section.widgets.flatMap((widget) => {
       const wide = columns > 1 && spansRow(widget);
-      const tile = measure(widget, wide ? full : width, heightOf(widget));
-      return tile === null ? [] : [{ tile, wide }];
+      const tileWidth = wide ? full : width;
+      const first = measure(widget, tileWidth, heightOf(widget));
+      if (first === null) {
+        return [];
+      }
+      if (!framesItem(widget.variants[0])) {
+        return [{ tile: first, wide }];
+      }
+      const fitted = Math.min(heightOf(widget), Math.max(height, neededHeight(first)));
+      const tile =
+        fitted === heightOf(widget) ? first : (measure(widget, tileWidth, fitted) ?? first);
+      framingHeights.set(tile, fitted);
+      return [{ tile, wide }];
     });
     // The creative tiles go by themes: each theme starts a row, so a tile only shares one with
     // another of its theme (but a wildcard's, see below).
@@ -392,10 +409,10 @@ export function gallerySections(
     const rows = groups.map(({ width: rowWidth, tiles }): GalleryRow => {
       if (!grows) {
         const pictures = tiles.some((tile) => tile.pages[0].item.kind === 'image');
-        const framing = tiles.some((tile) => framesItem(tile.pages[0].item));
+        const framing = tiles.flatMap((tile) => framingHeights.get(tile) ?? []);
         return {
           width: rowWidth,
-          height: framing ? Math.round(width * FRAMING_TILE_RATIO) : pictures ? tallest : height,
+          height: framing.length > 0 ? Math.max(...framing) : pictures ? tallest : height,
           widgets: tiles,
         };
       }

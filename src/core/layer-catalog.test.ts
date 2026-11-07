@@ -160,8 +160,11 @@ describe('activityCatalog', () => {
       'image-slides',
       'image-photobooth',
       'image-chat',
-      'image-chatPair',
+      'image-margins',
     ]);
+    // With two photos, the second page of the tile with one (three, the margins').
+    expect(variantKeys(trail, 'image-chat')).toEqual(['image-chat', 'image-chat-pair']);
+    expect(variantKeys(trail, 'image-margins')).toEqual(['image-margins', 'image-margins-pair']);
     expect(variantKeys(trail, 'image')).toEqual(['image', 'image-light', 'image-dark']);
     // And an instant photo of it, with each caption.
     expect(variantKeys(trail, 'image-instant')).toEqual([

@@ -13,6 +13,7 @@ import {
   HEART_RATE_ZONE_VIEWS,
   IMAGE_FRAMES,
   IMAGE_MOUNTS,
+  type ImageMount,
   INSTANT_CAPTIONS,
   type Layer,
   type LayerKind,
@@ -202,6 +203,12 @@ export function creativeTheme(key: string): number | null {
   return CREATIVE_PLACES.get(key)?.theme ?? null;
 }
 
+/** The holders that are a page of another's tile, with a photo fewer: by the tile's holder. */
+const PAIRED_MOUNTS: Partial<Record<ImageMount, ImageMount>> = {
+  chatPair: 'chat',
+  marginsPair: 'margins',
+};
+
 /**
  * The widget an item is a variant of: the same for a time as a clock or in units, or for
  * every line of a route. The gallery draws the variants of a widget at one size, so they compare.
@@ -231,9 +238,10 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'summaryBlock':
       return `summaryBlock-${item.block.design}`;
     case 'image':
-      // The instant photos and each holder, a tile of their own.
+      // The instant photos and each holder, a tile of their own; a chat and a margins' page with one
+      // photo fewer, a page of the same tile (the user's choice).
       return item.mount !== undefined
-        ? `image-${item.mount}`
+        ? `image-${PAIRED_MOUNTS[item.mount] ?? item.mount}`
         : item.caption === undefined
           ? 'image'
           : 'image-instant';
@@ -319,9 +327,10 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           'quote' in item.block ? item.block.quote : undefined,
         ];
       case 'image':
-        // As is, the default; an instant photo by its caption, where and how far the default.
+        // As is, the default; an instant photo by its caption, where and how far the default; a
+        // holder with one photo fewer than its tile's first page, `pair`.
         return item.mount !== undefined
-          ? []
+          ? [PAIRED_MOUNTS[item.mount] === undefined ? undefined : 'pair']
           : item.caption === undefined
             ? [item.frame === 'none' ? undefined : item.frame]
             : [

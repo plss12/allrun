@@ -79,6 +79,8 @@ const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   polaroid: ['forestBridge', 'woodlandPath'],
   slides: ['mountainRunner', 'forestBridge', 'trackShoes'],
   photobooth: ['forestBridge', 'mountainRunner', 'trackShadow', 'trackShoes'],
+  margins: ['mountainRunner', 'forestBridge', 'trackShoes'],
+  marginsPair: ['trackShadow', 'woodlandPath'],
 };
 
 /** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */

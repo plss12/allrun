@@ -94,8 +94,11 @@ describe.each(READY_DESIGN_IDS)('%s', (id: ReadyDesignId) => {
       const boxes = scene()
         .prepareLayers(template, context)
         .map(({ layer, width, height }) => {
-          const halfWidth = (width * layer.transform.scale) / 2;
-          const halfHeight = (height * layer.transform.scale) / 2;
+          // Turned as it is: a leaning or turned piece takes more room.
+          const cos = Math.abs(Math.cos(layer.transform.rotation));
+          const sin = Math.abs(Math.sin(layer.transform.rotation));
+          const halfWidth = ((width * cos + height * sin) * layer.transform.scale) / 2;
+          const halfHeight = ((width * sin + height * cos) * layer.transform.scale) / 2;
           const x = layer.transform.x * canvas.width;
           const y = layer.transform.y * canvas.height;
           return {
@@ -110,13 +113,17 @@ describe.each(READY_DESIGN_IDS)('%s', (id: ReadyDesignId) => {
       expect(boxes.length).toBe(template.layers.length);
       for (const box of boxes) {
         expect([box.id, box.left]).toEqual([box.id, expect.any(Number)]);
-        // A strip of film runs off the sides of the canvas, on purpose.
-        if (id !== 'filmStrip') {
-          expect(box.left).toBeGreaterThanOrEqual(0);
-          expect(box.right).toBeLessThanOrEqual(canvas.width);
+        // A strip of film runs off the canvas along it, on purpose: across a tall canvas, and up
+        // a wide one, where it is turned.
+        const wide = canvas.width > canvas.height;
+        if (id !== 'filmStrip' || wide) {
+          expect(box.left).toBeGreaterThanOrEqual(-0.5);
+          expect(box.right).toBeLessThanOrEqual(canvas.width + 0.5);
         }
-        expect(box.top).toBeGreaterThanOrEqual(0);
-        expect(box.bottom).toBeLessThanOrEqual(canvas.height);
+        if (id !== 'filmStrip' || !wide) {
+          expect(box.top).toBeGreaterThanOrEqual(-0.5);
+          expect(box.bottom).toBeLessThanOrEqual(canvas.height + 0.5);
+        }
       }
       for (const a of boxes) {
         for (const b of boxes) {

@@ -110,6 +110,30 @@ describe('setFormat with the widgets measured', () => {
     expect(setFormat(square, 'story', sizeOf).layers).toEqual(design.layers);
   });
 
+  it('keeps a strip of film off the canvas along it, laid up a wide one, and back on a story', () => {
+    const strip: Layer = {
+      id: 'strip',
+      kind: 'image',
+      image: SAMPLE_IMAGE,
+      frame: 'none',
+      mount: 'filmStrip',
+      transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0.035 },
+      opacity: 1,
+    };
+    // Across a story, and up a wide canvas, as the scene measures it in each.
+    const sizeOf = (_id: string, format: string) =>
+      format === 'landscape' ? { width: 640, height: 1300 } : { width: 1300, height: 640 };
+    const design = { ...INITIAL_DESIGN, layers: [strip] };
+    const wide = setFormat(design, 'landscape', sizeOf);
+    const laid = wide.layers?.[0].transform;
+    // Never turned: only its tilt; as much of the canvas along it as it took across the story, so it
+    // still runs off it, and no more across it than it took down the story.
+    expect(laid?.rotation).toBe(0.035);
+    expect(((laid?.scale ?? 0) * 1300) / 566).toBeCloseTo(1300 / 1080);
+    expect(((laid?.scale ?? 0) * 640) / 1080).toBeLessThanOrEqual(640 / 1920 + 1e-9);
+    expect(setFormat(wide, 'story', sizeOf).layers).toEqual(design.layers);
+  });
+
   it('places a widget moved after a change where it is now', () => {
     const piece: Layer = {
       id: 'strip',

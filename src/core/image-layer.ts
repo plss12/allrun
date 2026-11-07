@@ -66,9 +66,11 @@ export function mountWindows(mount: ImageMount | undefined): number {
     ? SLIDES.count
     : mount === 'photobooth'
       ? BOOTH.count
-      : mount === 'chatPair'
+      : mount === 'chatPair' || mount === 'marginsPair'
         ? 2
-        : 1;
+        : mount === 'margins'
+          ? 3
+          : 1;
 }
 
 /**
@@ -286,6 +288,11 @@ export interface MountBox extends ImageBox {
    * cuts them at its ends, so that a frame shows the side of the picture nearest the window.
    */
   readonly frames: readonly BoxRect[];
+  /**
+   * Whether it is laid up the canvas, its frames one under another and its bands at its sides (a
+   * strip of film on a wide canvas): its texts are laid out along a band as across, and turned.
+   */
+  readonly upright?: boolean;
 }
 
 /** Proportions of the window of every holder: as a phone's vertical photos, which it never cuts. */
@@ -326,6 +333,15 @@ function windowIn(band: number): BoxRect {
   const height = IMAGE_SIDE - 2 * band;
   const width = height * WINDOW_RATIO;
   return { x: -width / 2, y: -height / 2, width, height };
+}
+
+/**
+ * Whether a holder is as big as the canvas, every format laid out for it: the camera, the crop
+ * screen and the margins' page. It comes at the canvas's size, and goes under the widgets already
+ * there; only the camera and the crop screen hold the canvas's photo (see `coversCanvas`).
+ */
+export function fillsCanvas(mount: ImageMount | undefined): boolean {
+  return coversCanvas(mount) || mount === 'margins' || mount === 'marginsPair';
 }
 
 /** The holders as big as the canvas, seen through: the camera and the crop screen. */
@@ -609,6 +625,73 @@ export function chatBox(pair: boolean, canvas: Size): ChatBox {
 }
 
 /**
+ * The margins' page (`margins`, `marginsPair`): its bands' depth as a share of the canvas's
+ * shorter side, the room between photos, and its texts' size as a share of a band.
+ */
+const MARGINS = { band: 0.14, gap: 14, text: 0.27 } as const;
+
+/** A margins' page laid out (see `marginsBox`). */
+export interface MarginsBox extends Size {
+  readonly windows: readonly BoxRect[];
+  /** Whether it is laid out for a wide canvas: the photos in a row, the bands over and under them. */
+  readonly wide: boolean;
+  /** Where each of the three data and each of the three labels goes: its middle. */
+  readonly data: readonly { readonly x: number; readonly y: number }[];
+  readonly labels: readonly { readonly x: number; readonly y: number }[];
+  /** How long a text may be along its band, and its letters' size. */
+  readonly length: number;
+  readonly size: number;
+}
+
+/**
+ * Where a margins' page as big as `canvas` puts its `count` photos and its texts: the photos the
+ * whole height between two bands, the data in the left one and the labels in the right one, each at
+ * a third of it whatever the photos (the user's reference); on a wide canvas, the photos in a row
+ * between bands over and under them, so they never become thin strips. Time and space O(n) for n
+ * photos.
+ */
+export function marginsBox(count: number, canvas: Size): MarginsBox {
+  const wide = canvas.width > canvas.height;
+  const band = MARGINS.band * Math.min(canvas.width, canvas.height);
+  const { gap } = MARGINS;
+  const left = -canvas.width / 2;
+  const top = -canvas.height / 2;
+  const thirds = [1, 3, 5].map((sixth) => sixth / 6);
+  if (wide) {
+    const width = (canvas.width - (count - 1) * gap) / count;
+    return {
+      ...canvas,
+      wide,
+      windows: Array.from({ length: count }, (_, i) => ({
+        x: left + i * (width + gap),
+        y: top + band,
+        width,
+        height: canvas.height - 2 * band,
+      })),
+      data: thirds.map((share) => ({ x: left + share * canvas.width, y: top + band / 2 })),
+      labels: thirds.map((share) => ({ x: left + share * canvas.width, y: -top - band / 2 })),
+      length: (canvas.width / 3) * 0.9,
+      size: band * MARGINS.text,
+    };
+  }
+  const height = (canvas.height - (count - 1) * gap) / count;
+  return {
+    ...canvas,
+    wide,
+    windows: Array.from({ length: count }, (_, i) => ({
+      x: left + band,
+      y: top + i * (height + gap),
+      width: canvas.width - 2 * band,
+      height,
+    })),
+    data: thirds.map((share) => ({ x: left + band / 2, y: top + share * canvas.height })),
+    labels: thirds.map((share) => ({ x: -left - band / 2, y: top + share * canvas.height })),
+    length: (canvas.height / 3) * 0.9,
+    size: band * MARGINS.text,
+  };
+}
+
+/**
  * The windows of a holder of several (see `mountWindows`) on `canvas`, from its middle; `null`
  * for the rest.
  */
@@ -620,6 +703,10 @@ function windowsOf(mount: ImageMount | undefined, canvas: Size): readonly BoxRec
       return boothBox().windows;
     case 'chatPair':
       return chatBox(true, canvas).windows;
+    case 'margins':
+      return marginsBox(3, canvas).windows;
+    case 'marginsPair':
+      return marginsBox(2, canvas).windows;
     default:
       return null;
   }
@@ -709,6 +796,13 @@ export function mountBox(mount: ImageMount, canvas: Size): MountBox {
         frames: [],
       };
     }
+    case 'margins':
+    case 'marginsPair': {
+      const page = marginsBox(mount === 'margins' ? 3 : 2, canvas);
+      const [picture] = page.windows;
+      const none = { ...picture, width: 0 };
+      return { ...canvas, picture, radius: 0, holes: [], sides: [none, none], frames: [] };
+    }
     case 'chat':
     case 'chatPair': {
       const chat = chatBox(mount === 'chatPair', canvas);
@@ -743,6 +837,43 @@ export function mountBox(mount: ImageMount, canvas: Size): MountBox {
     }
     case 'filmStrip': {
       const { band, gap, shown, radius, hole } = FILM_STRIP;
+      if (canvas.width > canvas.height) {
+        // Up a wide canvas, so that its ends still go off it (the user's choice): the frames one
+        // under another, upright, the bands and perforations at its sides.
+        const across = IMAGE_SIDE;
+        const pictureWidth = across - 2 * band;
+        const pictureHeight = pictureWidth / WINDOW_RATIO;
+        const picture = {
+          x: -pictureWidth / 2,
+          y: -pictureHeight / 2,
+          width: pictureWidth,
+          height: pictureHeight,
+        };
+        const along = pictureHeight * (1 + 2 * shown) + 2 * gap;
+        const none = { ...picture, width: 0 };
+        const count = Math.floor(along / hole.step);
+        const start = (-count * hole.step) / 2 + (hole.step - hole.width) / 2;
+        return {
+          width: across,
+          height: along,
+          picture,
+          radius,
+          holes: Array.from({ length: count }, (_, i) => {
+            const y = start + i * hole.step;
+            const shape = { width: hole.height, height: hole.width, radius: hole.radius };
+            return [
+              { ...shape, x: -across / 2 + hole.inset, y },
+              { ...shape, x: across / 2 - hole.inset - hole.height, y },
+            ];
+          }).flat(),
+          sides: [none, none],
+          frames: [
+            { ...picture, y: picture.y - pictureHeight - gap },
+            { ...picture, y: -picture.y + gap },
+          ],
+          upright: true,
+        };
+      }
       const picture = windowIn(band);
       const width = picture.width * (1 + 2 * shown) + 2 * gap;
       const none = { ...picture, width: 0 };

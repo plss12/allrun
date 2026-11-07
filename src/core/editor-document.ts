@@ -239,13 +239,15 @@ export function setFormat(
     if (before === undefined || after === undefined) {
       return layer;
     }
-    const transform = keepInCanvas(
-      from.transform,
-      before,
-      after,
-      CANVAS_FORMATS[from.format],
-      CANVAS_FORMATS[format],
-    );
+    const old = CANVAS_FORMATS[from.format];
+    const next = CANVAS_FORMATS[format];
+    // A strip of film is laid up a wide canvas and across a tall one: its ways swap with the
+    // canvas's, so its ends still go off it.
+    const swapped =
+      layer.kind === 'image' &&
+      layer.mount === 'filmStrip' &&
+      next.width > next.height !== old.width > old.height;
+    const transform = keepInCanvas(from.transform, before, after, old, next, swapped);
     if (!sameTransform(transform, from.transform)) {
       fitted[layer.id] = { ...from, fitted: transform };
     }

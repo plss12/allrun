@@ -224,8 +224,10 @@ export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
  * (`crop`), an old slide viewer with three pictures, a datum in each (`slides`), or a photobooth's
  * strip of three, a datum on a piece of tape over it and its date at its foot (`photobooth`), or a
  * chat in dark mode, its date over a sent photo and the message with two data under it, with one
- * photo (`chat`) or two (`chatPair`): those with more than one picture, see `windowCount`. The
- * holder and the data on it move as one piece.
+ * photo (`chat`) or two (`chatPair`), or a page as big as the canvas, its photos the whole of it
+ * between two bands with texts turned in them, three photos (`margins`) or two (`marginsPair`):
+ * those with more than one picture, see `windowCount`. The holder and the data on it move as one
+ * piece.
  */
 export const IMAGE_MOUNTS = [
   'filmFrame',
@@ -237,6 +239,8 @@ export const IMAGE_MOUNTS = [
   'photobooth',
   'chat',
   'chatPair',
+  'margins',
+  'marginsPair',
 ] as const;
 
 export type ImageMount = (typeof IMAGE_MOUNTS)[number];

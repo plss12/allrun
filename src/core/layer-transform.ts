@@ -410,8 +410,9 @@ const INSIDE_SLACK = 1;
  * stays inside the new one, shrunk just enough if it no longer fits and moved in if it pokes out (the
  * user's choice: big pieces, a Polaroid or a strip, went off a wide canvas). Along a way it went off
  * on purpose (a film strip's ends, across) it is left to: a strip still fits the new canvas's height.
- * Its size is the new canvas's measure (a holder as big as the canvas grows with it). Time and space
- * O(1).
+ * Its size is the new canvas's measure (a holder as big as the canvas grows with it). A piece laid
+ * out the other way there (`swapped`: a strip of film, up a wide canvas) keeps instead the share of
+ * the canvas it took, along it and across. Time and space O(1).
  */
 export function keepInCanvas(
   transform: LayerTransform,
@@ -419,7 +420,16 @@ export function keepInCanvas(
   after: Size,
   from: Size,
   to: Size,
+  swapped: boolean = false,
 ): LayerTransform {
+  if (swapped) {
+    // Laid out the other way on the new canvas (a strip of film, up a wide one): as much of it as it
+    // took along its length and across, now the other way, as its design would lay it (the user's
+    // choice: only fitted across, a strip came out huge on a wide canvas).
+    const along = (before.width / from.width) * (to.height / after.height);
+    const across = (before.height / from.height) * (to.width / after.width);
+    return { ...transform, scale: transform.scale * Math.min(along, across) };
+  }
   const old = reach(transform, before);
   const x = transform.x * from.width;
   const y = transform.y * from.height;

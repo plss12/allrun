@@ -361,12 +361,28 @@ describe('gallerySections', () => {
       ['image-filmStrip'],
       ['image-camera', 'image-crop'],
       ['image-slides', 'image-photobooth'],
-      ['image-chat', 'image-chatPair'],
+      ['image-chat', 'image-margins'],
     ]);
     // The strip, wide by nature, takes its whole row, as tall as the pictures' over it.
     const full = SCREEN - 2 * gallery.GALLERY_PADDING;
     expect(rows[2]?.width).toBe(full);
     expect(rows[2]?.height).toBe(rows[1]?.height);
+  });
+
+  it('makes the row of the pieces laid out for the canvas lower on a wide canvas, where they are wide', () => {
+    const rowOf = (format: 'story' | 'landscape') =>
+      gallery
+        .gallerySections(
+          activityCatalog(activity, ['elevation']),
+          format,
+          'inter',
+          contextFor(activityData),
+          SCREEN,
+          'Text',
+        )
+        .find((section) => section.id === 'photos')
+        ?.rows.find((row) => row.widgets.some((widget) => widget.key === 'image-camera'));
+    expect(rowOf('landscape')?.height ?? 0).toBeLessThan(rowOf('story')?.height ?? 0);
   });
 
   it('lays the name and the monogram side by side, and both together under them, as wide', () => {

@@ -727,6 +727,8 @@ export const es: Translations = {
       photobooth: 'Fotomatón',
       chat: 'Mensaje',
       chatPair: 'Mensaje, dos fotos',
+      margins: 'Márgenes',
+      marginsPair: 'Márgenes, dos fotos',
     },
   },
   activityCharts: {

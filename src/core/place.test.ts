@@ -42,6 +42,7 @@ describe('namesPlace', () => {
 
   it('tells the designs that write the place from the others', () => {
     expect(namesPlace(readyDesign('polaroid', data, 'story').template.layers)).toBe(true);
+    expect(namesPlace(readyDesign('margins', data, 'story').template.layers)).toBe(true);
     expect(namesPlace(readyDesign('crop', data, 'story').template.layers)).toBe(false);
     expect(namesPlace(readyDesign('messageOne', data, 'story').template.layers)).toBe(false);
   });

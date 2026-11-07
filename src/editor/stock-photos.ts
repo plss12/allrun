@@ -116,6 +116,8 @@ const MOUNT_PHOTOS: Readonly<Record<ImageMount, readonly StockPhoto[]>> = {
   photobooth: ['monoStride', 'streetCrossing', 'stadiumField'],
   chat: ['streetCrossing'],
   chatPair: ['forestBridge', 'trackShadow'],
+  margins: ['mountainRunner', 'woodlandPath', 'trackShoes'],
+  marginsPair: ['trackShadow', 'forestTrail'],
 };
 const FRAME_PHOTOS: Readonly<Record<ImageFrame, StockPhoto>> = {
   none: 'mountainRunner',

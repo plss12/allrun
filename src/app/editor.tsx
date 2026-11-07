@@ -72,6 +72,7 @@ import {
 import {
   canAddImage,
   coversCanvas,
+  fillsCanvas,
   EDITOR_PHOTO,
   imageCount,
   isEmptyWindow,
@@ -992,7 +993,7 @@ function EditorWorkspace({
   ): Template => {
     const added = addLayer(current, newLayer(item, id, current.format, designFont(current.layers)));
     // As big as the canvas, it goes under the widgets there, not to hide them.
-    return item.kind === 'image' && coversCanvas(item.mount) ? moveLayer(added, id, 'back') : added;
+    return item.kind === 'image' && fillsCanvas(item.mount) ? moveLayer(added, id, 'back') : added;
   };
   const addLayerNow = (item: Exclude<NewLayer, { kind: 'text' }>) => {
     const id = uniqueLayerId(template, catalogItemKey(item));
