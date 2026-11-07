@@ -760,6 +760,9 @@ export const en = {
       crop: 'Crop',
       polaroid: 'Polaroid',
       slides: 'Slides',
+      photobooth: 'Photobooth',
+      chat: 'Message',
+      chatPair: 'Message, two photos',
     },
   },
   activityCharts: {

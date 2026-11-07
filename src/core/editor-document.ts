@@ -1,6 +1,5 @@
 import { newCollage, withCellPlacement } from './collage';
 import {
-  EDITOR_PHOTO,
   fillSlots,
   isImageLayer,
   isPhotoSlot,
@@ -8,10 +7,11 @@ import {
   slotPictures,
   withEmptySlots,
 } from './image-layer';
-import type { LayerTransform } from './layer-transform';
-import { COVER_PLACEMENT, type PhotoPlacement, samePlacement } from './photo-placement';
+import { keepInCanvas, type LayerTransform } from './layer-transform';
+import { COVER_PLACEMENT, type PhotoPlacement, samePlacement, type Size } from './photo-placement';
 import {
   AUTO_BACKGROUND,
+  CANVAS_FORMATS,
   type CanvasFormat,
   type Collage,
   type CollageLayout,
@@ -73,6 +73,20 @@ export interface EditorDesign {
   readonly cells: readonly (string | null)[];
   /** Whether it comes from a design of the gallery, which a collage replaces, not from a collage. */
   readonly isDesign: boolean;
+  /**
+   * The widgets a change of format shrank or moved in (see `setFormat`), by id: where each was, so
+   * that going back to that format, untouched since, puts it back as it was.
+   */
+  readonly fitted: Readonly<Record<string, FittedLayer>>;
+}
+
+/** A widget a change of format moved (see `EditorDesign.fitted`). */
+export interface FittedLayer {
+  /** The format it was placed in, and where it was there. */
+  readonly format: CanvasFormat;
+  readonly transform: LayerTransform;
+  /** Where the change put it: while it is still there, it was not touched since. */
+  readonly fitted: LayerTransform;
 }
 
 /** A collage's cells after the first, all empty. */
@@ -103,6 +117,7 @@ export const INITIAL_DESIGN: EditorDesign = {
   photoId: null,
   cells: NO_CELLS,
   isDesign: false,
+  fitted: {},
 };
 
 /**
@@ -160,6 +175,7 @@ export function applyDesign(
       pictures,
     ),
     isDesign: true,
+    fitted: {},
   };
 }
 
@@ -180,12 +196,62 @@ export function setLanguage(design: EditorDesign, language: DesignLanguage | nul
 }
 
 /**
- * Another format. The widgets stay where they are, in relative positions, and the user rearranges
- * them if they need to; the default layout is laid out again for the new format. Returns `design`
- * itself for the same format.
+ * The size of the widget `id` before its scale in `format`, as the scene measures it; `undefined`
+ * for one it doesn't draw there.
  */
-export function setFormat(design: EditorDesign, format: CanvasFormat): EditorDesign {
-  return format === design.format ? design : { ...design, format };
+export type LayerSize = (id: string, format: CanvasFormat) => Size | undefined;
+
+/**
+ * Another format. The widgets stay where they are, in relative positions, and the user rearranges
+ * them if they need to; but those measured by `sizeOf` that were inside the canvas stay inside the
+ * new one, shrunk or moved in only as much as it takes (see `keepInCanvas`), and remember where
+ * they were (`fitted`): untouched since, each is placed from there, so going back to its format
+ * puts it back as it was, and going on to a third places it as from where it was (the user's
+ * choice: shrunk on a wide canvas, a piece stayed small back on a story). The default layout is laid
+ * out again for the new format. Returns `design` itself for the same format. Time O(n) for n
+ * widgets.
+ */
+export function setFormat(
+  design: EditorDesign,
+  format: CanvasFormat,
+  sizeOf?: LayerSize,
+): EditorDesign {
+  if (format === design.format) {
+    return design;
+  }
+  if (design.layers === null || sizeOf === undefined) {
+    return { ...design, format, fitted: {} };
+  }
+  const fitted: Record<string, FittedLayer> = {};
+  const layers = design.layers.map((layer) => {
+    const kept = design.fitted[layer.id];
+    const from =
+      kept !== undefined && sameTransform(kept.fitted, layer.transform)
+        ? { format: kept.format, transform: kept.transform }
+        : { format: design.format, transform: layer.transform };
+    if (from.format === format) {
+      return sameTransform(from.transform, layer.transform)
+        ? layer
+        : { ...layer, transform: from.transform };
+    }
+    const before = sizeOf(layer.id, from.format);
+    const after = sizeOf(layer.id, format);
+    if (before === undefined || after === undefined) {
+      return layer;
+    }
+    const transform = keepInCanvas(
+      from.transform,
+      before,
+      after,
+      CANVAS_FORMATS[from.format],
+      CANVAS_FORMATS[format],
+    );
+    if (!sameTransform(transform, from.transform)) {
+      fitted[layer.id] = { ...from, fitted: transform };
+    }
+    return sameTransform(transform, layer.transform) ? layer : { ...layer, transform };
+  });
+  return { ...design, format, layers, fitted };
 }
 
 /** Places the photo anew. Returns `design` itself when it is already there. */
@@ -210,6 +276,7 @@ const fromZero = (
   frame,
   background: AUTO_BACKGROUND,
   isDesign: false,
+  fitted: {},
 });
 
 /**
@@ -302,14 +369,14 @@ export const EMPTY_START: DesignStart = designStart(INITIAL_DESIGN);
 
 /**
  * What Start over goes back to: how the canvas started, with its settings (see `EditorDesign`) and
- * photos as they are: those in slots go on in them, or else the editor's and the cells' fill them.
+ * photos as they are: those in slots go on in them; the canvas's and the cells' stay where they are.
  * Time O(n) for n layers.
  */
 function startingPoint(design: EditorDesign, start: DesignStart): EditorDesign {
   const inSlots = slotPictures(design.layers ?? []).filter((image) => image !== SAMPLE_IMAGE);
-  const others = design.cells.filter((key) => key !== null);
-  const pictures =
-    inSlots.length > 0 ? inSlots : design.photoId === null ? others : [EDITOR_PHOTO, ...others];
+  // The widgets' photos stay in widgets, the canvas's and the cells' where they are (the user's
+  // rule): only those of the slots go on in the slots.
+  const pictures = inSlots;
   return {
     ...design,
     ...start,

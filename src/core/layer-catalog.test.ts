@@ -158,6 +158,9 @@ describe('activityCatalog', () => {
       'image-camera',
       'image-crop',
       'image-slides',
+      'image-photobooth',
+      'image-chat',
+      'image-chatPair',
     ]);
     expect(variantKeys(trail, 'image')).toEqual(['image', 'image-light', 'image-dark']);
     // And an instant photo of it, with each caption.

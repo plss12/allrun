@@ -16,7 +16,7 @@ import { TEST_DURATION_UNITS, testUnitLabel } from '@/test-utils/text-context';
 import { es } from '@/i18n/locales/es';
 
 import type { EditorData } from './editor-data';
-import { cropCaption, mountCaption } from './mount-caption';
+import { boothCaption, cropCaption, mountCaption } from './mount-caption';
 import type { LayerContext } from './template-scene';
 
 jest.mock('@shopify/react-native-skia/lib/commonjs/Platform', () => ({
@@ -164,6 +164,20 @@ describe.each(['camera', 'crop'] as const)('the %s', (id) => {
       ]);
       expect(prepared.hole).toBeUndefined();
     }
+  });
+});
+
+describe('boothCaption', () => {
+  it('writes the main datum on the tape and the date, between dots, at the foot', () => {
+    const { tape, foot } = boothCaption(activity, textContext, translate as never);
+    expect(tape).toMatch(/km$/);
+    expect(foot).toMatch(/^\d{1,2}·\d{1,2}·\d{4}$/);
+  });
+
+  it("writes a period's first total and its dates", () => {
+    const { tape, foot } = boothCaption(period, textContext, translate as never);
+    expect(tape.length).toBeGreaterThan(0);
+    expect(foot.length).toBeGreaterThan(0);
   });
 });
 

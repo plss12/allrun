@@ -17,10 +17,13 @@ import {
 import { periodCount, shortDistance, type Translate } from './instant-caption';
 
 /**
- * A holder with its letters around its picture, as all are but those as big as the canvas and the
- * slide viewer, which writes inside its slides.
+ * A holder with its letters around its picture, as all are but those as big as the canvas, the
+ * slide viewer, which writes inside its slides, and the photobooth's strip, on its tape and foot.
  */
-export type LetteredMount = Exclude<ImageMount, CanvasMount | 'slides'>;
+export type LetteredMount = Exclude<
+  ImageMount,
+  CanvasMount | 'slides' | 'photobooth' | 'chat' | 'chatPair'
+>;
 
 /** What a holder writes along one of its sides, spread along it. */
 export interface MountSide {
@@ -135,6 +138,30 @@ export function slidesCaption(
   translate: Translate,
 ): readonly string[] {
   return threeData(data, context, translate);
+}
+
+/** What a photobooth's strip writes: on its tape, and at its foot. */
+export interface BoothText {
+  readonly tape: string;
+  readonly foot: string;
+}
+
+/**
+ * What a photobooth's strip writes by hand: its main datum on the tape (the distance, or the time
+ * without one; a period's first total), and at its foot the date, its parts between dots
+ * ("14·10·2026"; a period's dates). Only real data (the user's rule). Time and space O(1).
+ */
+export function boothCaption(
+  data: EditorData,
+  context: TextContext,
+  translate: Translate,
+): BoothText {
+  const tape = threeData(data, context, translate)[0] ?? '';
+  const foot =
+    data.mode === 'activity'
+      ? formatActivityDate(data.activity.startLocal, context.locale, 'numeric').split('/').join('·')
+      : formatShortRange(data.summary.range, context.locale);
+  return { tape, foot };
 }
 
 /** A strip's texts from its data, by importance: the first in the middle, between the others. */

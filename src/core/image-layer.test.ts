@@ -16,11 +16,13 @@ import {
   isEmptyWindow,
   layerPictures,
   slidesBox,
+  boothBox,
+  chatBox,
+  mountWindows,
   windowAt,
   withoutPicture,
   withWindowPicture,
   isPhotoSlot,
-  leavesCanvasPhoto,
   MAX_IMAGES,
   coversCanvas,
   cropFrame,
@@ -174,20 +176,6 @@ describe('the slots of a design', () => {
     expect(fillSlots([sticker], ['x'])).toEqual([sticker]);
   });
 
-  it("never give a slot that keeps the canvas's photo that photo, which stays as the background", () => {
-    const polaroid = { ...slot('p', SAMPLE_IMAGE), keepsCanvasPhoto: true } as Layer;
-    expect(fillSlots([polaroid], [EDITOR_PHOTO])).toEqual([polaroid]);
-    expect(fillSlots([polaroid], [EDITOR_PHOTO, 'x'])).toEqual([{ ...polaroid, image: 'x' }]);
-    // The photo goes on to the next slot that takes it.
-    expect(fillSlots([polaroid, slot('a', SAMPLE_IMAGE)], [EDITOR_PHOTO, 'x'])).toEqual([
-      { ...polaroid, image: 'x' },
-      slot('a', EDITOR_PHOTO),
-    ]);
-    expect(leavesCanvasPhoto([polaroid])).toBe(true);
-    expect(leavesCanvasPhoto([polaroid, slot('a', SAMPLE_IMAGE)])).toBe(false);
-    expect(leavesCanvasPhoto([sticker])).toBe(true);
-  });
-
   it('are read back from a saved template, and an unknown holder is refused', () => {
     const template = { ...story, layers: [slot('a', SAMPLE_IMAGE)] };
     expect(parseTemplate(template).layers).toEqual([slot('a', SAMPLE_IMAGE)]);
@@ -287,11 +275,118 @@ describe('a holder with several windows', () => {
     const box = slidesBox();
     const middleOf = (i: number) => box.windows[i].y + box.windows[i].height / 2;
     const layer = asImage(viewer);
-    expect(windowAt(layer, { x: 0, y: middleOf(0) })).toBe(0);
-    expect(windowAt(layer, { x: 0, y: middleOf(2) })).toBe(2);
+    expect(windowAt(layer, { x: 0, y: middleOf(0) }, CANVAS_FORMATS.story)).toBe(0);
+    expect(windowAt(layer, { x: 0, y: middleOf(2) }, CANVAS_FORMATS.story)).toBe(2);
     const gap = box.windows[1].y - 4;
-    expect(windowAt(layer, { x: 0, y: gap })).toBe(1);
-    expect(windowAt(asImage({ ...viewer, mount: 'filmFrame' }), { x: 0, y: middleOf(2) })).toBe(0);
+    expect(windowAt(layer, { x: 0, y: gap }, CANVAS_FORMATS.story)).toBe(1);
+    expect(
+      windowAt(
+        asImage({ ...viewer, mount: 'filmFrame' }),
+        { x: 0, y: middleOf(2) },
+        CANVAS_FORMATS.story,
+      ),
+    ).toBe(0);
+  });
+});
+
+describe("a photobooth's strip", () => {
+  const inside =
+    (box: { width: number; height: number }) =>
+    (rect: { x: number; y: number; width: number; height: number }) => {
+      expect(rect.x).toBeGreaterThanOrEqual(-box.width / 2 - 1e-9);
+      expect(rect.y).toBeGreaterThanOrEqual(-box.height / 2 - 1e-9);
+      expect(rect.x + rect.width).toBeLessThanOrEqual(box.width / 2 + 1e-9);
+      expect(rect.y + rect.height).toBeLessThanOrEqual(box.height / 2 + 1e-9);
+    };
+
+  it('holds three photos, one under another, its foot under them and its tape over its top', () => {
+    const box = boothBox();
+    expect(mountWindows('photobooth')).toBe(3);
+    expect(box.windows).toHaveLength(3);
+    const within = inside(box);
+    [box.strip, box.foot, box.tape, ...box.windows].forEach(within);
+    for (let i = 1; i < box.windows.length; i++) {
+      expect(box.windows[i].y).toBeGreaterThan(box.windows[i - 1].y + box.windows[i - 1].height);
+    }
+    const last = box.windows[box.windows.length - 1];
+    expect(box.foot.y).toBeGreaterThanOrEqual(last.y + last.height);
+    // The tape sticks out above the strip, and covers the top of its first photo.
+    expect(box.tape.y).toBeLessThan(box.strip.y);
+    expect(box.tape.y + box.tape.height).toBeGreaterThan(box.windows[0].y);
+  });
+
+  it('knows which photo a touch is on', () => {
+    const box = boothBox();
+    const layer = {
+      id: 'booth',
+      kind: 'image',
+      image: SAMPLE_IMAGE,
+      frame: 'none',
+      mount: 'photobooth',
+      transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+      opacity: 1,
+    } as const;
+    const middle = (i: number) => box.windows[i].y + box.windows[i].height / 2;
+    expect(windowAt(layer, { x: 0, y: middle(1) }, CANVAS_FORMATS.story)).toBe(1);
+    expect(windowAt(layer, { x: 0, y: middle(2) }, CANVAS_FORMATS.story)).toBe(2);
+  });
+});
+
+describe('a chat as one piece', () => {
+  const inside =
+    (box: { width: number; height: number }) =>
+    (rect: { x: number; y: number; width: number; height: number }) => {
+      expect(rect.x).toBeGreaterThanOrEqual(-box.width / 2 - 1e-9);
+      expect(rect.y).toBeGreaterThanOrEqual(-box.height / 2 - 1e-9);
+      expect(rect.x + rect.width).toBeLessThanOrEqual(box.width / 2 + 1e-9);
+      expect(rect.y + rect.height).toBeLessThanOrEqual(box.height / 2 + 1e-9);
+    };
+
+  it.each([
+    ['one photo', false],
+    ['two photos', true],
+  ])('stacks the date, %s and the message, right-aligned, inside it', (_name, pair) => {
+    const box = chatBox(pair, CANVAS_FORMATS.story);
+    expect(box.wide).toBe(false);
+    expect(box.windows).toHaveLength(pair ? 2 : 1);
+    [box.date, box.message, ...box.windows].forEach(inside(box));
+    const [first] = box.windows;
+    expect(first.x + first.width).toBeCloseTo(box.message.x + box.message.width);
+    expect(first.width / first.height).toBeCloseTo(3 / 4);
+    expect(box.date.y + box.date.height).toBeLessThanOrEqual(first.y);
+    const lowest = Math.max(...box.windows.map((w) => w.y + w.height));
+    expect(box.message.y).toBeGreaterThanOrEqual(lowest);
+  });
+
+  it('lays the photos at the left and the date and message beside them on a wide canvas', () => {
+    const box = chatBox(true, CANVAS_FORMATS.landscape);
+    expect(box.wide).toBe(true);
+    [box.date, box.message, ...box.windows].forEach(inside(box));
+    const rightmost = Math.max(...box.windows.map((w) => w.x + w.width));
+    expect(box.message.x).toBeGreaterThan(rightmost);
+    expect(box.date.y + box.date.height).toBeLessThanOrEqual(box.message.y);
+  });
+
+  it('knows which of two photos a touch is on, the one on top where they overlap', () => {
+    const box = chatBox(true, CANVAS_FORMATS.story);
+    const layer = {
+      id: 'chat',
+      kind: 'image',
+      image: SAMPLE_IMAGE,
+      frame: 'none',
+      mount: 'chatPair',
+      transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+      opacity: 1,
+    } as const;
+    const [first, second] = box.windows;
+    expect(
+      windowAt(layer, { x: first.x + first.width - 10, y: first.y + 10 }, CANVAS_FORMATS.story),
+    ).toBe(0);
+    expect(
+      windowAt(layer, { x: second.x + 10, y: second.y + second.height - 10 }, CANVAS_FORMATS.story),
+    ).toBe(1);
+    // Where they overlap, the second, drawn over the first.
+    expect(windowAt(layer, { x: first.x + 10, y: second.y + 10 }, CANVAS_FORMATS.story)).toBe(1);
   });
 });
 
@@ -331,6 +426,17 @@ describe('mountBox', () => {
     if (mount === 'slides') {
       // Several windows of their own: see the tests of slidesBox.
       expect(box).toMatchObject({ width: slidesBox().width, height: slidesBox().height });
+      return;
+    }
+    if (mount === 'photobooth') {
+      // Several windows of their own: see the tests of boothBox.
+      expect(box).toMatchObject({ width: boothBox().width, height: boothBox().height });
+      return;
+    }
+    if (mount === 'chat' || mount === 'chatPair') {
+      // Laid out by the canvas: see the tests of chatBox.
+      const chat = chatBox(mount === 'chatPair', CANVAS_FORMATS.story);
+      expect(box).toMatchObject({ width: chat.width, height: chat.height });
       return;
     }
     if (coversCanvas(mount)) {

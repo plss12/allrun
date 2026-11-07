@@ -19,7 +19,14 @@ import type { ExportState } from './use-export';
 const DONE_MS = 2000;
 
 /** Says that the image can't be saved without permission, with the way to the settings. */
-export function alertNoPhotosPermission(t: ReturnType<typeof useTranslation>['t']): void {
+/** The texts the alert of a missing permission reads, by their keys. */
+type PermissionAlertKey =
+  | 'export.noPermissionTitle'
+  | 'export.noPermissionMessage'
+  | 'editor.cancel'
+  | 'export.openSettings';
+
+export function alertNoPhotosPermission(t: (key: PermissionAlertKey) => string): void {
   Alert.alert(t('export.noPermissionTitle'), t('export.noPermissionMessage'), [
     { text: t('editor.cancel'), style: 'cancel' },
     {

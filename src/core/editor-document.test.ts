@@ -81,6 +81,61 @@ describe('editLayers', () => {
   });
 });
 
+describe('setFormat with the widgets measured', () => {
+  it('keeps a piece that fitted the canvas inside the new one, and the rest where they were', () => {
+    const piece: Layer = {
+      id: 'strip',
+      kind: 'image',
+      image: SAMPLE_IMAGE,
+      frame: 'none',
+      mount: 'photobooth',
+      transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+      opacity: 1,
+    };
+    const text = defaultTemplate('story').layers[0];
+    const design = { ...INITIAL_DESIGN, layers: [text, piece] };
+    const size = { width: 500, height: 1400 };
+    const sizeOf = (id: string) => (id === 'strip' ? size : undefined);
+    const wide = setFormat(design, 'landscape', sizeOf);
+    expect(wide.format).toBe('landscape');
+    const [kept, fitted] = wide.layers ?? [];
+    // Not measured: where it was.
+    expect(kept).toEqual(text);
+    expect(fitted.transform.scale).toBeCloseTo(566 / 1400);
+    // Back on a story, untouched, it is as it was.
+    expect(setFormat(wide, 'story', sizeOf).layers).toEqual(design.layers);
+    // Through a third format too, placed from where it was.
+    const square = setFormat(wide, 'square', sizeOf);
+    expect(square.layers?.[1].transform.scale).toBeCloseTo(1080 / 1400);
+    expect(setFormat(square, 'story', sizeOf).layers).toEqual(design.layers);
+  });
+
+  it('places a widget moved after a change where it is now', () => {
+    const piece: Layer = {
+      id: 'strip',
+      kind: 'image',
+      image: SAMPLE_IMAGE,
+      frame: 'none',
+      mount: 'photobooth',
+      transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+      opacity: 1,
+    };
+    const size = { width: 500, height: 1400 };
+    const sizeOf = () => size;
+    const wide = setFormat({ ...INITIAL_DESIGN, layers: [piece] }, 'landscape', sizeOf);
+    const moved = {
+      ...wide,
+      layers: (wide.layers ?? []).map((layer) => ({
+        ...layer,
+        transform: { ...layer.transform, x: 0.3 },
+      })),
+    };
+    const back = setFormat(moved, 'story', sizeOf);
+    expect(back.layers?.[0].transform.x).toBeCloseTo(0.3);
+    expect(back.layers?.[0].transform.scale).toBeCloseTo(566 / 1400);
+  });
+});
+
 describe('setFormat, setPhotoPlacement and setBackground', () => {
   it('return the same design when nothing changes, so no undo step is recorded', () => {
     expect(setFormat(INITIAL_DESIGN, 'story')).toBe(INITIAL_DESIGN);
@@ -301,11 +356,13 @@ describe('start over, to how the canvas started', () => {
     expect(back.photoId).toBe(1);
   });
 
-  it('goes from another design chosen later back to the one it opened with, with the photos', () => {
+  it('goes from another design chosen later back to the one it opened with, its slots empty', () => {
     const later = applyDesign(chosen, { layers: [], photo: framed, background: night }, []);
     expect(canStartOver(later, start)).toBe(true);
     const back = startOver({ ...later, cells: ['picked-1', null, null, null, null] }, start);
-    expect(back.layers).toEqual([slot('picked-1')]);
+    // The collage's photos stay in the collage: the widgets' slots never take them.
+    expect(back.layers).toEqual([slot(SAMPLE_IMAGE)]);
+    expect(back.cells).toEqual(['picked-1', null, null, null, null]);
     expect(back.photo).toEqual(COVER_PLACEMENT);
     expect(back.isDesign).toBe(true);
   });

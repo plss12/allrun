@@ -2,7 +2,7 @@
 
 Date: 2026-11-07
 
-Status: accepted. Extends the image layer of ADR 009 and the designs' slots of ADR 007.
+Status: accepted. Extends the image layer of ADR 009 and the designs' slots of ADR 007. Used by the slide viewer, the photobooth's strip and the chat with two photos.
 
 ## Context
 
@@ -23,8 +23,7 @@ moved as one, and the Photobooth would have needed the same workaround again.
   others go in the optional `extraImages`, in order. An optional field keeps every saved design
   readable, with no new template version.
 - **Every helper of slots works by window**: `layerPictures` lists them (`SAMPLE_IMAGE` for one with
-  none yet); `fillSlots` fills them in order, the canvas's photo in the first, as a design's first
-  slot always took it; `withEmptySlots` saves them all empty; `isEmptyWindow` and
+  none yet); `fillSlots` fills them in order; `withEmptySlots` saves them all empty; `isEmptyWindow` and
   `firstEmptyWindow` say which one waits for a photo; `withoutPicture` empties those of a photo that
   can't be read; `setLayerImage` changes one window and leaves the others. Each window counts towards
   the six pictures a design takes (`imageCount`), since each is decoded.
@@ -51,6 +50,29 @@ moved as one, and the Photobooth would have needed the same workaround again.
   with the slides cut in it; a black per slide overlapped its neighbours', and the even-odd rule cut
   holes there), with a faint shade along it inside. Each slide writes one of the three data (the
   activity's card data, the period's totals) in Unbounded, a pale yellow, right of its middle.
+
+## The photobooth's strip
+
+- `boothBox`: three photos on black paper, a longer foot with the date by hand, and a piece of paper
+  tape over its top with the main datum, sticking out above it. In its design the strip leans 3°
+  and the tape stays level, over the canvas's photo as the Polaroid, which the user sets by hand (the owner's
+  reference and choice).
+
+## The chat
+
+- `chatBox`: the Message designs, three loose widgets before (the date, the photo, the message),
+  ran into each other on another format, so they became one piece, with one photo (`chat`) or two
+  (`chatPair`): the date over the rounded photos and the chat widget's own message under them,
+  shrunk to its band and right-aligned with them; on a wide canvas, side by side. The piece's
+  layout depends on the canvas, so `windowAt` takes it.
+
+## Photos of widgets and of the canvas, apart
+
+Later the same day the owner settled it (after trying a first photo of a widget that became the
+canvas's, and the photos going between the widgets' slots and a collage's cells): the photos of the
+widgets stay in them and leave with them, and the canvas's photo and the cells' stay where they are.
+A design's slots come empty; only the camera and the crop screen, as big as the canvas, use the
+canvas's photo.
 
 ## Rejected
 

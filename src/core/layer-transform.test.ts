@@ -1,4 +1,5 @@
 import {
+  keepInCanvas,
   layerPoint,
   layerCoversCanvas,
   hitTestLayers,
@@ -333,5 +334,57 @@ describe('layerPoint', () => {
     // A quarter turn clockwise put the layer's right side downwards.
     expect(point.x).toBeCloseTo(100);
     expect(point.y).toBeCloseTo(0);
+  });
+});
+
+describe('keepInCanvas', () => {
+  const story = { width: 1080, height: 1920 };
+  const wide = { width: 1080, height: 566 };
+  const piece = { width: 500, height: 1400 };
+
+  it('shrinks a piece that fitted a story to fit a wide canvas, in the middle', () => {
+    const transform = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
+    const next = keepInCanvas(transform, piece, piece, story, wide);
+    expect(next.scale).toBeCloseTo(566 / 1400);
+    expect(next.x).toBeCloseTo(0.5);
+    expect(next.y).toBeCloseTo(0.5);
+  });
+
+  it('moves in a small layer that would poke out, without shrinking it', () => {
+    const text = { width: 300, height: 100 };
+    const transform = { x: 0.5, y: 0.95, scale: 1, rotation: 0 };
+    const next = keepInCanvas(transform, text, text, story, wide);
+    expect(next.scale).toBe(1);
+    expect(next.y * wide.height + 50).toBeCloseTo(wide.height);
+  });
+
+  it('leaves a layer that fits where it was, as a share of the canvas', () => {
+    const text = { width: 300, height: 100 };
+    const transform = { x: 0.3, y: 0.5, scale: 1, rotation: 0 };
+    expect(keepInCanvas(transform, text, text, story, wide)).toEqual(transform);
+  });
+
+  it('fits a strip off the sides on purpose to the new height, still off the sides', () => {
+    const strip = { width: 1400, height: 600 };
+    const transform = { x: 0.5, y: 0.5, scale: 1, rotation: 0.03 };
+    const next = keepInCanvas(transform, strip, strip, story, wide);
+    const tall = (1400 * Math.sin(0.03) + 600 * Math.cos(0.03)) * next.scale;
+    expect(tall).toBeCloseTo(wide.height);
+    expect(1400 * next.scale).toBeGreaterThan(wide.width);
+    expect(next.x).toBe(0.5);
+  });
+
+  it('leaves a layer that went off the canvas both ways', () => {
+    const huge = { width: 3000, height: 3000 };
+    const transform = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
+    expect(keepInCanvas(transform, huge, huge, story, wide)).toBe(transform);
+  });
+
+  it('counts its turn: a leaning piece takes more room', () => {
+    const transform = { x: 0.5, y: 0.5, scale: 1, rotation: Math.PI / 2 };
+    const square = { width: 2000, height: 2000 };
+    const next = keepInCanvas(transform, piece, piece, square, story);
+    // Turned a quarter, its 1400 run across a canvas 1080 wide.
+    expect(next.scale).toBeCloseTo(1080 / 1400);
   });
 });

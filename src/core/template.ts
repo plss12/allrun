@@ -221,8 +221,11 @@ export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
  * (`lightNegative`), a dark strip of film with the same picture again in the frames beside it
  * (`filmStrip`), the phone's camera as big as the canvas, seen through it (`camera`), a phone's crop
  * screen as big as the canvas, the picture dimmed around a smaller canvas with its data under it
- * (`crop`), or an old slide viewer with three pictures, a datum in each (`slides`, the only one
- * with more than one: see `windowCount`). The holder and the data on it move as one piece.
+ * (`crop`), an old slide viewer with three pictures, a datum in each (`slides`), or a photobooth's
+ * strip of three, a datum on a piece of tape over it and its date at its foot (`photobooth`), or a
+ * chat in dark mode, its date over a sent photo and the message with two data under it, with one
+ * photo (`chat`) or two (`chatPair`): those with more than one picture, see `windowCount`. The
+ * holder and the data on it move as one piece.
  */
 export const IMAGE_MOUNTS = [
   'filmFrame',
@@ -231,6 +234,9 @@ export const IMAGE_MOUNTS = [
   'camera',
   'crop',
   'slides',
+  'photobooth',
+  'chat',
+  'chatPair',
 ] as const;
 
 export type ImageMount = (typeof IMAGE_MOUNTS)[number];
@@ -811,11 +817,6 @@ export const layerSchema = z.discriminatedUnion('kind', [
      * within it (see `slotBox`). A picture in a holder is always one (see `isPhotoSlot`).
      */
     slot: z.boolean().optional(),
-    /**
-     * A slot that never takes the canvas's photo, which stays as the design's background: the
-     * Polaroid's, over the landscape (see `fillSlots`).
-     */
-    keepsCanvasPhoto: z.boolean().optional(),
   }),
   z.object({
     ...layerBase,

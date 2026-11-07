@@ -1,13 +1,6 @@
 import { emptyLayout, defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
-import {
-  IMAGE_SIDE,
-  instantBox,
-  mountBox,
-  SAMPLE_IMAGE,
-  SLOT_PICTURE,
-  slidesBox,
-} from './image-layer';
-import { at, type TemplateData, textStyle } from './layout-kit';
+import { instantBox, mountBox, SAMPLE_IMAGE, slidesBox, boothBox, chatBox } from './image-layer';
+import { at, type TemplateData } from './layout-kit';
 import {
   CANVAS_FORMATS,
   type CanvasFormat,
@@ -32,49 +25,22 @@ export const READY_DESIGN_IDS = [
   'crop',
   'polaroid',
   'slides',
+  'photobooth',
 ] as const;
 
 export type ReadyDesignId = (typeof READY_DESIGN_IDS)[number];
 
-/** A design laid out, and the widgets to align once measured, which only the scene can do. */
+/** A design laid out by its recipe. */
 export interface ReadyDesign {
   readonly template: Template;
-  /** A layer whose right edge goes at `right` (a fraction of the canvas's width). */
-  readonly alignRight: readonly { readonly id: string; readonly right: number }[];
 }
 
 const BLACK = '#000000';
 const WHITE = '#FFFFFF';
-/** The gray of a chat's date over a dark background. */
-const CHAT_DATE = '#8E8E93';
-/**
- * Of a sent chat message over the canvas: its size, and about how tall it comes out. Small, for the
- * photo to lead (decision of the user).
- */
-const BUBBLE = { scale: 0.85, height: 145 } as const;
-/** In a wide canvas the message goes beside the photos, smaller. */
-const WIDE_BUBBLE_SCALE = 0.6;
-/** A chat's date: its size and about how tall it comes out; and the room around each part. */
-const DATE = { scale: 0.62, height: 50 } as const;
-const GAP = 28;
 /** Where the watermark goes across a wide canvas, as a fraction of it. */
 const WIDE_WATERMARK_X = 0.72;
 /** The room the watermark takes at the canvas's foot, on it. */
 const FOOT = 0.1;
-
-/** A chat's photo: an empty slot with rounded corners, the same widget as "Your photo". */
-function chatPhoto(id: string, x: number, y: number, scale: number): Layer {
-  return {
-    id,
-    kind: 'image',
-    image: SAMPLE_IMAGE,
-    frame: 'none',
-    rounded: true,
-    slot: true,
-    transform: at({ x, y, scale }),
-    opacity: 1,
-  };
-}
 
 /** A slot of `mount`, empty, centered at (`x`, `y`) of the canvas at `scale`. */
 function slot(id: string, mount: ImageMount, x: number, y: number, scale: number): Layer {
@@ -87,44 +53,6 @@ function slot(id: string, mount: ImageMount, x: number, y: number, scale: number
     transform: at({ x, y, scale }),
     opacity: 1,
   };
-}
-
-/** The date of an activity or the name of a period, small and gray, over a chat. */
-function chatDate(data: TemplateData, x: number, y: number): Layer {
-  const style = textStyle('inter', { color: CHAT_DATE, shadow: false });
-  const transform = at({ x, y, scale: DATE.scale });
-  return data.mode === 'activity'
-    ? {
-        id: 'date',
-        kind: 'info',
-        field: 'activityDate',
-        dateFormat: 'long',
-        style,
-        transform,
-        opacity: 1,
-      }
-    : { id: 'date', kind: 'info', field: 'periodName', style, transform, opacity: 1 };
-}
-
-/** The data as a sent chat message, in dark mode, centered at (`x`, `y`) of the canvas. */
-function chatBubble(data: TemplateData, x: number, y: number, scale: number = BUBBLE.scale): Layer {
-  const common = { id: 'message', logo: false, transform: at({ x, y, scale }) };
-  const style = { font: 'inter', color: WHITE, bold: false, uppercase: false } as const;
-  return data.mode === 'activity'
-    ? {
-        ...common,
-        kind: 'activityBlock',
-        block: { design: 'message', layout: 'dark' },
-        style,
-        opacity: 1,
-      }
-    : {
-        ...common,
-        kind: 'summaryBlock',
-        block: { design: 'periodMessage', layout: 'dark' },
-        style,
-        opacity: 1,
-      };
 }
 
 /** The format's AllRun watermark, where a new design has it. */
@@ -155,105 +83,37 @@ function design(
 }
 
 /**
- * How the parts of a chat go in `format`: stacked (the date, the photos, the message), or in a wide
- * canvas with the photos at the left and the rest beside them.
- *
- * @param stack - How tall the photos are, as times one photo's height.
- * @param share - The most of the canvas's width a photo takes.
+ * Most of the canvas a chat takes, wide and tall, and where its middle goes down it: above the
+ * watermark at the canvas's foot, which on a wide canvas reaches higher up it.
  */
-function chatLayout(format: CanvasFormat, stack: number, share: number) {
+const CHAT_ROOM = {
+  tall: { width: 0.9, height: 1 - FOOT - 0.06, y: (1 - FOOT) / 2 },
+  wide: { width: 0.9, height: 0.74, y: 0.42 },
+} as const;
+
+/**
+ * A chat in dark mode with one photo or two (`pair`), as one piece (see `chatBox`: the date, the
+ * sent photos and the message, the user's choice, so that nothing runs into anything on another
+ * format), as big as it fits over the watermark, over black. Time and space O(1).
+ */
+function message(
+  id: ReadyDesignId,
+  pair: boolean,
+  data: TemplateData,
+  format: CanvasFormat,
+): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
-  const photoWidth = (IMAGE_SIDE * SLOT_PICTURE.width) / SLOT_PICTURE.height;
-  const wide = canvas.width > canvas.height;
-  const room = wide
-    ? canvas.height * (1 - 2 * 0.06)
-    : canvas.height * (1 - FOOT - 0.04) - DATE.height - BUBBLE.height - 2 * GAP;
-  const scale = Math.min(room / (stack * IMAGE_SIDE), (share * canvas.width) / photoWidth);
-  const height = stack * IMAGE_SIDE * scale;
-  const width = photoWidth * scale;
-  return { canvas, wide, scale, width, height };
-}
-
-function messageOne(data: TemplateData, format: CanvasFormat): ReadyDesign {
-  const { canvas, wide, scale, width, height } = chatLayout(format, 1, 0.63);
-  if (wide) {
-    const x = 0.06 + width / 2 / canvas.width;
-    const right = 0.95;
-    return {
-      template: design('messageOne', data, format, BLACK, [
-        chatPhoto('photo-1', x, 0.5, scale),
-        chatDate(data, (x + width / 2 / canvas.width + right) / 2, 0.22),
-        chatBubble(data, 0.7, 0.5, WIDE_BUBBLE_SCALE),
-        ...watermark(data, format),
-      ]),
-      alignRight: [{ id: 'message', right }],
-    };
-  }
-  const right = 0.94;
-  const x = right - width / 2 / canvas.width;
-  const total = DATE.height + GAP + height + GAP + BUBBLE.height;
-  const top = (canvas.height * (1 - FOOT) - total) / 2;
-  const photoTop = top + DATE.height + GAP;
-  return {
-    template: design('messageOne', data, format, BLACK, [
-      chatDate(data, 0.5, (top + DATE.height / 2) / canvas.height),
-      chatPhoto('photo-1', x, (photoTop + height / 2) / canvas.height, scale),
-      chatBubble(data, x, (photoTop + height + GAP + BUBBLE.height / 2) / canvas.height),
-      ...watermark(data, format),
-    ]),
-    alignRight: [{ id: 'message', right }],
-  };
-}
-
-/** How far down and to the left the second of two photos of a chat goes, as times the first. */
-const SECOND_PHOTO = { down: 0.84, left: 0.3 } as const;
-
-function messageTwo(data: TemplateData, format: CanvasFormat): ReadyDesign {
-  const wide = CANVAS_FORMATS[format].width > CANVAS_FORMATS[format].height;
-  const { canvas, scale, width, height } = chatLayout(
-    format,
-    wide ? 1 : 1 + SECOND_PHOTO.down,
-    0.42,
+  const box = chatBox(pair, canvas);
+  const room = box.wide ? CHAT_ROOM.wide : CHAT_ROOM.tall;
+  const scale = Math.min(
+    (room.width * canvas.width) / box.width,
+    (room.height * canvas.height) / box.height,
   );
-  const photo = IMAGE_SIDE * scale;
-  if (wide) {
-    // Smaller, side by side and overlapped, to leave the message its half of the canvas.
-    const shrink = 0.82;
-    const half = (width * shrink) / 2 / canvas.width;
-    const first = 0.05 + half;
-    const second = first + half;
-    return {
-      template: design('messageTwo', data, format, BLACK, [
-        chatPhoto('photo-1', first, 0.46, scale * shrink),
-        chatPhoto('photo-2', second, 0.54, scale * shrink),
-        chatDate(data, 0.78, 0.26),
-        chatBubble(data, 0.78, 0.5, WIDE_BUBBLE_SCALE),
-        ...watermark(data, format),
-      ]),
-      alignRight: [{ id: 'message', right: 0.95 }],
-    };
-  }
-  const right = 0.94;
-  const x = right - width / 2 / canvas.width;
-  const total = DATE.height + GAP + height + GAP + BUBBLE.height;
-  const top = (canvas.height * (1 - FOOT) - total) / 2;
-  const photoTop = top + DATE.height + GAP;
-  const firstY = photoTop + photo / 2;
-  const secondY = firstY + photo * SECOND_PHOTO.down;
   return {
-    template: design('messageTwo', data, format, BLACK, [
-      chatDate(data, 0.5, (top + DATE.height / 2) / canvas.height),
-      chatPhoto('photo-1', x, firstY / canvas.height, scale),
-      chatPhoto(
-        'photo-2',
-        x - (width * SECOND_PHOTO.left) / canvas.width,
-        secondY / canvas.height,
-        scale,
-      ),
-      chatBubble(data, x, (photoTop + height + GAP + BUBBLE.height / 2) / canvas.height),
+    template: design(id, data, format, BLACK, [
+      slot('photo-1', pair ? 'chatPair' : 'chat', 0.5, room.y, scale),
       ...watermark(data, format),
     ]),
-    alignRight: [{ id: 'message', right }],
   };
 }
 
@@ -275,7 +135,6 @@ function centeredPiece(
   );
   return {
     template: design(id, data, format, WHITE, [slot('photo-1', mount, 0.5, 0.5, scale)]),
-    alignRight: [],
   };
 }
 
@@ -300,7 +159,6 @@ function filmStrip(data: TemplateData, format: CanvasFormat): ReadyDesign {
     template: design('filmStrip', data, format, BLACK, [
       { ...strip, transform: { ...strip.transform, rotation: STRIP_TILT } },
     ]),
-    alignRight: [],
   };
 }
 
@@ -311,7 +169,6 @@ function filmStrip(data: TemplateData, format: CanvasFormat): ReadyDesign {
 function camera(data: TemplateData, format: CanvasFormat): ReadyDesign {
   return {
     template: design('camera', data, format, BLACK, [slot('photo-1', 'camera', 0.5, 0.5, 1)]),
-    alignRight: [],
   };
 }
 
@@ -322,7 +179,6 @@ function camera(data: TemplateData, format: CanvasFormat): ReadyDesign {
 function crop(data: TemplateData, format: CanvasFormat): ReadyDesign {
   return {
     template: design('crop', data, format, BLACK, [slot('photo-1', 'crop', 0.5, 0.5, 1)]),
-    alignRight: [],
   };
 }
 
@@ -333,9 +189,9 @@ function crop(data: TemplateData, format: CanvasFormat): ReadyDesign {
 const POLAROID = { width: 0.55, height: 0.8, tilt: (-4 * Math.PI) / 180 } as const;
 
 /**
- * An instant photo with its place under it, leaning, over the canvas's own photo, which stays as
- * the background (the user's choice: a landscape behind, and another photo in the Polaroid), so
- * its slot keeps it (see `keepsCanvasPhoto`). Over black with no photo yet. Time and space O(1).
+ * An instant photo with its place under it, leaning, over the canvas's own photo, the background
+ * the user chooses (the user's choice: a landscape behind, and another photo in the Polaroid).
+ * Over black with no photo yet. Time and space O(1).
  */
 function polaroid(data: TemplateData, format: CanvasFormat): ReadyDesign {
   const canvas = CANVAS_FORMATS[format];
@@ -351,11 +207,10 @@ function polaroid(data: TemplateData, format: CanvasFormat): ReadyDesign {
     frame: 'light',
     caption: 'place',
     slot: true,
-    keepsCanvasPhoto: true,
     transform: { x: 0.5, y: 0.5, scale, rotation: POLAROID.tilt },
     opacity: 1,
   };
-  return { template: design('polaroid', data, format, BLACK, [photo]), alignRight: [] };
+  return { template: design('polaroid', data, format, BLACK, [photo]) };
 }
 
 /** Most of the canvas a slide viewer takes, wide and tall. */
@@ -374,15 +229,44 @@ function slides(data: TemplateData, format: CanvasFormat): ReadyDesign {
   );
   return {
     template: design('slides', data, format, BLACK, [slot('photo-1', 'slides', 0.5, 0.5, scale)]),
-    alignRight: [],
   };
+}
+
+/**
+ * A photobooth's strip over the canvas's photo: how much of the canvas it takes at most, wide and
+ * tall, and how much it leans, clockwise (3°), as one left on a table (the user's choice).
+ */
+const BOOTH_ROOM = { width: 0.46, height: 0.8, tilt: (-3 * Math.PI) / 180 } as const;
+
+/**
+ * A photobooth's strip with three photos, leaning, over the canvas's own photo, the background the
+ * user chooses, as the Polaroid's; its datum on the tape, its date at its foot. Over black with no
+ * photo yet. Time and space O(1).
+ */
+function photobooth(data: TemplateData, format: CanvasFormat): ReadyDesign {
+  const canvas = CANVAS_FORMATS[format];
+  const box = boothBox();
+  const scale = Math.min(
+    (BOOTH_ROOM.width * canvas.width) / box.width,
+    (BOOTH_ROOM.height * canvas.height) / box.height,
+  );
+  const strip: Layer = {
+    id: 'photo-1',
+    kind: 'image',
+    image: SAMPLE_IMAGE,
+    frame: 'none',
+    mount: 'photobooth',
+    transform: { x: 0.5, y: 0.5, scale, rotation: BOOTH_ROOM.tilt },
+    opacity: 1,
+  };
+  return { template: design('photobooth', data, format, BLACK, [strip]) };
 }
 
 const RECIPES: Readonly<
   Record<ReadyDesignId, (data: TemplateData, format: CanvasFormat) => ReadyDesign>
 > = {
-  messageOne,
-  messageTwo,
+  messageOne: (data, format) => message('messageOne', false, data, format),
+  messageTwo: (data, format) => message('messageTwo', true, data, format),
   filmFrame: (data, format) => centeredPiece('filmFrame', 'filmFrame', data, format),
   lightNegative: (data, format) => centeredPiece('lightNegative', 'lightNegative', data, format),
   filmStrip,
@@ -390,6 +274,7 @@ const RECIPES: Readonly<
   crop,
   polaroid,
   slides,
+  photobooth,
 };
 
 /** One of AllRun's designs laid out for `data` in `format`. Time and space O(1). */

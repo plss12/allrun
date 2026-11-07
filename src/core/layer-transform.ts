@@ -387,3 +387,64 @@ export function layerPoint(
     y: (dx * sin + dy * cos) / transform.scale,
   };
 }
+
+/**
+ * Half the width and height a layer of `size` (before its scale) takes on the canvas, turned and
+ * scaled as `transform` says. Time and space O(1).
+ */
+function reach(transform: LayerTransform, size: Size): { readonly x: number; readonly y: number } {
+  const cos = Math.abs(Math.cos(transform.rotation));
+  const sin = Math.abs(Math.sin(transform.rotation));
+  return {
+    x: ((size.width * cos + size.height * sin) * transform.scale) / 2,
+    y: ((size.width * sin + size.height * cos) * transform.scale) / 2,
+  };
+}
+
+/** How far, in canvas pixels, a layer may poke out and still count as inside: rounding. */
+const INSIDE_SLACK = 1;
+
+/**
+ * Where a layer goes when the canvas changes from `from` to `to`: where it was, as a share of the
+ * canvas, as every layer keeps; but along each way it was inside the old canvas, across or down, it
+ * stays inside the new one, shrunk just enough if it no longer fits and moved in if it pokes out (the
+ * user's choice: big pieces, a Polaroid or a strip, went off a wide canvas). Along a way it went off
+ * on purpose (a film strip's ends, across) it is left to: a strip still fits the new canvas's height.
+ * Its size is the new canvas's measure (a holder as big as the canvas grows with it). Time and space
+ * O(1).
+ */
+export function keepInCanvas(
+  transform: LayerTransform,
+  before: Size,
+  after: Size,
+  from: Size,
+  to: Size,
+): LayerTransform {
+  const old = reach(transform, before);
+  const x = transform.x * from.width;
+  const y = transform.y * from.height;
+  const insideAcross = x - old.x >= -INSIDE_SLACK && x + old.x <= from.width + INSIDE_SLACK;
+  const insideDown = y - old.y >= -INSIDE_SLACK && y + old.y <= from.height + INSIDE_SLACK;
+  if (!insideAcross && !insideDown) {
+    return transform;
+  }
+  const now = reach(transform, after);
+  const shrink = Math.min(
+    1,
+    insideAcross ? to.width / (2 * now.x) : 1,
+    insideDown ? to.height / (2 * now.y) : 1,
+  );
+  const half = { x: now.x * shrink, y: now.y * shrink };
+  const clampTo = (value: number, low: number, high: number) =>
+    low > high ? (low + high) / 2 : Math.min(Math.max(value, low), high);
+  return {
+    ...transform,
+    scale: transform.scale * shrink,
+    x: insideAcross
+      ? clampTo(transform.x * to.width, half.x, to.width - half.x) / to.width
+      : transform.x,
+    y: insideDown
+      ? clampTo(transform.y * to.height, half.y, to.height - half.y) / to.height
+      : transform.y,
+  };
+}

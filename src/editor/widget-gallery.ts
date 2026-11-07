@@ -86,10 +86,17 @@ function isPicture(widget: CatalogWidget): boolean {
 
 /**
  * Whether an item is as big as the canvas with its photo (the camera, the crop screen), or as tall
- * (the slide viewer): in a tile as tall as a story, for it to read.
+ * (the slide viewer, the photobooth's strip, a chat): in a tile as tall as a story, for it to read.
  */
 function framesItem(item: CatalogItem): boolean {
-  return item.kind === 'image' && (coversCanvas(item.mount) || item.mount === 'slides');
+  return (
+    item.kind === 'image' &&
+    (coversCanvas(item.mount) ||
+      item.mount === 'slides' ||
+      item.mount === 'photobooth' ||
+      item.mount === 'chat' ||
+      item.mount === 'chatPair')
+  );
 }
 
 /**

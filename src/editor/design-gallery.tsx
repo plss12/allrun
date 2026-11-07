@@ -8,12 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '@/ui/spinner';
 import { newCollage } from '@/core/collage';
 import { READY_DESIGN_IDS, type ReadyDesignId } from '@/core/designs';
-import {
-  isPhotoSlot,
-  layerPictures,
-  leavesCanvasPhoto,
-  withWindowPicture,
-} from '@/core/image-layer';
+import { isPhotoSlot, layerPictures, withWindowPicture } from '@/core/image-layer';
 import {
   CANVAS_FORMATS,
   type CanvasFormat,
@@ -70,8 +65,8 @@ const COLLAGES: readonly {
 const COLLAGE_FRAMES: readonly ImageFrame[] = ['none', 'light', 'dark'];
 
 /**
- * The stock photos of AllRun's designs, in their slots; a design that leaves the canvas's photo as
- * its background (see `leavesCanvasPhoto`) has that one first.
+ * The stock photos of AllRun's designs, in their slots; one shown over a photo of the canvas (see
+ * `OVER_A_PHOTO`) has that one first.
  */
 const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   messageOne: ['streetCrossing'],
@@ -83,6 +78,7 @@ const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   crop: ['trackShadow'],
   polaroid: ['forestBridge', 'woodlandPath'],
   slides: ['mountainRunner', 'forestBridge', 'trackShoes'],
+  photobooth: ['forestBridge', 'mountainRunner', 'trackShadow', 'trackShoes'],
 };
 
 /** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */
@@ -96,8 +92,14 @@ const SAVED_PHOTOS: readonly StockPhoto[] = [
 ];
 
 /**
- * The stock photos `names` of a design: the one over its canvas, if it shows the canvas's photo,
- * and those of its slots.
+ * AllRun's designs whose thumbnail shows a photo of the canvas behind their slots, as they are made
+ * to be used (a landscape behind the Polaroid); the others show their own background.
+ */
+const OVER_A_PHOTO: ReadonlySet<string> = new Set(['allrun-polaroid', 'allrun-photobooth']);
+
+/**
+ * The stock photos `names` of a design: the one over its canvas, if its thumbnail shows one (see
+ * `OVER_A_PHOTO`; any design without slots), and those of its slots.
  */
 function stockOf(
   template: Template,
@@ -106,7 +108,7 @@ function stockOf(
   if (!template.layers.some(isPhotoSlot)) {
     return { canvas: names, slots: [] };
   }
-  return leavesCanvasPhoto(template.layers)
+  return OVER_A_PHOTO.has(template.id)
     ? { canvas: names.slice(0, 1), slots: names.slice(1) }
     : { canvas: [], slots: names };
 }

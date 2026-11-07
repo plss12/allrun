@@ -62,7 +62,13 @@ export function windowCount(layer: ImageLayer): number {
 
 /** How many windows a picture in `mount` has (none: a picture as it is), as `windowCount` says. */
 export function mountWindows(mount: ImageMount | undefined): number {
-  return mount === 'slides' ? SLIDES.count : 1;
+  return mount === 'slides'
+    ? SLIDES.count
+    : mount === 'photobooth'
+      ? BOOTH.count
+      : mount === 'chatPair'
+        ? 2
+        : 1;
 }
 
 /**
@@ -162,9 +168,7 @@ export function withEmptySlots(layers: readonly Layer[]): Layer[] {
 
 /**
  * `layers` with the empty windows of their slots filled in order with `pictures`; those left over
- * stay out. A slot that keeps the canvas's photo (see `keepsCanvasPhoto`) takes the first other
- * one, and the canvas's goes on to the next window that takes it, if any. Time O(n·w·p) for n
- * layers of w windows and p pictures.
+ * stay out. Time O(n·w) for n layers of w windows.
  */
 export function fillSlots(layers: readonly Layer[], pictures: readonly string[]): Layer[] {
   const left = [...pictures];
@@ -176,12 +180,8 @@ export function fillSlots(layers: readonly Layer[], pictures: readonly string[])
       if (picture !== SAMPLE_IMAGE) {
         return filled;
       }
-      const at = left.findIndex((key) => layer.keepsCanvasPhoto !== true || key !== EDITOR_PHOTO);
-      if (at === -1) {
-        return filled;
-      }
-      const [image] = left.splice(at, 1);
-      return withWindowPicture(filled, window, image);
+      const image = left.shift();
+      return image === undefined ? filled : withWindowPicture(filled, window, image);
     }, layer);
   });
 }
@@ -206,15 +206,6 @@ export function withoutPicture(layers: readonly Layer[], key: string): Layer[] {
       ),
     ];
   });
-}
-
-/**
- * Whether a design leaves the canvas's photo as its background: none of its slots takes it, as
- * none does in a design without slots, or with only slots that keep it (the Polaroid's). Time O(n)
- * for n layers.
- */
-export function leavesCanvasPhoto(layers: readonly Layer[]): boolean {
-  return layers.filter(isPhotoSlot).every((layer) => layer.keepsCanvasPhoto === true);
 }
 
 /** A rectangle inside a widget centered on (0, 0). */
@@ -457,31 +448,224 @@ export function slidesBox(): SlidesBox {
 }
 
 /**
+ * A photobooth's strip (`photobooth`), in canvas pixels of 1080: how many photos, each one's size
+ * (a booth's, a little wider than tall), the black paper around them, between them and the longer
+ * foot under them, for its date; and the piece of paper tape over its top, with its datum: its size,
+ * how far it sticks out above the strip, and how much it leans (3°, counterclockwise: level when
+ * the strip leans as much the other way, as the owner's reference).
+ */
+const BOOTH = {
+  count: 3,
+  photo: { width: 440, height: 400 },
+  edge: 22,
+  gap: 14,
+  foot: 110,
+  tape: { width: 300, height: 92, over: 24, turn: (3 * Math.PI) / 180 },
+} as const;
+
+/** A photobooth's strip laid out (see `boothBox`): the piece, its strip, photos, foot and tape. */
+export interface BoothBox extends Size {
+  readonly strip: BoxRect;
+  readonly windows: readonly BoxRect[];
+  readonly foot: BoxRect;
+  /** The tape, before its turn, which goes about its middle. */
+  readonly tape: BoxRect & { readonly turn: number };
+}
+
+/**
+ * Where a photobooth's strip puts its photos, one under another, its foot under them and the tape
+ * over its top, sticking out above it: all of it inside the piece. Time and space O(1).
+ */
+export function boothBox(): BoothBox {
+  const { count, photo, edge, gap, foot, tape } = BOOTH;
+  const strip = {
+    width: photo.width + 2 * edge,
+    height: edge + count * photo.height + (count - 1) * gap + foot,
+  };
+  const width = strip.width;
+  const height = strip.height + tape.over;
+  const top = -height / 2 + tape.over;
+  const windows = Array.from({ length: count }, (_, i) => ({
+    x: -photo.width / 2,
+    y: top + edge + i * (photo.height + gap),
+    width: photo.width,
+    height: photo.height,
+  }));
+  return {
+    width,
+    height,
+    strip: { x: -strip.width / 2, y: top, ...strip },
+    windows,
+    foot: { x: -strip.width / 2, y: top + strip.height - foot, width: strip.width, height: foot },
+    tape: {
+      x: -tape.width / 2,
+      y: -height / 2,
+      width: tape.width,
+      height: tape.height,
+      turn: tape.turn,
+    },
+  };
+}
+
+/**
+ * A chat's piece (`chat`, `chatPair`), in canvas pixels of 1080: its photos' widths (3:4, as a
+ * phone's, rounded as a chat shows them), how far down and left the second of two goes as times
+ * the first (and right and down on a wide canvas), the date's band over them, the room between the
+ * parts, and the band of the message under them (as wide as the piece, the message shrunk to fit
+ * it). On a wide canvas, the photos at the left and the date and message in a column beside them.
+ */
+const CHAT = {
+  one: 560,
+  two: 440,
+  second: { down: 0.84, left: 0.3 },
+  wideSecond: { right: 0.5, down: 0.16 },
+  date: 56,
+  gap: 28,
+  message: 150,
+  width: 860,
+  column: 620,
+  radius: 40,
+} as const;
+
+/** A chat's piece laid out (see `chatBox`): the piece, its photos, its date and its message. */
+export interface ChatBox extends Size {
+  readonly windows: readonly BoxRect[];
+  readonly date: BoxRect;
+  readonly message: BoxRect;
+  readonly radius: number;
+  /** Whether it is laid out for a wide canvas, side by side. */
+  readonly wide: boolean;
+}
+
+/**
+ * Where a chat's piece puts its parts, with one photo or two (`pair`): stacked, the date over the
+ * photos at the right and the message under them, its right edge with theirs, as a chat sends them;
+ * on a wide `canvas`, the photos at the left and the date and message beside them. Time and space
+ * O(1).
+ */
+export function chatBox(pair: boolean, canvas: Size): ChatBox {
+  const { gap, radius } = CHAT;
+  const width = pair ? CHAT.two : CHAT.one;
+  const height = (width / SLOT_PICTURE.width) * SLOT_PICTURE.height;
+  const wide = canvas.width > canvas.height;
+  if (wide) {
+    const area = pair
+      ? { width: width * (1 + CHAT.wideSecond.right), height: height * (1 + CHAT.wideSecond.down) }
+      : { width, height };
+    const whole = { width: area.width + 2 * gap + CHAT.column, height: area.height };
+    const left = -whole.width / 2;
+    const top = -whole.height / 2;
+    const first = { x: left, y: top, width, height };
+    const column = { x: left + area.width + 2 * gap, width: CHAT.column };
+    const block = CHAT.date + gap + CHAT.message;
+    return {
+      ...whole,
+      wide,
+      radius,
+      windows: pair
+        ? [
+            first,
+            {
+              x: left + width * CHAT.wideSecond.right,
+              y: top + height * CHAT.wideSecond.down,
+              width,
+              height,
+            },
+          ]
+        : [first],
+      date: { ...column, y: -block / 2, height: CHAT.date },
+      message: { ...column, y: -block / 2 + CHAT.date + gap, height: CHAT.message },
+    };
+  }
+  const area = pair ? height * (1 + CHAT.second.down) : height;
+  const whole = { width: CHAT.width, height: CHAT.date + 2 * gap + area + CHAT.message };
+  const right = whole.width / 2;
+  const top = -whole.height / 2;
+  const photosTop = top + CHAT.date + gap;
+  const first = { x: right - width, y: photosTop, width, height };
+  return {
+    ...whole,
+    wide,
+    radius,
+    windows: pair
+      ? [
+          first,
+          {
+            x: right - width - width * CHAT.second.left,
+            y: photosTop + height * CHAT.second.down,
+            width,
+            height,
+          },
+        ]
+      : [first],
+    date: { x: -whole.width / 2, y: top, width: whole.width, height: CHAT.date },
+    message: {
+      x: -whole.width / 2,
+      y: photosTop + area + gap,
+      width: whole.width,
+      height: CHAT.message,
+    },
+  };
+}
+
+/**
+ * The windows of a holder of several (see `mountWindows`) on `canvas`, from its middle; `null`
+ * for the rest.
+ */
+function windowsOf(mount: ImageMount | undefined, canvas: Size): readonly BoxRect[] | null {
+  switch (mount) {
+    case 'slides':
+      return slidesBox().windows;
+    case 'photobooth':
+      return boothBox().windows;
+    case 'chatPair':
+      return chatBox(true, canvas).windows;
+    default:
+      return null;
+  }
+}
+
+/**
  * The window of `layer` under `point`, from its middle and before its scale (see `layerPoint`):
- * the slide touched in a slide viewer, else its only window (0), also off them. Time O(w) for w
- * windows.
+ * the photo touched in a slide viewer, a photobooth's strip or a chat with two, the nearest between
+ * two; else its only window (0), also off them. Time O(w) for w windows.
  */
 export function windowAt(
   layer: ImageLayer,
   point: { readonly x: number; readonly y: number },
+  canvas: Size,
 ): number {
-  if (layer.mount !== 'slides') {
+  const windows = windowsOf(layer.mount, canvas);
+  if (windows === null) {
     return 0;
   }
-  const { windows } = slidesBox();
+  // Photos that overlap (a chat's two): the one on top, the last, where both are.
+  const under = windows
+    .map((rect, i) => ({ rect, i }))
+    .reverse()
+    .find(
+      ({ rect }) =>
+        point.x >= rect.x &&
+        point.x <= rect.x + rect.width &&
+        point.y >= rect.y &&
+        point.y <= rect.y + rect.height,
+    );
+  if (under !== undefined) {
+    return under.i;
+  }
   const at = windows.findIndex(({ y, height }) => point.y >= y && point.y <= y + height);
   if (at !== -1) {
     return at;
   }
-  // Between two slides, the nearest.
+  // Between two photos, the nearest.
   const distances = windows.map(({ y, height }) => Math.abs(point.y - (y + height / 2)));
   return distances.indexOf(Math.min(...distances));
 }
 
 /**
  * The widget of a picture in its holder (see `IMAGE_MOUNTS`), as tall as `IMAGE_SIDE`, but the
- * camera and the crop screen, as big as the `canvas`, and the slide viewer, as `slidesBox` makes
- * it. Time and space O(1).
+ * camera and the crop screen, as big as the `canvas`, and the slide viewer and the photobooth's
+ * strip, as `slidesBox` and `boothBox` make them. Time and space O(1).
  */
 export function mountBox(mount: ImageMount, canvas: Size): MountBox {
   const height = IMAGE_SIDE;
@@ -506,6 +690,35 @@ export function mountBox(mount: ImageMount, canvas: Size): MountBox {
         height: slides.height,
         picture,
         radius: slides.radius,
+        holes: [],
+        sides: [none, none],
+        frames: [],
+      };
+    }
+    case 'photobooth': {
+      const booth = boothBox();
+      const [picture] = booth.windows;
+      const none = { ...picture, width: 0 };
+      return {
+        width: booth.width,
+        height: booth.height,
+        picture,
+        radius: 0,
+        holes: [],
+        sides: [none, none],
+        frames: [],
+      };
+    }
+    case 'chat':
+    case 'chatPair': {
+      const chat = chatBox(mount === 'chatPair', canvas);
+      const [picture] = chat.windows;
+      const none = { ...picture, width: 0 };
+      return {
+        width: chat.width,
+        height: chat.height,
+        picture,
+        radius: chat.radius,
         holes: [],
         sides: [none, none],
         frames: [],

@@ -724,6 +724,9 @@ export const es: Translations = {
       crop: 'Recorte',
       polaroid: 'Polaroid',
       slides: 'Diapositivas',
+      photobooth: 'Fotomatón',
+      chat: 'Mensaje',
+      chatPair: 'Mensaje, dos fotos',
     },
   },
   activityCharts: {

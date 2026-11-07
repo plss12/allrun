@@ -34,6 +34,10 @@ import {
   type CropFrame,
   cropFrame,
   layerPictures,
+  type BoothBox,
+  boothBox,
+  type ChatBox,
+  chatBox,
   type SlidesBox,
   slidesBox,
   FRAME_COLORS,
@@ -68,7 +72,7 @@ import {
   type Template,
 } from '@/core/template';
 import { formatDuration } from '@/core/units';
-import { formatBucketLabels } from '@/ui/format';
+import { formatActivityDate, formatBucketLabels } from '@/ui/format';
 
 import {
   activityChartHeader,
@@ -79,6 +83,7 @@ import {
   layerText,
   type ParagraphContent,
   periodChartHeader,
+  periodName,
   periodTotalsHeader,
   roundedChartValue,
   speedMeasure,
@@ -102,6 +107,8 @@ import {
 } from './scene-text';
 import { type CaptionText, instantCaption } from './instant-caption';
 import {
+  boothCaption,
+  type BoothText,
   cropCaption,
   slidesCaption,
   type LetteredMount,
@@ -915,6 +922,86 @@ function prepareLayer(
           ),
         };
       }
+      if (layer.mount === 'chat' || layer.mount === 'chatPair') {
+        const box = chatBox(layer.mount === 'chatPair', canvas);
+        const photos = layerPictures(layer).map((key) => {
+          const one = images?.get(key);
+          return {
+            picture: one?.image ?? null,
+            empty:
+              emptySlots !== undefined && (key === SAMPLE_IMAGE || one === undefined)
+                ? emptySlots
+                : null,
+          };
+        });
+        // The message is the chat widget's own, drawn into its band.
+        const common = {
+          id: layer.id,
+          transform: layer.transform,
+          opacity: 1,
+          logo: false,
+          style: { font: 'inter', color: '#FFFFFF', bold: false, uppercase: false },
+        } as const;
+        const context = { fonts, textContext, translate, canvas, phrases };
+        const message =
+          data.mode === 'activity'
+            ? prepareActivityBlock(
+                { ...common, kind: 'activityBlock', block: { design: 'message', layout: 'dark' } },
+                data,
+                context,
+              )
+            : prepareSummaryBlock(
+                {
+                  ...common,
+                  kind: 'summaryBlock',
+                  block: { design: 'periodMessage', layout: 'dark' },
+                },
+                data,
+                context,
+              );
+        const date =
+          data.mode === 'activity'
+            ? formatActivityDate(data.activity.startLocal, textContext.locale, 'long')
+            : periodName(data, textContext, translate);
+        return {
+          layer,
+          width: box.width,
+          height: box.height,
+          content: (
+            <ChatWidget
+              box={box}
+              photos={photos}
+              date={chatDate(fonts, date, box)}
+              message={message}
+            />
+          ),
+        };
+      }
+      if (layer.mount === 'photobooth') {
+        const box = boothBox();
+        const photos = layerPictures(layer).map((key) => {
+          const one = images?.get(key);
+          return {
+            picture: one?.image ?? null,
+            empty:
+              emptySlots !== undefined && (key === SAMPLE_IMAGE || one === undefined)
+                ? emptySlots
+                : null,
+          };
+        });
+        return {
+          layer,
+          width: box.width,
+          height: box.height,
+          content: (
+            <BoothWidget
+              box={box}
+              photos={photos}
+              writing={boothWriting(fonts, boothCaption(data, textContext, translate), box)}
+            />
+          ),
+        };
+      }
       if (layer.mount === 'camera') {
         // The app's view over the picture, as one widget: moving it moves the picture.
         const common = {
@@ -1517,6 +1604,304 @@ function CameraWidget({
       )}
       {view}
       {empty === 'hint' ? <EmptySign cx={0} cy={0} /> : null}
+    </Group>
+  );
+}
+
+/** A chat's date: the gray of iOS over a dark chat, and its size. */
+const CHAT_LOOK = { date: '#8E8E93', dateSize: 30 } as const;
+
+/** Lays out a chat's date in the middle of its band, shrunk to fit it. Time O(1). */
+function chatDate(fonts: SkTypefaceFontProvider, text: string, box: ChatBox): PlacedParagraph {
+  const layOut = (size: number) => {
+    const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+    builder.pushStyle({
+      color: Skia.Color(CHAT_LOOK.date),
+      fontFamilies: fontFamiliesOf('inter'),
+      fontSize: size,
+    });
+    builder.addText(text);
+    builder.pop();
+    const paragraph = finishParagraph(builder);
+    paragraph.layout(NO_WRAP_WIDTH);
+    return paragraph;
+  };
+  let paragraph = layOut(CHAT_LOOK.dateSize);
+  if (paragraph.getLongestLine() > box.date.width) {
+    const fit = box.date.width / paragraph.getLongestLine();
+    discardParagraph(paragraph);
+    paragraph = layOut(CHAT_LOOK.dateSize * fit);
+  }
+  const width = Math.ceil(paragraph.getLongestLine()) + 1;
+  paragraph.layout(width);
+  return {
+    paragraph,
+    x: box.date.x + (box.date.width - width) / 2,
+    y: box.date.y + (box.date.height - paragraph.getHeight()) / 2,
+  };
+}
+
+/**
+ * A chat in dark mode, as one piece (see `chatBox`): the date over the sent photos, rounded as a
+ * chat shows them, and the message with its data, shrunk to its band and its right edge with theirs.
+ * A photo not chosen shows the sign to fill it (`hint`) or nothing (`blank`, in the image).
+ */
+function ChatWidget({
+  box,
+  photos,
+  date,
+  message,
+}: {
+  readonly box: ChatBox;
+  readonly photos: readonly {
+    readonly picture: SkImage | null;
+    readonly empty: 'hint' | 'blank' | null;
+  }[];
+  readonly date: PlacedParagraph;
+  readonly message: {
+    readonly content: ReactElement;
+    readonly width: number;
+    readonly height: number;
+  } | null;
+}) {
+  const band = box.message;
+  const fit =
+    message === null ? 1 : Math.min(1, band.width / message.width, band.height / message.height);
+  return (
+    <Group>
+      <ParagraphPicture
+        paragraph={date.paragraph}
+        x={date.x}
+        y={date.y}
+        width={Math.ceil(date.paragraph.getLongestLine()) + 1}
+      />
+      {box.windows.map((window, i) => {
+        const photo = photos[i];
+        if (photo === undefined || photo.empty === 'blank') {
+          return null;
+        }
+        return (
+          <Group
+            key={i}
+            clip={Skia.RRectXY(
+              Skia.XYWHRect(window.x, window.y, window.width, window.height),
+              box.radius,
+              box.radius,
+            )}
+          >
+            {photo.empty === null && photo.picture !== null ? (
+              <Image image={photo.picture} rect={window} fit="cover" sampling={PHOTO_SAMPLING} />
+            ) : (
+              <Rect {...window} color={LOADING_PICTURE} />
+            )}
+            {photo.empty === 'hint' ? (
+              <EmptySign cx={window.x + window.width / 2} cy={window.y + window.height / 2} />
+            ) : null}
+          </Group>
+        );
+      })}
+      {message === null ? null : (
+        <Group
+          transform={[
+            { translateX: band.x + band.width - (message.width * fit) / 2 },
+            { translateY: band.y + band.height / 2 },
+            { scale: fit },
+          ]}
+        >
+          {message.content}
+        </Group>
+      )}
+    </Group>
+  );
+}
+
+/**
+ * How a photobooth's strip looks: its black paper, the paper tape (a warm beige, a little see-through,
+ * its ends torn in teeth), and the writing by hand, in Permanent Marker (the instant photo's): dark
+ * on the tape, light on the paper. Sizes in canvas pixels, the room the tape's writing keeps at its
+ * ends included.
+ */
+const BOOTH_LOOK = {
+  paper: '#121212',
+  tape: 'rgba(226, 220, 204, 0.9)',
+  tooth: { depth: 6, step: 12 },
+  tapeInk: '#1E1E1E',
+  footInk: '#EBE8E1',
+  tapeSize: 40,
+  footSize: 34,
+  room: 24,
+} as const;
+
+/** A photobooth's writing laid out: each text, its width, and where its middle goes. */
+interface BoothWriting {
+  readonly tape: PlacedParagraph | null;
+  readonly foot: PlacedParagraph | null;
+}
+
+/**
+ * Lays out what a photobooth's strip writes (see `boothCaption`), each line in the middle of its
+ * place, shrunk to fit it. Time O(1).
+ */
+function boothWriting(fonts: SkTypefaceFontProvider, text: BoothText, box: BoothBox): BoothWriting {
+  const line = (
+    words: string,
+    size: number,
+    color: string,
+    place: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    },
+  ): PlacedParagraph | null => {
+    if (words === '') {
+      return null;
+    }
+    const layOut = (fontSize: number) => {
+      const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+      builder.pushStyle({
+        color: Skia.Color(color),
+        fontFamilies: fontFamiliesOf('permanentMarker'),
+        fontSize,
+      });
+      builder.addText(words.toUpperCase());
+      builder.pop();
+      const paragraph = finishParagraph(builder);
+      paragraph.layout(NO_WRAP_WIDTH);
+      return paragraph;
+    };
+    let paragraph = layOut(size);
+    const room = place.width - 2 * BOOTH_LOOK.room;
+    if (paragraph.getLongestLine() > room) {
+      const fit = room / paragraph.getLongestLine();
+      discardParagraph(paragraph);
+      paragraph = layOut(size * fit);
+    }
+    const width = Math.ceil(paragraph.getLongestLine()) + 1;
+    paragraph.layout(width);
+    return {
+      paragraph,
+      x: place.x + (place.width - width) / 2,
+      y: place.y + (place.height - paragraph.getHeight()) / 2,
+    };
+  };
+  return {
+    // The tape's, about its own middle: it is drawn turned there.
+    tape: line(text.tape, BOOTH_LOOK.tapeSize, BOOTH_LOOK.tapeInk, {
+      x: -box.tape.width / 2,
+      y: -box.tape.height / 2,
+      width: box.tape.width,
+      height: box.tape.height,
+    }),
+    foot: line(text.foot, BOOTH_LOOK.footSize, BOOTH_LOOK.footInk, box.foot),
+  };
+}
+
+/** The tape's outline, made once: a rectangle about its middle, its two ends torn in teeth. */
+let boothTape: SkPath | null = null;
+
+function tapePath(box: BoothBox): SkPath {
+  if (boothTape !== null) {
+    return boothTape;
+  }
+  const { width, height } = box.tape;
+  const { depth, step } = BOOTH_LOOK.tooth;
+  const builder = Skia.PathBuilder.Make();
+  const left = -width / 2;
+  const top = -height / 2;
+  builder.moveTo(left, top);
+  builder.lineTo(left + width, top);
+  for (let y = 0; y <= height; y += step) {
+    builder.lineTo(left + width - ((y / step) % 2 === 1 ? depth : 0), top + y);
+  }
+  builder.lineTo(left + width, top + height);
+  builder.lineTo(left, top + height);
+  for (let y = height; y >= 0; y -= step) {
+    builder.lineTo(left + ((y / step) % 2 === 1 ? depth : 0), top + y);
+  }
+  builder.close();
+  boothTape = builder.detach();
+  return boothTape;
+}
+
+/**
+ * A photobooth's strip with its photos, as one piece: the black paper lifted off what is under it by
+ * a shadow, a photo in each place, the date by hand at its foot, and the tape over its top with the
+ * datum, level when the design leans the strip. A place with no photo shows the sign to fill it
+ * (`hint`) or only the paper (`blank`, in the image).
+ */
+function BoothWidget({
+  box,
+  photos,
+  writing,
+}: {
+  readonly box: BoothBox;
+  readonly photos: readonly {
+    readonly picture: SkImage | null;
+    readonly empty: 'hint' | 'blank' | null;
+  }[];
+  readonly writing: BoothWriting;
+}) {
+  const tapeMiddle = {
+    x: box.tape.x + box.tape.width / 2,
+    y: box.tape.y + box.tape.height / 2,
+  };
+  return (
+    <Group>
+      <Group
+        layer={
+          <Paint>
+            <DropShadow />
+          </Paint>
+        }
+      >
+        <Rect {...box.strip} color={BOOTH_LOOK.paper} />
+      </Group>
+      {box.windows.map((window, i) => {
+        const photo = photos[i];
+        return photo === undefined || photo.empty === 'blank' ? null : photo.empty === null &&
+          photo.picture !== null ? (
+          <Image
+            key={i}
+            image={photo.picture}
+            rect={window}
+            fit="cover"
+            sampling={PHOTO_SAMPLING}
+          />
+        ) : (
+          <Rect key={i} {...window} color={LOADING_PICTURE} />
+        );
+      })}
+      {box.windows.map((window, i) =>
+        photos[i]?.empty === 'hint' ? (
+          <EmptySign key={i} cx={window.x + window.width / 2} cy={window.y + window.height / 2} />
+        ) : null,
+      )}
+      {writing.foot === null ? null : (
+        <ParagraphPicture
+          paragraph={writing.foot.paragraph}
+          x={writing.foot.x}
+          y={writing.foot.y}
+          width={Math.ceil(writing.foot.paragraph.getLongestLine()) + 1}
+        />
+      )}
+      <Group
+        transform={[
+          { translateX: tapeMiddle.x },
+          { translateY: tapeMiddle.y },
+          { rotate: box.tape.turn },
+        ]}
+      >
+        <Path path={tapePath(box)} color={BOOTH_LOOK.tape} />
+        {writing.tape === null ? null : (
+          <ParagraphPicture
+            paragraph={writing.tape.paragraph}
+            x={writing.tape.x}
+            y={writing.tape.y}
+            width={Math.ceil(writing.tape.paragraph.getLongestLine()) + 1}
+          />
+        )}
+      </Group>
     </Group>
   );
 }
