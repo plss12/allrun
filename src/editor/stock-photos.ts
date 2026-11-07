@@ -8,9 +8,9 @@ import type { LayerImage } from './template-scene';
 
 /**
  * Our own photos (Pexels, see `assets/images/stock/SOURCES.md`), which every design's thumbnail and
- * every tile of a picture show, so we know how each one looks: never the user's. Small copies, 540 px
- * on their short side, enough for a thumbnail: all of them take about 1 MB in the app and 20 MB once
- * decoded, only on the screens that show them.
+ * every tile of a picture show, so we know how each one looks: never the user's. Small copies, 432 px
+ * on their short side, enough for a thumbnail: all of them take about 1.4 MB in the app and 27 MB
+ * once decoded, once a session.
  */
 const STOCK_FILES = {
   brickWall: require('../../assets/images/stock/brick-wall.jpg'),
