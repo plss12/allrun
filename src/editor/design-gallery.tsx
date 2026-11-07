@@ -8,7 +8,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '@/ui/spinner';
 import { newCollage } from '@/core/collage';
 import { READY_DESIGN_IDS, type ReadyDesignId } from '@/core/designs';
-import { isPhotoSlot, leavesCanvasPhoto } from '@/core/image-layer';
+import {
+  isPhotoSlot,
+  layerPictures,
+  leavesCanvasPhoto,
+  withWindowPicture,
+} from '@/core/image-layer';
 import {
   CANVAS_FORMATS,
   type CanvasFormat,
@@ -77,6 +82,7 @@ const READY_PHOTOS: Readonly<Record<ReadyDesignId, readonly StockPhoto[]>> = {
   camera: ['forestBridge'],
   crop: ['trackShadow'],
   polaroid: ['forestBridge', 'woodlandPath'],
+  slides: ['mountainRunner', 'forestBridge', 'trackShoes'],
 };
 
 /** What fills a saved design's thumbnail: its slots, its photo or its cells, one after another. */
@@ -105,7 +111,10 @@ function stockOf(
     : { canvas: [], slots: names };
 }
 
-/** `template` with its stock photos `names` in its slots (see `stockOf`), by their keys. */
+/**
+ * `template` with its stock photos `names` in the windows of its slots (see `stockOf`), by their
+ * keys, in order and again from the first if they run out.
+ */
 function withStock(template: Template, all: readonly StockPhoto[]): Template {
   const names = stockOf(template, all).slots;
   let next = 0;
@@ -115,8 +124,10 @@ function withStock(template: Template, all: readonly StockPhoto[]): Template {
       if (!isPhotoSlot(layer)) {
         return layer;
       }
-      next += 1;
-      return { ...layer, image: names[(next - 1) % names.length] };
+      return layerPictures(layer).reduce((filled, _, window) => {
+        next += 1;
+        return withWindowPicture(filled, window, names[(next - 1) % names.length]);
+      }, layer);
     }),
   };
 }

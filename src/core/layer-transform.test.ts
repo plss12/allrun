@@ -1,4 +1,5 @@
 import {
+  layerPoint,
   layerCoversCanvas,
   hitTestLayers,
   type LayerBox,
@@ -315,5 +316,22 @@ describe('layerCoversCanvas', () => {
   it('says so of a small layer scaled up, turned and all, if it reaches every corner', () => {
     const size = { width: 300, height: 300 };
     expect(layerCoversCanvas({ ...centered, scale: 10, rotation: 0.3 }, size, canvas)).toBe(true);
+  });
+});
+
+describe('layerPoint', () => {
+  const canvas = { width: 1080, height: 1920 };
+
+  it('takes a point of the canvas into the layer, from its middle and before its scale', () => {
+    const transform = { x: 0.5, y: 0.5, scale: 2, rotation: 0 };
+    expect(layerPoint(transform, { x: 640, y: 960 }, canvas)).toEqual({ x: 50, y: 0 });
+  });
+
+  it('undoes its turn', () => {
+    const transform = { x: 0.5, y: 0.5, scale: 1, rotation: Math.PI / 2 };
+    const point = layerPoint(transform, { x: 540, y: 1060 }, canvas);
+    // A quarter turn clockwise put the layer's right side downwards.
+    expect(point.x).toBeCloseTo(100);
+    expect(point.y).toBeCloseTo(0);
   });
 });

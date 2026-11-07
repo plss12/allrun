@@ -108,10 +108,16 @@ interface EditorCanvasProps {
   readonly adjustedScale: SharedValue<number>;
   readonly adjustedOpacity: SharedValue<number>;
   readonly onSelect: (id: string | null) => void;
-  /** Called on a tap on the layer already selected: a text or a verse is edited. */
-  readonly onTapSelected: (id: string) => void;
-  /** Called on a tap that selects a layer, after `onSelect`: a slot with no photo asks for one. */
-  readonly onTapLayer: (id: string) => void;
+  /**
+   * Called on a tap on the layer already selected, at `at` (canvas pixels): a text or a verse is
+   * edited, the picture of the window touched changed.
+   */
+  readonly onTapSelected: (id: string, at: { readonly x: number; readonly y: number }) => void;
+  /**
+   * Called on a tap that selects a layer, after `onSelect`, at `at` (canvas pixels): a slot's
+   * window with no photo asks for one.
+   */
+  readonly onTapLayer: (id: string, at: { readonly x: number; readonly y: number }) => void;
   /**
    * Called with the selected layer's content size, before scaling, when it changes (`null`: none
    * selected), so the editor knows how far down it reaches.
@@ -338,10 +344,10 @@ export function EditorCanvas({
     if (id === null) {
       onTapPhoto({ x: at.x / canvas.width, y: at.y / canvas.height });
     } else if (id === selectedId) {
-      onTapSelected(id);
+      onTapSelected(id, at);
     } else {
       onSelect(id);
-      onTapLayer(id);
+      onTapLayer(id, at);
     }
   };
 

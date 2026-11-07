@@ -16,8 +16,11 @@ import {
 } from './editor-data';
 import { periodCount, shortDistance, type Translate } from './instant-caption';
 
-/** A holder with its letters around its picture, as all are but those as big as the canvas. */
-export type LetteredMount = Exclude<ImageMount, CanvasMount>;
+/**
+ * A holder with its letters around its picture, as all are but those as big as the canvas and the
+ * slide viewer, which writes inside its slides.
+ */
+export type LetteredMount = Exclude<ImageMount, CanvasMount | 'slides'>;
 
 /** What a holder writes along one of its sides, spread along it. */
 export interface MountSide {
@@ -94,28 +97,44 @@ export function mountCaption(
 const CROP_SEPARATOR = '  ·  ';
 
 /**
- * What a crop screen writes in the pill under its box: an activity's first three data (`cardMetrics`:
- * "11,3 km  ·  5:54/km  ·  1h 06min"), a period's first three totals. Time and space O(1).
+ * An activity's first three data (`cardMetrics`: "11,3 km", "5:54/km", "1h 06min"), or a period's first
+ * three totals, as a holder writes them. Time and space O(1).
  */
-export function cropCaption(data: EditorData, context: TextContext, translate: Translate): string {
+function threeData(data: EditorData, context: TextContext, translate: Translate): string[] {
   if (data.mode === 'activity') {
     const { activity } = data;
-    return cardMetrics(activity)
-      .map((metric) =>
-        metric === 'distance'
-          ? shortDistance(metricValue(activity, 'distance') ?? 0, context)
-          : plainMetricText(activity, metric, context, 'tight'),
-      )
-      .join(CROP_SEPARATOR);
+    return cardMetrics(activity).map((metric) =>
+      metric === 'distance'
+        ? shortDistance(metricValue(activity, 'distance') ?? 0, context)
+        : plainMetricText(activity, metric, context, 'tight'),
+    );
   }
   const { summary } = data;
-  return periodTotals(summary)
-    .map((metric) =>
-      metric === 'totalDistance'
-        ? shortDistance(summary.totalDistanceMeters, context)
-        : summaryTotalText(metric, summaryMetricValue(summary, metric) ?? 0, context, translate),
-    )
-    .join(CROP_SEPARATOR);
+  return periodTotals(summary).map((metric) =>
+    metric === 'totalDistance'
+      ? shortDistance(summary.totalDistanceMeters, context)
+      : summaryTotalText(metric, summaryMetricValue(summary, metric) ?? 0, context, translate),
+  );
+}
+
+/**
+ * What a crop screen writes in the pill under its box: the three data (see `threeData`) in a line,
+ * "11,3 km  ·  5:54/km  ·  1h 06min". Time and space O(1).
+ */
+export function cropCaption(data: EditorData, context: TextContext, translate: Translate): string {
+  return threeData(data, context, translate).join(CROP_SEPARATOR);
+}
+
+/**
+ * What a slide viewer writes inside each slide, in order: one of the three data (see
+ * `threeData`) each, so none repeats; a slide with no datum left writes nothing. Time and space O(1).
+ */
+export function slidesCaption(
+  data: EditorData,
+  context: TextContext,
+  translate: Translate,
+): readonly string[] {
+  return threeData(data, context, translate);
 }
 
 /** A strip's texts from its data, by importance: the first in the middle, between the others. */

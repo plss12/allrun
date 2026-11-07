@@ -5,6 +5,7 @@ import {
   isImageLayer,
   isPhotoSlot,
   SAMPLE_IMAGE,
+  slotPictures,
   withEmptySlots,
 } from './image-layer';
 import type { LayerTransform } from './layer-transform';
@@ -305,10 +306,7 @@ export const EMPTY_START: DesignStart = designStart(INITIAL_DESIGN);
  * Time O(n) for n layers.
  */
 function startingPoint(design: EditorDesign, start: DesignStart): EditorDesign {
-  const inSlots = (design.layers ?? [])
-    .filter(isPhotoSlot)
-    .map((layer) => layer.image)
-    .filter((image) => image !== SAMPLE_IMAGE);
+  const inSlots = slotPictures(design.layers ?? []).filter((image) => image !== SAMPLE_IMAGE);
   const others = design.cells.filter((key) => key !== null);
   const pictures =
     inSlots.length > 0 ? inSlots : design.photoId === null ? others : [EDITOR_PHOTO, ...others];

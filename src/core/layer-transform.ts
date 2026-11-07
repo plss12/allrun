@@ -368,3 +368,22 @@ export function layerCoversCanvas(
     );
   });
 }
+
+/**
+ * `point` of the canvas (canvas pixels) in the frame of a layer placed by `transform`: from its
+ * middle, its turn undone and before its scale, as its content is drawn. Time and space O(1).
+ */
+export function layerPoint(
+  transform: LayerTransform,
+  point: { readonly x: number; readonly y: number },
+  canvas: Size,
+): { readonly x: number; readonly y: number } {
+  const dx = point.x - transform.x * canvas.width;
+  const dy = point.y - transform.y * canvas.height;
+  const cos = Math.cos(-transform.rotation);
+  const sin = Math.sin(-transform.rotation);
+  return {
+    x: (dx * cos - dy * sin) / transform.scale,
+    y: (dx * sin + dy * cos) / transform.scale,
+  };
+}

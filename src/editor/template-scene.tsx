@@ -33,6 +33,9 @@ import {
   CAPTION_INK,
   type CropFrame,
   cropFrame,
+  layerPictures,
+  type SlidesBox,
+  slidesBox,
   FRAME_COLORS,
   INSTANT_COLORS,
   type ImageBox,
@@ -100,6 +103,7 @@ import {
 import { type CaptionText, instantCaption } from './instant-caption';
 import {
   cropCaption,
+  slidesCaption,
   type LetteredMount,
   MOUNT_ARROW as MOUNT_ARROW_MARK,
   mountCaption,
@@ -886,6 +890,31 @@ function prepareLayer(
         (layer.image === SAMPLE_IMAGE || picked === undefined)
           ? emptySlots
           : null;
+      if (layer.mount === 'slides') {
+        const box = slidesBox();
+        const slides = layerPictures(layer).map((key) => {
+          const one = images?.get(key);
+          return {
+            picture: one?.image ?? null,
+            empty:
+              emptySlots !== undefined && (key === SAMPLE_IMAGE || one === undefined)
+                ? emptySlots
+                : null,
+          };
+        });
+        return {
+          layer,
+          width: box.width,
+          height: box.height,
+          content: (
+            <SlidesWidget
+              box={box}
+              slides={slides}
+              data={slidesData(fonts, slidesCaption(data, textContext, translate), box)}
+            />
+          ),
+        };
+      }
       if (layer.mount === 'camera') {
         // The app's view over the picture, as one widget: moving it moves the picture.
         const common = {
@@ -1488,6 +1517,190 @@ function CameraWidget({
       )}
       {view}
       {empty === 'hint' ? <EmptySign cx={0} cy={0} /> : null}
+    </Group>
+  );
+}
+
+/**
+ * How a slide viewer looks: its body and gate in black, the gate's edge out of focus as an old
+ * projector's (`blur`, a mask's sigma: the photo stays sharp, user's reference), a faint shade
+ * along it inside, and the data in a wide letter, a pale yellow, right of each slide's middle.
+ */
+const SLIDES_LOOK = {
+  body: '#000000',
+  blur: 5,
+  shade: { blur: 22, opacity: 0.25 },
+  /** How far past the piece the gate reaches, beyond its blur, and the photo under its edge. */
+  gate: 60,
+  bleed: 16,
+  ink: '#F4E4A6',
+  font: 'unbounded' as FontId,
+  size: 34,
+  inset: 52,
+  bodyRadius: 28,
+} as const;
+
+/** A slide's datum laid out, and where it goes: its right end and its middle's height. */
+interface SlideDatum {
+  readonly paragraph: SkParagraph;
+  readonly width: number;
+  readonly right: number;
+  readonly y: number;
+}
+
+/**
+ * Lays out a slide viewer's data, one per slide in order, in capitals (see `slidesCaption`). Time
+ * O(d) for d data.
+ */
+function slidesData(
+  fonts: SkTypefaceFontProvider,
+  texts: readonly string[],
+  box: SlidesBox,
+): readonly SlideDatum[] {
+  return box.windows.flatMap((window, i) => {
+    const text = texts[i];
+    if (text === undefined) {
+      return [];
+    }
+    const builder = Skia.ParagraphBuilder.Make({ textAlign: TextAlign.Left }, fonts);
+    builder.pushStyle({
+      color: Skia.Color(SLIDES_LOOK.ink),
+      fontFamilies: fontFamiliesOf(SLIDES_LOOK.font),
+      fontSize: SLIDES_LOOK.size,
+    });
+    builder.addText(text.toUpperCase());
+    builder.pop();
+    const paragraph = finishParagraph(builder);
+    paragraph.layout(NO_WRAP_WIDTH);
+    const width = Math.ceil(paragraph.getLongestLine()) + 1;
+    paragraph.layout(width);
+    return [
+      {
+        paragraph,
+        width,
+        right: window.x + window.width - SLIDES_LOOK.inset,
+        y: window.y + window.height / 2,
+      },
+    ];
+  });
+}
+
+/** A slide viewer's gate, made once: around each slide, with its tab (see `slidesBox`). */
+let slidesGate: { readonly ring: SkPath; readonly tabs: SkPath } | null = null;
+
+/**
+ * The gate of a slide viewer: the black over the piece, a rounded window cut in it per slide, and the
+ * tabs cutting into the slides. Two paths, since a tab over the gate would cut a hole in it with
+ * the even-odd rule. Time and space O(1).
+ */
+function gateOf(box: SlidesBox): { readonly ring: SkPath; readonly tabs: SkPath } {
+  if (slidesGate !== null) {
+    return slidesGate;
+  }
+  const ring = Skia.PathBuilder.Make();
+  const tabs = Skia.PathBuilder.Make();
+  // One black past the whole piece, so the blur never thins its edge, the slides cut in it: a black
+  // around each would overlap its neighbours', and the even-odd rule would cut a hole there.
+  const reach = SLIDES_LOOK.gate;
+  ring.addRect(
+    Skia.XYWHRect(
+      -box.width / 2 - reach,
+      -box.height / 2 - reach,
+      box.width + 2 * reach,
+      box.height + 2 * reach,
+    ),
+  );
+  for (const window of box.windows) {
+    ring.addRRect(
+      Skia.RRectXY(
+        Skia.XYWHRect(window.x, window.y, window.width, window.height),
+        box.radius,
+        box.radius,
+      ),
+    );
+  }
+  for (const tab of box.tabs) {
+    tabs.addRRect(
+      Skia.RRectXY(Skia.XYWHRect(tab.x, tab.y, tab.width, tab.height), tab.radius, tab.radius),
+    );
+  }
+  slidesGate = { ring: ring.detach(), tabs: tabs.detach() };
+  return slidesGate;
+}
+
+/**
+ * An old slide viewer with its pictures, as one piece: each picture covering its slide, sharp,
+ * under a black gate whose edge and tab come in out of focus, with its datum inside. A slide with
+ * no picture shows the sign to fill it (`hint`) or only black (`blank`, in the image).
+ */
+function SlidesWidget({
+  box,
+  slides,
+  data,
+}: {
+  readonly box: SlidesBox;
+  readonly slides: readonly {
+    readonly picture: SkImage | null;
+    readonly empty: 'hint' | 'blank' | null;
+  }[];
+  readonly data: readonly SlideDatum[];
+}) {
+  const gate = gateOf(box);
+  const body = Skia.RRectXY(
+    Skia.XYWHRect(-box.width / 2, -box.height / 2, box.width, box.height),
+    SLIDES_LOOK.bodyRadius,
+    SLIDES_LOOK.bodyRadius,
+  );
+  return (
+    <Group clip={body}>
+      <Rect
+        x={-box.width / 2}
+        y={-box.height / 2}
+        width={box.width}
+        height={box.height}
+        color={SLIDES_LOOK.body}
+      />
+      {box.windows.map((window, i) => {
+        const slide = slides[i];
+        // Under the gate a little past the slide: its blurred edge never shows a hard one.
+        const under = {
+          x: window.x - SLIDES_LOOK.bleed,
+          y: window.y - SLIDES_LOOK.bleed,
+          width: window.width + 2 * SLIDES_LOOK.bleed,
+          height: window.height + 2 * SLIDES_LOOK.bleed,
+        };
+        return slide === undefined || slide.empty === 'blank' ? null : slide.empty === null &&
+          slide.picture !== null ? (
+          <Image key={i} image={slide.picture} rect={under} fit="cover" sampling={PHOTO_SAMPLING} />
+        ) : (
+          <Rect key={i} {...under} color={LOADING_PICTURE} />
+        );
+      })}
+      {data.map(({ paragraph, width, right, y }, i) => (
+        <ParagraphPicture
+          key={i}
+          paragraph={paragraph}
+          x={right - width}
+          y={y - paragraph.getHeight() / 2}
+          width={width}
+        />
+      ))}
+      <Group opacity={SLIDES_LOOK.shade.opacity}>
+        <Path path={gate.ring} color={SLIDES_LOOK.body} fillType="evenOdd">
+          <BlurMask blur={SLIDES_LOOK.shade.blur} style="normal" />
+        </Path>
+      </Group>
+      <Path path={gate.ring} color={SLIDES_LOOK.body} fillType="evenOdd">
+        <BlurMask blur={SLIDES_LOOK.blur} style="normal" />
+      </Path>
+      <Path path={gate.tabs} color={SLIDES_LOOK.body}>
+        <BlurMask blur={SLIDES_LOOK.blur} style="normal" />
+      </Path>
+      {box.windows.map((window, i) =>
+        slides[i]?.empty === 'hint' ? (
+          <EmptySign key={i} cx={window.x + window.width / 2} cy={window.y + window.height / 2} />
+        ) : null,
+      )}
     </Group>
   );
 }
@@ -3116,7 +3329,11 @@ export class PreparedLayerCache {
   private environment: readonly unknown[] = [];
   private kept = new Map<
     string,
-    { readonly signature: string; readonly image: unknown; readonly prepared: PreparedLayer | null }
+    {
+      readonly signature: string;
+      readonly images: readonly unknown[];
+      readonly prepared: PreparedLayer | null;
+    }
   >();
 
   /** The layers of `template`, as `prepareLayers` gives them. */
@@ -3139,18 +3356,21 @@ export class PreparedLayerCache {
       string,
       {
         readonly signature: string;
-        readonly image: unknown;
+        readonly images: readonly unknown[];
         readonly prepared: PreparedLayer | null;
       }
     >();
     const prepared = template.layers.flatMap((layer) => {
       const signature = JSON.stringify({ ...layer, transform: null });
-      const image = layer.kind === 'image' ? context.images?.get(layer.image) : undefined;
+      const images =
+        layer.kind === 'image' ? layerPictures(layer).map((key) => context.images?.get(key)) : [];
       const known = this.kept.get(layer.id);
       const entry =
-        known?.signature === signature && known.image === image
+        known?.signature === signature &&
+        known.images.length === images.length &&
+        known.images.every((one, i) => one === images[i])
           ? known
-          : { signature, image, prepared: prepareLayer(layer, context, canvas) };
+          : { signature, images, prepared: prepareLayer(layer, context, canvas) };
       next.set(layer.id, entry);
       return entry.prepared === null ? [] : [{ ...entry.prepared, layer }];
     });

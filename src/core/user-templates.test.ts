@@ -2,6 +2,7 @@ import { makeActivity } from '@/test-utils/make-activity';
 import { makeSummary } from '@/test-utils/make-summary';
 
 import { defaultActivityTemplate, defaultSummaryTemplate, newLayer } from './default-layout';
+import { SAMPLE_IMAGE } from './image-layer';
 import { addLayer } from './template-edit';
 import {
   isSaved,
@@ -23,11 +24,15 @@ describe('saveDesign', () => {
     expect(saved).toEqual({ savedAt: at('10:00'), template: { ...story, id: 'mine-1' } });
   });
 
-  it("leaves out the user's pictures, which belong to the image, not to the design", () => {
+  it("keeps the user's pictures as empty slots: the photos belong to the image, not to the design", () => {
     const picture = newLayer({ kind: 'image', image: 'picked-1', frame: 'none' }, 'image', 'story');
     const withPicture = addLayer(story, picture);
     const saved = saveDesign(withPicture, 'mine-1', at('10:00'));
-    expect(saved.template.layers).toEqual(story.layers);
+    expect(saved.template.layers).toEqual([
+      ...story.layers,
+      { ...picture, image: SAMPLE_IMAGE, slot: true },
+    ]);
+    // The same design with another photo in it is the same saved design.
     expect(isSaved([saved], withPicture)).toBe(true);
   });
 

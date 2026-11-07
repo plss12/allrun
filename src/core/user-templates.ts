@@ -33,8 +33,8 @@ export function parseSavedTemplate(json: unknown): SavedTemplate {
 }
 
 /**
- * The design on the canvas, ready to store as a template of its own: without the user's pictures,
- * which belong to this image, not to the design, and with its slots empty (see `image-layer.ts`).
+ * The design on the canvas, ready to store as a template of its own: every picture an empty slot
+ * (see `withEmptySlots`), since the photos belong to this image, not to the design.
  */
 export function saveDesign(design: Template, id: string, savedAt: string): SavedTemplate {
   return { savedAt, template: { ...design, id, layers: withEmptySlots(design.layers) } };
@@ -56,7 +56,7 @@ export function templatesFor(
 
 /**
  * Whether `design` is already saved: one of `saved` has its format, mode, widgets (but the
- * pictures, which are never saved), photo placement and background, whatever its id. Saving it again would only add a second identical
+ * photos, which are never saved: their pictures are, as empty slots), photo placement and background, whatever its id. Saving it again would only add a second identical
  * thumbnail. Time O(n · s) for n templates of size s.
  */
 export function isSaved(saved: readonly SavedTemplate[], design: Template): boolean {

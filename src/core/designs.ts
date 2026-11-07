@@ -1,5 +1,12 @@
 import { emptyLayout, defaultActivityTemplate, defaultSummaryTemplate } from './default-layout';
-import { IMAGE_SIDE, instantBox, mountBox, SAMPLE_IMAGE, SLOT_PICTURE } from './image-layer';
+import {
+  IMAGE_SIDE,
+  instantBox,
+  mountBox,
+  SAMPLE_IMAGE,
+  SLOT_PICTURE,
+  slidesBox,
+} from './image-layer';
 import { at, type TemplateData, textStyle } from './layout-kit';
 import {
   CANVAS_FORMATS,
@@ -24,6 +31,7 @@ export const READY_DESIGN_IDS = [
   'camera',
   'crop',
   'polaroid',
+  'slides',
 ] as const;
 
 export type ReadyDesignId = (typeof READY_DESIGN_IDS)[number];
@@ -350,6 +358,26 @@ function polaroid(data: TemplateData, format: CanvasFormat): ReadyDesign {
   return { template: design('polaroid', data, format, BLACK, [photo]), alignRight: [] };
 }
 
+/** Most of the canvas a slide viewer takes, wide and tall. */
+const SLIDES_ROOM = { width: 0.9, height: 0.95 } as const;
+
+/**
+ * An old slide viewer with three photos, a datum in each (the user's choice), as big as it fits,
+ * over black, as its own body is. Time and space O(1).
+ */
+function slides(data: TemplateData, format: CanvasFormat): ReadyDesign {
+  const canvas = CANVAS_FORMATS[format];
+  const box = slidesBox();
+  const scale = Math.min(
+    (SLIDES_ROOM.width * canvas.width) / box.width,
+    (SLIDES_ROOM.height * canvas.height) / box.height,
+  );
+  return {
+    template: design('slides', data, format, BLACK, [slot('photo-1', 'slides', 0.5, 0.5, scale)]),
+    alignRight: [],
+  };
+}
+
 const RECIPES: Readonly<
   Record<ReadyDesignId, (data: TemplateData, format: CanvasFormat) => ReadyDesign>
 > = {
@@ -361,6 +389,7 @@ const RECIPES: Readonly<
   camera,
   crop,
   polaroid,
+  slides,
 };
 
 /** One of AllRun's designs laid out for `data` in `format`. Time and space O(1). */

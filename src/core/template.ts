@@ -219,11 +219,19 @@ export type InstantCaption = (typeof INSTANT_CAPTIONS)[number];
  * What holds a picture (see `mountBox`), the picture cut to fit it around its middle: a black 35 mm
  * frame with its data around it (`filmFrame`), a light strip of negative with perforations
  * (`lightNegative`), a dark strip of film with the same picture again in the frames beside it
- * (`filmStrip`), the phone's camera as big as the canvas, seen through it (`camera`), or a phone's crop
+ * (`filmStrip`), the phone's camera as big as the canvas, seen through it (`camera`), a phone's crop
  * screen as big as the canvas, the picture dimmed around a smaller canvas with its data under it
- * (`crop`). The holder and the data on it move as one piece.
+ * (`crop`), or an old slide viewer with three pictures, a datum in each (`slides`, the only one
+ * with more than one: see `windowCount`). The holder and the data on it move as one piece.
  */
-export const IMAGE_MOUNTS = ['filmFrame', 'lightNegative', 'filmStrip', 'camera', 'crop'] as const;
+export const IMAGE_MOUNTS = [
+  'filmFrame',
+  'lightNegative',
+  'filmStrip',
+  'camera',
+  'crop',
+  'slides',
+] as const;
 
 export type ImageMount = (typeof IMAGE_MOUNTS)[number];
 
@@ -782,6 +790,11 @@ export const layerSchema = z.discriminatedUnion('kind', [
      * gallery's sample (see `SAMPLE_IMAGE`). Designs never keep pictures (see `saveDesign`).
      */
     image: z.string(),
+    /**
+     * The pictures of a holder's other windows, in order, when it has more than one (see
+     * `windowCount`): the first window's is `image`. Each a key as `image` is; empty, none chosen.
+     */
+    extraImages: z.array(z.string()).optional(),
     frame: z.enum(IMAGE_FRAMES),
     /**
      * An instant photo's caption (see `INSTANT_CAPTIONS`): the picture, cut square, in a Polaroid's

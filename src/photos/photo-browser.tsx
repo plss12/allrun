@@ -16,7 +16,7 @@ import {
   type PhotoSource,
   readPhotoAccess,
 } from '@/data/photo-library';
-import { KeptMounted } from '@/editor/round-button';
+import { KeptMounted, PillButton } from '@/editor/round-button';
 import { smallCardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { formatRelativeDay } from '@/ui/format';
@@ -149,20 +149,31 @@ function useLibraryPhotos(source: PhotoSource): {
   };
 }
 
-/** A photo of the grid, square and cut to fit, drawn from the library at its size. */
+/** The mark of a photo while choosing several: its size, and its room from the corner. */
+const MARK = { size: 24, inset: 6 } as const;
+
+/**
+ * A photo of the grid, square and cut to fit, drawn from the library at its size. While choosing
+ * several (`order` not `undefined`), a ring in its corner, filled with its place among those
+ * chosen (`order`, from 1) once chosen, as Instagram marks them.
+ */
 function PhotoCell({
   photo,
   label,
+  order,
   onPress,
 }: {
   readonly photo: LibraryPhoto;
   readonly label: string;
+  readonly order?: number | null;
   readonly onPress: () => void;
 }) {
+  const chosen = order !== undefined && order !== null;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={order === undefined ? undefined : { selected: chosen }}
       onPress={onPress}
       style={({ pressed }) => ({
         aspectRatio: 1,
@@ -177,6 +188,37 @@ function PhotoCell({
         cachePolicy="memory"
         style={{ flex: 1, backgroundColor: colors.secondarySystemBackground }}
       />
+      {order === undefined ? null : (
+        <View
+          style={{
+            position: 'absolute',
+            top: HALF_GAP + MARK.inset,
+            right: HALF_GAP + MARK.inset,
+            width: MARK.size,
+            height: MARK.size,
+            borderRadius: MARK.size / 2,
+            borderWidth: 2,
+            borderColor: '#FFFFFF',
+            backgroundColor: chosen ? colors.tint : 'rgba(0, 0, 0, 0.25)',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {chosen ? (
+            <Text
+              style={{
+                color: colors.onTint,
+                fontSize: 13,
+                lineHeight: 16,
+                fontWeight: '700',
+                textAlign: 'center',
+              }}
+            >
+              {String(order)}
+            </Text>
+          ) : null}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -232,19 +274,27 @@ type GridItem =
 
 const NO_PHOTO_ITEM: GridItem = { kind: 'none' };
 
-/** The photos of `source` in a grid, keeping only what is on screen. */
+/**
+ * The photos of `source` in a grid, keeping only what is on screen. While choosing several
+ * (`chosen` given), each shows its mark, and `bottom` points stay free under the list for the
+ * button that adds them.
+ */
 function PhotoGrid({
   source,
   top,
   emptyMessage,
   onPick,
   onNoPhoto,
+  chosen,
+  bottom = 0,
 }: {
   readonly source: PhotoSource;
   readonly top: ListTop;
   readonly emptyMessage: string;
   readonly onPick: (id: string) => void;
   readonly onNoPhoto?: () => void;
+  readonly chosen?: readonly string[];
+  readonly bottom?: number;
 }) {
   const { t } = useTranslation();
   const { locale } = useDisplaySettings();
@@ -298,12 +348,14 @@ function PhotoGrid({
       onEndReached={loadMore}
       onEndReachedThreshold={1}
       ListHeaderComponent={<>{top.header}</>}
-      contentContainerStyle={{ paddingTop: top.inset, paddingBottom: insets.bottom }}
+      contentContainerStyle={{ paddingTop: top.inset, paddingBottom: insets.bottom + bottom }}
+      extraData={chosen}
       renderItem={({ item }) =>
         item.kind === 'photo' ? (
           <PhotoCell
             photo={item.photo}
             label={labelOf(item.photo)}
+            order={chosen === undefined ? undefined : chosen.indexOf(item.photo.id) + 1 || null}
             onPress={() => onPick(item.photo.id)}
           />
         ) : (
@@ -464,20 +516,45 @@ function NoAccess({
  * only what is on screen. With limited access, only the photos allowed show, and a line offers to
  * choose others. A tap on a photo gives its library id to `onPick`; with `onNoPhoto`, the recent
  * photos start with a cell to go on without one. `top` goes over all of it, scrolling with the
- * list, which starts `topInset` points down so that it can pass under a header.
+ * list, which starts `topInset` points down so that it can pass under a header. With `max` over
+ * one and `onPickMany`, taps mark up to `max` photos in order instead, on any shelf, and a button
+ * under the grid gives them to `onPickMany`.
  */
 export function PhotoBrowser({
   onPick,
   onNoPhoto,
+  max = 1,
+  onPickMany,
   top = null,
   topInset = 0,
 }: {
   readonly onPick: (id: string) => void;
   readonly onNoPhoto?: () => void;
+  readonly max?: number;
+  readonly onPickMany?: (ids: readonly string[]) => void;
   readonly top?: ReactNode;
   readonly topInset?: number;
 }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const [chosen, setChosen] = useState<readonly string[]>([]);
+  const several = max > 1 && onPickMany !== undefined;
+  /** A tap on a photo: chosen at once, or marked and unmarked, up to `max`. */
+  const tapPhoto = (id: string) => {
+    if (!several) {
+      onPick(id);
+      return;
+    }
+    setChosen((current) =>
+      current.includes(id)
+        ? current.filter((one) => one !== id)
+        : current.length < max
+          ? [...current, id]
+          : current,
+    );
+  };
+  const marks = several ? chosen : undefined;
+  const room = several ? ADD_BUTTON.height + 2 * ADD_BUTTON.gap : 0;
   const { access, ask } = usePhotoAccess();
   const [shelf, setShelf] = useState<Shelf>('recent');
   // Each shelf stays mounted once opened, so its list stays where it was.
@@ -545,7 +622,9 @@ export function PhotoBrowser({
           top={listTop()}
           source={{ kind: 'recent' }}
           emptyMessage={t('photos.empty')}
-          onPick={onPick}
+          onPick={tapPhoto}
+          chosen={marks}
+          bottom={room}
           onNoPhoto={onNoPhoto}
         />
       </KeptMounted>
@@ -555,7 +634,9 @@ export function PhotoBrowser({
             top={listTop()}
             source={{ kind: 'favorites' }}
             emptyMessage={t('photos.noFavorites')}
-            onPick={onPick}
+            onPick={tapPhoto}
+            chosen={marks}
+            bottom={room}
           />
         </KeptMounted>
       ) : null}
@@ -581,10 +662,38 @@ export function PhotoBrowser({
             )}
             source={{ kind: 'album', albumId: album.id }}
             emptyMessage={t('photos.empty')}
-            onPick={onPick}
+            onPick={tapPhoto}
+            chosen={marks}
+            bottom={room}
+          />
+        </View>
+      ) : null}
+      {several ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: insets.bottom + ADD_BUTTON.gap,
+            alignItems: 'center',
+          }}
+        >
+          <PillButton
+            icon="check"
+            iconSize={24}
+            label={t('photos.addCount', { count: String(chosen.length) })}
+            showLabel
+            accent
+            disabled={chosen.length === 0}
+            onPress={() => onPickMany?.(chosen)}
+            height={ADD_BUTTON.height}
           />
         </View>
       ) : null}
     </View>
   );
 }
+
+/** The button that adds the photos marked: its height and its room over the screen's foot. */
+const ADD_BUTTON = { height: 52, gap: 12 } as const;

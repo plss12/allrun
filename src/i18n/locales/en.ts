@@ -55,6 +55,8 @@ export const en = {
   },
   photos: {
     choose: 'Choose a photo',
+    chooseSeveral: 'Choose up to {{max}} photos',
+    addCount: 'Add ({{count}})',
     shelves: {
       recent: 'Recent',
       favorites: 'Favorites',
@@ -757,6 +759,7 @@ export const en = {
       camera: 'Camera',
       crop: 'Crop',
       polaroid: 'Polaroid',
+      slides: 'Slides',
     },
   },
   activityCharts: {

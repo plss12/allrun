@@ -12,7 +12,13 @@ import {
   INSTANT,
   instantBox,
   instantFrame,
-  isEmptySlot,
+  firstEmptyWindow,
+  isEmptyWindow,
+  layerPictures,
+  slidesBox,
+  windowAt,
+  withoutPicture,
+  withWindowPicture,
   isPhotoSlot,
   leavesCanvasPhoto,
   MAX_IMAGES,
@@ -97,6 +103,11 @@ describe('picture limits', () => {
     expect(canAddImage(full)).toBe(false);
   });
 
+  it('makes room for every window of a piece of several photos', () => {
+    expect(canAddImage(withPictures(MAX_IMAGES - 3), 0, 3)).toBe(true);
+    expect(canAddImage(withPictures(MAX_IMAGES - 2), 0, 3)).toBe(false);
+  });
+
   it("counts a collage's photos among them", () => {
     expect(canAddImage(story, MAX_IMAGES - 1)).toBe(true);
     expect(canAddImage(story, MAX_IMAGES)).toBe(false);
@@ -131,11 +142,14 @@ describe('the slots of a design', () => {
   });
 
   it('counts as empty with no picture chosen, or with the photo the editor no longer has', () => {
-    expect(isEmptySlot(slot('a', SAMPLE_IMAGE), true)).toBe(true);
-    expect(isEmptySlot(slot('a', 'picked-1'), false)).toBe(false);
-    expect(isEmptySlot(slot('a', EDITOR_PHOTO), true)).toBe(false);
-    expect(isEmptySlot(slot('a', EDITOR_PHOTO), false)).toBe(true);
-    expect(isEmptySlot(sticker, false)).toBe(false);
+    expect(isEmptyWindow(slot('a', SAMPLE_IMAGE), 0, true)).toBe(true);
+    expect(isEmptyWindow(slot('a', 'picked-1'), 0, false)).toBe(false);
+    expect(isEmptyWindow(slot('a', EDITOR_PHOTO), 0, true)).toBe(false);
+    expect(isEmptyWindow(slot('a', EDITOR_PHOTO), 0, false)).toBe(true);
+    expect(isEmptyWindow(sticker, 0, false)).toBe(false);
+    expect(firstEmptyWindow(slot('a', SAMPLE_IMAGE), true)).toBe(0);
+    expect(firstEmptyWindow(slot('a', 'picked-1'), true)).toBeNull();
+    expect(firstEmptyWindow(sticker, true)).toBeNull();
   });
 
   it("says when the editor's photo is in one, instead of over the canvas", () => {
@@ -144,9 +158,10 @@ describe('the slots of a design', () => {
     expect(usesEditorPhoto([{ ...sticker, image: EDITOR_PHOTO } as Layer])).toBe(false);
   });
 
-  it('are saved empty, and pictures stuck on are not saved', () => {
+  it('are saved empty, and so is a picture stuck on, as a slot to fill', () => {
     expect(withEmptySlots([slot('a', 'picked-1'), sticker, story.layers[0]])).toEqual([
       slot('a', SAMPLE_IMAGE),
+      { ...sticker, image: SAMPLE_IMAGE, slot: true },
       story.layers[0],
     ]);
   });
@@ -194,6 +209,92 @@ describe('the slots of a design', () => {
   });
 });
 
+describe('a holder with several windows', () => {
+  const viewer: Layer = {
+    id: 'slides',
+    kind: 'image',
+    image: SAMPLE_IMAGE,
+    frame: 'none',
+    mount: 'slides',
+    transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+    opacity: 1,
+  };
+  const asImage = (layer: Layer) => {
+    if (layer.kind !== 'image') {
+      throw new Error('Not a picture');
+    }
+    return layer;
+  };
+
+  it('has a picture per window, empty until chosen', () => {
+    expect(layerPictures(asImage(viewer))).toEqual([SAMPLE_IMAGE, SAMPLE_IMAGE, SAMPLE_IMAGE]);
+    const second = withWindowPicture(asImage(viewer), 1, 'picked-2');
+    expect(layerPictures(second)).toEqual([SAMPLE_IMAGE, 'picked-2', SAMPLE_IMAGE]);
+    expect(firstEmptyWindow(second, true)).toBe(0);
+    expect(isEmptyWindow(second, 1, true)).toBe(false);
+    // Each window counts towards the most a design takes.
+    expect(imageCount([viewer])).toBe(3);
+  });
+
+  it('fills its windows in order, the canvas photo first, and saves them all empty', () => {
+    const [filled] = fillSlots([viewer], [EDITOR_PHOTO, 'picked-1']);
+    expect(layerPictures(asImage(filled))).toEqual([EDITOR_PHOTO, 'picked-1', SAMPLE_IMAGE]);
+    expect(usesEditorPhoto([filled])).toBe(true);
+    expect(withEmptySlots([filled])).toEqual([viewer]);
+    expect(parseTemplate({ ...story, layers: [filled] }).layers).toEqual([filled]);
+  });
+
+  it('changes the picture of one window only', () => {
+    const template = { ...story, layers: [viewer] };
+    const changed = setLayerImage(template, 'slides', 'picked-3', 2);
+    expect(layerPictures(asImage(changed.layers[0]))).toEqual([
+      SAMPLE_IMAGE,
+      SAMPLE_IMAGE,
+      'picked-3',
+    ]);
+    expect(setLayerImage(changed, 'slides', 'picked-3', 2)).toBe(changed);
+    expect(setLayerImage(changed, 'slides', 'picked-3', 3)).toBe(changed);
+  });
+
+  it('empties the windows of a picture that could not be read, and drops it stuck on', () => {
+    const [filled] = fillSlots([viewer], ['bad', 'good', 'bad']);
+    const sticker: Layer = { ...viewer, id: 'sticker', mount: undefined, image: 'bad' };
+    const [left, ...rest] = withoutPicture([filled, sticker], 'bad');
+    expect(layerPictures(asImage(left))).toEqual([SAMPLE_IMAGE, 'good', SAMPLE_IMAGE]);
+    expect(rest).toEqual([]);
+  });
+
+  it('stacks its slides 3:2 inside it, each with its tab at the middle of its left edge', () => {
+    const box = slidesBox();
+    expect(box.windows).toHaveLength(3);
+    for (const [i, window] of box.windows.entries()) {
+      expect(window.width / window.height).toBeCloseTo(3 / 2);
+      expect(window.x).toBeGreaterThanOrEqual(-box.width / 2);
+      expect(window.x + window.width).toBeLessThanOrEqual(box.width / 2);
+      expect(window.y).toBeGreaterThanOrEqual(-box.height / 2);
+      expect(window.y + window.height).toBeLessThanOrEqual(box.height / 2);
+      const tab = box.tabs[i];
+      expect(tab.y + tab.height / 2).toBeCloseTo(window.y + window.height / 2);
+      // Its rounded end inside the slide, the rest outside it.
+      expect(tab.x).toBeLessThan(window.x);
+      expect(tab.x + tab.width).toBeGreaterThan(window.x);
+    }
+    // The middle one at the middle, and the others as far above and below it.
+    expect(box.windows[1].y + box.windows[1].height / 2).toBeCloseTo(0);
+  });
+
+  it('knows which slide a touch is on, and the nearest between two', () => {
+    const box = slidesBox();
+    const middleOf = (i: number) => box.windows[i].y + box.windows[i].height / 2;
+    const layer = asImage(viewer);
+    expect(windowAt(layer, { x: 0, y: middleOf(0) })).toBe(0);
+    expect(windowAt(layer, { x: 0, y: middleOf(2) })).toBe(2);
+    const gap = box.windows[1].y - 4;
+    expect(windowAt(layer, { x: 0, y: gap })).toBe(1);
+    expect(windowAt(asImage({ ...viewer, mount: 'filmFrame' }), { x: 0, y: middleOf(2) })).toBe(0);
+  });
+});
+
 describe('slotBox', () => {
   it('fills the place of a slot with a vertical photo of a phone', () => {
     const box = slotBox({ width: 3024, height: 4032 }, 'none');
@@ -227,6 +328,11 @@ describe('mountBox', () => {
       expect(rect.x + rect.width).toBeLessThanOrEqual(box.width / 2 + 1e-9);
       expect(rect.y + rect.height).toBeLessThanOrEqual(box.height / 2 + 1e-9);
     };
+    if (mount === 'slides') {
+      // Several windows of their own: see the tests of slidesBox.
+      expect(box).toMatchObject({ width: slidesBox().width, height: slidesBox().height });
+      return;
+    }
     if (coversCanvas(mount)) {
       // As big as the canvas, seen through it: its photo covers it.
       expect(box).toMatchObject(CANVAS_FORMATS.story);

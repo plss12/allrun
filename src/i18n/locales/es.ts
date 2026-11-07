@@ -54,6 +54,8 @@ export const es: Translations = {
   },
   photos: {
     choose: 'Elige una foto',
+    chooseSeveral: 'Elige hasta {{max}} fotos',
+    addCount: 'Añadir ({{count}})',
     shelves: {
       recent: 'Recientes',
       favorites: 'Favoritas',
@@ -721,6 +723,7 @@ export const es: Translations = {
       camera: 'Cámara',
       crop: 'Recorte',
       polaroid: 'Polaroid',
+      slides: 'Diapositivas',
     },
   },
   activityCharts: {

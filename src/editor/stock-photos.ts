@@ -105,12 +105,14 @@ export function stockImages(stock: StockPhotos): ReadonlyMap<string, LayerImage>
   );
 }
 
-const MOUNT_PHOTOS: Readonly<Record<ImageMount, StockPhoto>> = {
-  filmFrame: 'monoSprinter',
-  lightNegative: 'forestTrail',
-  filmStrip: 'trackShoes',
-  camera: 'forestBridge',
-  crop: 'trackShadow',
+/** The stock photos of each holder's tile, one per window (see `windowCount`). */
+const MOUNT_PHOTOS: Readonly<Record<ImageMount, readonly StockPhoto[]>> = {
+  filmFrame: ['monoSprinter'],
+  lightNegative: ['forestTrail'],
+  filmStrip: ['trackShoes'],
+  camera: ['forestBridge'],
+  crop: ['trackShadow'],
+  slides: ['runway', 'woodlandPath', 'concreteWall'],
 };
 const FRAME_PHOTOS: Readonly<Record<ImageFrame, StockPhoto>> = {
   none: 'mountainRunner',
@@ -118,18 +120,25 @@ const FRAME_PHOTOS: Readonly<Record<ImageFrame, StockPhoto>> = {
   dark: 'brickWall',
 };
 
-/** The stock photo of a tile of a picture: a different one each, for variety (the user's choice). */
-function tilePhoto(layer: Extract<Layer, { kind: 'image' }>): StockPhoto {
+/**
+ * The stock photos of a tile of a picture, one per window: a different one each, for variety (the
+ * user's choice).
+ */
+function tilePhotos(layer: Extract<Layer, { kind: 'image' }>): readonly StockPhoto[] {
   if (layer.mount !== undefined) {
     return MOUNT_PHOTOS[layer.mount];
   }
   if (layer.caption !== undefined) {
-    return layer.caption === 'place' ? 'forestBridge' : 'streetCrossing';
+    return [layer.caption === 'place' ? 'forestBridge' : 'streetCrossing'];
   }
-  return FRAME_PHOTOS[layer.frame];
+  return [FRAME_PHOTOS[layer.frame]];
 }
 
-/** A widget of the gallery with its stock photo, if it is a picture; any other, as it is. */
+/** A widget of the gallery with its stock photos, if it is a picture; any other, as it is. */
 export function withStockPicture(layer: Layer): Layer {
-  return layer.kind === 'image' ? { ...layer, image: tilePhoto(layer) } : layer;
+  if (layer.kind !== 'image') {
+    return layer;
+  }
+  const [image, ...extraImages] = tilePhotos(layer);
+  return { ...layer, image, ...(extraImages.length === 0 ? {} : { extraImages }) };
 }

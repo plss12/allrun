@@ -360,6 +360,7 @@ describe('gallerySections', () => {
       ['image-filmFrame', 'image-lightNegative'],
       ['image-filmStrip'],
       ['image-camera', 'image-crop'],
+      ['image-slides'],
     ]);
     // The strip, wide by nature, takes its whole row, as tall as the pictures' over it.
     const full = SCREEN - 2 * gallery.GALLERY_PADDING;

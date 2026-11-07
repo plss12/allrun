@@ -79,9 +79,20 @@ export type CatalogItem =
   | Readonly<Pick<LayerOf<'summaryBlock'>, 'kind' | 'block'>>
   | Readonly<Pick<LayerOf<'image'>, 'kind' | 'image' | 'frame' | 'caption' | 'mount'>>;
 
-/** What a new layer is made from: a catalog item, with the typed content for free text. */
+/**
+ * What a new layer is made from: a catalog item, with the typed content for free text, or a picture
+ * with its photos (one per window, see `windowCount`), or with none yet, as a slot showing the
+ * sign to fill it.
+ */
 export type NewLayer =
-  Exclude<CatalogItem, { kind: 'text' }> | { readonly kind: 'text'; readonly content: string };
+  | Exclude<CatalogItem, { kind: 'text' }>
+  | { readonly kind: 'text'; readonly content: string }
+  | Readonly<
+      Pick<
+        LayerOf<'image'>,
+        'kind' | 'image' | 'frame' | 'caption' | 'mount' | 'slot' | 'extraImages'
+      >
+    >;
 
 export type CatalogSectionId = 'data' | 'creative' | 'photos' | 'charts' | 'basic' | 'brand';
 

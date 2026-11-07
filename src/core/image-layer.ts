@@ -52,18 +52,62 @@ export function isImageLayer(layer: Layer): layer is ImageLayer {
   return layer.kind === 'image';
 }
 
-/** How many pictures `layers` show. Time O(n) for n layers. */
-export function imageCount(layers: readonly Layer[]): number {
-  return layers.filter(isImageLayer).length;
+/**
+ * How many windows, each with its picture, a picture's widget has: three in the slide viewer, one
+ * in the rest (see `IMAGE_MOUNTS`). Time and space O(1).
+ */
+export function windowCount(layer: ImageLayer): number {
+  return mountWindows(layer.mount);
+}
+
+/** How many windows a picture in `mount` has (none: a picture as it is), as `windowCount` says. */
+export function mountWindows(mount: ImageMount | undefined): number {
+  return mount === 'slides' ? SLIDES.count : 1;
 }
 
 /**
- * Whether another picture fits in the design (see `MAX_IMAGES`).
+ * The picture of each window of `layer` (see `windowCount`), in order: `image`, then
+ * `extraImages`, and `SAMPLE_IMAGE` for a window with none yet. Time and space O(w) for w windows.
+ */
+export function layerPictures(layer: ImageLayer): string[] {
+  const extra = layer.extraImages ?? [];
+  return Array.from({ length: windowCount(layer) }, (_, window) =>
+    window === 0 ? layer.image : (extra[window - 1] ?? SAMPLE_IMAGE),
+  );
+}
+
+/** `layer` with `image` in its window `window` (see `layerPictures`). Time O(w) for w windows. */
+export function withWindowPicture(layer: ImageLayer, window: number, image: string): ImageLayer {
+  if (window === 0) {
+    return { ...layer, image };
+  }
+  const pictures = layerPictures(layer);
+  pictures[window] = image;
+  return { ...layer, extraImages: pictures.slice(1) };
+}
+
+/**
+ * `layer` with no picture in any window, as a slot (a picture as it is, or an instant photo, becomes
+ * one; one in a holder always is): as a design keeps it.
+ */
+function emptied(layer: ImageLayer): ImageLayer {
+  const { extraImages: _extra, ...rest } = layer;
+  return { ...rest, image: SAMPLE_IMAGE, ...(layer.mount === undefined ? { slot: true } : {}) };
+}
+
+/** How many pictures `layers` show, a window each. Time O(n) for n layers. */
+export function imageCount(layers: readonly Layer[]): number {
+  return layers.filter(isImageLayer).reduce((sum, layer) => sum + windowCount(layer), 0);
+}
+
+/**
+ * Whether another picture fits in the design (see `MAX_IMAGES`), or `count` of them (a piece with
+ * as many windows).
  *
  * @param cellPhotos - How many photos its collage shows: they are pictures of the design too.
  */
-export function canAddImage(template: Template, cellPhotos = 0): boolean {
-  return imageCount(template.layers) + cellPhotos < MAX_IMAGES;
+export function canAddImage(template: Template, cellPhotos = 0, count = 1): boolean {
+  return imageCount(template.layers) + cellPhotos + count <= MAX_IMAGES;
 }
 
 /** Whether a layer is a slot of a design: a picture marked as one, or in a holder (`IMAGE_MOUNTS`). */
@@ -71,53 +115,96 @@ export function isPhotoSlot(layer: Layer): layer is ImageLayer {
   return isImageLayer(layer) && (layer.slot === true || layer.mount !== undefined);
 }
 
+/** The pictures in the windows of the slots of `layers`, in order. Time O(n) for n layers. */
+export function slotPictures(layers: readonly Layer[]): string[] {
+  return layers.filter(isPhotoSlot).flatMap(layerPictures);
+}
+
 /** Whether the editor's photo is in a slot, instead of over the canvas. Time O(n) for n layers. */
 export function usesEditorPhoto(layers: readonly Layer[]): boolean {
-  return layers.some((layer) => isPhotoSlot(layer) && layer.image === EDITOR_PHOTO);
+  return slotPictures(layers).includes(EDITOR_PHOTO);
 }
 
 /**
- * Whether a slot has no picture: none chosen, or the editor's photo while there is none.
+ * Whether the window `window` of a slot has no picture: none chosen, or the editor's photo while
+ * there is none. Time O(w) for w windows.
  *
  * @param hasPhoto - Whether the editor has a photo.
  */
-export function isEmptySlot(layer: Layer, hasPhoto: boolean): layer is ImageLayer {
-  return (
-    isPhotoSlot(layer) &&
-    (layer.image === SAMPLE_IMAGE || (layer.image === EDITOR_PHOTO && !hasPhoto))
-  );
+export function isEmptyWindow(layer: Layer, window: number, hasPhoto: boolean): boolean {
+  if (!isPhotoSlot(layer)) {
+    return false;
+  }
+  const picture = layerPictures(layer)[window];
+  return picture === SAMPLE_IMAGE || (picture === EDITOR_PHOTO && !hasPhoto);
 }
 
 /**
- * `layers` as a saved design keeps them: its slots empty, and without the other pictures, which
- * belong to the image being made, not to the design. Time O(n) for n layers.
+ * The first window of a slot with no picture (see `isEmptyWindow`), or `null`: none, or not a slot.
+ * Time O(w) for w windows.
+ */
+export function firstEmptyWindow(layer: Layer, hasPhoto: boolean): number | null {
+  if (!isPhotoSlot(layer)) {
+    return null;
+  }
+  const at = layerPictures(layer).findIndex((_, window) => isEmptyWindow(layer, window, hasPhoto));
+  return at === -1 ? null : at;
+}
+
+/**
+ * `layers` as a saved design keeps them: every picture an empty slot, so that whoever uses the
+ * design puts their own photos in it (the user's choice); the photos belong to the image being
+ * made, not to the design. Time O(n) for n layers.
  */
 export function withEmptySlots(layers: readonly Layer[]): Layer[] {
-  return layers.flatMap((layer): Layer[] => {
-    if (isPhotoSlot(layer)) {
-      return [{ ...layer, image: SAMPLE_IMAGE }];
-    }
-    return isImageLayer(layer) ? [] : [layer];
-  });
+  return layers.map((layer) => (isImageLayer(layer) ? emptied(layer) : layer));
 }
 
 /**
- * `layers` with their empty slots filled in order with `pictures`; those left over stay out. A slot
- * that keeps the canvas's photo (see `keepsCanvasPhoto`) takes the first other one, and the canvas's
- * goes on to the next slot that takes it, if any. Time O(n·p) for n layers and p pictures.
+ * `layers` with the empty windows of their slots filled in order with `pictures`; those left over
+ * stay out. A slot that keeps the canvas's photo (see `keepsCanvasPhoto`) takes the first other
+ * one, and the canvas's goes on to the next window that takes it, if any. Time O(n·w·p) for n
+ * layers of w windows and p pictures.
  */
 export function fillSlots(layers: readonly Layer[], pictures: readonly string[]): Layer[] {
   const left = [...pictures];
   return layers.map((layer) => {
-    if (!isPhotoSlot(layer) || layer.image !== SAMPLE_IMAGE) {
+    if (!isPhotoSlot(layer)) {
       return layer;
     }
-    const at = left.findIndex((key) => layer.keepsCanvasPhoto !== true || key !== EDITOR_PHOTO);
-    if (at === -1) {
-      return layer;
+    return layerPictures(layer).reduce((filled, picture, window) => {
+      if (picture !== SAMPLE_IMAGE) {
+        return filled;
+      }
+      const at = left.findIndex((key) => layer.keepsCanvasPhoto !== true || key !== EDITOR_PHOTO);
+      if (at === -1) {
+        return filled;
+      }
+      const [image] = left.splice(at, 1);
+      return withWindowPicture(filled, window, image);
+    }, layer);
+  });
+}
+
+/**
+ * `layers` with `key` out of every window: those of slots go back to empty, and a picture stuck on
+ * with it leaves (a picture that couldn't be read). Time O(n·w) for n layers of w windows.
+ */
+export function withoutPicture(layers: readonly Layer[], key: string): Layer[] {
+  return layers.flatMap((layer): Layer[] => {
+    if (!isImageLayer(layer) || !layerPictures(layer).includes(key)) {
+      return [layer];
     }
-    const [image] = left.splice(at, 1);
-    return { ...layer, image };
+    if (!isPhotoSlot(layer)) {
+      return [];
+    }
+    return [
+      layerPictures(layer).reduce(
+        (cleared, picture, window) =>
+          picture === key ? withWindowPicture(cleared, window, SAMPLE_IMAGE) : cleared,
+        layer,
+      ),
+    ];
   });
 }
 
@@ -315,8 +402,86 @@ export function cropFrame(canvas: Size): CropFrame {
 }
 
 /**
+ * An old slide viewer (`slides`), in canvas pixels of 1080: how many slides, each one's width and
+ * proportions (3:2, as a camera's), the room between them and around them, its corners', and the
+ * viewer's tab cutting into each slide's left edge at its middle: how far in, how tall (a share of
+ * the slide's height) and its corners'.
+ */
+const SLIDES = {
+  count: 3,
+  width: 760,
+  ratio: 2 / 3,
+  gap: 44,
+  margin: 40,
+  radius: 30,
+  tab: { depth: 46, height: 0.3, radius: 26 },
+} as const;
+
+/** A slide viewer laid out (see `slidesBox`): the whole piece, its slides and their tabs. */
+export interface SlidesBox extends Size {
+  readonly windows: readonly BoxRect[];
+  readonly tabs: readonly BoxHole[];
+  readonly radius: number;
+}
+
+/**
+ * Where a slide viewer puts its slides, one under another around its middle, each with the tab
+ * cutting into its left edge, always at its middle (the user's choice). Time and space O(1).
+ */
+export function slidesBox(): SlidesBox {
+  const { count, width, ratio, gap, margin, radius, tab } = SLIDES;
+  const height = width * ratio;
+  const whole = {
+    width: width + 2 * margin,
+    height: count * height + (count - 1) * gap + 2 * margin,
+  };
+  const windows = Array.from({ length: count }, (_, i) => ({
+    x: -width / 2,
+    y: -whole.height / 2 + margin + i * (height + gap),
+    width,
+    height,
+  }));
+  return {
+    ...whole,
+    windows,
+    radius,
+    tabs: windows.map((window) => ({
+      // From outside the slide, so only its rounded end shows inside it.
+      x: window.x - tab.radius,
+      y: window.y + (window.height * (1 - tab.height)) / 2,
+      width: tab.depth + tab.radius,
+      height: window.height * tab.height,
+      radius: tab.radius,
+    })),
+  };
+}
+
+/**
+ * The window of `layer` under `point`, from its middle and before its scale (see `layerPoint`):
+ * the slide touched in a slide viewer, else its only window (0), also off them. Time O(w) for w
+ * windows.
+ */
+export function windowAt(
+  layer: ImageLayer,
+  point: { readonly x: number; readonly y: number },
+): number {
+  if (layer.mount !== 'slides') {
+    return 0;
+  }
+  const { windows } = slidesBox();
+  const at = windows.findIndex(({ y, height }) => point.y >= y && point.y <= y + height);
+  if (at !== -1) {
+    return at;
+  }
+  // Between two slides, the nearest.
+  const distances = windows.map(({ y, height }) => Math.abs(point.y - (y + height / 2)));
+  return distances.indexOf(Math.min(...distances));
+}
+
+/**
  * The widget of a picture in its holder (see `IMAGE_MOUNTS`), as tall as `IMAGE_SIDE`, but the
- * camera and the crop screen, as big as the `canvas`. Time and space O(1).
+ * camera and the crop screen, as big as the `canvas`, and the slide viewer, as `slidesBox` makes
+ * it. Time and space O(1).
  */
 export function mountBox(mount: ImageMount, canvas: Size): MountBox {
   const height = IMAGE_SIDE;
@@ -331,6 +496,20 @@ export function mountBox(mount: ImageMount, canvas: Size): MountBox {
       };
       const none = { ...picture, width: 0 };
       return { ...canvas, picture, radius: 0, holes: [], sides: [none, none], frames: [] };
+    }
+    case 'slides': {
+      const slides = slidesBox();
+      const [picture] = slides.windows;
+      const none = { ...picture, width: 0 };
+      return {
+        width: slides.width,
+        height: slides.height,
+        picture,
+        radius: slides.radius,
+        holes: [],
+        sides: [none, none],
+        frames: [],
+      };
     }
     case 'filmFrame': {
       const { band, side } = FILM_FRAME;
@@ -444,16 +623,27 @@ function framedBox(width: number, height: number, frame: ImageFrame): ImageBox {
 }
 
 /**
- * Shows another picture in the image layer `id` (its frame, place and size stay). Returns
- * `template` itself when the layer is missing or already shows it.
+ * Shows another picture in the window `window` of the image layer `id` (its frame, place and size
+ * stay, and its other windows). Returns `template` itself when the layer or window is missing or
+ * already shows it.
  */
-export function setLayerImage(template: Template, id: string, image: string): Template {
+export function setLayerImage(
+  template: Template,
+  id: string,
+  image: string,
+  window: number = 0,
+): Template {
   const index = template.layers.findIndex((layer) => layer.id === id);
   const layer = template.layers[index];
-  if (layer === undefined || !isImageLayer(layer) || layer.image === image) {
+  if (
+    layer === undefined ||
+    !isImageLayer(layer) ||
+    window >= windowCount(layer) ||
+    layerPictures(layer)[window] === image
+  ) {
     return template;
   }
   const layers = [...template.layers];
-  layers[index] = { ...layer, image };
+  layers[index] = withWindowPicture(layer, window, image);
   return { ...template, layers };
 }

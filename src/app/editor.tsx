@@ -52,6 +52,7 @@ import { backgroundColor } from '@/core/design-background';
 import {
   LAYER_MARGIN,
   layerCoversCanvas,
+  layerPoint,
   layerVerticalReach,
   liftToClear,
 } from '@/core/layer-transform';
@@ -72,9 +73,14 @@ import {
   canAddImage,
   coversCanvas,
   EDITOR_PHOTO,
-  isEmptySlot,
+  firstEmptyWindow,
+  isEmptyWindow,
+  layerPictures,
+  mountWindows,
+  slotPictures,
+  windowAt,
+  withoutPicture,
   isImageLayer,
-  isPhotoSlot,
   MAX_IMAGES,
   SAMPLE_IMAGE,
   SAMPLE_PICTURE,
@@ -154,7 +160,7 @@ import { useStockPhotos } from '@/editor/stock-photos';
 import { TemplateSheet } from '@/editor/template-sheet';
 import { produceImage, useExport } from '@/editor/use-export';
 import { type ColumnTool, WidgetColumn } from '@/editor/widget-column';
-import { usePhotoPicker } from '@/photos/use-photo-picker';
+import { type PhotoRequest, usePhotoPicker } from '@/photos/use-photo-picker';
 import { logError } from '@/ui/log';
 import { useDisplaySettings } from '@/ui/settings';
 import { SheetHost } from '@/ui/sheet';
@@ -457,7 +463,7 @@ function EditorWorkspace({
   }
   const pictures = usePictures(
     [
-      ...template.layers.filter(isImageLayer).map((layer) => layer.image),
+      ...template.layers.filter(isImageLayer).flatMap(layerPictures),
       ...shownCellPictures.filter((key) => key !== null),
     ],
     (key) => {
@@ -469,16 +475,7 @@ function EditorWorkspace({
         })),
       );
       // A slot of the design goes back to empty; a picture stuck on leaves it.
-      edit((current) => ({
-        ...current,
-        layers: current.layers.flatMap((layer) =>
-          !isImageLayer(layer) || layer.image !== key
-            ? [layer]
-            : isPhotoSlot(layer)
-              ? [{ ...layer, image: SAMPLE_IMAGE }]
-              : [],
-        ),
-      }));
+      edit((current) => ({ ...current, layers: withoutPicture(current.layers, key) }));
     },
     photoPicker.pick,
   );
@@ -819,6 +816,26 @@ function EditorWorkspace({
   /**
    * Picks a photo from the library and passes its key to `onPicked` (nothing if the user cancels).
    */
+  /**
+   * Asks for photos as `request` says (see `PhotoRequest`) and hands their library ids to
+   * `onChosen`, none for "No photo"; nothing if the user closes the grid. A failure is logged and
+   * noticed.
+   */
+  const choosePhotos = async (
+    request: PhotoRequest,
+    onChosen: (ids: readonly string[]) => void | Promise<void>,
+  ) => {
+    try {
+      const ids = await photoPicker.choose(request);
+      if (ids !== null) {
+        await onChosen(ids);
+      }
+    } catch (error) {
+      logError('Could not open the photo library', error);
+      notice.show(t('editor.photoError'));
+    }
+  };
+
   const pickPicture = (onPicked: (key: string) => void) => {
     void (async () => {
       try {
@@ -835,43 +852,60 @@ function EditorWorkspace({
 
   /**
    * Adds a picture of the user's in its frame (an instant photo with its caption), picked from
-   * the library, on top of the others and selected; a design takes up to `MAX_IMAGES`. An instant
+   * the library, on top of the others and selected; a design takes up to `MAX_IMAGES`. A piece of
+   * several photos (the slide viewer) asks for them all at once, in order. "No photo" adds it as a
+   * slot showing the sign to fill it, which a saved design keeps (the user's choice). An instant
    * photo of where it was asks first to name the place (Android), and writes the date without it.
    * A holder as big as the canvas (the camera, the crop screen) holds the canvas's own photo (see
    * `coversCanvas`): with none, the one picked becomes it, in the same undo step.
    */
   const addPicture = ({ frame, caption, mount }: PictureLook) => {
     setSheetOpen(false);
-    if (!canAddImage(template, cellPhotos)) {
+    const count = mountWindows(mount);
+    if (!canAddImage(template, cellPhotos, count)) {
       notice.show(t('editor.maxImages', { max: String(MAX_IMAGES) }));
       return;
     }
+    const look = {
+      kind: 'image',
+      frame,
+      ...(caption === undefined ? {} : { caption }),
+      ...(mount === undefined ? {} : { mount }),
+    } as const;
     if (coversCanvas(mount)) {
-      const item = { kind: 'image', image: EDITOR_PHOTO, frame, mount } as const;
+      const item = { ...look, image: EDITOR_PHOTO };
       if (photo !== null) {
         addLayerNow(item);
         return;
       }
-      const id = uniqueLayerId(template, catalogItemKey(item));
-      void pickPhoto((current) =>
-        editLayers(current, defaultTemplate, (layers) => placeLayer(layers, item, id)),
-      ).then((picked) => {
-        if (picked) {
-          selectLayer(id);
+      void choosePhotos({ max: 1, allowNone: true }, (ids) => {
+        const [libraryId] = ids;
+        if (libraryId === undefined) {
+          // With no photo yet, it shows the sign to choose the canvas's.
+          addLayerNow(item);
+          return;
         }
+        const id = uniqueLayerId(template, catalogItemKey(item));
+        setCanvasPhoto(libraryId, (current) =>
+          editLayers(current, defaultTemplate, (layers) => placeLayer(layers, item, id)),
+        );
+        selectLayer(id);
       });
       return;
     }
     const pick = () =>
-      pickPicture((image) =>
-        addLayerNow({
-          kind: 'image',
-          image,
-          frame,
-          ...(caption === undefined ? {} : { caption }),
-          ...(mount === undefined ? {} : { mount }),
-        }),
-      );
+      void choosePhotos({ max: count, allowNone: true }, async (ids) => {
+        if (ids.length === 0) {
+          addLayerNow({
+            ...look,
+            image: SAMPLE_IMAGE,
+            ...(mount === undefined ? { slot: true } : {}),
+          });
+          return;
+        }
+        const [image, ...extraImages] = await Promise.all(ids.map((id) => pictures.add(id)));
+        addLayerNow({ ...look, image, ...(extraImages.length === 0 ? {} : { extraImages }) });
+      });
     if (
       caption === 'place' &&
       placeLookup.status === 'needsPermission' &&
@@ -884,15 +918,19 @@ function EditorWorkspace({
   };
 
   /**
-   * Shows another picture in the image layer `id`, as one undo step. In a slot with the editor's
+   * Shows another picture in the window `window` of the image layer `id`, as one undo step. In a slot with the editor's
    * photo, it replaces that photo: the slot would give the canvas back the one it took. In a slot
    * that keeps the canvas's photo (the Polaroid's) over a canvas with none, the photo goes behind it
    * too, so the design shows whole with one photo (the user's choice); another background is then
    * chosen as always.
    */
-  const changePicture = (id: string) => {
+  const changePicture = (id: string, window: number = 0) => {
     const layer = template.layers.find((candidate) => candidate.id === id);
-    if (layer !== undefined && isImageLayer(layer) && layer.image === EDITOR_PHOTO) {
+    if (
+      layer !== undefined &&
+      isImageLayer(layer) &&
+      layerPictures(layer)[window] === EDITOR_PHOTO
+    ) {
       void pickPhoto();
       return;
     }
@@ -912,7 +950,9 @@ function EditorWorkspace({
           }
           const image = await pictures.add(libraryId);
           setCanvasPhoto(libraryId, (current) =>
-            editLayers(current, defaultTemplate, (layers) => setLayerImage(layers, id, image)),
+            editLayers(current, defaultTemplate, (layers) =>
+              setLayerImage(layers, id, image, window),
+            ),
           );
         } catch (error) {
           logError('Could not open the photo library', error);
@@ -921,7 +961,26 @@ function EditorWorkspace({
       })();
       return;
     }
-    pickPicture((image) => edit((current) => setLayerImage(current, id, image)));
+    if (
+      layer !== undefined &&
+      isImageLayer(layer) &&
+      isEmptyWindow(layer, window, photo !== null)
+    ) {
+      // The empty windows from the one touched on, then those before it: all at once, in order.
+      const inWindows = layerPictures(layer);
+      const order = [...inWindows.keys()].map((i) => (window + i) % inWindows.length);
+      const targets = order.filter((i) => inWindows[i] === SAMPLE_IMAGE);
+      if (targets.length > 1) {
+        void choosePhotos({ max: targets.length, allowNone: false }, async (ids) => {
+          const keys = await Promise.all(ids.map((one) => pictures.add(one)));
+          edit((current) =>
+            keys.reduce((next, key, i) => setLayerImage(next, id, key, targets[i]), current),
+          );
+        });
+        return;
+      }
+    }
+    pickPicture((image) => edit((current) => setLayerImage(current, id, image, window)));
   };
 
   /** Adds a widget on top of the others and selects it, ready to be dragged into place. */
@@ -967,10 +1026,9 @@ function EditorWorkspace({
    * for a collage to show them; those of the cells stay where they were.
    */
   const startAgain = (next: (pictures: readonly string[]) => EditorDesign): EditorDesign => {
-    const inSlots = template.layers
-      .filter(isPhotoSlot)
-      .map((layer) => layer.image)
-      .filter((key) => key !== SAMPLE_IMAGE && key !== EDITOR_PHOTO);
+    const inSlots = slotPictures(template.layers).filter(
+      (key) => key !== SAMPLE_IMAGE && key !== EDITOR_PHOTO,
+    );
     const newcomers = inSlots.filter((key) => !cellPictures.includes(key));
     const others = [...inSlots, ...cellPictures.filter((key) => key !== null)].filter(
       (key, i, all) => all.indexOf(key) === i,
@@ -1033,15 +1091,16 @@ function EditorWorkspace({
   };
 
   /**
-   * Rewrites a free text, changes a picture, or opens the list of a verse, a quote or a chat
+   * Rewrites a free text, changes a picture (that of `window`, if it has several), or opens the list of a verse, a quote or a chat
    * message's phrase to choose other words; the other widgets have nothing to edit (see
    * `canEditLayer`).
    */
-  const editLayer = (layer: Layer) => {
+  const editLayer = (layer: Layer, window?: number) => {
     if (layer.kind === 'text') {
       startTyping(editTextDraft(layer));
     } else if (layer.kind === 'image') {
-      changePicture(layer.id);
+      // Its button knows no window: the first with no picture, else the first.
+      changePicture(layer.id, window ?? firstEmptyWindow(layer, photo !== null) ?? 0);
     } else if (chosenWordsOf(layer) !== null) {
       setChoosingId(layer.id);
     }
@@ -1054,20 +1113,27 @@ function EditorWorkspace({
    * leaves no canvas to tap on, whichever it is and however it got there, it lets go instead, or it
    * could never be let go of: its action stays on its button (the user's choice).
    */
-  const tapSelected = (id: string) => {
+  const tapSelected = (id: string, at: { readonly x: number; readonly y: number }) => {
     const layer = template.layers.find((candidate) => candidate.id === id);
     if (layer === undefined) {
       return;
     }
+    const window = tappedWindow(layer, at);
     const covers =
       selectedSize !== null &&
       layerCoversCanvas(layer.transform, selectedSize, CANVAS_FORMATS[template.format]);
-    if (covers && !isEmptySlot(layer, photo !== null)) {
+    if (covers && !isEmptyWindow(layer, window, photo !== null)) {
       setSelectedId(null);
     } else {
-      editLayer(layer);
+      editLayer(layer, window);
     }
   };
+
+  /** The window of `layer` at `at` (canvas pixels): the slide touched, in a slide viewer. */
+  const tappedWindow = (layer: Layer, at: { readonly x: number; readonly y: number }) =>
+    isImageLayer(layer)
+      ? windowAt(layer, layerPoint(layer.transform, at, CANVAS_FORMATS[template.format]))
+      : 0;
 
   const duplicateSelected = (id: string) => {
     const copyId = uniqueLayerId(template, id);
@@ -1089,9 +1155,12 @@ function EditorWorkspace({
    * that keeps the canvas's photo (the Polaroid's), which its own sign fills: the button chooses
    * the background then.
    */
-  const firstEmptySlot = template.layers.find(
-    (layer) => isEmptySlot(layer, photo !== null) && layer.keepsCanvasPhoto !== true,
-  );
+  const firstEmptySlot = template.layers.flatMap((layer) => {
+    const window = firstEmptyWindow(layer, photo !== null);
+    return window === null || !isImageLayer(layer) || layer.keepsCanvasPhoto === true
+      ? []
+      : [{ id: layer.id, window }];
+  })[0];
 
   /** Opens the photo's tools and the background (the bottom row's photo button). */
   const openPhotoTools = () => {
@@ -1116,7 +1185,7 @@ function EditorWorkspace({
         setPhotoTools(false);
       } else if (firstEmptySlot !== undefined) {
         setPhotoTools(false);
-        changePicture(firstEmptySlot.id);
+        changePicture(firstEmptySlot.id, firstEmptySlot.window);
       } else {
         void pickPhoto();
       }
@@ -1157,25 +1226,18 @@ function EditorWorkspace({
     rotation: layer.transform.rotation,
   });
 
-  /**
-   * Picks the canvas's photo from the grid, as one undo step with `alongWith` (a widget that comes
-   * with it). Resolves whether one was picked.
-   */
-  const pickPhoto = async (
-    alongWith: (design: EditorDesign) => EditorDesign = (design) => design,
-  ): Promise<boolean> => {
+  /** Picks the canvas's photo from the grid, as one undo step. */
+  const pickPhoto = async () => {
     setPhotoTools(false);
     const libraryId = await photoPicker.pick();
-    if (libraryId === null) {
-      return false;
+    if (libraryId !== null) {
+      setCanvasPhoto(libraryId, (design) => design);
     }
-    setCanvasPhoto(libraryId, alongWith);
-    return true;
   };
 
   /**
    * Makes the photo `libraryId` of the library, already chosen, the canvas's, as one undo step with
-   * `alongWith` (see `pickPhoto`).
+   * `alongWith` (a widget that comes with it).
    */
   const setCanvasPhoto = (libraryId: string, alongWith: (design: EditorDesign) => EditorDesign) => {
     const id = nextPhotoId;
@@ -1430,10 +1492,11 @@ function EditorWorkspace({
               adjustedOpacity={liveOpacity}
               onSelect={selectLayer}
               onTapSelected={tapSelected}
-              onTapLayer={(id) => {
+              onTapLayer={(id, at) => {
                 const layer = template.layers.find((candidate) => candidate.id === id);
-                if (layer !== undefined && isEmptySlot(layer, photo !== null)) {
-                  changePicture(id);
+                const window = layer === undefined ? 0 : tappedWindow(layer, at);
+                if (layer !== undefined && isEmptyWindow(layer, window, photo !== null)) {
+                  changePicture(id, window);
                 }
               }}
               onSelectedSizeChange={setSelectedSize}
@@ -1609,7 +1672,7 @@ function EditorWorkspace({
               )}
               onPress={
                 firstEmptySlot !== undefined
-                  ? () => changePicture(firstEmptySlot.id)
+                  ? () => changePicture(firstEmptySlot.id, firstEmptySlot.window)
                   : photo === null && design.collage === null
                     ? () => void pickPhoto()
                     : openPhotoTools
