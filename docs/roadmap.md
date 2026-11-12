@@ -35,8 +35,8 @@ How Strava is connected and cached: ADR 020.
 
 - Done (2026-11-13): connecting Strava, its refresh token kept by the server; the activities read from Strava with a cache on the phone; streams, splits, laps and heart rate zones on demand; tested with the owner's real activities on both phones, which brought out the overlaid routes of a period done in several places (now grouped by place). Also the app's language in the profile.
 - Done: a real walk's raw JSON (recorded with the Strava app on the phone) has no steps, nor does the API reference mention them anywhere: no steps (the owner's decision: Strava's data only).
-- The map behind routes (ADR 009): Mapbox or MapTiler, with the key behind Supabase. Check cost, and the attribution their licences require, also on exported images.
-- Place names from the map provider, by country: in Spain the province, not the region ("Andújar, Jaén"); elsewhere the region (the province field is the county in the US). Today `place-lookup.ts` keeps only the region.
+- The map under routes (ADR 021, accepted): OpenFreeMap's vector tiles drawn with Skia, muted, no labels, the credit only in the profile. In order: tile math and style in `src/core/` with tests; tiles fetched and cached on the phone (`@mapbox/vector-tile`, `pbf`); the home's activity cards (measured on the M32: scroll at 20 ms or less); "Credits and licences" in the profile; then a "with map" variant of the route with a big datum in the editor.
+- Done: place names by province in Spain ("Andújar, Jaén"; a capital names its community, "Jaén, Andalucía"), the same on both phones, from the phone's geocoder and a table of the provinces; every permission asked for as the app opens.
 - Request Strava's API review once it works with the owner's account (10 athletes until then). Creating the API app needs a paid Strava subscription, which the owner accepts.
 
 ## 6. Milestone 5: native
