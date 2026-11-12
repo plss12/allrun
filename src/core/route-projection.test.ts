@@ -1,4 +1,10 @@
-import { largestFit, projectRoutes, routeSpan } from './route-projection';
+import {
+  groupByPlace,
+  largestFit,
+  projectRoutes,
+  routeSpan,
+  SAME_PLACE_GAP,
+} from './route-projection';
 
 describe('projectRoutes', () => {
   it('fits a route into the box, centered, with north up', () => {
@@ -44,28 +50,80 @@ describe('projectRoutes', () => {
     expect(width / height).toBeCloseTo(1, 1);
   });
 
-  it('shares one projection across routes', () => {
+  it('shares one projection across routes of the same place', () => {
+    // Two 2 km routes half a kilometer apart, in the same city: they keep where they are.
     const [west, east] = projectRoutes(
       [
         [
           [0, 0],
-          [0, 1],
+          [0, 0.02],
         ],
         [
-          [0, 2],
-          [0, 3],
+          [0, 0.025],
+          [0, 0.045],
         ],
       ],
-      300,
-      300,
+      450,
+      450,
     );
-    expect(west[1].x).toBeCloseTo(100);
-    expect(east[0].x).toBeCloseTo(200);
+    expect(west[1].x).toBeCloseTo(200);
+    expect(east[0].x).toBeCloseTo(250);
+  });
+
+  it('draws routes of different places one over another, centered, at one scale', () => {
+    // A loop at home (Seville) and a longer one on a trip (Rome): each centered in the box.
+    const seville = [
+      [37.38, -5.99],
+      [37.39, -5.98],
+    ] as const;
+    const rome = [
+      [41.89, 12.48],
+      [41.91, 12.5],
+    ] as const;
+    const [here, there] = projectRoutes([seville, rome], 200, 200);
+    const middle = (route: readonly { x: number; y: number }[]) => ({
+      x: (Math.min(...route.map((p) => p.x)) + Math.max(...route.map((p) => p.x))) / 2,
+      y: (Math.min(...route.map((p) => p.y)) + Math.max(...route.map((p) => p.y))) / 2,
+    });
+    expect(middle(here).x).toBeCloseTo(100);
+    expect(middle(here).y).toBeCloseTo(100);
+    expect(middle(there).x).toBeCloseTo(100);
+    expect(middle(there).y).toBeCloseTo(100);
+    // Rome's, twice as tall, fills the box; Seville's comes out at the same scale, half as tall.
+    expect(there[0].y - there[1].y).toBeCloseTo(200);
+    expect(here[0].y - here[1].y).toBeCloseTo(100);
   });
 
   it('centers single points and keeps empty routes empty', () => {
     expect(projectRoutes([[[40, -3]]], 200, 100)).toEqual([[{ x: 100, y: 50 }]]);
     expect(projectRoutes([[], []], 100, 100)).toEqual([[], []]);
+  });
+});
+
+describe('groupByPlace', () => {
+  /** A route along the equator from `fromKm` to `toKm` east (a degree is 111.19 km there). */
+  const along = (fromKm: number, toKm: number): [number, number][] => [
+    [0, fromKm / 111.19],
+    [0, toKm / 111.19],
+  ];
+
+  it('keeps together routes that touch or nearly, and those they link in a chain', () => {
+    // 0 and 1 overlap; 1 and 3 are 2 km apart, less than half of 3's 5 km; 4 is a town away.
+    expect(groupByPlace([along(0, 5), along(4, 8), [], along(10, 15), along(30, 34)])).toEqual([
+      [0, 1, 3],
+      [4],
+    ]);
+  });
+
+  it('separates nearby towns whose gap is wider than half the larger route', () => {
+    // Two 5 km loops 20 km apart: drawn where they are, each would be a dot.
+    expect(groupByPlace([along(0, 5), along(25, 30)])).toEqual([[0], [1]]);
+    expect(groupByPlace([along(0, 10), along(10 + 10 * SAME_PLACE_GAP, 12)])).toEqual([[0, 1]]);
+  });
+
+  it('keeps one route as one place, and single points apart', () => {
+    expect(groupByPlace([along(0, 5)])).toEqual([[0]]);
+    expect(groupByPlace([[[0, 0]], [[0, 0.01]]])).toEqual([[0], [1]]);
   });
 });
 

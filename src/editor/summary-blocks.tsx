@@ -152,6 +152,9 @@ const SIZES = {
   periodOverlay: {
     value: 110,
     data: 36,
+    /** The period's name over the main total, as the period's data names it. */
+    title: 0.34,
+    titleGap: 0.14,
     minWidth: 5,
     height: 0.85,
     gap: 0.3,
@@ -443,8 +446,9 @@ export function prepareSummaryBlock(
       case 'periodRoutes': {
         if (block.layout === 'overlay') {
           // All the period's routes overlaid, as an activity's route over its big datum (or its
-          // main sport's icon, without any): over its main total, and the other two small under
-          // it, spread to its width.
+          // main sport's icon, without any): over the period's name and its main total, and the
+          // other two small under it, spread to its width. The name tells it from an activity's
+          // route (the owner's choice), centered over the total.
           const sizes = SIZES.periodOverlay;
           const totals = periodTotals(data.summary).map((metric) =>
             summaryTotalText(
@@ -476,12 +480,17 @@ export function prepareSummaryBlock(
                   0,
                   'start',
                 );
+          const named = column(
+            [line(title, sizes.value * sizes.title, sizes.value * sizes.titleGap), stack],
+            0,
+            'center',
+          );
           const width = Math.max(main.width, sizes.value * sizes.minWidth);
           // Without any route (a month of gym sessions), its main sport's icon in their place.
           const art =
             routesBox(data.summary.routes, width, width * sizes.height, sizes.stroke) ??
             iconBox(mainFamily(data.activities), sizes.value * sizes.icon);
-          return column([art, stack], sizes.value * sizes.gap, 'center');
+          return column([art, named], sizes.value * sizes.gap, 'center');
         }
         // Each activity as the activities' route with a big datum, small: its route (its sport's
         // icon without one) over its main datum, its other two small under it; in a grid, by date.
