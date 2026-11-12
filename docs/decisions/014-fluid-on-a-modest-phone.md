@@ -227,14 +227,18 @@ the gallery (no change).
 Still over the targets, with what each costs:
 
 - **Scrolling the galleries**: 32-38 ms a frame in "+", 20-28 in Designs and 19-34 in Stickers
-  (the home screen, 19). The render thread spends about 10 ms of its CPU issuing each frame and the
-  GPU about 11, for the hundreds of views a gallery keeps mounted (`removeClippedSubviews` off, so
-  that its canvases don't vanish on scrolling back); the tiles aren't drawn again. Hiding what is
-  under the sheet saved 5 ms. A gallery that keeps fewer views mounted, without losing its canvases,
-  is a task of its own.
-- **The first Designs after launching the app**: one frame of 1.1-1.3 s (500-690 ms later in a
-  session): the first draw of its thumbnails and their photos (see decoding photos natively,
-  below).
+  (the home screen, 19). Not the tiles: with every tile only its card and canvas, and then with no
+  canvas at all, "+" still scrolled at 34-36 ms. Sampled with simpleperf, the main thread spreads it
+  over the scroll view itself (21 %), mounting the list's next rows while it moves (16 %),
+  Reanimated handling each scroll event (13 %) and recording the frame (22 %); what is under the
+  sheet adds about 5 ms. A task of its own: a list that mounts less while it scrolls, without
+  losing its canvases.
+- **The first Designs of a session, once the stock photos are decoded**: one frame of about 1.1 s
+  (530 ms just after launching, when they aren't yet and the thumbnails show grey). Not shaders:
+  sampled with simpleperf, it is putting the photos on the GPU (16 %), waiting for the GPU while it
+  makes their mipmaps and draws them (32 %), and making each thumbnail's surface. Uploading them
+  ahead of time was tried in the second round and left out for its memory; decoding photos
+  natively, straight into the GPU (below, roadmap step 6), is the fix.
 - **Choosing a design**: one or two frames of 120-200 ms, the main thread drawing the new design's
   pieces for the first time.
 
