@@ -379,11 +379,21 @@ function SheetCard({ visible, onClose, onBack, keepMounted = false, children }: 
     return null;
   }
   return (
-    // Never flattened, whatever it lets through (see `SheetHost`).
+    // Never flattened, whatever it lets through (see `SheetHost`). Kept mounted and closed, it is
+    // also transparent: out of sight already, Android still went through its hundreds of views on
+    // every frame of the screen under it, and moving a widget went from 9 to 22 ms a frame on a
+    // modest phone; a transparent view it skips, and its canvases keep their surfaces.
     <View
       collapsable={false}
       pointerEvents={visible ? 'box-none' : 'none'}
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: visible || moving ? 1 : 0,
+      }}
     >
       <Animated.View
         style={{

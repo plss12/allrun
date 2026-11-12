@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Template } from '@/core/template';
@@ -13,8 +14,13 @@ import type { LayerContext } from './template-scene';
 /**
  * The editor's Designs button: the same gallery as the selection screen's tab, with a tile to save
  * the design on the canvas among the user's, whose own show those of its format.
+ *
+ * It stays mounted once opened, as the widget gallery does (ADR 015): closing it let go of every
+ * thumbnail's canvas, and Android destroying their surfaces held frames of 110-200 ms, on choosing
+ * a design too; and each opening drew them again. While it stays closed it isn't drawn again (see
+ * `TemplateSheet`), so the editor's edits cost nothing more.
  */
-export function TemplateSheet({
+function TemplateSheetContent({
   visible,
   onClose,
   design,
@@ -34,7 +40,7 @@ export function TemplateSheet({
 }) {
   const { t } = useTranslation();
   return (
-    <Sheet visible={visible} onClose={onClose}>
+    <Sheet visible={visible} onClose={onClose} keepMounted>
       <SheetFrame title={t('templates.title')} closeLabel={t('editor.close')} onClose={onClose}>
         <DesignGallery
           context={layerContext}
@@ -47,3 +53,9 @@ export function TemplateSheet({
     </Sheet>
   );
 }
+
+/** {@link TemplateSheetContent}, drawn again only while it shows or as it opens or closes. */
+export const TemplateSheet = memo(
+  TemplateSheetContent,
+  (before, after) => !before.visible && !after.visible,
+);
