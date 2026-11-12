@@ -118,9 +118,21 @@ function fromError(context: string, error: AuthError): AuthResult {
   return failed(problem);
 }
 
-/** Where a link of an email or a provider brings the user back: this app, at `path`. */
+/** Where a link of an email brings the user back: this app, at `path`. */
 function backTo(path: string): string {
   return Linking.createURL(path);
+}
+
+/**
+ * Where a provider's sign-in brings the user back: the app's scheme and `auth-callback`, with no
+ * server. In Expo Go `backTo` names the computer serving the app by its IP, and Supabase refuses
+ * every return address whose server is an IP (but 127.0.0.1), sending the user to the Site URL,
+ * which Expo Go can't open. The system's browser session hands back any address of the scheme it
+ * waits for without opening it, so the server part isn't needed.
+ */
+function providerBackTo(): string {
+  const url = Linking.createURL('auth-callback');
+  return `${url.slice(0, url.indexOf(':'))}://auth-callback`;
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
@@ -210,7 +222,7 @@ export async function exchangeFromLink(url: string): Promise<AuthResult> {
  * app with a code. Closing the browser is no error.
  */
 export async function signInWithGoogle(): Promise<AuthResult> {
-  const redirectTo = backTo('auth-callback');
+  const redirectTo = providerBackTo();
   const { data, error } = await client().auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo, skipBrowserRedirect: true },

@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 
 import { phoneSessionStorage } from './phone-session-storage';
 import { readSupabaseConfig } from './phrases-table';
+import { provideWebCrypto } from './web-crypto';
 
 /** The client, once made; `null` once found that the project isn't set (see `supabase`). */
 let made: SupabaseClient | null | undefined;
@@ -27,6 +28,7 @@ export function supabase(): SupabaseClient | null {
     made = null;
     return made;
   }
+  provideWebCrypto();
   const client = createClient(config.url, config.publishableKey, {
     auth: {
       storage: phoneSessionStorage,
