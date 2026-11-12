@@ -33,9 +33,8 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 
 How Strava is connected and cached: ADR 020.
 
-- Sign-in and token exchange (`expo-web-browser` comes back). A quick look at real activities is worth it early: they may bring out what sample data hides.
-- Streams, splits and laps on demand; heart rate zones need the `profile:read_all` permission.
-- A real walk's raw JSON: use steps only if Strava sends them, undocumented (the owner's decision: Strava's data only).
+- Done (2026-11-13): connecting Strava, its refresh token kept by the server; the activities read from Strava with a cache on the phone; streams, splits, laps and heart rate zones on demand; tested with the owner's real activities on both phones, which brought out the overlaid routes of a period done in several places (now grouped by place). Also the app's language in the profile.
+- Done: a real walk's raw JSON (recorded with the Strava app on the phone) has no steps, nor does the API reference mention them anywhere: no steps (the owner's decision: Strava's data only).
 - The map behind routes (ADR 009): Mapbox or MapTiler, with the key behind Supabase. Check cost, and the attribution their licences require, also on exported images.
 - Place names from the map provider, by country: in Spain the province, not the region ("Andújar, Jaén"); elsewhere the region (the province field is the county in the US). Today `place-lookup.ts` keeps only the region.
 - Request Strava's API review once it works with the owner's account (10 athletes until then). Creating the API app needs a paid Strava subscription, which the owner accepts.
