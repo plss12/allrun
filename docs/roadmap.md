@@ -11,7 +11,7 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 - Low value, only if it shows: a gallery's other pages laid out only on swiping (JavaScript time, not frames), with care for the dots (empty or repeated pages are discarded on measuring).
 - Closed on 2026-11-06, after a last pass on the iPhone.
 - Found after closing it, and solved: memory grew with every screen opened and closed, from collections too rare in both JavaScript runtimes; a collection on coming back to a screen makes it level off (ADR 014). Native memory still creeps about 2 MB a full editor session: look at it again with the app bigger, before publishing.
-- Found in a third round (ADR 014, 2026-11-12): the galleries scroll at 32-38 ms a frame in "+", 20-28 in Designs and 19-34 in Stickers, over the 20 ms target, not from the tiles (the same with no canvas at all) but from the list mounting rows and handling scroll events while it moves. A task of its own, to plan with the owner.
+- Found in a third round (ADR 014, 2026-11-12): the galleries scroll over the 20 ms target. Left for step 7, with the other reviews before publishing.
 
 ## 2. Closing the style between phones
 
@@ -60,6 +60,9 @@ Native work goes first on Android, where development builds are free. Then the i
 - EAS environment variables (`EXPO_PUBLIC_SUPABASE_URL`, `_PUBLISHABLE_KEY`): without them the app silently stays on its built-in phrases.
 - Supabase's free plan pauses a project after a week of low activity: review the plan.
 - Native permission texts in both languages, the stores' listings and a privacy policy.
+- **Reviews on a modest phone before publishing** (the owner's decision, 2026-11-12), measured on the M32 in release as in ADR 014:
+  - **The galleries' scroll**: 32-38 ms a frame in "+", 20-28 in Designs and 19-34 in Stickers, against 20 (the home screen, 19, is about React Native's floor on that phone). Not the tiles: the same with no canvas at all; the main thread spreads it over the scroll view (21 %), mounting the list's next rows while it moves (16 %), Reanimated handling each scroll event (13 %) and recording the frame (22 %). First a session of two or three hours, low risk: find what Reanimated does with the vertical scroll's events and take it out if it isn't needed, and mount the rows ahead while the gallery is still instead of while it scrolls; expected 25-28 ms. Only if that isn't enough, FlashList (one or two sessions, a real risk: a reused tile draws its canvas again, about 12 ms, and tiles came back piece by piece once before). Hiding what is under a sheet saves about 5 ms more, but the strip over the card would show black instead of the dimmed editor: only with the owner's OK.
+  - **Native memory**, which still creeps about 2 MB a full editor session (step 1).
 
 ## After the MVP
 
