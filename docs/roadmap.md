@@ -31,6 +31,8 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 
 ## 5. Milestone 4: Strava for real
 
+How Strava is connected and cached: ADR 020.
+
 - Sign-in and token exchange (`expo-web-browser` comes back). A quick look at real activities is worth it early: they may bring out what sample data hides.
 - Streams, splits and laps on demand; heart rate zones need the `profile:read_all` permission.
 - A real walk's raw JSON: use steps only if Strava sends them, undocumented (the owner's decision: Strava's data only).

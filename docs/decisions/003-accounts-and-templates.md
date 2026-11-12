@@ -2,6 +2,9 @@
 
 Date: 2026-10-16
 
+Status: the anonymous user is superseded by ADR 019, and the Strava tokens on the device by ADR
+020 (the refresh token on the server).
+
 ## Context
 
 Future features (paid plans, features unrelated to Strava, users without Strava) will need a real
