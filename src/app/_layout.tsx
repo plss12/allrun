@@ -11,6 +11,7 @@ import { ActivitySourceProvider, usesStrava } from '@/data/activity-source';
 import { startAuth, useAuth } from '@/data/auth';
 import { followDesigns, forgetDesigns } from '@/data/design-sync';
 import { followProfile } from '@/data/profile';
+import { askStartupPermissions } from '@/data/startup-permissions';
 import { followStrava, useStrava } from '@/data/strava';
 import { TemplateStoreProvider } from '@/data/user-templates';
 import { syncPhrases } from '@/data/phrases';
@@ -95,6 +96,13 @@ export default function RootLayout() {
   // Ready, it still fades out before it goes (see `LaunchScreen`).
   const [launchGone, setLaunchGone] = useState(false);
   const onLaunchGone = useCallback(() => setLaunchGone(true), []);
+  // Every permission the app uses, asked for as it opens, once its launch screen is gone (the
+  // owner's decision): the system shows only what it may still ask.
+  useEffect(() => {
+    if (launchGone) {
+      void askStartupPermissions();
+    }
+  }, [launchGone]);
   const shownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onLaunchShown = () => {
     if (shownTimer.current !== null) {

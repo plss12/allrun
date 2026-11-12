@@ -28,7 +28,7 @@ Capa `image`, `core/image-layer.ts`.
 
 - Las líneas centradas encogen cada una por su cuenta (un lugar largo no encoge su distancia), y si el lugar quedara por debajo del 70 % se escribe solo la ciudad (`shorterFirst`); las dos columnas de «Fecha y datos» encogen juntas.
 - Dos pies (`instantCaption` en `editor/instant-caption.ts`): `place`, centrado, el lugar (ciudad y región; sin él, la fecha) sobre la distancia en palabras con un decimal («11,3 kilómetros», con la coma o el punto del idioma, decisión del usuario; sin distancia, el tiempo), y `data`, la fecha y la hora a la izquierda y los dos primeros datos de su tarjeta a la derecha (`cardMetrics`: «11,3 km», «5:54/km»); en un resumen, el nombre del periodo sobre su distancia total en palabras, y sus fechas y actividades a la izquierda y la distancia y el tiempo totales a la derecha.
-- El de lugar pide antes el permiso de ubicación en Android.
+- El de lugar pide antes el permiso de ubicación en Android si no se dio al abrir la app (`data/startup-permissions.ts` pide todos los permisos al abrirla, decisión del usuario). Nombra el sitio donde empezó la ruta con el geocodificador del teléfono; en España, la provincia escrita igual en los dos teléfonos y, en una capital, la comunidad («Andújar, Jaén», «Jaén, Andalucía»; `placeOfAddress` y la tabla de `core/spain-provinces.ts`: Apple y Google la ponen en campos distintos).
 
 ## Diseños
 
