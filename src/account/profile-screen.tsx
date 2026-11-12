@@ -190,8 +190,10 @@ export function ProfileScreen() {
           ) : null}
         </Section>
 
-        <Section title={t('account.profile.languageSection')}>
-          <View style={{ padding: CARD_PADDING }}>
+        {/* The selector alone, centered: in a card it was a box around a box (the owner's
+            choice). */}
+        <Section title={t('account.profile.languageSection')} bare>
+          <View style={{ alignItems: 'center' }}>
             <GlassTabs
               values={APP_LANGUAGE_CHOICES.map((choice) =>
                 t(`account.profile.languages.${choice}`),
@@ -266,8 +268,16 @@ export function ProfileScreen() {
   );
 }
 
-/** A group of rows on a card, with a title over it. */
-function Section({ title, children }: { readonly title?: string; readonly children: ReactNode }) {
+/** A group of rows on a card, with a title over it; `bare`, with no card (a control alone). */
+function Section({
+  title,
+  bare = false,
+  children,
+}: {
+  readonly title?: string;
+  readonly bare?: boolean;
+  readonly children: ReactNode;
+}) {
   return (
     <View style={{ gap: 8, marginTop: 16 }}>
       {title === undefined ? null : (
@@ -283,7 +293,7 @@ function Section({ title, children }: { readonly title?: string; readonly childr
           {title.toLocaleUpperCase()}
         </Text>
       )}
-      <View style={smallCardSurface(14)}>{children}</View>
+      {bare ? children : <View style={smallCardSurface(14)}>{children}</View>}
     </View>
   );
 }
