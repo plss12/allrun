@@ -11,6 +11,7 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 - Low value, only if it shows: a gallery's other pages laid out only on swiping (JavaScript time, not frames), with care for the dots (empty or repeated pages are discarded on measuring).
 - Closed on 2026-11-06, after a last pass on the iPhone.
 - Found after closing it, and solved: memory grew with every screen opened and closed, from collections too rare in both JavaScript runtimes; a collection on coming back to a screen makes it level off (ADR 014). Native memory still creeps about 2 MB a full editor session: look at it again with the app bigger, before publishing.
+- Found in a third round (ADR 014, 2026-11-12): the galleries scroll at 32-38 ms a frame in "+", 20-28 in Designs and 19-34 in Stickers, over the 20 ms target, for the hundreds of views each keeps mounted so that its canvases don't vanish on scrolling back. A task of its own, to plan with the owner.
 
 ## 2. Closing the style between phones
 
@@ -21,8 +22,8 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 ## 3. Finishing R4: selection and designs
 
 - The rest of AllRun's designs, decided and built one at a time with the owner. Built: Crop, Polaroid, Slides (the Dark film, as an old slide viewer; ADR 016), Photobooth, Message as one piece, Margins, Calendar (a tear-off calendar's square sheet), and a dark Polaroid and a dark Calendar: fifteen, in the widget gallery's order, for full rows of three. AllRun's designs are closed for the MVP. Both galleries draw in the story format whatever the canvas, and what is chosen fits the canvas; the 25 stock photos are 432 px on their short side (27 MB decoded once a session, from 43 MB at 540 px). Out: Duo, Poster, Day, Route, Receipt, Music (basic widgets) and Band (a photo in a band with a data line and the logo, which Margins covers better). A design must be more than a basic widget on the photo, which the user can place themselves: a new piece or a creative mix (the owner's rule, after trying the Poster).
-- Done: filters of the photo (R4e, ADR 017): Chrome, Golden, Portra, Fade, Mono, Motion Blur and Zoom Blur, only on the canvas's own photo, alone, swiped with one finger as on Instagram; the photo moves with two fingers. To judge on both phones, and to measure moving a blurred photo with two fingers on the M32.
-- An ADR for R4.
+- Done: filters of the photo (R4e, ADR 017): Chrome, Golden, Portra, Fade, Mono, Motion Blur and Zoom Blur, only on the canvas's own photo, alone, swiped with one finger as on Instagram; the photo moves with two fingers. Judged by the owner on both phones and measured on the M32 (ADR 014, third round): a blurred photo is drawn once, and moves at 12 ms a frame.
+- Done: the ADR for R4 (ADR 018): choosing what to make, Stickers, collages, designs and filters, with what was left out.
 
 ## 4. Accounts
 

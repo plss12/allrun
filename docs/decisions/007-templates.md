@@ -5,7 +5,7 @@ Date: 2026-10-18
 Status: built in milestone 3d; where templates are chosen and what the user's ones keep changed
 with ADR 011. AllRun's four recipes below were retired in R4d: its designs are now in
 `core/designs.ts`, with photo slots, and the gallery is the same in the selection screen and the
-editor (an ADR of R4 will record it).
+editor (ADR 018).
 
 ## Context
 

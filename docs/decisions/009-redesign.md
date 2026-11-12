@@ -2,7 +2,8 @@
 
 Date: 2026-10-22
 
-Status: agreed; to be built in milestones R1 to R4, before milestone 4 (Strava).
+Status: done, in milestones R1 to R4, before milestone 4 (Strava). R3 is recorded in ADR 011 and
+R4 in ADR 018, with what changed from this plan.
 
 ## Context
 

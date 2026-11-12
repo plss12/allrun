@@ -184,6 +184,60 @@ Still open, with what each costs:
 shrinks the text even if it fits (11 % measured) and leaves it up and to the left of the box measured
 before shrinking it. Sizes are chosen by the text's length, the same on both phones.
 
+### A third round, on what R4 added (2026-11-12)
+
+Measured as before, in a release build on the M32, on everything built since the second round:
+the filters, the new designs and their gallery, the own sheet kept mounted, the canvas's view the
+size of the editor. Two fingers come from a virtual touchscreen made with Android's `hid` tool
+(`adb` can't write to the phone's own: SELinux), so pinching, moving and turning with two fingers is
+repeatable too. The photo was a 12 MP one of our own, never the owner's.
+
+| Median frame (90th percentile)       | Before                | After            |
+| ------------------------------------ | --------------------- | ---------------- |
+| Two fingers on a Motion Blur photo   | 29-38 (40-65) ms      | 12 (13-17) ms    |
+| Two fingers on a Zoom Blur photo     | 12, but 117 ms frames | 12 (13-15) ms    |
+| Moving a widget, gallery opened once | 22 (25) ms            | 10-14 (20-22) ms |
+| Reopening Designs (all its frames)   | 250-400 ms            | 90-124 ms        |
+
+- **A blurred photo is drawn once** (`useBakedPhoto` in `editor/baked-photo.tsx`): a blur reads the
+  photo 24 times a pixel, and drawing it on every frame of two fingers took 30-60 ms, and up to 117
+  ms as a gesture started or ended. The photo is now drawn with its blur into a texture with the
+  photo's own pixels, once per photo and filter, and the canvas draws that wherever the photo is:
+  for it to serve at any size, a blur grows and shrinks with the photo (ADR 017). Compared pixel by
+  pixel on the phone, the texture and the vector drawing differ by 4 levels of 255 at most. It takes
+  the photo's pixels in the GPU while a blur is on.
+- **A sheet kept mounted is transparent while closed** (`SheetCard` in `ui/sheet.tsx`). Out of
+  sight below the screen, Android still prepared and drew its hundreds of views on every frame of
+  the editor: once the widget gallery had been opened, moving a widget took 22 ms a frame instead
+  of 9. A transparent view it skips, and its canvases keep their surfaces. Traced with Perfetto and
+  simpleperf: the main thread did the same work; the render thread's preparing and drawing grew.
+- **Designs stays mounted in the editor, as the widget gallery does** (ADR 015): closing it let go
+  of every thumbnail, and Android destroying their surfaces held frames of 110-150 ms, choosing a
+  design too; and every opening drew them all again. While closed it isn't rendered again, so the
+  editor's edits cost nothing more. It keeps about 29 MB more of the GPU's memory while the editor
+  is open (73 MB after opening it once, against 44 MB when let go).
+- Measured and within the targets: swiping the filters (10-16 ms a frame while the finger moves;
+  a frame of 45-70 ms as it starts and when a blur is chosen), two fingers on a photo without a
+  filter or with a color one (12 ms), the second and later "+" (no frame over 100 ms).
+
+Tried and discarded: the filter's name without its fade (fewer frames after the finger lifts, the
+same while it moves; it would change the look), and the "Tap to choose" pill without its clip in
+the gallery (no change).
+
+Still over the targets, with what each costs:
+
+- **Scrolling the galleries**: 32-38 ms a frame in "+", 20-28 in Designs and 19-34 in Stickers
+  (the home screen, 19). The render thread spends about 10 ms of its CPU issuing each frame and the
+  GPU about 11, for the hundreds of views a gallery keeps mounted (`removeClippedSubviews` off, so
+  that its canvases don't vanish on scrolling back); the tiles aren't drawn again. Hiding what is
+  under the sheet saved 5 ms. A gallery that keeps fewer views mounted, without losing its canvases,
+  is a task of its own.
+- **The first Designs after launching the app**: one frame of 1.1-1.3 s (500-690 ms later in a
+  session): the first draw of its thumbnails and their photos (see decoding photos natively,
+  below).
+- **Choosing a design**: one or two frames of 120-200 ms, the main thread drawing the new design's
+  pieces for the first time.
+
 ## Not done yet
 
 - **Decoding photos natively, straight into a GPU buffer** (ADR 004) needs a native module. In a
