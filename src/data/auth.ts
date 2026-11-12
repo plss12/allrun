@@ -1,4 +1,9 @@
-import type { AuthError, Session, SupabaseClient } from '@supabase/supabase-js';
+import {
+  type AuthError,
+  isAuthPKCECodeVerifierMissingError,
+  type Session,
+  type SupabaseClient,
+} from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useSyncExternalStore } from 'react';
@@ -196,7 +201,9 @@ const usedCodes = new Set<string>();
 /**
  * Trades the code a link brought back (an email's confirmation or reset, Google's or Apple's
  * sign-in) for a session. On Android the link reaches the app both through the browser session
- * and as a link of its own: the second time does nothing.
+ * and as a link of its own: the second time does nothing. In Expo Go on Android the link of its
+ * own reloads the app, which forgets the codes it traded: the second trade then finds no PKCE
+ * verifier (the first used it up) but a session, and that is no error.
  */
 export async function exchangeCode(code: string): Promise<AuthResult> {
   if (usedCodes.has(code)) {
@@ -204,7 +211,16 @@ export async function exchangeCode(code: string): Promise<AuthResult> {
   }
   usedCodes.add(code);
   const { error } = await client().auth.exchangeCodeForSession(code);
-  return error === null ? DONE : fromError('Could not trade a sign-in code', error);
+  if (error === null) {
+    return DONE;
+  }
+  if (isAuthPKCECodeVerifierMissingError(error)) {
+    const { data } = await client().auth.getSession();
+    if (data.session !== null) {
+      return DONE;
+    }
+  }
+  return fromError('Could not trade a sign-in code', error);
 }
 
 /** {@link exchangeCode} with the code in a link, or the error it came back with. */
