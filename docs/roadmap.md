@@ -25,12 +25,9 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 - Done: filters of the photo (R4e, ADR 017): Chrome, Golden, Portra, Fade, Mono, Motion Blur and Zoom Blur, only on the canvas's own photo, alone, swiped with one finger as on Instagram; the photo moves with two fingers. Judged by the owner on both phones and measured on the M32 (ADR 014, third round): a blurred photo is drawn once, and moves at 12 ms a frame.
 - Done: the ADR for R4 (ADR 018): choosing what to make, Stickers, collages, designs and filters, with what was left out.
 
-## 4. Accounts
+## 4. Accounts (done, ADR 019)
 
-- Login required before publishing, replacing the anonymous user of ADR 003 (needs its own ADR). Strava's sign-in gives no email, so own accounts with Supabase: Apple, Google and email. Sign in with Apple if Google is offered, account deletion inside the app, and Apple's rule on requiring login to check when publishing.
-- Update emails only with their own opt-in consent (GDPR): having an account doesn't grant it.
-- The user's own designs sync: a Supabase table of rows (user, template JSON, updated at) with row level security; local first, the last write wins. Photos stay out, as they already do (`saveDesign`, `withEmptySlots`): slots come empty on another phone.
-- A profile with its settings: hiding the start and end of routes, off by default. Nothing can turn it on until then, so it must exist before publishing.
+- Done: an account required from the first launch, with an email and a password (confirmed by a link), or Google in the browser; Apple's button says it is coming until step 7. The profile, from the AllRun logo: hiding the ends of routes (off, or 100, 200 or 500 m, applied where activities come in), update emails only with their own opt-in (GDPR), signing out and deleting the account inside the app. The user's designs sync with the account, local first, the later write winning; photos stay out. What publishing needs (own SMTP and domain, Google in production, Sign in with Apple) is in step 7.
 
 ## 5. Milestone 4: Strava for real
 
