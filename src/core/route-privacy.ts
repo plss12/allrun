@@ -1,13 +1,20 @@
+import type { Activity } from './activity';
 import { haversineMeters, interpolate, type LatLng } from './geo';
+import { decodePolyline, encodePolyline } from './polyline';
 
 /**
- * Default distance hidden at each end of a route: none (the user's decision). Hiding them will be a
- * setting of the user's profile, to turn on, kept with their account (`SUGGESTED_PRIVACY_TRIM_METERS`).
+ * Default distance hidden at each end of a route: none (the user's decision). Hiding them is a
+ * setting of the user's profile, kept with their account (ADR 019).
  */
 export const DEFAULT_PRIVACY_TRIM_METERS = 0;
 
-/** Distance hidden at each end of a route once the user turns that on. */
-export const SUGGESTED_PRIVACY_TRIM_METERS = 200;
+/** The distances the profile offers to hide at each end of a route, once turned on. */
+export const ROUTE_PRIVACY_CHOICES = [100, 200, 500] as const;
+
+export type RoutePrivacyChoice = (typeof ROUTE_PRIVACY_CHOICES)[number];
+
+/** The distance chosen first when the user turns hiding on: the middle one (the owner's choices). */
+export const SUGGESTED_PRIVACY_TRIM_METERS: RoutePrivacyChoice = 200;
 
 /**
  * Hides the start and end of a route so a shared image doesn't reveal where the athlete lives.
@@ -47,4 +54,18 @@ function dropLeadingMeters(points: readonly LatLng[], meters: number): LatLng[] 
     travelled += segment;
   }
   return [];
+}
+
+/**
+ * `activity` with the start and end of its route hidden (see `trimRouteEnds`), as the app shows and
+ * exports it: applied where activities come into the app (`PrivateRoutesSource`), so that no
+ * screen or image can skip it. A route too short to keep anything loses its line. The same object
+ * when nothing is hidden. Time O(n) for n points.
+ */
+export function withRoutePrivacy(activity: Activity, meters: number): Activity {
+  if (meters === 0 || activity.routePolyline === null) {
+    return activity;
+  }
+  const kept = trimRouteEnds(decodePolyline(activity.routePolyline), meters);
+  return { ...activity, routePolyline: kept.length < 2 ? null : encodePolyline(kept) };
 }

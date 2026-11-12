@@ -1,5 +1,8 @@
+import { makeActivity } from '@/test-utils/make-activity';
+
 import { haversineMeters, type LatLng, pathLengthMeters } from './geo';
-import { trimRouteEnds } from './route-privacy';
+import { decodePolyline, encodePolyline } from './polyline';
+import { trimRouteEnds, withRoutePrivacy } from './route-privacy';
 
 // Straight line north along a meridian: 0.001° of latitude is ~111.2 m.
 const STEP_METERS = haversineMeters([0, 0], [0.001, 0]);
@@ -45,5 +48,30 @@ describe('trimRouteEnds', () => {
   it('rejects negative or non-finite distances', () => {
     expect(() => trimRouteEnds(straightRoute(3), -1)).toThrow(RangeError);
     expect(() => trimRouteEnds(straightRoute(3), Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe('withRoutePrivacy', () => {
+  const activity = (polyline: string | null) => makeActivity({ routePolyline: polyline });
+
+  it('hides each end of the route, as the app then shows and exports it', () => {
+    const route = straightRoute(20);
+    const hidden = withRoutePrivacy(activity(encodePolyline(route)), 500);
+    const kept = decodePolyline(hidden.routePolyline ?? '');
+    expect(haversineMeters(route[0], kept[0])).toBeCloseTo(500, -1);
+    expect(pathLengthMeters(kept)).toBeCloseTo(pathLengthMeters(route) - 1000, -1);
+  });
+
+  it('takes the line away from a route too short to keep anything', () => {
+    expect(
+      withRoutePrivacy(activity(encodePolyline(straightRoute(5))), 500).routePolyline,
+    ).toBeNull();
+  });
+
+  it('leaves the activity as it is with nothing to hide', () => {
+    const shown = activity(encodePolyline(straightRoute(20)));
+    expect(withRoutePrivacy(shown, 0)).toBe(shown);
+    const indoors = activity(null);
+    expect(withRoutePrivacy(indoors, 500)).toBe(indoors);
   });
 });

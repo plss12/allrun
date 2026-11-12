@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, useWindowDimensions } from 'react-native';
 
 import type { PeriodKind } from '@/core/periods';
-import { useActivitySource } from '@/data/activity-source';
+import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
 import { ActivityCard } from '@/home/activity-card';
 import { type PeriodChoice, PeriodCard } from '@/home/period-card';
 import { useDisplaySettings } from '@/ui/settings';
@@ -59,7 +59,8 @@ export function DataSheet({
 function Activities({ onChoose }: { readonly onChoose: (id: string) => void }) {
   const { t } = useTranslation();
   const source = useActivitySource();
-  const recent = useAsync(() => source.listRecent(RECENT_LIMIT), 'recent');
+  const sourceKey = useActivitySourceKey();
+  const recent = useAsync(() => source.listRecent(RECENT_LIMIT), `recent|${sourceKey}`);
   const { unit, locale } = useDisplaySettings();
   const { width } = useWindowDimensions();
   const today = todayLocal();

@@ -4,15 +4,16 @@ import { parseSavedTemplate, type SavedTemplate } from '@/core/user-templates';
 import { logError } from '@/ui/log';
 
 /**
- * Where the user's templates are kept. Local files for now; when real login arrives, an
- * implementation backed by Supabase syncs them across devices (ADR 003) without touching the
- * editor.
+ * Where the phone keeps the user's templates, which `data/design-sync.ts` syncs with their account
+ * (ADR 019) without the editor knowing.
  */
 export interface TemplateStore {
   /** Every saved template that is still valid, in no particular order. */
   list(): Promise<SavedTemplate[]>;
   save(saved: SavedTemplate): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Deletes every template, also those it couldn't read (signing out, ADR 019). */
+  clear(): Promise<void>;
 }
 
 /** Template ids we create, safe as file names (see {@link newTemplateId}). */
@@ -63,6 +64,12 @@ export class FileTemplateStore implements TemplateStore {
     const file = this.fileOf(id);
     if (file.exists) {
       file.delete();
+    }
+  }
+
+  async clear(): Promise<void> {
+    if (this.directory.exists) {
+      this.directory.delete();
     }
   }
 

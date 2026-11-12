@@ -25,6 +25,10 @@ function memoryStore(initial: readonly SavedTemplate[] = []) {
       kept = kept.filter(({ template }) => template.id !== id);
       return Promise.resolve();
     },
+    clear: () => {
+      kept = [];
+      return Promise.resolve();
+    },
   };
   return { store, fail: (value: boolean) => (failing = value) };
 }
@@ -75,6 +79,32 @@ describe('templatesList', () => {
     await list.save(saved('b'));
     await settle();
     expect(idsOf(list)).toEqual(['b', 'a']);
+  });
+
+  it('shows what reached the store from elsewhere, with no loading in between', async () => {
+    const { store } = memoryStore([saved('a')]);
+    const list = templatesList(store);
+    list.load();
+    await settle();
+    // A sync wrote a design from another phone straight into the store.
+    await store.save(saved('b'));
+    const states: string[] = [];
+    list.subscribe(() => states.push(list.get().status));
+    list.reload();
+    await settle();
+    expect(idsOf(list)).toEqual(['b', 'a']);
+    expect(states).toEqual(['success']);
+  });
+
+  it('keeps showing its list when reading it again fails', async () => {
+    const { store, fail } = memoryStore([saved('a')]);
+    const list = templatesList(store);
+    list.load();
+    await settle();
+    fail(true);
+    list.reload();
+    await settle();
+    expect(idsOf(list)).toEqual(['a']);
   });
 
   it('says why it could not load, and loads again when asked', async () => {

@@ -17,7 +17,7 @@ App móvil (iOS + Android) para poner datos de Strava sobre tus fotos con libert
 
 El detalle vive en `.claude/rules/`, y cada regla se carga sola al leer o editar sus ficheros. Lo que solo importa a un área se escribe en su regla; aquí, solo lo que vale en cualquier sesión.
 
-`editor`, `editor-canvas` (gestos, foto, filtros, collages), `editor-history` (deshacer), `editor-color`, `editor-photos` (soportes, diseños, exportar) · `widgets`, `activity-widgets`, `summary-widgets`, `charts` · `gallery` · `skia-memory` · `app-shell` (carga, barra, inicio, selección) · `icons-and-brand` · `data-and-templates` · `scene-tests`.
+`editor`, `editor-canvas` (gestos, foto, filtros, collages), `editor-history` (deshacer), `editor-color`, `editor-photos` (soportes, diseños, exportar) · `widgets`, `activity-widgets`, `summary-widgets`, `charts` · `gallery` · `skia-memory` · `app-shell` (carga, barra, inicio, selección) · `icons-and-brand` · `data-and-templates` · `accounts` (entrar, perfil, sincronización) · `scene-tests`.
 
 ## Estructura
 
@@ -26,7 +26,8 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/app/`: solo pantallas y layouts (Expo Router).
 - `src/core/`: dominio puro y testeado (deportes, métricas, resúmenes, gráficas, widgets, plantillas, diseños, catálogo de la galería, exportación). Sin imports de React Native ni de E/S.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/schema.ts` valida con Zod y mapea al modelo `Activity`, y `strava/detail.ts` los _streams_, parciales y vueltas al `ActivityDetail`; `fixtures/` genera un historial sintético con el formato de Strava que pasa por esos mismos esquemas.
-- `src/data/`: proveedores de datos: fuente de actividades, plantillas del usuario, colores favoritos, frases y nombre del lugar.
+- `src/data/`: proveedores de datos: fuente de actividades, cuenta y sesión, perfil, plantillas del usuario y su sincronización, colores favoritos, frases y nombre del lugar.
+- `src/account/`: pantallas de la cuenta: entrar, contraseña nueva y perfil.
 - `src/editor/`: lienzo Skia, widgets, galerías, gestos y exportación.
 - `src/home/`: inicio. `src/photos/`: la cuadrícula propia de fotos.
 - `src/ui/`: piezas comunes de interfaz: iconos, texto, barra superior, hojas, formato de datos y estados de carga y error.

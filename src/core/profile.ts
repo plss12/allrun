@@ -1,0 +1,78 @@
+import { z } from 'zod';
+
+import { ROUTE_PRIVACY_CHOICES, type RoutePrivacyChoice } from './route-privacy';
+
+/**
+ * The user's profile (ADR 019): what they set once for all their images, kept with their account
+ * (`public.profiles`) and on the phone, to have it at once.
+ */
+export interface Profile {
+  /** How much of each end of every route is hidden: 0 shows them whole. */
+  readonly routePrivacyMeters: 0 | RoutePrivacyChoice;
+  /** Whether they want AllRun's update emails: never, until they turn it on (GDPR). */
+  readonly updateEmails: boolean;
+}
+
+/** A new account's profile: routes whole, no emails. */
+export const DEFAULT_PROFILE: Profile = { routePrivacyMeters: 0, updateEmails: false };
+
+const metersSchema = z.union([z.literal(0), ...ROUTE_PRIVACY_CHOICES.map((m) => z.literal(m))]);
+
+/** A row of `public.profiles` as the Data API returns it. */
+const profileRowSchema = z.object({
+  route_privacy_meters: metersSchema,
+  update_emails: z.boolean(),
+});
+
+/**
+ * Validates the profile the server returned.
+ *
+ * @throws Error naming each invalid field.
+ */
+export function parseProfileRow(row: unknown): Profile {
+  const result = profileRowSchema.safeParse(row);
+  if (!result.success) {
+    throw new Error(`Invalid profile row:\n${z.prettifyError(result.error)}`, {
+      cause: result.error,
+    });
+  }
+  return {
+    routePrivacyMeters: result.data.route_privacy_meters,
+    updateEmails: result.data.update_emails,
+  };
+}
+
+/** The columns of `public.profiles` a user may change, for `profile`. */
+export function profileRow(profile: Profile): {
+  readonly route_privacy_meters: number;
+  readonly update_emails: boolean;
+} {
+  return {
+    route_privacy_meters: profile.routePrivacyMeters,
+    update_emails: profile.updateEmails,
+  };
+}
+
+/** The profile as the phone keeps it, with whose it is. */
+const storedProfileSchema = z.object({
+  userId: z.string().min(1),
+  routePrivacyMeters: metersSchema,
+  updateEmails: z.boolean(),
+});
+
+export type StoredProfile = z.infer<typeof storedProfileSchema>;
+
+/**
+ * Validates the profile kept on the phone.
+ *
+ * @throws Error naming each invalid field.
+ */
+export function parseStoredProfile(json: unknown): StoredProfile {
+  const result = storedProfileSchema.safeParse(json);
+  if (!result.success) {
+    throw new Error(`Invalid stored profile:\n${z.prettifyError(result.error)}`, {
+      cause: result.error,
+    });
+  }
+  return result.data;
+}

@@ -62,7 +62,9 @@
         {
           "locationWhenInUsePermission": "AllRun uses your location only to name the city where your activities started."
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

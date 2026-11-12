@@ -7,7 +7,8 @@ module.exports = defineConfig([
   expoConfig,
   eslintPluginPrettierRecommended,
   {
-    ignores: ['dist/*', '.claude/skills/*'],
+    // Edge Functions run on Deno, with its own imports: Supabase checks them on deploying.
+    ignores: ['dist/*', '.claude/skills/*', 'supabase/functions/*'],
   },
   // The app looks the same on every phone (ADR 013): its own icons and letter, never the system's.
   {

@@ -9,7 +9,6 @@ import { sportIcon } from '@/core/activity-block';
 import type { LocalDate } from '@/core/dates';
 import { cardMetrics, metricValue, toDisplayMetric } from '@/core/metrics';
 import { decodePolyline } from '@/core/polyline';
-import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Box, largestFit, projectRoutes, routeSpan } from '@/core/route-projection';
 import type { DistanceUnit } from '@/core/units';
 import { cardSurface } from '@/theme/card-surface';
@@ -191,7 +190,7 @@ function routePath(polyline: string | null, free: readonly Box[]) {
   if (polyline === null) {
     return null;
   }
-  const points = trimRouteEnds(decodePolyline(polyline), DEFAULT_PRIVACY_TRIM_METERS);
+  const points = decodePolyline(polyline);
   if (points.length < 2) {
     return null;
   }

@@ -37,7 +37,6 @@ import { type Phrase, phraseLanguage, phraseWords } from '@/core/phrases';
 import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import { formatPlace } from '@/core/place';
 import { decodePolyline } from '@/core/polyline';
-import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
 import type { HitHole } from '@/core/layer-transform';
 import type { Size } from '@/core/photo-placement';
@@ -559,11 +558,7 @@ export function routeBox(
   look?: { readonly color?: string; readonly width: number },
 ): Box | null {
   const stroke = look?.width ?? ROUTE_STROKE;
-  const [points] = projectRoutes(
-    [trimRouteEnds(decodePolyline(polyline), DEFAULT_PRIVACY_TRIM_METERS)],
-    width,
-    height,
-  );
+  const [points] = projectRoutes([decodePolyline(polyline)], width, height);
   if (points.length < 2) {
     return null;
   }

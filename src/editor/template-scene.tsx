@@ -70,7 +70,6 @@ import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
 import type { PhotoDrawing, Size } from '@/core/photo-placement';
 import type { Phrase } from '@/core/phrases';
 import { decodePolyline } from '@/core/polyline';
-import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { type Point, projectRoutes } from '@/core/route-projection';
 import {
   type ActivityChartSeries,
@@ -3297,9 +3296,7 @@ function CenteredParagraph({ paragraph }: { readonly paragraph: SkParagraph }) {
 
 /** Decodes, trims the private ends of and projects routes into a box. */
 function projectedRoutes(polylines: readonly string[], width: number, height: number): Point[][] {
-  const routes = polylines.map((polyline) =>
-    trimRouteEnds(decodePolyline(polyline), DEFAULT_PRIVACY_TRIM_METERS),
-  );
+  const routes = polylines.map((polyline) => decodePolyline(polyline));
   return projectRoutes(routes, width, height);
 }
 

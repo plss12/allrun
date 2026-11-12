@@ -107,7 +107,7 @@ import {
   previewTextDraft,
   type TextDraft,
 } from '@/core/text-draft';
-import { useActivitySource } from '@/data/activity-source';
+import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
 import { pickedPhoto } from '@/data/photo-library';
 import { usePhrases } from '@/data/phrases';
 import type { DistanceUnit } from '@/core/units';
@@ -221,8 +221,12 @@ export default function Editor() {
 function EditorScreen({ params }: { readonly params: EditorRequest }) {
   const { t } = useTranslation();
   const source = useActivitySource();
+  const sourceKey = useActivitySourceKey();
   const fonts = useEditorFonts();
-  const data = useAsync(() => loadEditorData(source, params), JSON.stringify(params));
+  const data = useAsync(
+    () => loadEditorData(source, params),
+    `${JSON.stringify(params)}|${sourceKey}`,
+  );
   /**
    * Another activity or period chosen in the editor, which keeps the design: loaded without
    * leaving the workspace, which shows the data it had meanwhile.

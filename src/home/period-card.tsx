@@ -40,7 +40,7 @@ import {
   toDisplaySummaryMetric,
 } from '@/core/summary-metrics';
 import type { DistanceUnit } from '@/core/units';
-import { useActivitySource } from '@/data/activity-source';
+import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { CardGradient } from '@/ui/card-gradient';
@@ -160,12 +160,16 @@ export function PeriodCard({
 }) {
   const { t } = useTranslation();
   const source = useActivitySource();
+  const sourceKey = useActivitySourceKey();
   const [range, setRange] = useState<DateRange>(() =>
     kind === 'custom'
       ? startCustomRange(periodContaining('month', today), today)
       : periodContaining(kind, today),
   );
-  const activities = useAsync(() => source.listInRange(range), `${range.start}/${range.end}`);
+  const activities = useAsync(
+    () => source.listInRange(range),
+    `${range.start}/${range.end}|${sourceKey}`,
+  );
   const pages = useMemo(
     () =>
       activities.status === 'success'

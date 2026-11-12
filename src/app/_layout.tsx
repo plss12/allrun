@@ -8,6 +8,9 @@ import { Appearance } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ActivitySourceProvider } from '@/data/activity-source';
+import { startAuth, useAuth } from '@/data/auth';
+import { followDesigns, forgetDesigns } from '@/data/design-sync';
+import { followProfile } from '@/data/profile';
 import { TemplateStoreProvider } from '@/data/user-templates';
 import { syncPhrases } from '@/data/phrases';
 import { loadEditorFonts } from '@/editor/fonts';
@@ -58,7 +61,30 @@ export default function RootLayout() {
   const [shownLongEnough, setShownLongEnough] = useState(false);
   const [warming, setWarming] = useState(false);
   const warmupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const launching = !(fontsSettled && shownLongEnough);
+  // An account is required (ADR 019): which screens show waits for the stored session to be read.
+  const auth = useAuth();
+  useEffect(() => startAuth(), []);
+  const signedIn = auth.status === 'signedIn';
+  const recovering = auth.status === 'signedIn' && auth.recovering;
+  // The profile and the designs follow the account: its own once signed in, synced; forgotten on
+  // the phone once signed out, as another person may sign in next (ADR 019).
+  const accountId = auth.status === 'signedIn' ? auth.userId : null;
+  const authKnown = auth.status !== 'loading';
+  const lastAccount = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authKnown) {
+      return;
+    }
+    followProfile(accountId);
+    followDesigns(accountId);
+    if (lastAccount.current !== null && accountId === null) {
+      forgetDesigns().catch((error: unknown) =>
+        logError('Could not clear the designs on signing out', error),
+      );
+    }
+    lastAccount.current = accountId;
+  }, [authKnown, accountId]);
+  const launching = !(fontsSettled && shownLongEnough && auth.status !== 'loading');
   // Ready, it still fades out before it goes (see `LaunchScreen`).
   const [launchGone, setLaunchGone] = useState(false);
   const onLaunchGone = useCallback(() => setLaunchGone(true), []);
@@ -123,11 +149,23 @@ export default function RootLayout() {
                   headerShown: false,
                 }}
               >
-                <Stack.Screen name="index" options={{ title: t('home.title') }} />
-                <Stack.Screen name="select" options={{ title: '' }} />
-                {/* The editor is full screen, with its own floating controls (ADR 009); it rises
-                    as a modal and closes with its own button, which asks before losing edits. */}
-                <Stack.Screen name="editor" options={{ presentation: 'fullScreenModal' }} />
+                <Stack.Protected guard={signedIn && !recovering}>
+                  <Stack.Screen name="index" options={{ title: t('home.title') }} />
+                  <Stack.Screen name="select" options={{ title: '' }} />
+                  {/* The editor is full screen, with its own floating controls (ADR 009); it
+                      rises as a modal and closes with its own button, which asks before losing
+                      edits. */}
+                  <Stack.Screen name="editor" options={{ presentation: 'fullScreenModal' }} />
+                  <Stack.Screen name="profile" />
+                </Stack.Protected>
+                <Stack.Protected guard={!signedIn}>
+                  <Stack.Screen name="sign-in" />
+                </Stack.Protected>
+                {/* Signed in by a reset link: a new password before anything else. */}
+                <Stack.Protected guard={recovering}>
+                  <Stack.Screen name="new-password" />
+                </Stack.Protected>
+                <Stack.Screen name="auth-callback" />
               </Stack>
             ) : null}
           </TemplateStoreProvider>

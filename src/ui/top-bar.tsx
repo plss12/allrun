@@ -127,6 +127,40 @@ function TabsGround({ width, children }: { readonly width: number; readonly chil
   );
 }
 
+/**
+ * A round button beside the tabs, on the same glass as them, as tall as the bar: the home's logo,
+ * which opens the profile, and its filter (the owner's choice).
+ */
+export function GlassButton({
+  label,
+  onPress,
+  children,
+}: {
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly children: ReactNode;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={4}
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+    >
+      <TabsGround width={TOP_BAR_HEIGHT}>
+        <View
+          pointerEvents="none"
+          importantForAccessibility="no-hide-descendants"
+          style={{ ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' }}
+        >
+          {children}
+        </View>
+      </TabsGround>
+    </Pressable>
+  );
+}
+
 /** The chosen tab's capsule. */
 const CAPSULE_COLOR = 'rgba(0, 0, 0, 0.55)';
 

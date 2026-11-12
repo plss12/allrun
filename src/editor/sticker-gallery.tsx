@@ -9,7 +9,7 @@ import { exportEncoding, exportFileName } from '@/core/export';
 import { stickerCatalog } from '@/core/layer-catalog';
 import { type StickerLook, withStickerLook } from '@/core/layer-style';
 import { startOf } from '@/core/place';
-import { useActivitySource } from '@/data/activity-source';
+import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
 import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
 import { usePhrases } from '@/data/phrases';
 import { colors } from '@/theme/colors';
@@ -82,7 +82,11 @@ export interface StickerData {
  */
 export function useStickerData(params: EditorRequest): StickerData {
   const source = useActivitySource();
-  const data = useAsync(() => loadEditorData(source, params), JSON.stringify(params));
+  const sourceKey = useActivitySourceKey();
+  const data = useAsync(
+    () => loadEditorData(source, params),
+    `${JSON.stringify(params)}|${sourceKey}`,
+  );
   // Its place, named without asking for anything: if that needs a permission, it isn't offered.
   const activity = data.status === 'success' && data.data.mode === 'activity' ? data.data : null;
   const lookup = useAsync(

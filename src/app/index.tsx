@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { FlatList, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,20 +7,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Activity } from '@/core/activity';
 import type { PeriodKind } from '@/core/periods';
 import { familiesOf } from '@/core/summary';
-import { useActivitySource } from '@/data/activity-source';
+import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
 import { BrandMark } from '@/editor/brand/brand-art';
-import { FLOATING_INK, KeptMounted, RoundButton } from '@/editor/round-button';
+import { FLOATING_INK, KeptMounted } from '@/editor/round-button';
 import { ActivityCard } from '@/home/activity-card';
 import { PeriodCard } from '@/home/period-card';
 import { type SportFilter, SportFilterMenu } from '@/home/sport-filter-menu';
 import { colors } from '@/theme/colors';
 import { useCollectOnReturn } from '@/ui/collect-garbage';
 import { useDisplaySettings } from '@/ui/settings';
+import { AppIcon } from '@/ui/app-icon';
 import { SportGlyph } from '@/ui/sport-glyph';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 import { todayLocal } from '@/ui/today';
-import { GlassTabs, TOP_BAR_HEIGHT, TopBar, useTopBarRoom, useTopBarTop } from '@/ui/top-bar';
+import { GlassButton, GlassTabs, TopBar, useTopBarRoom, useTopBarTop } from '@/ui/top-bar';
 import { useAsync } from '@/ui/use-async';
 
 const RECENT_LIMIT = 50;
@@ -70,7 +72,14 @@ export default function Home() {
           <Summaries />
         </KeptMounted>
       ) : null}
-      <TopBar left={<BrandMark height={22} />}>
+      <TopBar
+        left={
+          // The logo opens the profile (the owner's choice).
+          <GlassButton label={t('account.profile.open')} onPress={() => router.push('/profile')}>
+            <BrandMark height={BAR_LOGO_HEIGHT} />
+          </GlassButton>
+        }
+      >
         <GlassTabs
           values={TABS.map((option) => t(`home.tabs.${option}`))}
           selectedIndex={TABS.indexOf(tab)}
@@ -85,7 +94,8 @@ export default function Home() {
 function Activities({ active }: { readonly active: boolean }) {
   const { t } = useTranslation();
   const source = useActivitySource();
-  const recent = useAsync(() => source.listRecent(RECENT_LIMIT), 'recent');
+  const sourceKey = useActivitySourceKey();
+  const recent = useAsync(() => source.listRecent(RECENT_LIMIT), `recent|${sourceKey}`);
   const [sport, setSport] = useState<SportFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const barTop = useTopBarTop();
@@ -118,17 +128,19 @@ function Activities({ active }: { readonly active: boolean }) {
       {/* Beside the tabs, only with the activities on screen: the summaries have no use for it. */}
       {active ? (
         <View style={{ position: 'absolute', top: barTop, right: 8 }}>
-          {/* With a sport chosen, its icon says which one is on. */}
-          <RoundButton
-            icon={shown === 'all' ? 'filter' : undefined}
+          {/* With a sport chosen, its icon says which one is on. On the glass, as the logo across. */}
+          <GlassButton
             label={
               shown === 'all' ? t('home.filter') : `${t('home.filter')}, ${t(`families.${shown}`)}`
             }
-            size={TOP_BAR_HEIGHT}
             onPress={() => setFilterOpen(true)}
           >
-            {shown === 'all' ? null : <SportGlyph icon={shown} size={24} color={FLOATING_INK} />}
-          </RoundButton>
+            {shown === 'all' ? (
+              <AppIcon name="filter" size={BAR_ICON_SIZE} color={FLOATING_INK} />
+            ) : (
+              <SportGlyph icon={shown} size={BAR_ICON_SIZE} color={FLOATING_INK} />
+            )}
+          </GlassButton>
         </View>
       ) : null}
     </>
@@ -202,3 +214,7 @@ function Summaries() {
     </ScrollView>
   );
 }
+
+/** The logo in its round button, and the filter's icon in the one across. */
+const BAR_LOGO_HEIGHT = 20;
+const BAR_ICON_SIZE = 24;

@@ -1,5 +1,4 @@
 import { decodePolyline } from '@/core/polyline';
-import { DEFAULT_PRIVACY_TRIM_METERS, trimRouteEnds } from '@/core/route-privacy';
 import { projectRoutes } from '@/core/route-projection';
 import { sportIcon, tyreCompounds } from '@/core/activity-block';
 import { addDays, isInRange } from '@/core/dates';
@@ -232,9 +231,7 @@ export function routesBox(
   color?: string,
 ): Box | null {
   const routes = projectRoutes(
-    polylines.map((polyline) =>
-      trimRouteEnds(decodePolyline(polyline), DEFAULT_PRIVACY_TRIM_METERS),
-    ),
+    polylines.map((polyline) => decodePolyline(polyline)),
     width,
     height,
   ).filter((points) => points.length >= 2);
