@@ -370,7 +370,6 @@ export function EditorCanvas({
    * never shows a stale transform for a frame.
    */
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const dragged = boxes.find((box) => box.id === draggingId) ?? null;
   const draggedOpacity = layers.find(({ layer }) => layer.id === draggingId)?.layer.opacity ?? 1;
   const startDrag = (id: string) => {
     onSelect(id);
@@ -495,6 +494,12 @@ export function EditorCanvas({
   /** Where the fingers put the layer; `liveTransform` is that, snapped. */
   const rawTransform = useSharedValue<LayerTransform>(IDENTITY);
   const liveTransform = useSharedValue<LayerTransform>(IDENTITY);
+  /**
+   * The dragged layer's size, set on the UI thread with its transform when the drag starts: read
+   * from React, the corner marks could draw a frame before it arrived, at size 0, all
+   * four in the layer's center.
+   */
+  const liveSize = useSharedValue<Size>({ width: 0, height: 0 });
   const snapX = useSharedValue<SnapLine>('none');
   const snapY = useSharedValue<SnapLine>('none');
   const layerStraight = useSharedValue(false);
@@ -617,6 +622,7 @@ export function EditorCanvas({
     targetId.set(box.id);
     rawTransform.set(box.transform);
     liveTransform.set(box.transform);
+    liveSize.set({ width: box.width, height: box.height });
     scheduleOnRN(startDrag, box.id);
   };
 
@@ -845,15 +851,10 @@ export function EditorCanvas({
   const frameInset = frameStroke / 2;
   const frameArm = CORNER_ARM * hairline;
   const liveFrameMatrix = useDerivedValue(() => frameMatrix(liveTransform.get(), canvas));
-  const liveFramePath = useDerivedValue(() =>
-    frameCorners(
-      liveTransform.get(),
-      dragged?.width ?? 0,
-      dragged?.height ?? 0,
-      frameInset,
-      frameArm,
-    ),
-  );
+  const liveFramePath = useDerivedValue(() => {
+    const { width, height } = liveSize.get();
+    return frameCorners(liveTransform.get(), width, height, frameInset, frameArm);
+  });
   // The selected layer at the size slider's scale, or the opacity bar's, while one is dragged.
   const selectedTransform = selected?.transform ?? IDENTITY;
   const selectedOpacity = layers.find(({ layer }) => layer.id === selectedId)?.layer.opacity ?? 1;

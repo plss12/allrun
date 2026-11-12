@@ -9,7 +9,7 @@ paths:
 
 ## Selección
 
-- Un widget seleccionado lleva solo cuatro esquinas finas, como el visor de una cámara: blancas con un borde oscuro, de 14 pt (o un tercio del lado si es más corto), en las esquinas de su caja más su margen (`frameCorners` en `editor-canvas.tsx`); siguen al dedo mientras se mueve o cambia de tamaño. Decisión del usuario tras probar y descartar el marco redondeado entero («feo»), oscurecer lo demás (un widget negro no destacaba) y un halo con su forma («horrible»). Se dibujan en el lienzo, encima de la escena, y la imagen exportada nunca las lleva.
+- Un widget seleccionado lleva solo cuatro esquinas finas, como el visor de una cámara: blancas con un borde oscuro, de 14 pt (o un tercio del lado si es más corto), en las esquinas de su caja más su margen (`frameCorners` en `editor-canvas.tsx`); siguen al dedo mientras se mueve o cambia de tamaño, con el tamaño del widget arrastrado en un valor compartido que se fija junto a su transformación al empezar (`liveSize`): leído de React, a veces llegaba tarde y las cuatro esquinas se dibujaban juntas en el centro. Decisión del usuario tras probar y descartar el marco redondeado entero («feo»), oscurecer lo demás (un widget negro no destacaba) y un halo con su forma («horrible»). Se dibujan en el lienzo, encima de la escena, y la imagen exportada nunca las lleva.
 
 ## La vista del lienzo
 
