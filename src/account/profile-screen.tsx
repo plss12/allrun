@@ -12,13 +12,15 @@ import {
 import { deleteAccount, signOut, useAuth } from '@/data/auth';
 import { sendBeforeLeaving } from '@/data/design-sync';
 import { changeProfile, useProfile } from '@/data/profile';
+import { disconnectStrava, useStrava } from '@/data/strava';
 import { RoundButton } from '@/editor/round-button';
 import { smallCardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { Spinner } from '@/ui/spinner';
 import { Text } from '@/ui/text';
 import { Toggle } from '@/ui/toggle';
 
-import { AccountButton } from './account-parts';
+import { AccountButton, AccountLink } from './account-parts';
 import { GlassTabs, TOP_BAR_HEIGHT, TopBar, useTopBarRoom } from '@/ui/top-bar';
 
 /** The screen's side margins, as the home's. */
@@ -33,7 +35,8 @@ function distanceLabel(meters: RoutePrivacyChoice): string {
 
 /**
  * The profile (ADR 019), from the button on the home's top bar: the account (its email, signing
- * out, deleting it), hiding the start and end of routes, and update emails. Every change shows at
+ * out, deleting it), the Strava connected (ADR 020), hiding the start and end of routes, and
+ * update emails. Every change shows at
  * once and is kept with the account; one it couldn't keep goes back, and says so.
  */
 export function ProfileScreen() {
@@ -45,6 +48,8 @@ export function ProfileScreen() {
   const profile = useProfile();
   const [failed, setFailed] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const strava = useStrava();
+  const [disconnecting, setDisconnecting] = useState(false);
   const email = auth.status === 'signedIn' ? auth.email : null;
   const hiding = profile.routePrivacyMeters !== 0;
 
@@ -75,6 +80,23 @@ export function ProfileScreen() {
     Alert.alert(t('account.profile.signOutTitle'), t('account.profile.signOutMessage'), [
       { text: t('account.profile.cancel'), style: 'cancel' },
       { text: t('account.profile.signOut'), onPress: () => void signOutSent() },
+    ]);
+  const askDisconnect = () =>
+    Alert.alert(t('strava.disconnectTitle'), t('strava.disconnectMessage'), [
+      { text: t('account.profile.cancel'), style: 'cancel' },
+      {
+        text: t('strava.disconnect'),
+        style: 'destructive',
+        onPress: () => {
+          setDisconnecting(true);
+          void disconnectStrava().then((done) => {
+            setDisconnecting(false);
+            if (!done) {
+              Alert.alert(t('strava.disconnectFailed'));
+            }
+          });
+        },
+      },
     ]);
   const askDelete = () =>
     Alert.alert(t('account.profile.deleteTitle'), t('account.profile.deleteMessage'), [
@@ -116,6 +138,26 @@ export function ProfileScreen() {
             </View>
           </Row>
         </Section>
+
+        {strava.status === 'connected' ? (
+          <Section title={t('strava.section')}>
+            <Row>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>
+                  {t('strava.connectedAs')}
+                </Text>
+                <Text numberOfLines={1} style={{ color: colors.label, fontSize: 17 }}>
+                  {strava.athleteName === '' ? '—' : strava.athleteName}
+                </Text>
+              </View>
+              {disconnecting ? (
+                <Spinner />
+              ) : (
+                <AccountLink label={t('strava.disconnect')} onPress={askDisconnect} />
+              )}
+            </Row>
+          </Section>
+        ) : null}
 
         <Section title={t('account.profile.privacySection')}>
           <Row>

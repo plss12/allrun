@@ -131,8 +131,13 @@ function backTo(path: string): string {
  * waits for without opening it, so the server part isn't needed.
  */
 function providerBackTo(): string {
-  const url = Linking.createURL('auth-callback');
-  return `${url.slice(0, url.indexOf(':'))}://auth-callback`;
+  return `${appScheme()}://auth-callback`;
+}
+
+/** The scheme the app's links use: `exp` in Expo Go, `allrun` in the app's own builds. */
+export function appScheme(): string {
+  const url = Linking.createURL('');
+  return url.slice(0, url.indexOf(':'));
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {

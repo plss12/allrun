@@ -574,6 +574,22 @@ export const en = {
       unknown: 'Something went wrong. Try again.',
     },
   },
+  strava: {
+    connectMessage: 'Connect Strava to see your activities here.',
+    connect: 'Connect with Strava',
+    connecting: 'Connecting Strava',
+    checkFailed: 'Couldn’t check your Strava. Check your connection.',
+    missingActivityScope:
+      'AllRun needs your activities: leave them ticked on Strava’s page and try again.',
+    unconfigured: 'Strava is not available in this build.',
+    failed: 'Strava couldn’t be connected. Try again.',
+    section: 'Strava',
+    connectedAs: 'Connected as',
+    disconnect: 'Disconnect',
+    disconnectTitle: 'Disconnect Strava?',
+    disconnectMessage: 'AllRun won’t see your activities until you connect it again.',
+    disconnectFailed: 'Strava couldn’t be disconnected. Check your connection and try again.',
+  },
   /** The color menu: its grid, the eyedropper and the favorites. */
   colorMenu: {
     eyedropper: 'Eyedropper',

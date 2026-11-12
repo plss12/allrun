@@ -7,6 +7,15 @@ import { todayLocal } from '@/ui/today';
 
 import { useProfile } from './profile';
 
+/**
+ * Whether the activities come from Strava (ADR 020). A development build can use the synthetic
+ * history instead, without connecting Strava, with `EXPO_PUBLIC_ACTIVITY_SOURCE=fixtures`; a
+ * release build always uses Strava.
+ */
+export function usesStrava(): boolean {
+  return !(__DEV__ && process.env.EXPO_PUBLIC_ACTIVITY_SOURCE === 'fixtures');
+}
+
 /** The source and what its activities depend on, so that loads redo when it changes. */
 interface ProvidedSource {
   readonly source: ActivitySource;

@@ -7,10 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Activity } from '@/core/activity';
 import type { PeriodKind } from '@/core/periods';
 import { familiesOf } from '@/core/summary';
-import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
+import { useActivitySource, useActivitySourceKey, usesStrava } from '@/data/activity-source';
+import { useStrava } from '@/data/strava';
 import { BrandMark } from '@/editor/brand/brand-art';
 import { FLOATING_INK, KeptMounted } from '@/editor/round-button';
 import { ActivityCard } from '@/home/activity-card';
+import { ConnectStravaView } from '@/home/connect-strava-view';
 import { PeriodCard } from '@/home/period-card';
 import { type SportFilter, SportFilterMenu } from '@/home/sport-filter-menu';
 import { colors } from '@/theme/colors';
@@ -51,6 +53,7 @@ function useListRoom() {
  * Home: the activities as a gallery, or the summaries of each period (ADR 009). Both stay mounted,
  * so changing tabs loads nothing again and each keeps where it was; the summaries, the heavier ones,
  * start loading out of sight soon after the activities show, or at once if they are asked for.
+ * Until Strava is connected, Strava's button takes their place, under the same bar (ADR 020).
  */
 export default function Home() {
   const { t } = useTranslation();
@@ -58,20 +61,30 @@ export default function Home() {
   const [summariesDue, setSummariesDue] = useState(false);
   // Back from the selection or the editor, what they left goes (see useCollectOnReturn).
   useCollectOnReturn();
+  const strava = useStrava();
+  const connected = !usesStrava() || strava.status === 'connected';
   useEffect(() => {
     const timer = setTimeout(() => setSummariesDue(true), SUMMARIES_AFTER_MS);
     return () => clearTimeout(timer);
   }, []);
   return (
     <>
-      <KeptMounted hidden={tab !== 'activities'} style={StyleSheet.absoluteFill}>
-        <Activities active={tab === 'activities'} />
-      </KeptMounted>
-      {summariesDue || tab === 'summaries' ? (
-        <KeptMounted hidden={tab !== 'summaries'} style={StyleSheet.absoluteFill}>
-          <Summaries />
-        </KeptMounted>
-      ) : null}
+      {connected ? (
+        <>
+          <KeptMounted hidden={tab !== 'activities'} style={StyleSheet.absoluteFill}>
+            <Activities active={tab === 'activities'} />
+          </KeptMounted>
+          {summariesDue || tab === 'summaries' ? (
+            <KeptMounted hidden={tab !== 'summaries'} style={StyleSheet.absoluteFill}>
+              <Summaries />
+            </KeptMounted>
+          ) : null}
+        </>
+      ) : (
+        <View style={StyleSheet.absoluteFill}>
+          <ConnectStravaView />
+        </View>
+      )}
       <TopBar
         left={
           // The logo opens the profile (the owner's choice).

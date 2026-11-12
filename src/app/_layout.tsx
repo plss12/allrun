@@ -7,10 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { Appearance } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { ActivitySourceProvider } from '@/data/activity-source';
+import { ActivitySourceProvider, usesStrava } from '@/data/activity-source';
 import { startAuth, useAuth } from '@/data/auth';
 import { followDesigns, forgetDesigns } from '@/data/design-sync';
 import { followProfile } from '@/data/profile';
+import { followStrava, useStrava } from '@/data/strava';
 import { TemplateStoreProvider } from '@/data/user-templates';
 import { syncPhrases } from '@/data/phrases';
 import { loadEditorFonts } from '@/editor/fonts';
@@ -66,6 +67,8 @@ export default function RootLayout() {
   useEffect(() => startAuth(), []);
   const signedIn = auth.status === 'signedIn';
   const recovering = auth.status === 'signedIn' && auth.recovering;
+  // Until Strava is connected the home is the screen to connect it (ADR 020).
+  const strava = useStrava();
   // The profile and the designs follow the account: its own once signed in, synced; forgotten on
   // the phone once signed out, as another person may sign in next (ADR 019).
   const accountId = auth.status === 'signedIn' ? auth.userId : null;
@@ -77,6 +80,7 @@ export default function RootLayout() {
     }
     followProfile(accountId);
     followDesigns(accountId);
+    followStrava(accountId);
     if (lastAccount.current !== null && accountId === null) {
       forgetDesigns().catch((error: unknown) =>
         logError('Could not clear the designs on signing out', error),
@@ -84,7 +88,10 @@ export default function RootLayout() {
     }
     lastAccount.current = accountId;
   }, [authKnown, accountId]);
-  const launching = !(fontsSettled && shownLongEnough && auth.status !== 'loading');
+  // Signed in, it also waits to read what the phone kept of Strava, which is quick: otherwise the
+  // screen to connect it would flash before the home.
+  const stravaKnown = !signedIn || !usesStrava() || strava.status !== 'reading';
+  const launching = !(fontsSettled && shownLongEnough && auth.status !== 'loading' && stravaKnown);
   // Ready, it still fades out before it goes (see `LaunchScreen`).
   const [launchGone, setLaunchGone] = useState(false);
   const onLaunchGone = useCallback(() => setLaunchGone(true), []);
@@ -149,6 +156,9 @@ export default function RootLayout() {
                   headerShown: false,
                 }}
               >
+                {/* No guard may leave `index` out while signed in: Expo Router would then open the
+                    unguarded route with the shortest name instead (the profile, with nothing to go
+                    back to). Without Strava the home itself shows the screen to connect it. */}
                 <Stack.Protected guard={signedIn && !recovering}>
                   <Stack.Screen name="index" options={{ title: t('home.title') }} />
                   <Stack.Screen name="select" options={{ title: '' }} />
@@ -166,6 +176,7 @@ export default function RootLayout() {
                   <Stack.Screen name="new-password" />
                 </Stack.Protected>
                 <Stack.Screen name="auth-callback" />
+                <Stack.Screen name="strava-callback" />
               </Stack>
             ) : null}
           </TemplateStoreProvider>

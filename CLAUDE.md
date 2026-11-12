@@ -26,8 +26,8 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/app/`: solo pantallas y layouts (Expo Router).
 - `src/core/`: dominio puro y testeado (deportes, métricas, resúmenes, gráficas, widgets, plantillas, diseños, catálogo de la galería, exportación). Sin imports de React Native ni de E/S.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/schema.ts` valida con Zod y mapea al modelo `Activity`, y `strava/detail.ts` los _streams_, parciales y vueltas al `ActivityDetail`; `fixtures/` genera un historial sintético con el formato de Strava que pasa por esos mismos esquemas.
-- `src/data/`: proveedores de datos: fuente de actividades, cuenta y sesión, perfil, plantillas del usuario y su sincronización, colores favoritos, frases y nombre del lugar.
-- `src/account/`: pantallas de la cuenta: entrar, contraseña nueva y perfil.
+- `src/data/`: proveedores de datos: fuente de actividades, cuenta y sesión, conexión con Strava, perfil, plantillas del usuario y su sincronización, colores favoritos, frases y nombre del lugar.
+- `src/account/`: pantallas de la cuenta: entrar, contraseña nueva, conectar Strava y perfil.
 - `src/editor/`: lienzo Skia, widgets, galerías, gestos y exportación.
 - `src/home/`: inicio. `src/photos/`: la cuadrícula propia de fotos.
 - `src/ui/`: piezas comunes de interfaz: iconos, texto, barra superior, hojas, formato de datos y estados de carga y error.
@@ -35,7 +35,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/test-utils/`: helpers de tests (`makeActivity`, `makeSummary`, escenas con CanvasKit).
 - `assets/images/stock/`: fotos de las miniaturas de los diseños (Pexels, origen en `SOURCES.md`; originales en `docs/Fotos`, fuera de git).
 - `scripts/`: generadores de marca e iconos, y la build de Android.
-- `supabase/`: esquema (`migrations/`) y canje de tokens de Strava (`functions/`).
+- `supabase/`: esquema (`migrations/`) y Edge Functions (`functions/`: borrar la cuenta y los tokens de Strava, con lo común en `_shared/`).
 - `docs/decisions/`: ADRs. Léelos antes de tocar fuentes de datos, cuentas, plantillas, gráficas o el editor.
 
 ## Convenciones

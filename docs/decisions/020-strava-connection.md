@@ -27,7 +27,8 @@ strava.com/legal/api):
 - **Revoking**: `POST /oauth/revoke` (Basic auth with the client's id and secret), the only one
   from June 2027.
 - **Terms**: a user's data shown only to that user; the token kept confidential; the "Connect
-  with Strava" button links to Strava's authorize page, with Strava's official button files.
+  with Strava" button links to Strava's authorize page (Strava offers its files, in English only);
+  Strava's logos are never changed.
 
 ADR 003 kept the tokens on the phone because there was no account. Now there is one (ADR 019),
 on every phone the user signs in to.
@@ -35,8 +36,10 @@ on every phone the user signs in to.
 ## Decision
 
 - **The refresh token lives on the server, the access token on the phone.**
-  - A `private.strava_connections` table (not exposed by the API; only the Edge Functions' admin
-    client reads it): AllRun user, Strava athlete id, granted scopes, the refresh token encrypted
+  - A `strava_connections` table that only the Edge Functions' admin client (the service role)
+    can read: no grant for `anon` or `authenticated`, and row level security on with no policy.
+    It is in `public` because the admin client reaches tables through the Data API, which doesn't
+    serve `private`. In it: AllRun user, Strava athlete id, granted scopes, the refresh token encrypted
     (AES-GCM, key in the Edge Functions' secrets) and the current access token with its expiry.
     One Strava athlete belongs to one AllRun account: connecting it from another account moves it.
   - Three Edge Functions, all behind the user's session (`withSupabase({ auth: 'user' })`):
@@ -50,17 +53,23 @@ on every phone the user signs in to.
     times a day per user. A 401 asks `strava-token` once; if Strava refused the refresh (the user
     revoked AllRun in Strava's settings), the server deletes the row and the app asks to connect
     again.
-- **Connecting**: through the system's browser (`expo-web-browser`, as Google, ADR 019), so it
-  works in Expo Go and the build alike. The app makes a random `state` and checks it on return;
-  the `redirect_uri` is the app's scheme with `localhost` as its host, which the auth session
-  catches without opening (as `providerBackTo`). Scopes asked: `read,activity:read_all,
-profile:read_all`; without `activity:read_all` (or `activity:read`) the app says so and offers to
-  connect again. Opening the Strava app itself (app-to-app) is left for milestone 5, when the
-  iPhone leaves Expo Go.
-- **Where it shows**: after signing in, until Strava is connected, the home is a single screen
-  with Strava's orange "Connect with Strava" button, unchanged and in vector. The profile gets a
-  card with the connected athlete and "Disconnect". Nothing else changes: the editor and the
-  galleries keep reading an `ActivitySource`.
+- **Connecting**: through the system's browser (`expo-web-browser`, as Google, ADR 019), so it works
+  in Expo Go and the build alike. The app makes a random `state` and checks it on return; the
+  `redirect_uri` is `<scheme>://localhost/strava-callback` (Strava's callback domain set to
+  `localhost`), which the auth session catches without opening (as `providerBackTo`). On Android it
+  also reaches the app as a link, which `+native-intent` sends to the `strava-callback` route, and
+  the second arrival gets the first one's result. Scopes asked:
+  `read,activity:read_all,profile:read_all`; without `activity:read_all` (or `activity:read`) the
+  app says so and offers to connect again. Opening the Strava app itself (app-to-app) is left for
+  milestone 5, when the iPhone leaves Expo Go.
+- **Where it shows**: after signing in, until Strava is connected, the home stays as always (its
+  bar, tabs and profile), with a line and a button to connect Strava where the activities go (the
+  owner's choice: no page of its own). The button is ours, in Track Red as signing in (the owner's
+  choice), with "Connect with Strava" as plain text, translated: Strava's own file is in English
+  only, with its wordmark, which can't be changed, on the text's baseline. The guidelines ask that
+  the button lead to Strava's authorize page, not that their file be used. The profile gets a card
+  with the connected athlete and "Disconnect". Nothing else changes: the editor and the galleries
+  keep reading an `ActivitySource`.
 - **`StravaActivitySource`** (in `src/sources/strava/`), behind `PrivateRoutesSource` as today,
   with a cache on the phone (`expo-file-system`, one file per year of activity summaries; one per
   opened activity for its streams, splits and laps; one for the zones):

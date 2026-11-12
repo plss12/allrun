@@ -543,6 +543,23 @@ export const es: Translations = {
       unknown: 'Algo ha fallado. Vuelve a probar.',
     },
   },
+  strava: {
+    connectMessage: 'Conecta Strava para ver aquí tus actividades.',
+    connect: 'Conectar con Strava',
+    connecting: 'Conectando Strava',
+    checkFailed: 'No se ha podido comprobar tu Strava. Revisa la conexión.',
+    missingActivityScope:
+      'AllRun necesita tus actividades: déjalas marcadas en la página de Strava y vuelve a intentarlo.',
+    unconfigured: 'Strava no está disponible en esta versión.',
+    failed: 'No se ha podido conectar Strava. Vuelve a intentarlo.',
+    section: 'Strava',
+    connectedAs: 'Conectado como',
+    disconnect: 'Desconectar',
+    disconnectTitle: '¿Desconectar Strava?',
+    disconnectMessage: 'AllRun no verá tus actividades hasta que lo vuelvas a conectar.',
+    disconnectFailed:
+      'No se ha podido desconectar Strava. Revisa la conexión y vuelve a intentarlo.',
+  },
   /** The color menu: its grid, the eyedropper and the favorites. */
   colorMenu: {
     eyedropper: 'Cuentagotas',
