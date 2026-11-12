@@ -16,6 +16,7 @@ import {
 import { logError } from '@/ui/log';
 
 import { appScheme } from './auth';
+import { clearStravaCache } from './strava-cache-store';
 import { supabase } from './supabase';
 
 /**
@@ -69,9 +70,21 @@ function client() {
   return made;
 }
 
-/** Keeps `next` as the account's access, on the phone too; `null` forgets it. */
+/** Forgets the activities kept of a Strava no longer connected here. */
+function forgetActivities(): void {
+  try {
+    clearStravaCache();
+  } catch (error) {
+    logError('Could not clear the Strava activities kept on the phone', error);
+  }
+}
+
+/** Keeps `next` as the account's access, on the phone too; `null` forgets it, and its activities. */
 async function keep(owner: string, next: StravaAccess | null): Promise<void> {
   access = next;
+  if (next === null) {
+    forgetActivities();
+  }
   set(
     next === null
       ? { status: 'disconnected' }
@@ -154,6 +167,7 @@ export function followStrava(owner: string | null): void {
   if (owner === null) {
     set({ status: 'reading' });
     if (previous !== null) {
+      forgetActivities();
       SecureStore.deleteItemAsync(STORE_KEY).catch((error: unknown) =>
         logError('Could not forget the Strava access on signing out', error),
       );

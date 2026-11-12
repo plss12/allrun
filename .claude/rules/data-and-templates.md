@@ -2,7 +2,7 @@
 paths:
   - 'src/sources/**'
   - 'src/data/**'
-  - 'src/core/{sports,dates,route-privacy,template,phrases}*'
+  - 'src/core/{sports,dates,route-privacy,template,phrases,strava-cache}*'
   - 'src/ui/today*'
   - 'supabase/**'
 ---
@@ -10,6 +10,7 @@ paths:
 # Datos y plantillas
 
 - Strava: datos bajo demanda y caché local de menos de 7 días; el trazado llega completo al dueño, y el recorte de privacidad del inicio y del final viene desactivado por defecto (decisión del usuario): es un ajuste del perfil, guardado con la cuenta, y se aplica donde entran las actividades (`PrivateRoutesSource`; ver `accounts.md`). De Strava solo se usan los logos oficiales «Powered by Strava» / «Compatible with Strava», sin modificar; por decisión de producto, el editor solo ofrece el logo de AllRun.
+- Fuente real (`sources/strava/strava-source.ts`, ADR 020): la página más reciente se muestra al momento desde la caché y se vuelve a pedir en segundo plano (al abrir y al volver a la app, como mucho cada 5 min; `onChange` sube la revisión de la clave de `useActivitySource`); los resúmenes, por meses locales, pidiendo solo los que faltan o tienen 7 días, una consulta paginada por tramo de meses seguidos con un día de margen a cada lado (`core/strava-cache.ts`, con tests) y nunca los meses por venir; el detalle y los _streams_ al abrir una actividad, una sola vez aunque lo pidan a la vez `getActivity` y `getActivityDetail`. La caché va en `Paths.cache/strava` (`data/strava-cache-store.ts`), validada con Zod al leerla, y se borra al desconectar Strava y al cerrar sesión; la fuente se rehace por cuenta y conexión. Los tests usan una API falsa y un almacén en memoria.
 - Datos de ejemplo siempre sintéticos (`generateStravaFixtures`, con semilla fija): el repo es público y las actividades reales revelarían dónde vive el usuario.
 - Cualquier `sport_type` de Strava tiene que funcionar. Deporte en dos niveles (`core/sports.ts`): la modalidad decide las métricas (`core/metrics.ts`), la familia agrupa para los resúmenes y los filtros (`SPORT_FAMILIES`: carreras, ciclismo, caminatas, natación, entrenos y otros); lo desconocido cae en `other`, el perfil genérico. «Otros» solo aparece si el usuario tiene alguna.
 - Fechas: los periodos se agrupan por fecha local (`LocalDate`, `YYYY-MM-DD`) con aritmética de días en `core/dates.ts`, sin librerías de fechas ni `Date` local, salvo en la frontera con la plataforma (reloj y selector de fechas nativo: `ui/today.ts`).

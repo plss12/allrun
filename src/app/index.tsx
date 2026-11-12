@@ -187,9 +187,12 @@ function Gallery({ activities }: { readonly activities: readonly Activity[] }) {
         flexGrow: 1,
       }}
       ListHeaderComponent={
-        <Text style={{ color: colors.secondaryLabel, fontSize: 13, paddingBottom: 4 }}>
-          {t('home.sampleData')}
-        </Text>
+        // Only the synthetic history of a development build says it is.
+        usesStrava() ? undefined : (
+          <Text style={{ color: colors.secondaryLabel, fontSize: 13, paddingBottom: 4 }}>
+            {t('home.sampleData')}
+          </Text>
+        )
       }
       ListEmptyComponent={<EmptyView message={t('home.empty')} />}
       renderItem={({ item }) => (

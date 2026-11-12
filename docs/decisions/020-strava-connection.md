@@ -77,14 +77,20 @@ on every phone the user signs in to.
     once that is 7 days old (Strava's limit). A request asks Strava only for the stale or missing
     months, one paged query (`/athlete/activities`, 200 a page, `after`/`before`) per run of
     consecutive months.
-  - New activities: on opening the app and on coming back to it, one call with `after` the newest
-    cached start (at most once every few minutes). No refresh button.
+  - New activities: the newest page (`per_page` 50, no `after`), shown at once from the cache and
+    asked again in the background on opening the app and on coming back to it, at most once every
+    5 minutes. It also catches edits and deletions within the time it covers, which are merged
+    into the kept months; when something changed the screens load again. No refresh button.
+    (Built so rather than with `after` the newest start, which misses edits and deletions.)
   - An activity's detail (`/activities/{id}` and `/activities/{id}/streams`) is fetched when it is
     opened in the editor and kept 7 days; the zones (`/athlete/zones`) are kept 7 days too.
   - Files older than 7 days are deleted on start, and all of them on disconnecting or signing out.
   - What to ask Strava for is decided by a pure, tested planner in `src/core/` (which months, from
-    when, what to delete); the source only does the requests. 429 and network errors are shown
-    with the screens' error state, and the rate limit headers are logged.
+    when, what to delete: `core/strava-cache.ts`); the source only does the requests
+    (`sources/strava/strava-source.ts`, through `sources/strava/api.ts`). Months still to come
+    are never asked for. 429 and network errors are shown with the screens' error state, and the
+    rate limit usage goes in the error. The cache lives in the app's cache directory
+    (`data/strava-cache-store.ts`), which the system may empty: Strava is then asked again.
 - **The synthetic history stays** for tests, scene tests and development: an
   `EXPO_PUBLIC_ACTIVITY_SOURCE=fixtures` variable chooses it; release builds always use Strava.
 - **Out of this ADR**: the map behind routes and place names by country (their own ADR, when
