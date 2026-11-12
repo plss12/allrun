@@ -517,13 +517,16 @@ export function EditorCanvas({
     filterSettling.set(false);
   }, [filterPage, filter, shownPage, filterSettling]);
 
-  // Undo, redo or a new photo place it from outside; never mid-gesture, where the shared value
-  // is ahead of React.
+  // Undo, redo or a new photo place it from outside; never while the fingers move the photo, where
+  // the shared value is ahead of React. A new photo always takes the design's placement, even an
+  // unchanged one (it covers the canvas): the photo on screen must never keep the last one's. Gated
+  // by what the gesture moves, which goes back to none as every gesture ends, not by the count of
+  // gestures.
   useEffect(() => {
-    if (activeGestures.get() === 0) {
+    if (target.get() !== TARGET_PHOTO) {
       livePlacement.set(placement);
     }
-  }, [placement, livePlacement, activeGestures]);
+  }, [placement, photo, livePlacement, target]);
 
   const drawing = useDerivedValue((): PhotoDrawing =>
     photoSize === null
@@ -744,8 +747,9 @@ export function EditorCanvas({
     },
     onActivate: (event) => {
       // Where the finger went down, not where it was once it had moved enough to start.
-      chooseTarget(touchStart.get(), event.numberOfPointers);
+      // Counted first, so the count matches the ends whatever picking the target does.
       startGesture();
+      chooseTarget(touchStart.get(), event.numberOfPointers);
     },
     onUpdate: (event) => {
       const dx = event.changeX / ratio;
@@ -771,8 +775,8 @@ export function EditorCanvas({
 
   const pinch = usePinchGesture({
     onActivate: (event) => {
-      chooseTarget({ x: event.focalX / ratio, y: event.focalY / ratio }, 2);
       startGesture();
+      chooseTarget({ x: event.focalX / ratio, y: event.focalY / ratio }, 2);
     },
     onUpdate: (event) => {
       // The first event of some devices carries no scale yet.
@@ -803,8 +807,8 @@ export function EditorCanvas({
 
   const rotation = useRotationGesture({
     onActivate: (event) => {
-      chooseTarget({ x: event.anchorX / ratio, y: event.anchorY / ratio }, 2);
       startGesture();
+      chooseTarget({ x: event.anchorX / ratio, y: event.anchorY / ratio }, 2);
     },
     onUpdate: (event) => {
       if (target.get() === TARGET_LAYER) {

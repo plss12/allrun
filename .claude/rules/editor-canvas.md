@@ -28,6 +28,8 @@ paths:
 
 ADR 009, `core/photo-placement.ts`. Su colocación es relativa al lienzo (centro en fracciones del lienzo, tamaño respecto a cubrirlo, giro), así sirve con cualquier foto y cualquier copia de ella. Puede quedar más pequeña (hasta 0,2), salirse en parte (su centro nunca sale del lienzo) y girar sin hacer zoom. Se imanta como los widgets (centro, bordes de su alcance girado, ángulo recto) y al tamaño de cubrir; en un empate, el centro gana a los bordes.
 
+El lienzo la dibuja desde un _shared value_ (`livePlacement`), que toma la del diseño al deshacer, rehacer o cambiar de foto, salvo mientras los dedos mueven la foto (`TARGET_PHOTO`, no la cuenta de gestos). Una foto nueva la toma siempre, aunque no haya cambiado: a veces salía con el zoom de la anterior en vez de cubrir el lienzo (decisión del usuario: cambiar de foto la deja siempre a pantalla completa).
+
 ## Filtros de la foto
 
 ADR 017, `core/photo-filter.ts`. Decisiones del usuario: solo en la foto propia del lienzo, sola; nunca en un collage, ni en un widget, ni en la foto que se lleva la Cámara o el Recorte; Golden y Fade, y Chrome en lugar de Ink (el duotono de la marca no convenció en el teléfono), no más.
