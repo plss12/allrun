@@ -550,6 +550,13 @@ export const en = {
       signOutAnyway: 'Sign out anyway',
       privacySection: 'Privacy',
       hideRouteEnds: 'Hide the start and\nend of routes',
+      languageSection: 'Language',
+      /** Each language by its own name; the phone's, in the app's. */
+      languages: {
+        system: 'System',
+        es: 'Español',
+        en: 'English',
+      },
       emailsSection: 'Emails',
       updateEmails: 'News by email',
       changeFailed: 'It couldn’t be saved. Check your connection and try again.',

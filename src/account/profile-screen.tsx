@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { APP_LANGUAGE_CHOICES } from '@/core/profile';
 import {
   ROUTE_PRIVACY_CHOICES,
   type RoutePrivacyChoice,
@@ -35,8 +36,8 @@ function distanceLabel(meters: RoutePrivacyChoice): string {
 
 /**
  * The profile (ADR 019), from the button on the home's top bar: the account (its email, signing
- * out, deleting it), the Strava connected (ADR 020), hiding the start and end of routes, and
- * update emails. Every change shows at
+ * out, deleting it), the Strava connected (ADR 020), hiding the start and end of routes, the
+ * app's language and update emails. Every change shows at
  * once and is kept with the account; one it couldn't keep goes back, and says so.
  */
 export function ProfileScreen() {
@@ -187,6 +188,19 @@ export function ProfileScreen() {
               />
             </View>
           ) : null}
+        </Section>
+
+        <Section title={t('account.profile.languageSection')}>
+          <View style={{ padding: CARD_PADDING }}>
+            <GlassTabs
+              values={APP_LANGUAGE_CHOICES.map((choice) =>
+                t(`account.profile.languages.${choice}`),
+              )}
+              selectedIndex={APP_LANGUAGE_CHOICES.indexOf(profile.appLanguage)}
+              onChange={(index) => void change({ appLanguage: APP_LANGUAGE_CHOICES[index] })}
+              width={width - 2 * PADDING - 2 * CARD_PADDING}
+            />
+          </View>
         </Section>
 
         <Section title={t('account.profile.emailsSection')}>

@@ -2,7 +2,9 @@ import { getLocales } from 'expo-localization';
 import { createInstance } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
+import { type AppLanguageChoice, appLanguage } from '@/core/profile';
 import type { DistanceUnit } from '@/core/units';
+import { logError } from '@/ui/log';
 
 import { en } from './locales/en';
 import { es } from './locales/es';
@@ -49,3 +51,17 @@ i18n
   .catch((error: unknown) => {
     console.error('Failed to initialize i18n', error);
   });
+
+/**
+ * Shows the interface in the language the profile chose, kept with the account (ADR 019);
+ * `system` follows the phone. Every `useTranslation` redraws in it.
+ */
+export function applyAppLanguage(choice: AppLanguageChoice): void {
+  const language = appLanguage(choice, deviceLanguage());
+  if (i18n.language === language) {
+    return;
+  }
+  i18n.changeLanguage(language).catch((error: unknown) => {
+    logError(`Could not change the app's language to ${language}`, error);
+  });
+}

@@ -519,6 +519,13 @@ export const es: Translations = {
       signOutAnyway: 'Cerrar sesión igualmente',
       privacySection: 'Privacidad',
       hideRouteEnds: 'Ocultar el principio y\nel final de las rutas',
+      languageSection: 'Idioma',
+      /** Each language by its own name; the phone's, in the app's. */
+      languages: {
+        system: 'Sistema',
+        es: 'Español',
+        en: 'English',
+      },
       emailsSection: 'Correos',
       updateEmails: 'Novedades por correo',
       changeFailed: 'No se ha podido guardar. Comprueba la conexión y vuelve a probar.',

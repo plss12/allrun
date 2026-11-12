@@ -8,13 +8,15 @@ import {
   type Profile,
   profileRow,
 } from '@/core/profile';
+import { applyAppLanguage } from '@/i18n';
 import { logError } from '@/ui/log';
 
 import { supabase } from './supabase';
 
 /**
  * The signed-in user's profile (ADR 019), for the whole app: kept on the phone, to have it at once
- * (the routes are hidden as activities load), and asked to the account on signing in. A change
+ * (the routes are hidden as activities load, the app speaks its language), and asked to the account
+ * on signing in. A change
  * shows at once and is sent; if it can't be, it goes back and says so.
  */
 
@@ -27,6 +29,8 @@ const listeners = new Set<() => void>();
 
 function set(next: Profile): void {
   profile = next;
+  // The interface speaks the profile's language: every screen redraws in it at once.
+  applyAppLanguage(next.appLanguage);
   listeners.forEach((listener) => listener());
 }
 
@@ -49,9 +53,11 @@ function kept(owner: string): Profile | null {
       return null;
     }
     const stored = parseStoredProfile(JSON.parse(target.textSync()));
-    return stored.userId === owner
-      ? { routePrivacyMeters: stored.routePrivacyMeters, updateEmails: stored.updateEmails }
-      : null;
+    if (stored.userId !== owner) {
+      return null;
+    }
+    const { userId: _owner, ...keptProfile } = stored;
+    return keptProfile;
   } catch (error) {
     logError('Could not read the profile kept on the phone', error);
     return null;
@@ -87,7 +93,7 @@ export function followProfile(owner: string | null): void {
   void (async () => {
     const { data, error } = await client
       .from('profiles')
-      .select('route_privacy_meters, update_emails')
+      .select('route_privacy_meters, update_emails, app_language')
       .eq('id', owner)
       .single();
     if (userId !== owner) {
