@@ -67,7 +67,8 @@ export function isSaved(saved: readonly SavedTemplate[], design: Template): bool
       template.mode === design.mode &&
       sameJson(template.layers, layers) &&
       sameJson(template.photo, design.photo) &&
-      sameJson(template.background, design.background),
+      sameJson(template.background, design.background) &&
+      template.filter === design.filter,
   );
 }
 

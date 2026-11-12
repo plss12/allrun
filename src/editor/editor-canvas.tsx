@@ -1,7 +1,10 @@
 import {
   Canvas,
+  FilterMode,
   Group,
+  Image,
   Line,
+  MipmapMode,
   Path,
   Skia,
   type SkImage,
@@ -9,6 +12,7 @@ import {
 } from '@shopify/react-native-skia';
 import { ImpactFeedbackStyle, impactAsync } from 'expo-haptics';
 import { type ReactElement, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PixelRatio, Pressable, View } from 'react-native';
 import {
   GestureDetector,
@@ -48,6 +52,13 @@ import {
 } from '@/core/layer-transform';
 import { drawInCell } from '@/core/collage';
 import {
+  FILTER_PAGES,
+  pageAfterSwipe,
+  pageBeside,
+  type PhotoFilterId,
+  swipeOffset,
+} from '@/core/photo-filter';
+import {
   COVER_PLACEMENT,
   drawPhoto,
   panPlacement,
@@ -62,6 +73,7 @@ import { CANVAS_FORMATS, type Template } from '@/core/template';
 import { colors } from '@/theme/colors';
 import { AppIcon } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
+import { Text } from '@/ui/text';
 
 import { type TextureRequest, useGestureTextures } from './gesture-textures';
 import {
@@ -104,6 +116,13 @@ interface EditorCanvasProps {
   readonly placement: PhotoPlacement;
   /** The background's color where the photo leaves the canvas empty; `null` shows none. */
   readonly backdrop: string | null;
+  /**
+   * The background's color as `backdrop`, with the photo's filter `filter` (the `auto` one is the
+   * photo's color through it): what shows on either side of a swipe of the filters.
+   */
+  readonly backdropOf: (filter: PhotoFilterId | null) => string | null;
+  /** Called when a swipe, or an accessibility action, changes the photo's filter (one undo step). */
+  readonly onFilterChange: (filter: PhotoFilterId | null) => void;
   /** Id of the selected layer, or `null`. */
   readonly selectedId: string | null;
   /**
@@ -168,6 +187,24 @@ const TARGET_PHOTO = 1;
 /** A photo of a collage, in its cell. */
 const TARGET_CELL = 3;
 const TARGET_LAYER = 2;
+/** The photo's filters, swiped with one finger (the photo moves with two). */
+const TARGET_FILTER = 4;
+/**
+ * Nothing: a finger on the photo while the swipe before still settles, whose filter isn't on the
+ * canvas yet (quick swipes one after another broke the canvas).
+ */
+const TARGET_IGNORE = 5;
+
+/** How a swipe of the filters goes on to the next one, or back, once the finger lifts. */
+const FILTER_SETTLE = {
+  duration: 180,
+  easing: Easing.out(Easing.cubic),
+  reduceMotion: ReduceMotion.System,
+};
+/** How long the name of the filter chosen stays in the middle of the canvas, in milliseconds. */
+const FILTER_NAME_MS = 900;
+/** What a swipe's textures are drawn with: one pixel to one pixel. */
+const SIDE_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.None } as const;
 
 /** Track Red, as a plain string the UI thread can use. */
 const ACCENT = colors.tint;
@@ -274,6 +311,8 @@ export function EditorCanvas({
   onCellPlacementChange,
   placement,
   backdrop,
+  backdropOf,
+  onFilterChange,
   selectedId,
   adjusting,
   adjustedScale,
@@ -295,6 +334,11 @@ export function EditorCanvas({
   const displayHeight = canvas.height * ratio;
   const photoSize: Size | null =
     photo === null ? null : { width: photo.width(), height: photo.height() };
+  const { t } = useTranslation();
+  /** The photo's filter, and whether one finger swipes through them: on the canvas's photo, alone. */
+  const filter = template.filter ?? null;
+  const filtersOn = photo !== null && collage === null;
+  const filterPage = Math.max(0, FILTER_PAGES.indexOf(filter));
   const [layerCache] = useState(() => new PreparedLayerCache());
   const layers = layerCache.prepare(template, layerContext);
   const boxes: LayerBox[] = layers.map(({ layer, width, height, hole, line }) => ({
@@ -390,6 +434,46 @@ export function EditorCanvas({
     onCellPlacementChange(cell, moved);
     setMovingCell(null);
   };
+  /**
+   * A swipe of the photo's filters: while it lasts, the photo with the filters on either side is
+   * drawn into textures, and the one the finger brings in shows beside the current one, cut where
+   * the finger is (as on Instagram). Ending it is one React update with the new filter, so no frame
+   * shows the old one.
+   */
+  const [filterSwipe, setFilterSwipe] = useState(false);
+  /** The name of the filter just chosen, shown a moment in the middle of the canvas. */
+  const [filterName, setFilterName] = useState<{
+    readonly id: number;
+    readonly filter: PhotoFilterId | null;
+  } | null>(null);
+  const shownNameId = filterName?.id;
+  useEffect(() => {
+    if (shownNameId === undefined) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setFilterName(null), FILTER_NAME_MS);
+    return () => clearTimeout(timer);
+  }, [shownNameId]);
+  const chooseFilter = (next: PhotoFilterId | null) => {
+    if (next === filter) {
+      return;
+    }
+    onFilterChange(next);
+    playHaptic(ImpactFeedbackStyle.Light);
+    setFilterName((current) => ({ id: (current?.id ?? 0) + 1, filter: next }));
+  };
+  /** A filter's name, as the user reads it. */
+  const filterLabel = (shown: PhotoFilterId | null) =>
+    t(shown === null ? 'filters.none' : `filters.${shown}`);
+  const startFilterSwipe = () => setFilterSwipe(true);
+  const finishFilterSwipe = (page: number) => {
+    chooseFilter(FILTER_PAGES[page] ?? null);
+    setFilterSwipe(false);
+    // Its filter is the canvas's from now on, the same one if it went back: the next swipe starts
+    // from it.
+    shownPage.set(page);
+    filterSettling.set(false);
+  };
 
   const activeGestures = useSharedValue(0);
   const target = useSharedValue(TARGET_NONE);
@@ -416,6 +500,22 @@ export function EditorCanvas({
   const overTrash = useSharedValue(false);
   /** 0 → 1 as the finger reaches the trash, animated. */
   const trashProgress = useSharedValue(0);
+  /** A swipe of the filters: the finger's way and speed, and where the cut shows (screen points). */
+  const filterDx = useSharedValue(0);
+  const filterVelocity = useSharedValue(0);
+  const filterOffset = useSharedValue(0);
+  /**
+   * The page of the filter on the canvas, as the UI thread knows it, and whether a swipe still
+   * settles (from the finger lifting until its filter is on the canvas): a swipe starts from the
+   * filter the canvas shows, never from one a swipe just before is still bringing in.
+   */
+  const shownPage = useSharedValue(filterPage);
+  const filterSettling = useSharedValue(false);
+  useEffect(() => {
+    // Once the filter a swipe chose is on the canvas (or undo, redo or a design changed it).
+    shownPage.set(filterPage);
+    filterSettling.set(false);
+  }, [filterPage, filter, shownPage, filterSettling]);
 
   // Undo, redo or a new photo place it from outside; never mid-gesture, where the shared value
   // is ahead of React.
@@ -455,11 +555,16 @@ export function EditorCanvas({
     trashProgress.set(0);
   };
 
-  /** Picks what the gesture moves from where it started (canvas pixels). */
-  const chooseTarget = (point: { x: number; y: number }) => {
+  /**
+   * Picks what the gesture moves from where it started (canvas pixels) and with how many fingers:
+   * on the photo, one swipes its filters (where it takes them) and two move it.
+   */
+  const chooseTarget = (point: { x: number; y: number }, pointers: number) => {
     'worklet';
     if (target.get() !== TARGET_NONE) {
-      // A second simultaneous gesture keeps what the first one took.
+      // A second simultaneous gesture keeps what the first one took: a second finger on a swipe
+      // of the filters leaves it a swipe (in quick swipes the next finger often lands before the
+      // last lifts, and the photo jumped between them).
       return;
     }
     resetSnaps();
@@ -483,6 +588,18 @@ export function EditorCanvas({
         rawCellPlacement.set(cell.placement);
         liveCellPlacement.set(cell.placement);
         scheduleOnRN(startCellMove, index);
+        return;
+      }
+      if (filtersOn && pointers < 2 && filterSettling.get()) {
+        target.set(TARGET_IGNORE);
+        return;
+      }
+      if (filtersOn && pointers < 2) {
+        target.set(TARGET_FILTER);
+        filterDx.set(0);
+        filterVelocity.set(0);
+        filterOffset.set(0);
+        scheduleOnRN(startFilterSwipe);
         return;
       }
       target.set(TARGET_PHOTO);
@@ -593,6 +710,21 @@ export function EditorCanvas({
       scheduleOnRN(finishCellMove, movingIndex.get(), liveCellPlacement.get());
     } else if (target.get() === TARGET_PHOTO && photoSize !== null) {
       scheduleOnRN(finishPhotoMove, livePlacement.get());
+    } else if (target.get() === TARGET_FILTER) {
+      const from = shownPage.get();
+      const offset = filterOffset.get();
+      const page = pageAfterSwipe(
+        from,
+        offset,
+        filterVelocity.get(),
+        displayWidth,
+        FILTER_PAGES.length,
+      );
+      // On to the edge the new one comes from, or back; no swipe starts until it is on the canvas
+      // (see `TARGET_IGNORE`), so nothing cuts this short.
+      const to = page === from ? 0 : offset < 0 ? -displayWidth : displayWidth;
+      filterSettling.set(true);
+      filterOffset.set(withTiming(to, FILTER_SETTLE, () => scheduleOnRN(finishFilterSwipe, page)));
     } else if (target.get() === TARGET_LAYER) {
       if (overTrash.get()) {
         scheduleOnRN(dropOnTrash, targetId.get());
@@ -610,20 +742,27 @@ export function EditorCanvas({
     onBegin: (event) => {
       touchStart.set({ x: event.x / ratio, y: event.y / ratio });
     },
-    onActivate: () => {
+    onActivate: (event) => {
       // Where the finger went down, not where it was once it had moved enough to start.
-      chooseTarget(touchStart.get());
+      chooseTarget(touchStart.get(), event.numberOfPointers);
       startGesture();
     },
     onUpdate: (event) => {
       const dx = event.changeX / ratio;
       const dy = event.changeY / ratio;
-      if (target.get() === TARGET_LAYER) {
+      if (target.get() === TARGET_FILTER) {
+        // One finger's way: with two, their middle jumps as the second lands or the first lifts.
+        if (event.numberOfPointers === 1) {
+          filterDx.set(filterDx.get() + event.changeX);
+          filterVelocity.set(event.velocityX);
+          filterOffset.set(swipeOffset(filterDx.get(), displayWidth));
+        }
+      } else if (target.get() === TARGET_LAYER) {
         updateLayer(translateLayer(rawTransform.get(), canvas, dx, dy));
         trackTrash(event.x, event.y);
       } else if (target.get() === TARGET_CELL) {
         updateCell(panPlacement(rawCellPlacement.get(), guideBox.get(), dx, dy));
-      } else {
+      } else if (target.get() === TARGET_PHOTO) {
         updatePhoto(panPlacement(rawPlacement.get(), canvas, dx, dy));
       }
     },
@@ -632,7 +771,7 @@ export function EditorCanvas({
 
   const pinch = usePinchGesture({
     onActivate: (event) => {
-      chooseTarget({ x: event.focalX / ratio, y: event.focalY / ratio });
+      chooseTarget({ x: event.focalX / ratio, y: event.focalY / ratio }, 2);
       startGesture();
     },
     onUpdate: (event) => {
@@ -650,7 +789,7 @@ export function EditorCanvas({
             y: event.focalY / ratio - box.y,
           }),
         );
-      } else {
+      } else if (target.get() === TARGET_PHOTO) {
         updatePhoto(
           zoomPlacement(rawPlacement.get(), canvas, event.scaleChange, {
             x: event.focalX / ratio,
@@ -664,7 +803,7 @@ export function EditorCanvas({
 
   const rotation = useRotationGesture({
     onActivate: (event) => {
-      chooseTarget({ x: event.anchorX / ratio, y: event.anchorY / ratio });
+      chooseTarget({ x: event.anchorX / ratio, y: event.anchorY / ratio }, 2);
       startGesture();
     },
     onUpdate: (event) => {
@@ -672,7 +811,7 @@ export function EditorCanvas({
         updateLayer(rotateLayer(rawTransform.get(), event.rotationChange));
       } else if (target.get() === TARGET_CELL) {
         updateCell(rotatePlacement(rawCellPlacement.get(), event.rotationChange));
-      } else {
+      } else if (target.get() === TARGET_PHOTO) {
         updatePhoto(rotatePlacement(rawPlacement.get(), event.rotationChange));
       }
     },
@@ -799,6 +938,7 @@ export function EditorCanvas({
                     image: photo,
                     matrix: photoMatrix(drawPhoto(photoSize, canvas, placement)),
                     rect: photoRect(drawPhoto(photoSize, canvas, placement)),
+                    filter,
                   }
             }
             collage={collage}
@@ -826,6 +966,52 @@ export function EditorCanvas({
             width: Math.max(1, Math.round(clip.width * scale)),
             height: Math.max(1, Math.round(clip.height * scale)),
           },
+        },
+      };
+    }
+    if (filterSwipe && photo !== null && photoSize !== null) {
+      const drawn = drawPhoto(photoSize, canvas, placement);
+      /** The backdrop and the photo with `shown` filter, as the canvas draws them. */
+      const photoScene = (shown: PhotoFilterId | null) => {
+        // With its opacity in it (`#RRGGBBAA`), which Skia reads.
+        const color = backdropOf(shown);
+        return stillScene(
+          <TemplateScene
+            format={template.format}
+            layers={[]}
+            backdrop={
+              color === null ? { kind: 'checker' } : { kind: 'color', color, onChecker: true }
+            }
+            photo={{
+              image: photo,
+              matrix: photoMatrix(drawn),
+              rect: photoRect(drawn),
+              filter: shown,
+            }}
+            frame={frame}
+          />,
+        );
+      };
+      return {
+        // Drawn again for each filter on the canvas: the sides go with it.
+        key: `filter ${filterPage}`,
+        sceneSize,
+        under: photoScene(filter),
+        over:
+          layers.length === 0
+            ? null
+            : stillScene(
+                <TemplateScene
+                  format={template.format}
+                  layers={layers}
+                  backdrop={{ kind: 'none' }}
+                  photo={null}
+                />,
+              ),
+        live: null,
+        sides: {
+          before: photoScene(FILTER_PAGES[pageBeside(filterPage, -1, FILTER_PAGES.length)] ?? null),
+          after: photoScene(FILTER_PAGES[pageBeside(filterPage, 1, FILTER_PAGES.length)] ?? null),
         },
       };
     }
@@ -869,6 +1055,19 @@ export function EditorCanvas({
                   rect: layerClip(layers[movingLayer].width, layers[movingLayer].height),
                 },
         };
+
+  // A swipe of the filters: the photo with the filter coming in, over the current one from where the
+  // finger is to the edge it comes from, and the widgets over it, from the swipe's textures.
+  const swiping = filterSwipe && gestureTextures.readyKey === `filter ${filterPage}`;
+  const revealRect = useDerivedValue((): DrawRect => {
+    const offset = filterOffset.get() / ratio;
+    return offset < 0
+      ? { x: canvas.width + offset, y: 0, width: -offset, height: canvas.height }
+      : { x: 0, y: 0, width: offset, height: canvas.height };
+  });
+  const sideImage = useDerivedValue(() =>
+    filterOffset.get() < 0 ? gestureTextures.after.get() : gestureTextures.before.get(),
+  );
 
   // Snap guides: a vertical line at the left edge, center or right edge, a horizontal one at the
   // top, center or bottom; hidden while not snapped.
@@ -923,7 +1122,7 @@ export function EditorCanvas({
               photo={
                 photo === null
                   ? null
-                  : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect }
+                  : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect, filter }
               }
               frame={frame}
               collage={
@@ -955,6 +1154,19 @@ export function EditorCanvas({
               }
               textures={textures}
             />
+            {swiping ? (
+              <Group clip={revealRect}>
+                <Image image={sideImage} rect={sceneRect} fit="fill" sampling={SIDE_SAMPLING} />
+                {layers.length === 0 ? null : (
+                  <Image
+                    image={gestureTextures.over}
+                    rect={sceneRect}
+                    fit="fill"
+                    sampling={SIDE_SAMPLING}
+                  />
+                )}
+              </Group>
+            ) : null}
             <Line
               p1={verticalP1}
               p2={verticalP2}
@@ -1001,12 +1213,55 @@ export function EditorCanvas({
         onPress={() => onSelect(null)}
       />
       <GestureDetector gesture={gesture}>
-        {/* Kept as a view of its own: an empty one would be flattened away. */}
+        {/* Kept as a view of its own: an empty one would be flattened away. Where the photo takes
+            filters, screen readers change them as an adjustable value, a swipe each. */}
         <View
           collapsable={false}
+          accessible={filtersOn}
+          accessibilityRole={filtersOn ? 'adjustable' : undefined}
+          accessibilityLabel={filtersOn ? t('filters.label') : undefined}
+          accessibilityValue={filtersOn ? { text: filterLabel(filter) } : undefined}
+          accessibilityActions={
+            filtersOn ? [{ name: 'increment' }, { name: 'decrement' }] : undefined
+          }
+          onAccessibilityAction={(event) => {
+            const step = event.nativeEvent.actionName === 'increment' ? 1 : -1;
+            chooseFilter(FILTER_PAGES[pageBeside(filterPage, step, FILTER_PAGES.length)] ?? null);
+          }}
           style={{ position: 'absolute', left, top, width: displayWidth, height: displayHeight }}
         />
       </GestureDetector>
+      {filterName === null ? null : (
+        <Animated.View
+          key={filterName.id}
+          entering={FadeIn.duration(120)}
+          exiting={FadeOut.duration(250)}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left,
+            top,
+            width: displayWidth,
+            height: displayHeight,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text
+            importantForAccessibility="no"
+            style={{
+              color: '#FFFFFF',
+              fontSize: 30,
+              fontWeight: '600',
+              textShadowColor: 'rgba(0, 0, 0, 0.45)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 6,
+            }}
+          >
+            {filterLabel(filterName.filter)}
+          </Text>
+        </Animated.View>
+      )}
       {draggingId === null ? null : (
         <Animated.View
           entering={FadeIn.duration(150)}

@@ -229,7 +229,8 @@ comes later.
 - **Sharing**: Story (straight to an Instagram story), Copy, Save and Share.
 - **Filters on the photo**, changed by swiping sideways over it, as on Instagram: Zoom Blur, Motion
   Blur, Portra, Mono and Ink. Drawn with Skia (color matrices for the looks, runtime shaders for
-  the blurs), so the exported image is the same as the canvas.
+  the blurs), so the exported image is the same as the canvas. Built in ADR 017, with Chrome, Golden
+  and Fade and without Ink, only on the canvas's own photo, alone; the photo then moves with two fingers.
 - **Images from the gallery as widgets**, picked from the same in-app grid: a plain image (the
   image layer of R3), and an instant photo, a white frame around it with handwritten text under
   it (date and start time, two data; Permanent Marker).

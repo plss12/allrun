@@ -34,7 +34,8 @@ the decisions and what they replaced.
 
 - **The photo can be smaller than the canvas, leave it in part and turn without zooming**, placed
   relative to the canvas (`core/photo-placement.ts`), so any copy of it lands in the same place.
-  It snaps as widgets do, and to covering the canvas. Changing the photo centers it again.
+  It snaps as widgets do, and to covering the canvas. Changing the photo centers it again. Since
+  ADR 017 it moves with two fingers: one swipes its filters (a collage's cells still move with one).
 - **A background shows where the photo leaves the canvas empty**: by default the photo's
   dominant color (`auto`), or a color, or nothing (a transparent PNG).
 

@@ -17,7 +17,7 @@ App móvil (iOS + Android) para poner datos de Strava sobre tus fotos con libert
 
 El detalle vive en `.claude/rules/`, y cada regla se carga sola al leer o editar sus ficheros. Lo que solo importa a un área se escribe en su regla; aquí, solo lo que vale en cualquier sesión.
 
-`editor`, `editor-canvas` (gestos, foto, collages), `editor-history` (deshacer), `editor-color`, `editor-photos` (soportes, diseños, exportar) · `widgets`, `activity-widgets`, `summary-widgets`, `charts` · `gallery` · `skia-memory` · `app-shell` (carga, barra, inicio, selección) · `icons-and-brand` · `data-and-templates` · `scene-tests`.
+`editor`, `editor-canvas` (gestos, foto, filtros, collages), `editor-history` (deshacer), `editor-color`, `editor-photos` (soportes, diseños, exportar) · `widgets`, `activity-widgets`, `summary-widgets`, `charts` · `gallery` · `skia-memory` · `app-shell` (carga, barra, inicio, selección) · `icons-and-brand` · `data-and-templates` · `scene-tests`.
 
 ## Estructura
 

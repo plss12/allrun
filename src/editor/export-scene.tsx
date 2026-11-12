@@ -31,14 +31,19 @@ export interface ExportDesign {
   readonly dominant: string | null;
 }
 
-/** The photo placed as `template` says, at any resolution of it. */
+/** The photo placed as `template` says, at any resolution of it, with its filter. */
 export function scenePhoto(template: Template, photo: SkImage): ScenePhoto {
   const drawing = drawPhoto(
     { width: photo.width(), height: photo.height() },
     CANVAS_FORMATS[template.format],
     template.photo,
   );
-  return { image: photo, matrix: photoMatrix(drawing), rect: photoRect(drawing) };
+  return {
+    image: photo,
+    matrix: photoMatrix(drawing),
+    rect: photoRect(drawing),
+    filter: template.filter ?? null,
+  };
 }
 
 /** The photo of a collage's cell: decoded, still loading, or none. */

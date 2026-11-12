@@ -20,7 +20,13 @@ import {
 } from '@shopify/react-native-skia';
 import { useMemo } from 'react';
 
+import type { PhotoFilterId } from '@/core/photo-filter';
+
 import { DropShadow, textShadows } from './scene-text';
+import { FilteredPhoto } from './template-scene';
+
+/** A look of each kind the photo's filters draw with: a color matrix and the two blurs. */
+const WARMED_FILTERS: readonly PhotoFilterId[] = ['mono', 'motionBlur', 'zoomBlur'];
 
 /**
  * The GPU's programs for what the widgets draw, made once while the launch screen covers the app.
@@ -132,6 +138,25 @@ export function ShaderWarmup() {
           sampling={{ filter: FilterMode.Linear, mipmap: MipmapMode.Linear }}
         />
       )}
+      {/* The photo's filters: a color matrix (one program for every look) and each blur. */}
+      {image === null
+        ? null
+        : WARMED_FILTERS.map((filter, i) => (
+            <Group
+              key={filter}
+              transform={[{ translateX: (i + 0.5) * CELL }, { translateY: 2.5 * CELL }]}
+            >
+              <FilteredPhoto
+                photo={{
+                  image,
+                  matrix: [],
+                  rect: { x: -CELL / 4, y: -CELL / 4, width: CELL / 2, height: CELL / 2 },
+                  filter,
+                }}
+                canvasWidth={1080}
+              />
+            </Group>
+          ))}
     </Canvas>
   );
 }

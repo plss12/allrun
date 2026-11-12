@@ -1,3 +1,4 @@
+import type { PhotoFilterId } from './photo-filter';
 import { newCollage, withCellPlacement } from './collage';
 import {
   fillSlots,
@@ -44,6 +45,7 @@ export interface DesignStart {
   readonly collage: Collage | null;
   readonly frame: ImageFrame;
   readonly background: DesignBackground;
+  readonly filter: PhotoFilterId | null;
   readonly isDesign: boolean;
 }
 
@@ -64,6 +66,11 @@ export interface EditorDesign {
   readonly frame: ImageFrame;
   /** What shows where the photo leaves the canvas empty. */
   readonly background: DesignBackground;
+  /**
+   * The filter of the canvas's photo, `null` for none: only a single photo takes it, never a
+   * collage's nor a widget (see `photo-filter.ts`).
+   */
+  readonly filter: PhotoFilterId | null;
   readonly layers: EditorLayers;
   /** The distance unit of every widget; `null`, the device's. */
   readonly units: DistanceUnit | null;
@@ -113,6 +120,7 @@ export const INITIAL_DESIGN: EditorDesign = {
   collage: null,
   frame: 'none',
   background: AUTO_BACKGROUND,
+  filter: null,
   layers: null,
   units: null,
   language: null,
@@ -135,6 +143,7 @@ export function layoutTemplate(defaultTemplate: DefaultTemplate, design: EditorD
     ...(design.collage === null ? {} : { collage: design.collage }),
     ...(design.frame === 'none' ? {} : { frame: design.frame }),
     background: design.background,
+    ...(design.filter === null ? {} : { filter: design.filter }),
     ...(design.units === null ? {} : { units: design.units }),
     ...(design.language === null ? {} : { language: design.language }),
   };
@@ -163,7 +172,7 @@ export function editLayers(
  */
 export function applyDesign(
   design: EditorDesign,
-  saved: Pick<Template, 'layers' | 'photo' | 'collage' | 'frame' | 'background'>,
+  saved: Pick<Template, 'layers' | 'photo' | 'collage' | 'frame' | 'background' | 'filter'>,
   pictures: readonly string[],
 ): EditorDesign {
   return {
@@ -172,6 +181,7 @@ export function applyDesign(
     collage: saved.collage ?? null,
     frame: saved.frame ?? 'none',
     background: saved.background,
+    filter: saved.filter ?? null,
     layers: fillSlots(
       saved.layers.filter((layer) => !isImageLayer(layer) || isPhotoSlot(layer)),
       pictures,
@@ -279,6 +289,7 @@ const fromZero = (
   collage: layout === null ? null : newCollage(layout),
   frame,
   background: AUTO_BACKGROUND,
+  filter: null,
   isDesign: false,
   fitted: {},
 });
@@ -314,6 +325,14 @@ export function setCollageLayout(design: EditorDesign, layout: CollageLayout | n
   return (design.collage?.layout ?? null) === layout
     ? design
     : { ...design, collage: withLayout(design, layout) };
+}
+
+/**
+ * Another filter for the canvas's photo (`null`: none). Returns `design` itself when it is the
+ * same, so no undo step is recorded.
+ */
+export function setFilter(design: EditorDesign, filter: PhotoFilterId | null): EditorDesign {
+  return design.filter === filter ? design : { ...design, filter };
 }
 
 /** Another frame around the photos. Returns `design` itself when it is the same. */
@@ -365,6 +384,7 @@ export function designStart(design: EditorDesign): DesignStart {
     collage: design.collage,
     frame: design.frame,
     background: design.background,
+    filter: design.filter,
     isDesign: design.isDesign,
   };
 }
@@ -419,7 +439,8 @@ export function canStartOver(design: EditorDesign, start: DesignStart = EMPTY_ST
     sameJson(design.photo, back.photo) &&
     sameJson(design.collage, back.collage) &&
     design.frame === back.frame &&
-    sameJson(design.background, back.background)
+    sameJson(design.background, back.background) &&
+    design.filter === back.filter
   );
 }
 

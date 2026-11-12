@@ -21,6 +21,7 @@ import {
   startOver,
   setCellPlacement,
   setFrame,
+  setFilter,
 } from './editor-document';
 import { newCollage } from './collage';
 import { commit, createHistory, mapHistory, undo } from './history';
@@ -676,5 +677,44 @@ describe('a collage in the design', () => {
     const collage = setCollageLayout(INITIAL_DESIGN, 'two');
     expect(canStartOver(collage)).toBe(true);
     expect(startOver(collage).collage).toBeNull();
+  });
+});
+
+describe('the filter of the photo', () => {
+  it('is one undo step, none for the same, and goes into the template', () => {
+    const mono = setFilter(INITIAL_DESIGN, 'mono');
+    expect(mono.filter).toBe('mono');
+    expect(setFilter(mono, 'mono')).toBe(mono);
+    expect(layoutTemplate(defaultTemplate, mono).filter).toBe('mono');
+    expect(layoutTemplate(defaultTemplate, INITIAL_DESIGN)).not.toHaveProperty('filter');
+    expect(parseTemplate(layoutTemplate(defaultTemplate, mono))).toEqual(
+      layoutTemplate(defaultTemplate, mono),
+    );
+  });
+
+  it('is an edit for Start over, which takes it back to how the canvas started', () => {
+    const mono = setFilter(INITIAL_DESIGN, 'mono');
+    expect(canStartOver(mono)).toBe(true);
+    expect(startOver(mono).filter).toBeNull();
+    const opened = designStart(setFilter(INITIAL_DESIGN, 'chrome'));
+    expect(startOver(setFilter(INITIAL_DESIGN, 'golden'), opened).filter).toBe('chrome');
+  });
+
+  it('comes with a design, as its background does, and a collage over a design starts without one', () => {
+    const applied = applyDesign(
+      setFilter(INITIAL_DESIGN, 'mono'),
+      { layers: [], photo: COVER_PLACEMENT, background: night, filter: 'fade' },
+      [],
+    );
+    expect(applied.filter).toBe('fade');
+    const plain = applyDesign(
+      setFilter(INITIAL_DESIGN, 'mono'),
+      { layers: [], photo: COVER_PLACEMENT, background: night },
+      [],
+    );
+    expect(plain.filter).toBeNull();
+    expect(setCollageLayout(applied, 'two').filter).toBeNull();
+    // Out of a design, a collage keeps it, for when it goes back to a single photo.
+    expect(setCollageLayout(setFilter(INITIAL_DESIGN, 'mono'), 'two').filter).toBe('mono');
   });
 });

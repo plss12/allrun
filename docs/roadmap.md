@@ -21,8 +21,7 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 ## 3. Finishing R4: selection and designs
 
 - The rest of AllRun's designs, decided and built one at a time with the owner. Built: Crop, Polaroid, Slides (the Dark film, as an old slide viewer; ADR 016), Photobooth, Message as one piece, Margins, Calendar (a tear-off calendar's square sheet), and a dark Polaroid and a dark Calendar: fifteen, in the widget gallery's order, for full rows of three. AllRun's designs are closed for the MVP. Both galleries draw in the story format whatever the canvas, and what is chosen fits the canvas; the 25 stock photos are 432 px on their short side (27 MB decoded once a session, from 43 MB at 540 px). Out: Duo, Poster, Day, Route, Receipt, Music (basic widgets) and Band (a photo in a band with a data line and the logo, which Margins covers better). A design must be more than a basic widget on the photo, which the user can place themselves: a new piece or a creative mix (the owner's rule, after trying the Poster).
-- Designs with dates: an AllRun design can carry a start and an end date, inside the app, and shows or hides by itself (seasonal ones, such as Christmas).
-- Filters (R4e): Zoom Blur, Motion Blur, Portra, Mono, Ink, with Skia (color matrices, runtime shaders) so the export matches; one filter for the whole design, collages too. A one-finger sideways swipe always changes the filter, as on Instagram, and photos move with two fingers. This overturns "dragging an empty area frames the photo" (ADR 009, ADR 011) and the one-finger move in collage cells: update them then.
+- Done: filters of the photo (R4e, ADR 017): Chrome, Golden, Portra, Fade, Mono, Motion Blur and Zoom Blur, only on the canvas's own photo, alone, swiped with one finger as on Instagram; the photo moves with two fingers. To judge on both phones, and to measure moving a blurred photo with two fingers on the M32.
 - An ADR for R4.
 
 ## 4. Accounts

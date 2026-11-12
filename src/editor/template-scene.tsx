@@ -1,28 +1,33 @@
 import {
   BlurMask,
   Circle,
+  ColorMatrix,
   DashPathEffect,
   FilterMode,
   FontWeight,
   Group,
   Line,
   Image,
+  ImageShader,
   LinearGradient,
   MipmapMode,
   Paint,
   Path,
   Rect,
   RoundedRect,
+  Shader,
   Skia,
   type SkImage,
   type SkParagraph,
   type SkPath,
+  type SkRuntimeEffect,
   type SkTextStyle,
   type SkTypefaceFontProvider,
   TextAlign,
   type Transforms3d,
 } from '@shopify/react-native-skia';
 import { createContext, type ReactElement, use } from 'react';
+import { type PhotoFilterId, photoFilterLook } from '@/core/photo-filter';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity-charts';
@@ -231,6 +236,8 @@ export interface ScenePhoto {
   readonly image: SkImage;
   readonly matrix: Transforms3d | SharedValue<Transforms3d>;
   readonly rect: DrawRect | SharedValue<DrawRect>;
+  /** The canvas's photo's filter (see `photo-filter.ts`); absent or `null`, none. */
+  readonly filter?: PhotoFilterId | null;
 }
 
 /** A cell of a collage in a scene: its photo clipped to it, loading, or empty. */
@@ -443,6 +450,105 @@ function checkerPath(format: CanvasFormat, square: number): SkPath {
  * them smooth when scaled down instead of aliased.
  */
 const PHOTO_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear } as const;
+
+/** How many times a blur reads the photo for each of its pixels, along its way. */
+const BLUR_SAMPLES = 24;
+
+/**
+ * The photo smeared sideways, along its own width, `span` canvas pixels in all, read evenly along
+ * that way around each pixel: a photo panned with the subject.
+ */
+const MOTION_BLUR = `
+uniform shader image;
+uniform float span;
+half4 main(float2 p) {
+  half4 sum = half4(0);
+  for (int i = 0; i < ${BLUR_SAMPLES}; i++) {
+    float t = float(i) / ${BLUR_SAMPLES - 1}.0 - 0.5;
+    sum += image.eval(p + float2(span * t, 0.0));
+  }
+  return sum / ${BLUR_SAMPLES}.0;
+}`;
+
+/**
+ * The photo smeared out from its middle, the drawing's origin (see `photoRect`): each pixel the
+ * mean of the photo between it and `strength` of the way toward the middle, so the middle stays
+ * sharp and the edges rush in.
+ */
+const ZOOM_BLUR = `
+uniform shader image;
+uniform float strength;
+half4 main(float2 p) {
+  half4 sum = half4(0);
+  for (int i = 0; i < ${BLUR_SAMPLES}; i++) {
+    float t = float(i) / ${BLUR_SAMPLES - 1}.0;
+    sum += image.eval(p * (1.0 - strength * t));
+  }
+  return sum / ${BLUR_SAMPLES}.0;
+}`;
+
+/** The blurs' shaders, compiled once, when first drawn (Skia is loaded by then). */
+const blurEffects = new Map<string, SkRuntimeEffect>();
+
+function blurEffect(source: string): SkRuntimeEffect {
+  const kept = blurEffects.get(source);
+  if (kept !== undefined) {
+    return kept;
+  }
+  const effect = Skia.RuntimeEffect.Make(source);
+  if (effect === null) {
+    throw new Error('Could not compile a filter of the photo');
+  }
+  blurEffects.set(source, effect);
+  return effect;
+}
+
+/**
+ * The canvas's photo with its filter (see `photo-filter.ts`), in the coordinates of its
+ * `photoMatrix` group, where they are canvas pixels around the photo's middle: a look is a color
+ * matrix on the photo; a blur, a shader reading it, with the same sizes on the canvas, on the
+ * screen and in the image (the canvas is `canvasWidth` pixels wide in every format).
+ */
+export function FilteredPhoto({
+  photo,
+  canvasWidth,
+}: {
+  readonly photo: ScenePhoto;
+  readonly canvasWidth: number;
+}) {
+  const look =
+    photo.filter === undefined || photo.filter === null ? null : photoFilterLook(photo.filter);
+  if (look === null || look.kind === 'matrix') {
+    return (
+      <Image image={photo.image} rect={photo.rect} fit="fill" sampling={PHOTO_SAMPLING}>
+        {look === null ? null : <ColorMatrix matrix={[...look.matrix]} />}
+      </Image>
+    );
+  }
+  const imageShader = (
+    <ImageShader
+      image={photo.image}
+      rect={photo.rect}
+      fit="fill"
+      tx="clamp"
+      ty="clamp"
+      sampling={PHOTO_SAMPLING}
+    />
+  );
+  return (
+    <Rect rect={photo.rect}>
+      {look.kind === 'motionBlur' ? (
+        <Shader source={blurEffect(MOTION_BLUR)} uniforms={{ span: look.length * canvasWidth }}>
+          {imageShader}
+        </Shader>
+      ) : (
+        <Shader source={blurEffect(ZOOM_BLUR)} uniforms={{ strength: look.strength }}>
+          {imageShader}
+        </Shader>
+      )}
+    </Rect>
+  );
+}
 /** What stays still in a gesture is as sharp as the screen, one pixel to one pixel. */
 const TEXTURE_SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.None } as const;
 /**
@@ -507,7 +613,7 @@ export function TemplateScene({
       {photo === null ? null : (
         <Group clip={{ x: 0, y: 0, width, height }}>
           <Group transform={photo.matrix}>
-            <Image image={photo.image} rect={photo.rect} fit="fill" sampling={PHOTO_SAMPLING} />
+            <FilteredPhoto photo={photo} canvasWidth={width} />
           </Group>
         </Group>
       )}

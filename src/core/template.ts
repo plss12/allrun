@@ -1,3 +1,4 @@
+import { PHOTO_FILTERS } from './photo-filter';
 import { z } from 'zod';
 
 import type { MetricId } from './metrics';
@@ -996,6 +997,8 @@ const templateObjectSchema = z
      */
     frame: z.enum(IMAGE_FRAMES).optional(),
     background: backgroundSchema,
+    /** The filter of its single photo (see `photo-filter.ts`); absent, none. */
+    filter: z.enum(PHOTO_FILTERS).optional(),
     /** The design's own distance unit; absent, the device's. */
     units: z.enum(['km', 'mi']).optional(),
     /** The language of the design's widgets (see `DESIGN_LANGUAGES`); absent, the app's. */

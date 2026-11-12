@@ -32,6 +32,12 @@ export interface TextureRequest {
   readonly over: ReactElement | null;
   /** The widget that moves, `null` if it is a photo, which is one image already. */
   readonly live: { readonly element: ReactElement; readonly size: PixelSize } | null;
+  /**
+   * In a swipe of the photo's filters, what shows on either side as the finger goes: the backdrop
+   * and the photo with the filter before and after the one it has, whole canvases (`null` where
+   * there is none).
+   */
+  readonly sides?: { readonly before: ReactElement | null; readonly after: ReactElement | null };
 }
 
 /** The textures of the gesture in course, once drawn. */
@@ -39,6 +45,8 @@ export interface GestureTextures {
   readonly under: SharedValue<SkImage | null>;
   readonly over: SharedValue<SkImage | null>;
   readonly live: SharedValue<SkImage | null>;
+  readonly before: SharedValue<SkImage | null>;
+  readonly after: SharedValue<SkImage | null>;
   /** The gesture they are ready for, `null` until then: the scene draws in vector meanwhile. */
   readonly readyKey: string | null;
 }
@@ -84,6 +92,8 @@ export interface TextureSlots {
   readonly under: SharedValue<SkImage | null>;
   readonly over: SharedValue<SkImage | null>;
   readonly live: SharedValue<SkImage | null>;
+  readonly before: SharedValue<SkImage | null>;
+  readonly after: SharedValue<SkImage | null>;
 }
 
 /**
@@ -100,7 +110,7 @@ export function drawGestureTextures(
   gestures: { current: number },
   onReady: () => void,
 ): () => void {
-  const { under, over, live } = slots;
+  const { under, over, live, before, after } = slots;
   gestures.current += 1;
   const gesture = gestures.current;
   let current = true;
@@ -113,11 +123,19 @@ export function drawGestureTextures(
   };
   const record = (element: ReactElement | null): Promise<SkPicture | null> =>
     element === null ? Promise.resolve(null) : drawAsPicture(element);
-  Promise.all([record(request.under), record(request.over), record(request.live?.element ?? null)])
-    .then(([underPicture, overPicture, livePicture]) => {
+  Promise.all([
+    record(request.under),
+    record(request.over),
+    record(request.live?.element ?? null),
+    record(request.sides?.before ?? null),
+    record(request.sides?.after ?? null),
+  ])
+    .then(([underPicture, overPicture, livePicture, beforePicture, afterPicture]) => {
       if (!current) {
         // Over already, and another may have drawn its own: these must not replace them.
-        [underPicture, overPicture, livePicture].forEach((picture) => picture?.dispose());
+        [underPicture, overPicture, livePicture, beforePicture, afterPicture].forEach((picture) =>
+          picture?.dispose(),
+        );
         return;
       }
       const { sceneSize } = request;
@@ -129,6 +147,8 @@ export function drawGestureTextures(
           { picture: underPicture, size: sceneSize, texture: under },
           { picture: overPicture, size: sceneSize, texture: over },
           { picture: livePicture, size: liveSize, texture: live },
+          { picture: beforePicture, size: sceneSize, texture: before },
+          { picture: afterPicture, size: sceneSize, texture: after },
         ];
         let next = 0;
         const step = () => {
@@ -166,6 +186,8 @@ export function drawGestureTextures(
         freeTexture(under);
         freeTexture(over);
         freeTexture(live);
+        freeTexture(before);
+        freeTexture(after);
       });
     });
   };
@@ -179,12 +201,15 @@ export function drawGestureTextures(
  * them.
  *
  * Time O(s) once per gesture, for the s widgets of the scene, on the UI thread. Space O(canvas) in
- * the GPU, for two screens at most, freed when the gesture ends.
+ * the GPU, for two screens at most (four in a swipe of the photo's filters), freed when the gesture
+ * ends.
  */
 export function useGestureTextures(request: TextureRequest | null): GestureTextures {
   const under = useSharedValue<SkImage | null>(null);
   const over = useSharedValue<SkImage | null>(null);
   const live = useSharedValue<SkImage | null>(null);
+  const before = useSharedValue<SkImage | null>(null);
+  const after = useSharedValue<SkImage | null>(null);
   const [readyKey, setReadyKey] = useState<string | null>(null);
   const key = request?.key ?? null;
   const gestures = useRef(0);
@@ -193,8 +218,11 @@ export function useGestureTextures(request: TextureRequest | null): GestureTextu
     if (request === null) {
       return undefined;
     }
-    const endGesture = drawGestureTextures(request, { under, over, live }, gestures, () =>
-      setReadyKey(request.key),
+    const endGesture = drawGestureTextures(
+      request,
+      { under, over, live, before, after },
+      gestures,
+      () => setReadyKey(request.key),
     );
     return () => {
       setReadyKey(null);
@@ -204,5 +232,5 @@ export function useGestureTextures(request: TextureRequest | null): GestureTextu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return { under, over, live, readyKey };
+  return { under, over, live, before, after, readyKey };
 }

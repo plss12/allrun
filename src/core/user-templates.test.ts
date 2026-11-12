@@ -84,6 +84,14 @@ describe('isSaved', () => {
     expect(isSaved([stored], reordered)).toBe(true);
   });
 
+  it('tells apart another filter of the photo', () => {
+    const saved = [saveDesign(story, 'mine-1', at('10:00'))];
+    expect(isSaved(saved, { ...story, filter: 'mono' })).toBe(false);
+    expect(isSaved([saveDesign({ ...story, filter: 'mono' }, 'mine-2', at('10:00'))], story)).toBe(
+      false,
+    );
+  });
+
   it('tells apart a moved widget, another format or another mode', () => {
     const saved = [saveDesign(story, 'mine-1', at('10:00'))];
     const [first, ...rest] = story.layers;

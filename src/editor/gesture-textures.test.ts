@@ -115,8 +115,27 @@ describe('the textures of a gesture', () => {
       under: slot<SkImage>(),
       over: slot<SkImage>(),
       live: slot<SkImage>(),
+      before: slot<SkImage>(),
+      after: slot<SkImage>(),
     };
     gestures = { current: 0 };
+  });
+
+  it("draws the photo with the filters either side of a swipe's, and frees them too", async () => {
+    const end = drawGestureTextures(
+      { ...request('filter'), live: null, sides: { before: element, after: element } },
+      slots,
+      gestures,
+      jest.fn(),
+    );
+    await recorded();
+    expect(slots.before.get()).not.toBeNull();
+    expect(slots.after.get()).not.toBeNull();
+    end();
+    runFrees();
+    runFrames();
+    expect(slots.before.get()).toBeNull();
+    expect(slots.after.get()).toBeNull();
   });
 
   it('says they are ready once drawn', async () => {

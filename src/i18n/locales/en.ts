@@ -75,6 +75,18 @@ export const en = {
     limited: 'You only see the photos you allowed.',
     manage: 'Manage',
   },
+  /** The filters of the canvas's photo: their names stay as they are in every language. */
+  filters: {
+    label: 'Photo filter',
+    none: 'Original',
+    portra: 'Portra',
+    chrome: 'Chrome',
+    golden: 'Golden',
+    fade: 'Fade',
+    mono: 'Mono',
+    motionBlur: 'Motion Blur',
+    zoomBlur: 'Zoom Blur',
+  },
   editor: {
     choosePhoto: 'Choose photo',
     changePhoto: 'Change photo',

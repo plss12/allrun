@@ -74,6 +74,17 @@ export const es: Translations = {
     limited: 'Solo ves las fotos que has permitido.',
     manage: 'Gestionar',
   },
+  filters: {
+    label: 'Filtro de la foto',
+    none: 'Original',
+    portra: 'Portra',
+    chrome: 'Chrome',
+    golden: 'Golden',
+    fade: 'Fade',
+    mono: 'Mono',
+    motionBlur: 'Motion Blur',
+    zoomBlur: 'Zoom Blur',
+  },
   editor: {
     choosePhoto: 'Elegir foto',
     changePhoto: 'Cambiar foto',

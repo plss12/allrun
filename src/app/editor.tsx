@@ -40,6 +40,7 @@ import {
   setLanguage,
   setLayerTransform,
   setCellPlacement,
+  setFilter,
   setFrame,
   setPhotoPlacement,
   setUnits,
@@ -57,6 +58,7 @@ import {
   layerVerticalReach,
   liftToClear,
 } from '@/core/layer-transform';
+import { filteredColor } from '@/core/photo-filter';
 import { COVER_PLACEMENT, samePlacement, type Size } from '@/core/photo-placement';
 import { namesPlace, startOf } from '@/core/place';
 import { setLayerColor, setLayerOpacity } from '@/core/layer-style';
@@ -576,6 +578,11 @@ function EditorWorkspace({
     image,
   });
   const photoInSlot = usesEditorPhoto(template.layers);
+  /**
+   * Whether the photo's filter shows: only on the canvas's own photo, alone (not a collage's, nor
+   * one a piece took, the camera or the crop screen, whose photo is a widget's).
+   */
+  const filtersPhoto = design.collage === null && !photoInSlot && canvasImage !== null;
   const layerContext: LayerContext = {
     ...contextFor(unit, locale, widgetT),
     images:
@@ -749,7 +756,13 @@ function EditorWorkspace({
     .find((image) => image !== null);
   // The first photo of the design gives the color: the photo, or in a collage without it, the next.
   const dominantSource = canvasImage ?? firstCellImage ?? null;
-  const dominant = dominantSource === null ? null : readDominant(dominantSource);
+  const photoDominant = dominantSource === null ? null : readDominant(dominantSource);
+  // Through the photo's filter, where it takes one (a single photo on the canvas): grey behind a
+  // black and white photo, not its color.
+  const dominant =
+    photoDominant === null || !filtersPhoto
+      ? photoDominant
+      : filteredColor(design.filter, photoDominant);
   /** The photos of the cells on the canvas, decoded or on their way. */
   const canvasCells: readonly CellPhoto[] =
     design.collage === null
@@ -1518,6 +1531,13 @@ function EditorWorkspace({
               }
               placement={design.photo}
               backdrop={backgroundColor(design.background, dominant)}
+              backdropOf={(shown) =>
+                backgroundColor(
+                  design.background,
+                  photoDominant === null ? null : filteredColor(shown, photoDominant),
+                )
+              }
+              onFilterChange={(next) => change((current) => setFilter(current, next))}
               selectedId={typing ? null : selectedId}
               adjusting={adjusting}
               adjustedScale={liveScale}

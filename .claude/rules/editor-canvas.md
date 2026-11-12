@@ -1,10 +1,11 @@
 ---
 paths:
   - 'src/editor/{editor-canvas,gesture-textures,template-scene}*'
-  - 'src/core/{layer-transform,photo-placement,collage}*'
+  - 'src/core/{layer-transform,photo-placement,collage,photo-filter}*'
+  - 'src/editor/{photo-filter-scene,shader-warmup}*'
 ---
 
-# Lienzo: gestos, foto libre y collages
+# Lienzo: gestos, foto libre, filtros y collages
 
 ## Selección
 
@@ -26,6 +27,15 @@ paths:
 ## Foto libre
 
 ADR 009, `core/photo-placement.ts`. Su colocación es relativa al lienzo (centro en fracciones del lienzo, tamaño respecto a cubrirlo, giro), así sirve con cualquier foto y cualquier copia de ella. Puede quedar más pequeña (hasta 0,2), salirse en parte (su centro nunca sale del lienzo) y girar sin hacer zoom. Se imanta como los widgets (centro, bordes de su alcance girado, ángulo recto) y al tamaño de cubrir; en un empate, el centro gana a los bordes.
+
+## Filtros de la foto
+
+ADR 017, `core/photo-filter.ts`. Decisiones del usuario: solo en la foto propia del lienzo, sola; nunca en un collage, ni en un widget, ni en la foto que se lleva la Cámara o el Recorte; Golden y Fade, y Chrome en lugar de Ink (el duotono de la marca no convenció en el teléfono), no más.
+
+- Un dedo en horizontal sobre la foto cambia de filtro, como en Instagram: el actual a un lado y el que entra al otro, cortados donde está el dedo; al soltar, el que pasó de la mitad o el que se lanzó tras un poco (`pageAfterSwipe`), y su nombre grande en el centro un momento; los filtros dan la vuelta: tras el último viene el primero (`pageBeside`; decisión del usuario). La foto se mueve, amplía y gira con dos dedos, que tienen que empezar juntos: un segundo dedo durante el deslizamiento no cambia nada y solo cuenta el camino de un dedo (al deslizar rápido, el siguiente dedo toca antes de levantar el anterior, y la foto saltaba entre los dos). Un deslizamiento no empieza hasta que el anterior ha puesto su filtro en el lienzo (`TARGET_IGNORE`, `filterSettling`; seguidos, rompían el lienzo), y parte del filtro que el hilo de UI sabe que tiene el lienzo (`shownPage`). Los pellizcos y giros solo mueven la foto si el gesto es suyo (`TARGET_PHOTO`): antes, cualquier gesto sin dueño claro caía en moverla. Un dedo en un widget lo mueve, y en un collage mueve la foto de su celda, como antes. Para los lectores de pantalla, el lienzo es un valor ajustable.
+- Orden: la foto tal cual, los looks de más a menos saturados (Chrome, Golden, Portra, Fade y Mono) y luego Motion Blur y Zoom Blur (`PHOTO_FILTERS`; decisión del usuario, con test). Los looks son matrices de color de Skia, así que su color se calcula en `core` (`filteredColor`): el fondo `auto` es el color dominante de la foto a través de su filtro. Los desenfoques son shaders (`FilteredPhoto` en `template-scene.tsx`), en las coordenadas del grupo de la foto (píxeles del lienzo alrededor de su centro), así que miden lo mismo en el lienzo, en pantalla y al exportar; se prueban con CanvasKit (`photo-filter-scene.test.tsx`). En SkSL, `length` es una función: no vale de nombre de uniform.
+- El filtro es parte del diseño (`filter` en `EditorDesign` y en la plantilla, opcional): un paso del deshacer, cuenta para «Empezar de nuevo», se queda al cambiar de foto, viene con un diseño y se guarda con los del usuario; un collage lo conserva sin mostrarlo.
+- Rendimiento: al empezar el deslizamiento, la foto con el filtro actual y con los de cada lado, y los widgets encima, se dibujan una vez en texturas (`sides` en `gesture-textures.ts`), y cada fotograma solo pone dos, recortadas. Sus programas se compilan bajo la pantalla de carga (`ShaderWarmup`). Mover la foto con dos dedos dibuja la foto en vector con su filtro en cada fotograma: con un desenfoque es lo más caro, por medir en el M32.
 
 ## Collages
 
