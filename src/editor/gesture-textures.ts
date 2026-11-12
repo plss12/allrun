@@ -51,8 +51,12 @@ export interface GestureTextures {
   readonly readyKey: string | null;
 }
 
-/** Draws `picture` into a texture of the UI thread, the one that draws the canvas, and frees it. */
-function drawTexture(
+/**
+ * Draws `picture` into a texture of the UI thread, the one that draws the canvas, and frees it.
+ *
+ * @returns Whether it could make the texture's surface.
+ */
+export function drawTexture(
   picture: SkPicture | null,
   size: PixelSize,
   texture: SharedValue<SkImage | null>,

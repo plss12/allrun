@@ -75,6 +75,7 @@ import { AppIcon } from '@/ui/app-icon';
 import { logError } from '@/ui/log';
 import { Text } from '@/ui/text';
 
+import { useBakedPhoto } from './baked-photo';
 import { type TextureRequest, useGestureTextures } from './gesture-textures';
 import {
   type DrawRect,
@@ -530,7 +531,7 @@ export function EditorCanvas({
 
   const drawing = useDerivedValue((): PhotoDrawing =>
     photoSize === null
-      ? { x: 0, y: 0, width: 0, height: 0, rotation: 0 }
+      ? { x: 0, y: 0, width: 0, height: 0, rotation: 0, scale: 1 }
       : drawPhoto(photoSize, canvas, livePlacement.get()),
   );
   const livePhotoMatrix = useDerivedValue(() => photoMatrix(drawing.get()));
@@ -538,7 +539,7 @@ export function EditorCanvas({
   const cellDrawing = useDerivedValue((): PhotoDrawing => {
     const box = movingBox.get();
     return box === null
-      ? { x: 0, y: 0, width: 0, height: 0, rotation: 0 }
+      ? { x: 0, y: 0, width: 0, height: 0, rotation: 0, scale: 1 }
       : drawInCell(box.size, box.rect, liveCellPlacement.get());
   });
   const liveCellMatrix = useDerivedValue(() => photoMatrix(cellDrawing.get()));
@@ -1041,6 +1042,8 @@ export function EditorCanvas({
     return null;
   })();
   const gestureTextures = useGestureTextures(textureRequest);
+  // A blurred photo is drawn once, and the canvas draws that wherever it is (see useBakedPhoto).
+  const baked = useBakedPhoto(photo, filtersOn ? filter : null, canvas.width, canvas.height);
   const textures: SceneTextures | null =
     textureRequest === null || gestureTextures.readyKey !== textureRequest.key
       ? null
@@ -1126,7 +1129,13 @@ export function EditorCanvas({
               photo={
                 photo === null
                   ? null
-                  : { image: photo, matrix: livePhotoMatrix, rect: livePhotoRect, filter }
+                  : {
+                      image: photo,
+                      matrix: livePhotoMatrix,
+                      rect: livePhotoRect,
+                      filter,
+                      ...(baked === null ? {} : { baked }),
+                    }
               }
               frame={frame}
               collage={

@@ -79,10 +79,12 @@ function stripedPhoto(): SkImage {
   return surface.makeImageSnapshot();
 }
 
-/** The story design with the striped photo and `filter`, as exported. */
-async function exported(filter: PhotoFilterId | null): Promise<SkImage> {
+/** The story design with the striped photo and `filter`, as exported, the photo `scale` times covering. */
+async function exported(filter: PhotoFilterId | null, scale = 1): Promise<SkImage> {
+  const plain = newTemplate({ id: 't', mode: 'activity', format: 'story', layers: [] });
   const template = {
-    ...newTemplate({ id: 't', mode: 'activity', format: 'story', layers: [] }),
+    ...plain,
+    photo: { ...plain.photo, scale },
     ...(filter === null ? {} : { filter }),
   };
   return drawOffscreen(
@@ -129,6 +131,19 @@ describe('the filters of the photo, as exported', () => {
       expect(r).toBeGreaterThan(60);
       expect(b).toBeGreaterThan(60);
     }
+  });
+
+  it('smear as far as the photo is big in Motion Blur: twice its size, twice the trail', async () => {
+    // At twice covering, each stripe is 51.2 canvas pixels: a trail of the canvas's 4.5 % (48.6
+    // pixels) would leave a stripe's middle pure, and the photo's own, twice that, mixes it.
+    const stripeMiddle = { x: 540 + 26, y: 960 };
+    const sharp = await exported(null, 2);
+    const [sr, , sb] = pixel(sharp, stripeMiddle.x, stripeMiddle.y);
+    expect(Math.min(sr, sb)).toBeLessThan(15);
+    const image = await exported('motionBlur', 2);
+    const [r, , b] = pixel(image, stripeMiddle.x, stripeMiddle.y);
+    expect(r).toBeGreaterThan(60);
+    expect(b).toBeGreaterThan(60);
   });
 
   it('smear the edges out from the middle in Zoom Blur, and leave the middle sharp', async () => {

@@ -217,18 +217,24 @@ export interface DrawRect {
 /** Group transform that places a photo: at its center, turned around it (see `drawPhoto`). */
 export function photoMatrix(drawing: PhotoDrawing): Transforms3d {
   'worklet';
-  return [{ translateX: drawing.x }, { translateY: drawing.y }, { rotate: drawing.rotation }];
+  return [
+    { translateX: drawing.x },
+    { translateY: drawing.y },
+    { rotate: drawing.rotation },
+    { scale: drawing.scale },
+  ];
 }
 
-/** Where the photo goes inside its {@link photoMatrix} group: centered on it. */
+/**
+ * Where the photo goes inside its {@link photoMatrix} group: centered on it, at the size that just
+ * covers its canvas or cell, which the group scales. So what is drawn on it, as a filter's blur,
+ * grows and shrinks with the photo.
+ */
 export function photoRect(drawing: PhotoDrawing): DrawRect {
   'worklet';
-  return {
-    x: -drawing.width / 2,
-    y: -drawing.height / 2,
-    width: drawing.width,
-    height: drawing.height,
-  };
+  const width = drawing.width / drawing.scale;
+  const height = drawing.height / drawing.scale;
+  return { x: -width / 2, y: -height / 2, width, height };
 }
 
 /** The photo of a scene: drawn in `rect` inside a group transformed by `matrix`. */
@@ -238,6 +244,11 @@ export interface ScenePhoto {
   readonly rect: DrawRect | SharedValue<DrawRect>;
   /** The canvas's photo's filter (see `photo-filter.ts`); absent or `null`, none. */
   readonly filter?: PhotoFilterId | null;
+  /**
+   * The photo already drawn with its filter, at the size of `rect` (see `useBakedPhoto`): a blur
+   * reads the photo 24 times a pixel, too much to draw again on every frame of a modest phone.
+   */
+  readonly baked?: SharedValue<SkImage | null>;
 }
 
 /** A cell of a collage in a scene: its photo clipped to it, loading, or empty. */
@@ -505,9 +516,10 @@ function blurEffect(source: string): SkRuntimeEffect {
 
 /**
  * The canvas's photo with its filter (see `photo-filter.ts`), in the coordinates of its
- * `photoMatrix` group, where they are canvas pixels around the photo's middle: a look is a color
- * matrix on the photo; a blur, a shader reading it, with the same sizes on the canvas, on the
- * screen and in the image (the canvas is `canvasWidth` pixels wide in every format).
+ * `photoMatrix` group, canvas pixels around the photo's middle as it covers the canvas: a look is a
+ * color matrix on the photo; a blur, a shader reading it, the same on the canvas, on the screen and
+ * in the image (the canvas is `canvasWidth` pixels wide in every format), and as much bigger or
+ * smaller as the photo is drawn, as a blur taken with the photo would be.
  */
 export function FilteredPhoto({
   photo,
@@ -516,6 +528,9 @@ export function FilteredPhoto({
   readonly photo: ScenePhoto;
   readonly canvasWidth: number;
 }) {
+  if (photo.baked !== undefined) {
+    return <Image image={photo.baked} rect={photo.rect} fit="fill" sampling={PHOTO_SAMPLING} />;
+  }
   const look =
     photo.filter === undefined || photo.filter === null ? null : photoFilterLook(photo.filter);
   if (look === null || look.kind === 'matrix') {

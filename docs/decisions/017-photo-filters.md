@@ -42,10 +42,12 @@ Chrome in its place from a sheet of candidates.
   `core` (`filteredColor`): the `auto` background is the photo's dominant color through its filter,
   grey behind a black and white photo.
 - **The blurs are shaders** (SkSL, `FilteredPhoto` in `template-scene.tsx`) that read the photo 24
-  times along their way: Motion Blur sideways along the photo, 4.5 % of the canvas's width; Zoom Blur
-  out from the photo's middle, the edges up to 8 % of the way. They work in the coordinates of the
-  photo's group, canvas pixels around its middle, so their sizes are the same on the canvas, on
-  screen and in the exported image, without animated values.
+  times along their way: Motion Blur sideways along the photo, 4.5 % of the canvas's width when the
+  photo covers it; Zoom Blur out from the photo's middle, the edges up to 8 % of the way. They work
+  in the coordinates of the photo's group, canvas pixels around its middle at the size that covers
+  the canvas, which the group scales (`photoMatrix`, `photoRect`), so their sizes are the same on
+  the canvas, on screen and in the exported image, and grow and shrink with the photo, as a blur
+  taken with it would.
 - **The filter is part of the design**, as the background: `filter` in `EditorDesign` and in the
   template, optional, so every saved design still reads, with no new version. Each change is an
   undo step and counts for Start over; it stays when the photo changes, comes with a design (AllRun's
@@ -54,7 +56,9 @@ Chrome in its place from a sheet of candidates.
   filters either side, and the widgets over it, are drawn once into textures (`sides` in
   `gesture-textures.ts`), and each frame only puts two of them on screen, cut where the finger is: a
   blur isn't drawn again on every frame. Their programs are compiled under the launch screen
-  (`ShaderWarmup`).
+  (`ShaderWarmup`). A blurred photo is drawn once into a texture, kept while the photo and its
+  filter stay (`useBakedPhoto`), and the canvas draws that, also while two fingers move it: drawn
+  on every frame, a blur held the M32's frames at 30-60 ms (ADR 014, third round).
 - **Accessibility:** where the photo takes filters, the canvas is an adjustable value for screen
   readers, a swipe up or down changing the filter.
 
@@ -72,4 +76,7 @@ Chrome in its place from a sheet of candidates.
   candidates the owner chose Chrome instead.
 - **Other film candidates** (Expired, Tri-X, Instant, Cine): the owner kept the list short. Grain
   and a vignette would also have needed shaders of their own.
+- **Motion Blur's trail as a share of the canvas whatever the photo's size** (as first built):
+  the texture a gesture draws would show it growing with a pinch and shrinking back when the
+  fingers lifted.
 - **Seasonal or dated filters, or more than eight pages:** few, and always the same (the owner).

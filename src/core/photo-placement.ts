@@ -44,6 +44,8 @@ export interface PhotoDrawing {
   readonly width: number;
   readonly height: number;
   readonly rotation: number;
+  /** How many times its covering size it is drawn: `width` and `height` include it. */
+  readonly scale: number;
 }
 
 /** Centered, straight, just covering the canvas: how a photo starts. */
@@ -104,6 +106,7 @@ export function drawPhoto(photo: Size, canvas: Size, placement: PhotoPlacement):
     width: photo.width * ratio,
     height: photo.height * ratio,
     rotation: placement.rotation,
+    scale: placement.scale,
   };
 }
 
