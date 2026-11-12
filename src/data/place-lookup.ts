@@ -6,7 +6,7 @@ import {
 import { z } from 'zod';
 
 import type { LatLng } from '@/core/geo';
-import type { Place } from '@/core/place';
+import { type Place, placeOfAddress } from '@/core/place';
 import { logError } from '@/ui/log';
 
 /**
@@ -27,11 +27,19 @@ export const UNKNOWN_PLACE: PlaceLookup = { status: 'unknown' };
 /** A part of an address; geocoders sometimes give an empty one, which means unknown. */
 const part = z
   .string()
-  .nullable()
-  .transform((value) => (value === null || value.trim() === '' ? null : value));
+  .nullish()
+  .transform((value) =>
+    value === null || value === undefined || value.trim() === '' ? null : value,
+  );
 
 /** The parts of a geocoded address a place uses; the rest is ignored. */
-const addressSchema = z.object({ city: part, region: part, country: part });
+const addressSchema = z.object({
+  city: part,
+  region: part,
+  subregion: part,
+  country: part,
+  isoCountryCode: part,
+});
 
 /** Places already named, by their point: the geocoder limits how often it can be asked. */
 const named = new Map<string, Place | null>();
@@ -57,7 +65,7 @@ export async function lookUpPlace(point: LatLng | null, ask: boolean): Promise<P
     const key = `${point[0].toFixed(4)},${point[1].toFixed(4)}`;
     if (!named.has(key)) {
       const [address] = await reverseGeocodeAsync({ latitude: point[0], longitude: point[1] });
-      named.set(key, address === undefined ? null : addressSchema.parse(address));
+      named.set(key, address === undefined ? null : placeOfAddress(addressSchema.parse(address)));
     }
     const place = named.get(key) ?? null;
     return place === null ? UNKNOWN_PLACE : { status: 'known', place };

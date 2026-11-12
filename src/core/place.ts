@@ -1,14 +1,49 @@
 import type { Activity } from './activity';
 import type { LatLng } from './geo';
 import { decodePolyline } from './polyline';
+import { spanishProvince } from './spain-provinces';
 import type { Layer } from './template';
 
 /** Where an activity was done, as a geocoder names it; any part may be unknown. */
 export interface Place {
   readonly city: string | null;
-  /** The state or province ("Andalucía"). */
+  /**
+   * What follows the city: in Spain its province ("Jaén"), or its community in a provincial
+   * capital ("Jaén, Andalucía"); elsewhere the state or region the geocoder gives.
+   */
   readonly region: string | null;
   readonly country: string | null;
+}
+
+/** The parts of a phone geocoder's address a place is made of. */
+export interface GeocodedAddress {
+  readonly city: string | null;
+  /** Apple's administrative area, Google's admin area. */
+  readonly region: string | null;
+  /** Apple's sub-administrative area, Google's sub-admin area. */
+  readonly subregion: string | null;
+  readonly country: string | null;
+  readonly isoCountryCode: string | null;
+}
+
+/**
+ * The place of a geocoded address. In Spain its region is the province, found in whichever field
+ * the phone put it (Apple and Google differ) and written by its usual name, so both phones write
+ * the same; in a provincial capital, the community instead, so that the name isn't said twice
+ * ("Jaén, Andalucía", not "Jaén, Jaén"). Elsewhere the region as the geocoder gives it (in the
+ * US the sub-administrative area is the county). Time O(1).
+ */
+export function placeOfAddress(address: GeocodedAddress): Place {
+  const { city, country } = address;
+  const found =
+    address.isoCountryCode?.toUpperCase() === 'ES'
+      ? spanishProvince(address.subregion, address.region)
+      : null;
+  if (found === null) {
+    return { city, region: address.region, country };
+  }
+  const capital = city !== null && spanishProvince(city)?.province === found.province;
+  return { city, region: capital ? found.community : found.province, country };
 }
 
 /** How a place reads: "Sevilla", "Sevilla, Andalucía" or "Sevilla, España". */
