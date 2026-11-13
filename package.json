@@ -33,7 +33,12 @@
     "icons": "node scripts/icons/build-sport-icons.mjs && node scripts/icons/build-ui-icons.mjs && node scripts/icons/build-icon-font.mjs"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|@mapbox/vector-tile|@mapbox/point-geometry|pbf))",
+      "/node_modules/react-native-reanimated/plugin/",
+      "/node_modules/@react-native/babel-preset/"
+    ]
   },
   "dependencies": {
     "@expo-google-fonts/anton": "^0.4.2",
@@ -51,6 +56,7 @@
     "@expo-google-fonts/sacramento": "^0.4.1",
     "@expo-google-fonts/space-mono": "^0.4.2",
     "@expo-google-fonts/unbounded": "^0.4.1",
+    "@mapbox/vector-tile": "^3.0.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.2.1",
     "@shopify/flash-list": "2.3.2",
@@ -78,6 +84,7 @@
     "expo-system-ui": "~58.0.7",
     "expo-web-browser": "~58.0.8",
     "i18next": "^26.4.7",
+    "pbf": "^5.1.2",
     "react": "19.3.0",
     "react-i18next": "^17.0.20",
     "react-native": "0.88.1",

@@ -51,7 +51,13 @@ start, and findable later. The owner doesn't want it on any map, image or the la
   none twice; the oldest go past a size limit. OpenStreetMap's data has no time limit like
   Strava's. The address is one setting: if OpenFreeMap fails or closes, a self-hosted copy of the
   same tiles replaces it (Planetiler, the tool OpenFreeMap uses, builds the whole planet in a few
-  hours on one machine).
+  hours on one machine). As built (`data/map-tiles.ts`, `data/map-tile-loader.ts`): the index is
+  read once per run; tiles are kept uncompressed, as the server sends them (any server of the
+  schema will do), under their zoom, column and row without the data's version (an older tile
+  shows the same streets), up to 64 MB, the oldest kept first to go; a tile asked for twice at
+  once loads once, and a kept one that doesn't decode is deleted and asked for again. Only the
+  map's layers are decoded (`core/map-tile-decode.ts`), their features gathered by paint, so a
+  tile draws in a dozen paths: central Madrid at zoom 14 is 350 KB and some 13,000 points.
 - **The zoom follows the scale** (`core/map-tiles.ts`): the deepest zoom whose tiles are drawn at
   least 512 px wide (MapLibre's and Mapbox's size), at most 14, from the size in the design's
   units, so every phone and the exported image show the same detail. A 1,080 px square takes 4
