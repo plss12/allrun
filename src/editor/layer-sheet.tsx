@@ -125,6 +125,8 @@ export function galleryDataKey(data: LayerContext['data']): string {
         data.detail === null ? '' : 'detail',
         data.place?.city ?? '',
         data.zones === null ? '' : 'zones',
+        // The route's map comes after: the widgets with one are drawn again with it.
+        data.map === undefined || data.map === null ? '' : 'map',
       ].join(':')
     : [
         data.kind,
@@ -474,6 +476,7 @@ export function pageLabel(
           t(`widgets.${item.kind}`),
           t(`gallery.lineStyles.${item.line ?? 'solid'}`),
           flag(item.glow, t('gallery.glow')),
+          flag(item.kind === 'route' && item.map === true, t('gallery.onMap')),
         ];
       case 'summaryChart':
         return [

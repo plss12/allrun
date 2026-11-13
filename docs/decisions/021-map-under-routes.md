@@ -94,8 +94,25 @@ start, and findable later. The owner doesn't want it on any map, image or the la
   screen (the owner's decision, knowing the guidelines ask for more).
 - **Where the map shows**: under the home's activity cards first, the whole card (as Share Aura:
   the route fitted in a square of its own between the header and the data, every card as tall);
-  then, in the editor, a "with map" variant of the route with a big datum; other widgets once the
-  owner has seen it.
+  then, in the editor, a "with map" look of the route with a big datum (`bigPair` and `bigTrio`
+  with `layout: 'map'`, in the route's tile of the gallery; the owner's choice: the map in a
+  rounded square as wide as the big datum, over it, rather than behind the whole widget). The
+  map's square fits the route with a tenth of room around (`editor/widget-map.ts`); its tiles
+  depend only on the route and the square's shape, so the editor loads them for the activity as
+  it opens (`loadWidgetMap`, at the zoom of a 1,080 px square) and every widget, thumbnail and
+  export draws from them, a picture recorded once per view (`mapPicture`). Until they load, the
+  widget draws the route alone. The owner liked it and asked for it in the gallery's tile before
+  the route alone, and for the basic route widget on its map too (`map: true` on the route
+  layer: a rounded square 640 wide in the design, the line over it in the layer's look), offered
+  as solid, with a glow and on its map; its dashed and dotted lines were dropped from the gallery,
+  and a period's routes too (saved designs still draw them).
+- **A period's places** (`core/period-places.ts`, `periodRouteData` with a `place`): a period's
+  routes can't share one map when they were done in several places (a race away, a holiday: a map
+  over both would leave the routes as dots). So a period's routes are grouped by place, as the
+  overlaid routes already were, and each place gets its own pages, its routes on its map where
+  they really are, the period's name and the place's over it and the place's totals under it (the
+  owner's idea: no route is left out); the overlaid routes without a map keep the whole period.
+  At most 10 places, those with most activities first; each named by the phone's geocoder.
 - **Place names don't come from the map**: OpenMapTiles has cities, towns and regions but no
   provinces. They stay with the phone's geocoder, from where the route starts (never where the
   phone is). Apple's geocoder puts Spain's province where Google's puts the community, so a

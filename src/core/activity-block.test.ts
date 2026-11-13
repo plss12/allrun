@@ -144,7 +144,10 @@ describe('activityBlocks', () => {
       { design: 'dayColumns', layout: 'three' },
       { design: 'dayColumns', layout: 'four' },
       // Around the route, for activities with GPS.
+      // On its map first (ADR 021), then alone: with two data, then three.
+      { design: 'bigPair', layout: 'map', top: 'main' },
       { design: 'bigPair', layout: 'route', top: 'main' },
+      { design: 'bigTrio', layout: 'map', top: 'main' },
       { design: 'bigTrio', layout: 'route', top: 'main' },
       { design: 'dayRoute', top: 'main' },
       // Words: the quote and the verse with their first phrase (the others are chosen from a

@@ -200,21 +200,27 @@ const DATA_TILES: readonly (readonly ActivityBlock[])[] = [
   DAY_BETWEEN_LAYOUTS.map((layout) => ({ design: 'dayBetween', layout }) as const),
   DAY_OVER_LAYOUTS.map((layout) => ({ design: 'dayOver', layout }) as const),
   DAY_COLUMNS_LAYOUTS.map((layout) => ({ design: 'dayColumns', layout }) as const),
-  bigWithData('route'),
+  // On its map first (the owner's choice), each with two data and then three.
+  [
+    { design: 'bigPair', layout: 'map', top: 'main' },
+    { design: 'bigPair', layout: 'route', top: 'main' },
+    { design: 'bigTrio', layout: 'map', top: 'main' },
+    { design: 'bigTrio', layout: 'route', top: 'main' },
+  ],
   [{ design: 'dayRoute', top: 'main' }],
 ];
 
 /**
  * The gallery tile a version of a mixed widget scrolls in (see `catalogWidgetKey`): its design's,
  * or one shared by designs alike. A big datum with data, in its wide and stretched looks, under
- * the weekday or under the route; the splits as bars and as a ladder; and the laps in their two
+ * the weekday or under the route (alone or on its map); the splits as bars and as a ladder; and the laps in their two
  * tables.
  */
 export function blockTile(block: ActivityBlock): string {
   switch (block.design) {
     case 'bigPair':
     case 'bigTrio':
-      return block.layout === 'route'
+      return block.layout === 'route' || block.layout === 'map'
         ? 'bigRoute'
         : block.layout === 'day' || block.layout === 'stretchedDay'
           ? 'bigDay'
@@ -237,7 +243,9 @@ export const dataTop = (block: ActivityBlock): (typeof BIG_TOPS)[number] =>
  */
 function dataBlocks(activity: Activity): ActivityBlock[] {
   const fills = (block: ActivityBlock) => {
-    const route = block.design === 'dayRoute' || ('layout' in block && block.layout === 'route');
+    const route =
+      block.design === 'dayRoute' ||
+      ('layout' in block && (block.layout === 'route' || block.layout === 'map'));
     return (
       dataWidgetMetrics(activity, block).length === blockDataCount(block) &&
       (!route || activity.routePolyline !== null)
@@ -547,9 +555,7 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
         ? lettering('bowlbyOneSC', false)
         : block.layout === 'smallDay'
           ? lettering('inter', true)
-          : block.layout === 'route'
-            ? lettering('unbounded', true)
-            : lettering('unbounded', true);
+          : lettering('unbounded', true);
     case 'dayRoute':
       // As if written by hand around a route drawn by hand.
       return lettering('permanentMarker', false);

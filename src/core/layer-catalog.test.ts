@@ -125,7 +125,9 @@ describe('activityCatalog', () => {
       'block-dataStack-two',
     ]);
     expect(variantKeys(trail, 'block-bigRoute')).toEqual([
+      'block-bigRoute-map-pair',
       'block-bigRoute-route-pair',
+      'block-bigRoute-map-trio',
       'block-bigRoute-route-trio',
     ]);
     expect(variantKeys(trail, 'block-dayRoute')).toEqual(['block-dayRoute']);
@@ -263,13 +265,8 @@ describe('activityCatalog', () => {
     ]);
   });
 
-  it('offers the route solid, glowing, dashed and dotted', () => {
-    expect(variantKeys(trail, 'route')).toEqual([
-      'route',
-      'route-glow',
-      'route-dashed',
-      'route-dotted',
-    ]);
+  it('offers the route solid, glowing and on its map; no longer dashed or dotted', () => {
+    expect(variantKeys(trail, 'route')).toEqual(['route', 'route-glow', 'route-map']);
   });
 
   it('offers the logo as the name, the monogram and both, a tile each; its tone is styled', () => {
@@ -483,6 +480,8 @@ describe('summaryCatalog', () => {
       'text',
       'info-periodName',
     ]);
+    // Solid and glowing: the dashed and dotted lines were dropped.
+    expect(variantKeys(catalog, 'summaryRoutes')).toEqual(['summaryRoutes', 'summaryRoutes-glow']);
     expect(variantKeys(catalog, 'data')).toEqual([
       'summaryMetric-totalDistance',
       'summaryMetric-totalMovingTime',

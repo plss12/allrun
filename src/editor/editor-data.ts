@@ -55,6 +55,8 @@ import {
   formatShortWeekday,
 } from '@/ui/format';
 
+import type { WidgetMap } from './widget-map';
+
 /** A period summary to fill a template with. */
 export interface SummaryData {
   readonly mode: 'summary';
@@ -80,6 +82,11 @@ export interface ActivityData {
   readonly place: Place | null;
   /** The athlete's heart rate zones, for the zones of its heart rate chart; `null` without them. */
   readonly zones: HeartRateZones | null;
+  /**
+   * The tiles of its route's map, for the widgets with one (ADR 021); absent or `null` until they
+   * load, or without a route: those widgets then draw the route alone.
+   */
+  readonly map?: WidgetMap | null;
 }
 
 /** What the editor fills the template with: one activity, or a period summary. */

@@ -6,6 +6,7 @@ import {
   LinearGradient,
   Paint,
   Path,
+  Picture,
   Rect,
   RoundedRect,
   Skia,
@@ -35,6 +36,9 @@ import { castsShadow, contrastingInk } from '@/core/layer-style';
 import { metricValue, type MetricId } from '@/core/metrics';
 import { type Phrase, phraseLanguage, phraseWords } from '@/core/phrases';
 import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
+import type { Activity } from '@/core/activity';
+import type { LatLng } from '@/core/geo';
+import { toPixels, type Viewport } from '@/core/map-tiles';
 import { formatPlace } from '@/core/place';
 import { decodePolyline } from '@/core/polyline';
 import { type Point, projectRoutes } from '@/core/route-projection';
@@ -51,6 +55,7 @@ import type {
 import { writesInCapitals } from '@/core/template';
 import { durationParts } from '@/core/units';
 import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
+import { mapPicture } from '@/ui/map-picture';
 
 import { markWidth, PlainMark, PlainWordmark, wordmarkHeight } from './brand/brand-art';
 import {
@@ -70,6 +75,12 @@ import {
   type TextContext,
 } from './editor-data';
 import { CAP_HEIGHTS, drawsBold, fontFamiliesOf, lettersExtent } from './fonts';
+import {
+  WIDGET_MAP_RADIUS,
+  type WidgetMap,
+  widgetMapPoints,
+  widgetMapViewport,
+} from './widget-map';
 import { APP_ICON_PATHS, SPORT_ICON_PATHS, SPORT_ICON_SIZE } from './icons/sport-icons.generated';
 import {
   addLeanRoom,
@@ -278,9 +289,24 @@ type Piece =
       readonly color: string;
     }
   | {
+      /**
+       * A route's map (ADR 021), a rounded square `size` wide at (x, y), in the map's own colors:
+       * `viewport` is the square's, from its corner.
+       */
+      readonly kind: 'map';
+      readonly x: number;
+      readonly y: number;
+      readonly size: number;
+      readonly radius: number;
+      readonly viewport: Viewport;
+      readonly tiles: WidgetMap['tiles'];
+    }
+  | {
       readonly kind: 'route';
       readonly points: readonly Point[];
-      /** A replica's own color and width for it; the block's color and `ROUTE_STROKE` when absent. */
+      /**
+       * Its own color (a replica's) and width; the block's color and `ROUTE_STROKE` when absent.
+       */
       readonly color?: string;
       readonly width?: number;
     };
@@ -589,6 +615,55 @@ export function routeBox(
         })),
         ...look,
       },
+    ],
+  };
+}
+
+/**
+ * The activity's route on its map (ADR 021), as {@link routesMapBox}; `null` without a route.
+ */
+export function mapBox(
+  activity: Activity,
+  side: number,
+  map: WidgetMap,
+  stroke: number,
+): Box | null {
+  const points = widgetMapPoints(activity);
+  return points === null ? null : routesMapBox([points], side, map, stroke);
+}
+
+/**
+ * Routes of one place on their map (ADR 021), a rounded square `side` wide: the map, in its own
+ * colors and fitted to them with room around (see `widgetMapViewport`), and each route over it
+ * where it really is, in the block's color and `stroke` wide, projected with the same viewport
+ * so that they line up. Time O(n) for their n points.
+ */
+export function routesMapBox(
+  routes: readonly (readonly LatLng[])[],
+  side: number,
+  map: WidgetMap,
+  stroke: number,
+): Box {
+  const viewport = widgetMapViewport(routes.flat(), side);
+  const projected = routes.map((route) => route.map((point) => toPixels(point, viewport)));
+  return {
+    width: side,
+    height: side,
+    place: (x, y) => [
+      {
+        kind: 'map',
+        x,
+        y,
+        size: side,
+        radius: side * WIDGET_MAP_RADIUS,
+        viewport,
+        tiles: map.tiles,
+      },
+      ...projected.map((route): Piece => ({
+        kind: 'route',
+        points: route.map((point) => ({ x: x + point.x, y: y + point.y })),
+        width: stroke,
+      })),
     ],
   };
 }
@@ -1096,6 +1171,7 @@ const SIZES = {
     wide: { value: 120, data: 38, stretch: 1 },
     day: { value: 120, data: 38, stretch: 1 },
     route: { value: 120, data: 38, stretch: 1 },
+    map: { value: 120, data: 38, stretch: 1 },
     // Drawn this many times taller than the font, as AURA stretches its big "11.3 KM".
     stretched: { value: 180, data: 56, stretch: 1.9 },
     stretchedDay: { value: 180, data: 56, stretch: 1.9 },
@@ -2898,7 +2974,7 @@ export function prepareActivityBlock(
   data: ActivityData,
   { fonts, textContext, translate, canvas, phrases = BUILT_IN_PHRASES }: BlockContext,
 ): PreparedBlock | null {
-  const { activity } = data;
+  const { activity, map: routeMap } = data;
   const { block, style } = layer;
   const metrics = isDataWidget(block.design)
     ? dataWidgetMetrics(activity, block)
@@ -3058,7 +3134,18 @@ export function prepareActivityBlock(
           );
           return column([day, stack], 0, 'center');
         }
-        if (block.layout === 'route' && activity.routePolyline !== null) {
+        if (block.layout === 'map' && routeMap !== undefined && routeMap !== null) {
+          // The route on its map over it, in a square as wide as the big datum; until the map
+          // loads, the route alone, as below.
+          const map = mapBox(activity, main.width, routeMap, routeStrokeFor(main.width));
+          if (map !== null) {
+            return column([map, stack], sizes.value * BIG_HEADER.routeGap, 'center');
+          }
+        }
+        if (
+          (block.layout === 'route' || block.layout === 'map') &&
+          activity.routePolyline !== null
+        ) {
           // The route over it, centered, a little narrower than the big datum.
           const route = routeBox(
             activity.routePolyline,
@@ -4575,6 +4662,7 @@ function appMark(piece: Piece, i: number): ReactElement | null {
     case 'text':
     case 'messageTail':
     case 'paper':
+    case 'map':
       return null;
   }
 }
@@ -4609,6 +4697,7 @@ function BlockArt({
       case 'symbol':
       case 'disc':
       case 'mark':
+      case 'map':
         return [];
       case 'icon':
         return piece.color !== undefined
@@ -4672,6 +4761,19 @@ function BlockArt({
               r={piece.radius}
               color={piece.color}
             />
+          ) : piece.kind === 'map' ? (
+            <Group
+              key={i}
+              clip={Skia.RRectXY(
+                Skia.XYWHRect(piece.x, piece.y, piece.size, piece.size),
+                piece.radius,
+                piece.radius,
+              )}
+            >
+              <Group transform={[{ translateX: piece.x }, { translateY: piece.y }]}>
+                <Picture picture={mapPicture(piece.viewport, piece.tiles)} />
+              </Group>
+            </Group>
           ) : piece.kind === 'messageTail' ? (
             <Path key={i} path={messageTailPath(piece.x, piece.y)} color={piece.color} />
           ) : piece.kind === 'paper' ? (

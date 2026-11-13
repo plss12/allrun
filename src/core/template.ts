@@ -260,8 +260,8 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  * app is the point. Each design comes in a few versions, the pages of its tile in the gallery:
  * - `bigPair` (data): a datum big, unit and all, and two more small under it, at its ends, in a
  *   wide and heavy letter (`wide`), stretched upwards (`stretched`), under the weekday written as
- *   wide as it (`day`, or `stretchedDay` with the datum stretched) or under the route (`route`, only for
- *   activities with one);
+ *   wide as it (`day`, or `stretchedDay` with the datum stretched) or under the route (`route`, or
+ *   `map` with the route on its map in a rounded frame, ADR 021; only for activities with one);
  *   the big one is the
  *   sport's main datum (`top: 'main'`) or the time (`top: 'time'`), the others follow in the
  *   sport's order, without names, so never a second reading of one (see `bigMetrics`);
@@ -364,9 +364,9 @@ export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
 export const APP_MODES = ['dark', 'light'] as const;
 /**
  * The looks of a big datum: wide and heavy, stretched upwards, under the weekday (wide or
- * stretched) or under the route.
+ * stretched), under the route, or under the route on its map (ADR 021).
  */
-export const BIG_LAYOUTS = ['wide', 'stretched', 'day', 'stretchedDay', 'route'] as const;
+export const BIG_LAYOUTS = ['wide', 'stretched', 'day', 'stretchedDay', 'route', 'map'] as const;
 /** The looks of a big datum alone: under the weekday as wide, wide or stretched, or small. */
 export const BIG_SOLO_LAYOUTS = ['smallDay', 'day', 'stretchedDay'] as const;
 /** How many data go beside the short weekday: two on each side, or one. */
@@ -690,7 +690,13 @@ export const layerSchema = z.discriminatedUnion('kind', [
   }),
   // Templates saved while routes could mark their start and end (`endpoints`) still read: the
   // field is dropped.
-  z.object({ ...layerBase, kind: z.literal('route'), stroke: strokeStyleSchema }),
+  z.object({
+    ...layerBase,
+    kind: z.literal('route'),
+    stroke: strokeStyleSchema,
+    /** Over its map, in a rounded square (ADR 021); the line alone when absent. */
+    map: z.boolean().optional(),
+  }),
   z.object({ ...layerBase, kind: z.literal('summaryRoutes'), stroke: strokeStyleSchema }),
   z.object({
     ...layerBase,

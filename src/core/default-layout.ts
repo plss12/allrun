@@ -287,7 +287,7 @@ export function newLayer(
       };
     case 'route':
     case 'summaryRoutes': {
-      // The line's look goes in its stroke.
+      // The line's look goes in its stroke; an activity's route may lie on its map.
       const { kind, line, glow } = item;
       const one = kind === 'route';
       return {
@@ -299,6 +299,7 @@ export function newLayer(
           ...(line === undefined ? {} : { line }),
           ...(glow === undefined ? {} : { glow }),
         },
+        ...(item.kind === 'route' && item.map === true ? { map: true } : {}),
         transform: centered(one ? layout.route.scale : layout.routes.scale),
         opacity: one ? 0.95 : 0.85,
       };

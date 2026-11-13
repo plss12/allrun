@@ -13,6 +13,7 @@ import {
   MipmapMode,
   Paint,
   Path,
+  Picture,
   Rect,
   RoundedRect,
   Shader,
@@ -75,8 +76,10 @@ import {
 import type { HitHole, HitLine, LayerTransform } from '@/core/layer-transform';
 import type { PhotoDrawing, Size } from '@/core/photo-placement';
 import type { Phrase } from '@/core/phrases';
+import { toPixels } from '@/core/map-tiles';
 import { decodePolyline } from '@/core/polyline';
 import { type Point, projectRoutes } from '@/core/route-projection';
+import { mapPicture } from '@/ui/map-picture';
 import {
   type ActivityChartSeries,
   CANVAS_FORMATS,
@@ -137,6 +140,12 @@ import {
   type MountStrip,
 } from './mount-caption';
 import { discardParagraph, finishParagraph } from './paragraph-arena';
+import {
+  WIDGET_MAP_RADIUS,
+  type WidgetMap,
+  widgetMapPoints,
+  widgetMapViewport,
+} from './widget-map';
 import { ParagraphPicture } from './paragraph-picture';
 
 /**
@@ -771,6 +780,13 @@ function prepareLayer(
     case 'route': {
       if (data.mode !== 'activity' || data.activity.routePolyline === null) {
         return null;
+      }
+      // On its map once loaded; until then, and without one, the line alone.
+      if (layer.map === true && data.map !== undefined && data.map !== null) {
+        const onMap = preparedRouteMap(layer, data.activity, data.map);
+        if (onMap !== null) {
+          return onMap;
+        }
       }
       const routes = projectedRoutes([data.activity.routePolyline], ROUTE_BOX, ROUTE_BOX);
       return preparedRoutes(layer, routes, ROUTE_BOX, ROUTE_BOX);
@@ -3102,6 +3118,56 @@ function preparedRoutes(
     height: Math.max(...ys) - Math.min(...ys) + layer.stroke.width,
     content: <RouteLines routes={routes} box={box} boxHeight={boxHeight} stroke={layer.stroke} />,
     line: hitLine(routes, box, boxHeight, layer.stroke.width),
+  };
+}
+
+/**
+ * An activity's route on its map (ADR 021): a rounded square {@link ROUTE_BOX} wide with the map
+ * in its own colors and a shadow under it, the route over it in the layer's line, projected with
+ * the map's viewport so that both line up. The whole square is the layer's to grab. `null`
+ * without a route.
+ */
+function preparedRouteMap(
+  layer: Extract<Layer, { kind: 'route' }>,
+  activity: Activity,
+  map: WidgetMap,
+): PreparedLayer | null {
+  const points = widgetMapPoints(activity);
+  if (points === null) {
+    return null;
+  }
+  const viewport = widgetMapViewport(points, ROUTE_BOX);
+  const half = ROUTE_BOX / 2;
+  const radius = ROUTE_BOX * WIDGET_MAP_RADIUS;
+  return {
+    layer,
+    width: ROUTE_BOX,
+    height: ROUTE_BOX,
+    content: (
+      <Group>
+        <Group
+          layer={
+            <Paint>
+              <DropShadow />
+            </Paint>
+          }
+        >
+          <Group
+            clip={Skia.RRectXY(Skia.XYWHRect(-half, -half, ROUTE_BOX, ROUTE_BOX), radius, radius)}
+          >
+            <Group transform={[{ translateX: -half }, { translateY: -half }]}>
+              <Picture picture={mapPicture(viewport, map.tiles)} />
+            </Group>
+          </Group>
+        </Group>
+        <RouteLines
+          routes={[points.map((point) => toPixels(point, viewport))]}
+          box={ROUTE_BOX}
+          boxHeight={ROUTE_BOX}
+          stroke={layer.stroke}
+        />
+      </Group>
+    ),
   };
 }
 

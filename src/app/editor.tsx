@@ -114,6 +114,7 @@ import type { DistanceUnit } from '@/core/units';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
 import { galleryData } from '@/editor/gallery-place';
+import { loadWidgetMap } from '@/editor/load-widget-map';
 import { ColorMenu } from '@/editor/color-menu';
 import { Eyedropper } from '@/editor/eyedropper';
 import { snapshotDesign } from '@/editor/eyedropper-snapshot';
@@ -312,16 +313,33 @@ function EditorWorkspace({
       setAskedPlace({ id: activity.id, lookup });
       return lookup;
     });
-  const data: EditorData =
+  /**
+   * The tiles of the route's map, for the widgets with one (ADR 021): loaded in the background,
+   * those widgets draw the route alone until they come (and if they can't).
+   */
+  const routeMap = useAsync(
+    () => (loaded.mode === 'activity' ? loadWidgetMap(loaded.activity) : Promise.resolve(null)),
+    loaded.mode === 'activity'
+      ? `map|${loaded.activity.id}|${loaded.activity.routePolyline ?? ''}`
+      : 'map|summary',
+  );
+  const withMap = (shown: EditorData): EditorData =>
+    shown.mode === 'activity' && routeMap.status === 'success'
+      ? { ...shown, map: routeMap.data }
+      : shown;
+  const data: EditorData = withMap(
     loaded.mode === 'activity' && placeLookup.status === 'known'
       ? { ...loaded, place: placeLookup.place }
-      : loaded;
+      : loaded,
+  );
   /** What the galleries draw: the place, or a sample of it until the user allows naming it. */
-  const shownData = galleryData(loaded, placeLookup, {
-    city: t('gallery.placeSample.city'),
-    region: t('gallery.placeSample.region'),
-    country: t('gallery.placeSample.country'),
-  });
+  const shownData = withMap(
+    galleryData(loaded, placeLookup, {
+      city: t('gallery.placeSample.city'),
+      region: t('gallery.placeSample.region'),
+      country: t('gallery.placeSample.country'),
+    }),
+  );
   const defaultTemplate: DefaultTemplate = (format) =>
     emptyLayout(
       data.mode === 'activity'

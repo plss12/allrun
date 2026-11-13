@@ -52,7 +52,7 @@ export type CatalogItem =
       Pick<LayerOf<'info'>, 'kind' | 'field' | 'dateFormat' | 'periodFormat' | 'placeFormat'>
     >
   | { readonly kind: 'text' }
-  | ({ readonly kind: 'route' } & LineLook)
+  | ({ readonly kind: 'route'; readonly map?: boolean } & LineLook)
   | ({ readonly kind: 'summaryRoutes' } & LineLook)
   | Readonly<
       Pick<
@@ -289,6 +289,7 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           item.header === false ? 'noheader' : undefined,
         ];
       case 'route':
+        return [item.line, flag(item.glow, 'glow'), flag(item.map, 'map')];
       case 'summaryRoutes':
         return [item.line, flag(item.glow, 'glow')];
       case 'activityBlock':
@@ -447,14 +448,17 @@ const IMAGE_ENTRIES: readonly Entry[] = [
   ),
 ];
 
-/** Route lines, solid, solid with a glow, dashed and dotted. */
+/**
+ * Route lines: solid and with a glow, and an activity's also on its map (ADR 021). The owner
+ * dropped the dashed and dotted ones, which saved designs still draw.
+ */
 function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {
-  return tileEntries('basic', [
-    { kind },
-    { kind, glow: true },
-    { kind, line: 'dashed' },
-    { kind, line: 'dotted' },
-  ]);
+  return tileEntries(
+    'basic',
+    kind === 'route'
+      ? [{ kind }, { kind, glow: true }, { kind, map: true }]
+      : [{ kind }, { kind, glow: true }],
+  );
 }
 
 /**
