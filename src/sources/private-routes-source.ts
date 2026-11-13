@@ -41,4 +41,8 @@ export class PrivateRoutesSource implements ActivitySource {
   getHeartRateZones(): Promise<HeartRateZones | null> {
     return this.source.getHeartRateZones();
   }
+
+  getAthletePhoto(): Promise<string | null> {
+    return this.source.getAthletePhoto();
+  }
 }

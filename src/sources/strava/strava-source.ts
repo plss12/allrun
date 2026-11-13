@@ -19,6 +19,7 @@ import { selectActivities } from '@/core/summary';
 import type { ActivitySource } from '@/sources/activity-source';
 
 import type { StravaApi } from './api';
+import { athletePhoto, stravaAthleteSchema } from './athlete';
 import { parseStravaDetail, stravaDetailedActivitySchema, stravaStreamsSchema } from './detail';
 import { type StravaActivity, stravaActivitySchema, stravaToActivity } from './schema';
 import { parseStravaZones, stravaZonesSchema } from './zones';
@@ -48,6 +49,7 @@ const STREAM_KEYS = 'time,distance,altitude,velocity_smooth,heartrate,watts';
 
 const RECENT_KEY = 'recent';
 const ZONES_KEY = 'zones';
+const ATHLETE_KEY = 'athlete';
 const yearKey = (year: string) => `year-${year}`;
 const detailKey = (id: number) => `detail-${id}`;
 
@@ -80,6 +82,11 @@ type KeptDetail = z.infer<typeof keptDetailSchema>;
 const keptZonesSchema = z.object({
   fetchedAt: fetchedAtSchema,
   zones: stravaZonesSchema.nullable(),
+});
+
+const keptAthleteSchema = z.object({
+  fetchedAt: fetchedAtSchema,
+  photo: z.string().nullable(),
 });
 
 /** The numeric Strava id of an `Activity.id` (`strava:123`), or `null` if it isn't one. */
@@ -229,6 +236,18 @@ export class StravaActivitySource implements ActivitySource {
     const zones = answer === null ? null : stravaZonesSchema.parse(answer);
     await this.keep(ZONES_KEY, { fetchedAt: this.now(), zones });
     return zones === null ? null : parseStravaZones(zones);
+  }
+
+  /** The athlete's photo, kept as the zones are: asked for again once a week. */
+  async getAthletePhoto(): Promise<string | null> {
+    await this.ready();
+    const kept = await this.readKept(ATHLETE_KEY, keptAthleteSchema);
+    if (kept !== null && isCacheFresh(kept.fetchedAt, this.now())) {
+      return kept.photo;
+    }
+    const photo = athletePhoto(stravaAthleteSchema.parse(await this.api.get('/athlete')));
+    await this.keep(ATHLETE_KEY, { fetchedAt: this.now(), photo });
+    return photo;
   }
 
   // The cache ------------------------------------------------------------------------------------

@@ -25,4 +25,9 @@ export interface ActivitySource {
    * has none (an athlete without a heart rate monitor).
    */
   getHeartRateZones(): Promise<HeartRateZones | null>;
+  /**
+   * The address of the athlete's profile photo, for the profile's button; `null` when the source
+   * has none (an athlete who never set one).
+   */
+  getAthletePhoto(): Promise<string | null>;
 }

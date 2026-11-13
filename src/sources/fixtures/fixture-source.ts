@@ -58,6 +58,11 @@ export class FixtureActivitySource implements ActivitySource {
   async getHeartRateZones(): Promise<HeartRateZones | null> {
     return parseStravaZones(generateStravaZones());
   }
+
+  /** The synthetic athlete has no photo: the button shows the initial. */
+  async getAthletePhoto(): Promise<string | null> {
+    return null;
+  }
 }
 
 /** A seed from an id: the same id always gives the same seed (FNV-1a). Time O(id length). */

@@ -76,3 +76,18 @@ export function authProblem(error: {
   }
   return 'unknown';
 }
+
+/**
+ * The letter on the profile's button when there is no photo: the first of the athlete's name,
+ * or of the account's email without one, in capitals (a whole character, also outside the BMP);
+ * `null` when both are empty. Time O(n) for the name's length, space O(1).
+ */
+export function profileInitial(name: string, email: string): string | null {
+  for (const text of [name, email]) {
+    const [first] = text.trim();
+    if (first !== undefined) {
+      return first.toLocaleUpperCase();
+    }
+  }
+  return null;
+}

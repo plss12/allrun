@@ -9,10 +9,10 @@ import type { PeriodKind } from '@/core/periods';
 import { familiesOf } from '@/core/summary';
 import { useActivitySource, useActivitySourceKey, usesStrava } from '@/data/activity-source';
 import { useStrava } from '@/data/strava';
-import { BrandMark } from '@/editor/brand/brand-art';
 import { FLOATING_INK, KeptMounted } from '@/editor/round-button';
 import { ActivityCard } from '@/home/activity-card';
 import { ConnectStravaView } from '@/home/connect-strava-view';
+import { ProfileAvatar } from '@/home/profile-avatar';
 import { PeriodCard } from '@/home/period-card';
 import { type SportFilter, SportFilterMenu } from '@/home/sport-filter-menu';
 import { colors } from '@/theme/colors';
@@ -87,9 +87,10 @@ export default function Home() {
       )}
       <TopBar
         left={
-          // The logo opens the profile (the owner's choice).
+          // The athlete's photo opens the profile (the owner's choice: the logo there wasn't
+          // read as the way to it).
           <GlassButton label={t('account.profile.open')} onPress={() => router.push('/profile')}>
-            <BrandMark height={BAR_LOGO_HEIGHT} />
+            <ProfileAvatar />
           </GlassButton>
         }
       >
@@ -231,6 +232,5 @@ function Summaries() {
   );
 }
 
-/** The logo in its round button, and the filter's icon in the one across. */
-const BAR_LOGO_HEIGHT = 20;
+/** The filter's icon in its round button. */
 const BAR_ICON_SIZE = 24;

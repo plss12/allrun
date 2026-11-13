@@ -1,4 +1,10 @@
-import { authProblem, formProblem, MAX_PASSWORD_LENGTH, normalizeEmail } from './account';
+import {
+  authProblem,
+  formProblem,
+  MAX_PASSWORD_LENGTH,
+  normalizeEmail,
+  profileInitial,
+} from './account';
 
 describe('the sign-in form', () => {
   it('takes an email as typed, without spaces or capitals', () => {
@@ -37,5 +43,21 @@ describe('the answers of Supabase Auth', () => {
     expect(authProblem({ name: 'AuthRetryableFetchError' })).toBe('offline');
     expect(authProblem({ code: 'something_new' })).toBe('unknown');
     expect(authProblem({})).toBe('unknown');
+  });
+});
+
+describe('profileInitial', () => {
+  it("takes the athlete's name first, in capitals", () => {
+    expect(profileInitial('  ana López', 'pepe@example.com')).toBe('A');
+    expect(profileInitial('Ñandú', '')).toBe('Ñ');
+  });
+
+  it('falls back on the email, and on nothing', () => {
+    expect(profileInitial('', 'pepe@example.com')).toBe('P');
+    expect(profileInitial(' ', '')).toBeNull();
+  });
+
+  it('keeps a character outside the BMP whole', () => {
+    expect(profileInitial('𝒜lba', '')).toBe('𝒜');
   });
 });
