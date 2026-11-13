@@ -6,20 +6,6 @@ export interface Point {
   readonly y: number;
 }
 
-/** Rectangle in canvas pixels, from its top left corner. */
-export interface Box {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
-
-/** Width and height of the routes' bounding box, in projected units. */
-export interface Span {
-  readonly width: number;
-  readonly height: number;
-}
-
 /**
  * Two routes are of the same place when the gap between their bounding boxes is no more than
  * this share of the larger box's longer side: they keep where they really are, so the streets of
@@ -175,35 +161,4 @@ export function projectRoutes(
   return projected.map((route) =>
     route.map((p) => ({ x: offsetX + (p.x - minX) * fit, y: offsetY + (p.y - minY) * fit })),
   );
-}
-
-/**
- * The shape of the routes as {@link projectRoutes} draws them: the size of their bounding box,
- * in projected units; zero for no points. Time O(r² + n), space O(r + n).
- */
-export function routeSpan(routes: readonly (readonly LatLng[])[]): Span {
-  if (routes.every((route) => route.length === 0)) {
-    return { width: 0, height: 0 };
-  }
-  const { width, height } = bounds(toPlane(routes).flat());
-  return { width, height };
-}
-
-/**
- * Of several free areas, the one where routes of this `span` come out biggest once fitted in
- * it: the scale in each is that of the side the routes fill first. The first box wins a tie (a
- * single point fits any box alike). Time O(b) for b boxes, space O(1).
- *
- * @throws RangeError without boxes.
- */
-export function largestFit(span: Span, boxes: readonly Box[]): Box {
-  if (boxes.length === 0) {
-    throw new RangeError('No box to fit the routes in');
-  }
-  const scale = (box: Box) =>
-    Math.min(
-      span.width > 0 ? box.width / span.width : Number.POSITIVE_INFINITY,
-      span.height > 0 ? box.height / span.height : Number.POSITIVE_INFINITY,
-    );
-  return boxes.reduce((best, box) => (scale(box) > scale(best) ? box : best));
 }

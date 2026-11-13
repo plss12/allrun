@@ -3,17 +3,19 @@ import {
   requestForegroundPermissionsAsync,
   reverseGeocodeAsync,
 } from 'expo-location';
+import { File } from 'expo-file-system';
 import { z } from 'zod';
 
 import type { LatLng } from '@/core/geo';
 import { type Place, placeOfAddress } from '@/core/place';
 import { logError } from '@/ui/log';
 
+import { stravaCacheDirectory } from './strava-cache-store';
+
 /**
  * Where an activity was done, named by the device's geocoder (Apple's on iOS, Google's on
- * Android). iOS names places without asking; Android needs the location permission first, so it
- * is only asked for when the user picks the place widget. Milestone 4 moves this to the map
- * provider, without permissions on either (ADR 009).
+ * Android). iOS names places without asking; Android needs the location permission first, which
+ * the app asks for as it opens, and again when the user picks the place widget.
  */
 export type PlaceLookup =
   | { readonly status: 'known'; readonly place: Place }
@@ -41,13 +43,93 @@ const addressSchema = z.object({
   isoCountryCode: part,
 });
 
-/** Places already named, by their point: the geocoder limits how often it can be asked. */
-const named = new Map<string, Place | null>();
+const placeSchema = z.object({
+  city: z.string().nullable(),
+  region: z.string().nullable(),
+  country: z.string().nullable(),
+});
+const keptPlacesSchema = z.record(z.string(), placeSchema.nullable());
+
+/**
+ * Where the places already named are kept on the phone, so that the home's cards show theirs at
+ * once on every launch: with Strava's activities they are named from, in a folder of their own
+ * (which the Strava source's weekly pruning doesn't read), so they go when Strava is disconnected
+ * or the user signs out. A point is named the same for good.
+ */
+const placesFile = () => new File(stravaCacheDirectory(), 'places', 'places.json');
+
+/** Places already named, by their point (about 10 m), loaded from the phone once. */
+let named: Promise<Map<string, Place | null>> | null = null;
+
+function namedPlaces(): Promise<Map<string, Place | null>> {
+  named ??= (async () => {
+    const file = placesFile();
+    if (!file.exists) {
+      return new Map<string, Place | null>();
+    }
+    const kept = keptPlacesSchema.safeParse(JSON.parse(await file.text()));
+    if (!kept.success) {
+      logError('The places kept on the phone are damaged', kept.error);
+      return new Map<string, Place | null>();
+    }
+    return new Map(Object.entries(kept.data));
+  })().catch((error: unknown) => {
+    logError('Could not read the places kept on the phone', error);
+    return new Map<string, Place | null>();
+  });
+  return named;
+}
+
+/**
+ * The geocoder is asked one place at a time: Apple's limits how often it can be asked, and the
+ * home asks for every card it shows.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
+function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
+  const run = queue.then(task, task);
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+/** Names `point` with the geocoder, unless it was already, and keeps it on the phone. */
+function placeAt(point: LatLng): Promise<Place | null> {
+  const key = `${point[0].toFixed(4)},${point[1].toFixed(4)}`;
+  return oneAtATime(async () => {
+    const loading = namedPlaces();
+    const places = await loading;
+    const known = places.get(key);
+    if (known !== undefined) {
+      return known;
+    }
+    const [address] = await reverseGeocodeAsync({ latitude: point[0], longitude: point[1] });
+    const place = address === undefined ? null : placeOfAddress(addressSchema.parse(address));
+    // Forgotten meanwhile (Strava disconnected, signed out): nothing is kept again.
+    if (named !== loading) {
+      return place;
+    }
+    places.set(key, place);
+    try {
+      const file = placesFile();
+      file.parentDirectory.create({ intermediates: true, idempotent: true });
+      file.create({ overwrite: true });
+      await file.write(JSON.stringify(Object.fromEntries(places)));
+    } catch (error) {
+      logError('Could not keep the places on the phone', error);
+    }
+    return place;
+  });
+}
+
+/** Forgets the places read in this session; their file goes with Strava's cache. */
+export function forgetNamedPlaces(): void {
+  named = null;
+}
 
 /**
  * Names the place of `point`. Without permission on Android it says so, unless `ask` lets it ask
  * for it (the user just picked the place widget). Errors are logged and read as unknown: the
- * place is an extra, the editor works without it.
+ * place is an extra, the app works without it.
  */
 export async function lookUpPlace(point: LatLng | null, ask: boolean): Promise<PlaceLookup> {
   if (point === null) {
@@ -62,12 +144,7 @@ export async function lookUpPlace(point: LatLng | null, ask: boolean): Promise<P
         return ask ? UNKNOWN_PLACE : { status: 'needsPermission' };
       }
     }
-    const key = `${point[0].toFixed(4)},${point[1].toFixed(4)}`;
-    if (!named.has(key)) {
-      const [address] = await reverseGeocodeAsync({ latitude: point[0], longitude: point[1] });
-      named.set(key, address === undefined ? null : placeOfAddress(addressSchema.parse(address)));
-    }
-    const place = named.get(key) ?? null;
+    const place = await placeAt(point);
     return place === null ? UNKNOWN_PLACE : { status: 'known', place };
   } catch (error) {
     logError('Could not name the place of the activity', error);

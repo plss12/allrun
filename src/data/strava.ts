@@ -16,6 +16,7 @@ import {
 import { logError } from '@/ui/log';
 
 import { appScheme } from './auth';
+import { forgetNamedPlaces } from './place-lookup';
 import { clearStravaCache } from './strava-cache-store';
 import { supabase } from './supabase';
 
@@ -74,6 +75,7 @@ function client() {
 function forgetActivities(): void {
   try {
     clearStravaCache();
+    forgetNamedPlaces();
   } catch (error) {
     logError('Could not clear the Strava activities kept on the phone', error);
   }

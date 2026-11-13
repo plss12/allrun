@@ -9,6 +9,9 @@ import type { StravaCacheStore } from '@/sources/strava/strava-source';
  * on disconnecting Strava and on signing out.
  */
 const directory = () => new Directory(Paths.cache, 'strava');
+
+/** The folder of what the phone keeps of Strava, for what goes with it (the places' names). */
+export const stravaCacheDirectory = directory;
 const fileOf = (key: string) => new File(directory(), `${key}.json`);
 
 export const stravaCacheStore: StravaCacheStore = {
