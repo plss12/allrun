@@ -30,7 +30,13 @@ import { createContext, type ReactElement, use } from 'react';
 import { type PhotoFilterId, photoFilterLook } from '@/core/photo-filter';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { activityChartSeries, type LineSeries, splitRows } from '@/core/activity-charts';
+import {
+  activityChartSeries,
+  lineLevel,
+  type LineScale,
+  type LineSeries,
+  splitRows,
+} from '@/core/activity-charts';
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { Activity } from '@/core/activity';
 import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
@@ -968,6 +974,8 @@ function prepareLayer(
               elevation: showElevation ? name(translate('splitHeaders.elevation')) : null,
               heartRate: showHeartRate ? name(translate('splitHeaders.heartRate')) : null,
             }}
+            // As the pace line: a pace by its pace, a speed (a ride's) as it is.
+            scale={speed === 'speed' ? 'linear' : 'pace'}
             color={layer.color}
           />,
         );
@@ -1010,6 +1018,8 @@ function prepareLayer(
           {line ? (
             <LineBody
               series={series}
+              // A pace by its pace, as Strava draws it; a speed (a ride's) as it is.
+              scale={layer.series === 'pace' && speed !== 'speed' ? 'pace' : 'linear'}
               color={layer.color}
               average={
                 layer.averageLine === true
@@ -3610,28 +3620,26 @@ function ChartFrame({
 /**
  * A line over an area that fades out downwards, the shape of an activity's elevation, pace, heart
  * rate or power along the way, between the lowest and the highest values (with some room below
- * the lowest, so the area keeps some body). Optionally, a dashed line at the `average`, and the
- * line colored by heart rate `zones`.
+ * the lowest, so the area keeps some body), on its `scale` (see `lineLevel`). Optionally, a dashed
+ * line at the `average`, and the line colored by heart rate `zones`.
  */
 function LineBody({
   series,
+  scale,
   color,
   average,
   zones,
 }: {
   readonly series: LineSeries;
+  readonly scale: LineScale;
   readonly color: string;
   /** Where the dashed average line goes, in the series' units; `null` for none. */
   readonly average: number | null;
   /** The athlete's zones, to paint each stretch of the line in its zone's color. */
   readonly zones: HeartRateZones | null;
 }) {
-  const range = series.max - series.min;
-  const floor = series.min - range * LINE_FLOOR;
-  const span = range * (1 + LINE_FLOOR);
-  // A flat line sits halfway up.
   const yOf = (value: number) =>
-    span > 0 ? CHART_HEIGHT - ((value - floor) / span) * CHART_HEIGHT : CHART_HEIGHT / 2;
+    CHART_HEIGHT - lineLevel(value, series, scale, LINE_FLOOR) * CHART_HEIGHT;
   const points = series.points.map((point) => ({ x: point.x * CHART_WIDTH, y: yOf(point.y) }));
   const pathOf = (stretch: readonly Point[]) => {
     const builder = Skia.PathBuilder.Make();
@@ -3828,16 +3836,19 @@ interface SplitColumns {
 /**
  * Splits as a table, as Strava shows them: under the names of its columns, each row with its
  * number and its pace or speed (left-aligned), a bar as long as it was fast (the slowest still
- * takes {@link ROW_MIN_SHARE} of the room, so the differences show), and then its change in
- * altitude and its heart rate when shown, right-aligned so their digits line up.
+ * takes {@link ROW_MIN_SHARE} of the room, so the differences show) on the `scale` of the pace
+ * line beside it (`lineLevel`: a pace by its pace), and then its change in altitude and its heart
+ * rate when shown, right-aligned so their digits line up.
  */
 function SplitRows({
   rows,
   columns,
+  scale,
   color,
 }: {
   readonly rows: readonly PreparedRow[];
   readonly columns: SplitColumns;
+  readonly scale: LineScale;
   readonly color: string;
 }) {
   const widthOf = (paragraph: SkParagraph) => Math.ceil(paragraph.getLongestLine()) + 1;
@@ -3878,7 +3889,9 @@ function SplitRows({
   const fastest = Math.max(...speeds);
   const lengthOf = (speed: number) =>
     fastest > slowest
-      ? room * (ROW_MIN_SHARE + ((1 - ROW_MIN_SHARE) * (speed - slowest)) / (fastest - slowest))
+      ? room *
+        (ROW_MIN_SHARE +
+          (1 - ROW_MIN_SHARE) * lineLevel(speed, { min: slowest, max: fastest }, scale, 0))
       : room;
   const shadow = castsShadow(color) ? (
     <Paint>

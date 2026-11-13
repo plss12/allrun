@@ -13,7 +13,8 @@ import type { DistanceUnit } from './units';
  *
  * Streams hold a sample every second or so (thousands for a long run), far more than a chart
  * 1080 px wide can show, so lines are reduced to {@link LINE_POINTS} averages of equal stretches
- * of the activity. That also smooths the noise of single samples.
+ * of the activity. That also smooths the noise of single samples, and nothing more is smoothed:
+ * every line shows its changes as Strava draws them (the owner's choice, the same for all).
  */
 
 /** Points of a line chart: enough for a smooth curve at any size on the canvas. */
@@ -32,11 +33,34 @@ const PACE_OUTLIERS = 0.02;
 const MIN_SPLIT_SHARE = 0.3;
 
 /**
- * Points averaged together to draw each one of a line (see {@link smooth}). Power changes with
- * every pedal stroke and pace with every step, so they need it most; heart rate lags behind the
- * effort and is smooth already; the elevation profile is drawn as recorded.
+ * How a line's values go up its chart: `linear`, as they are; `pace`, speeds placed by their pace
+ * (time per distance), the faster higher, as Strava draws a pace: a minute per kilometer is as
+ * tall at 4:00 as at 7:00, where by speed the slow stretches would look flatter and the fast ones
+ * steeper.
  */
-const SMOOTHING = { pace: 5, heartRate: 3, power: 9 } as const;
+export type LineScale = 'linear' | 'pace';
+
+/**
+ * How high a value goes on a line chart running from `min` to `max` (its series'), as a share of
+ * its height: 0 at the bottom, 1 at `max`, with `floor` of the line's range left under `min` so
+ * the area under it keeps some body; a flat line sits halfway. With the `pace` scale, values are
+ * speeds (above 0) placed by their pace. Time and space O(1).
+ */
+export function lineLevel(
+  value: number,
+  { min, max }: { readonly min: number; readonly max: number },
+  scale: LineScale,
+  floor: number,
+): number {
+  const placed = (speedOrValue: number) =>
+    scale === 'pace' ? -1 / Math.max(speedOrValue, Number.MIN_VALUE) : speedOrValue;
+  const low = placed(min);
+  const range = placed(max) - low;
+  if (!(range > 0)) {
+    return 0.5;
+  }
+  return (placed(value) - low + range * floor) / (range * (1 + floor));
+}
 
 /** What a line chart runs along: the distance covered, or the time for a gym session. */
 export type ChartAxis = 'distance' | 'time';
@@ -153,26 +177,25 @@ export function activityChartSeries(
     }
     case 'pace': {
       const speed = streams.speed;
-      return speed === null
-        ? null
-        : lineSeries(streams, withoutOutliers(speed), 'distance', SMOOTHING.pace);
+      return speed === null ? null : lineSeries(streams, withoutOutliers(speed), 'distance');
     }
     case 'heartRate':
-      return lineSeries(streams, streams.heartRate, axisOf(streams), SMOOTHING.heartRate);
+      return lineSeries(streams, streams.heartRate, axisOf(streams));
     case 'power':
-      return lineSeries(streams, streams.power, axisOf(streams), SMOOTHING.power);
+      return lineSeries(streams, streams.power, axisOf(streams));
   }
 }
 
 /**
- * The charts an activity can show, in the order the editor offers them: the two of its pace (the
- * line and the splits) first, then its elevation, heart rate and power. Time O(n log n).
+ * The charts an activity can show, in the order the editor offers them: the splits' bars first,
+ * then the lines together, its pace, elevation, heart rate and power (the owner's choice). Time
+ * O(n log n).
  */
 export function availableActivityCharts(
   detail: ActivityDetail,
   unit: DistanceUnit,
 ): ActivityChartSeries[] {
-  const all: readonly ActivityChartSeries[] = ['pace', 'splits', 'elevation', 'heartRate', 'power'];
+  const all: readonly ActivityChartSeries[] = ['splits', 'pace', 'elevation', 'heartRate', 'power'];
   return all.filter((series) => activityChartSeries(detail, series, unit) !== null);
 }
 
@@ -192,7 +215,6 @@ function lineSeries(
   streams: ActivityStreams,
   values: readonly number[] | null,
   axis: ChartAxis,
-  smoothing = 1,
 ): LineSeries | null {
   const along = axis === 'distance' ? streams.distance : streams.time;
   if (values === null || along === null || along.length !== values.length || along.length < 2) {
@@ -203,7 +225,7 @@ function lineSeries(
   if (!(end > start)) {
     return null;
   }
-  const points = smooth(downsample(along, values, start, end, LINE_POINTS), smoothing);
+  const points = downsample(along, values, start, end, LINE_POINTS);
   if (points.length < 2) {
     return null;
   }
@@ -253,18 +275,6 @@ export function downsample(
     }
   }
   return points;
-}
-
-/**
- * A centered moving average of `window` points (an odd number; fewer at the ends), which keeps
- * the shape and drops the jitter. Time O(n · window), space O(n).
- */
-export function smooth(points: readonly ChartPoint[], window: number): ChartPoint[] {
-  const half = Math.floor(window / 2);
-  return points.map((point, i) => {
-    const near = points.slice(Math.max(0, i - half), i + half + 1);
-    return { x: point.x, y: near.reduce((sum, p) => sum + p.y, 0) / near.length };
-  });
 }
 
 /**

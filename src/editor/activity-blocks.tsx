@@ -29,7 +29,7 @@ import {
   type TyreCompound,
   tyreCompounds,
 } from '@/core/activity-block';
-import { splitRows } from '@/core/activity-charts';
+import { lineLevel, splitRows } from '@/core/activity-charts';
 import { activityEquivalences, type EquivalenceId } from '@/core/equivalences';
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import { metricValue, type MetricId } from '@/core/metrics';
@@ -1945,7 +1945,8 @@ const SPLIT_BARS_ROWS = 20;
 
 /**
  * A ladder of splits: white tags in a typewriter's letters under their title, each wider the
- * faster it went (up to `stretch` times the narrowest), the fastest in a brand color.
+ * faster it went (up to `stretch` times the narrowest; a pace by its pace), the fastest in a brand
+ * color.
  */
 const SPLIT_LADDER = {
   title: 40,
@@ -3691,15 +3692,19 @@ export function prepareActivityBlock(
           ),
           sizes.width,
         );
-        // How long each split took per unit: the slowest gets the longest bar.
-        const times = rows.map((split) => (split.speed > 0 ? 1 / split.speed : 0));
-        const quickest = Math.min(...times);
-        const slowest = Math.max(...times);
-        const share = (time: number) =>
+        // Each bar as long as what it writes: a pace by its time per unit (the slowest the
+        // longest), a speed (a ride's) by itself (the fastest the longest).
+        const speeds = rows.map((split) => split.speed);
+        const quickest = Math.max(...speeds);
+        const slowest = Math.min(...speeds);
+        const share = (splitSpeed: number) =>
           slowest === quickest
             ? (sizes.shortest + sizes.longest) / 2
             : sizes.shortest +
-              ((sizes.longest - sizes.shortest) * (time - quickest)) / (slowest - quickest);
+              (sizes.longest - sizes.shortest) *
+                (speed === 'speed'
+                  ? lineLevel(splitSpeed, { min: slowest, max: quickest }, 'linear', 0)
+                  : 1 - lineLevel(splitSpeed, { min: slowest, max: quickest }, 'pace', 0));
         const lines = rows.map((split, i) => {
           const texts = splitRowTexts(split, speed, textContext);
           const value = wide(texts.value, sizes.value, false);
@@ -3709,7 +3714,7 @@ export function prepareActivityBlock(
             true,
           );
           // Never shorter than its time.
-          const bar = Math.max(sizes.width * share(times[i]), value.width + 2 * sizes.pad);
+          const bar = Math.max(sizes.width * share(speeds[i]), value.width + 2 * sizes.pad);
           return placed(sizes.width, sizes.rowHeight, [
             { box: fillBox(sizes.width, sizes.rowHeight, 0, colors.band, {}), x: 0, y: 0 },
             { box: fillBox(bar, sizes.rowHeight, 0, colors.bar, {}), x: sizes.width - bar, y: 0 },
@@ -3735,8 +3740,8 @@ export function prepareActivityBlock(
         );
       }
       case 'splitLadder': {
-        // The splits as a ladder of tags, each as wide as it was fast, the fastest in a brand
-        // color.
+        // The splits as a ladder of tags, each as wide as it was fast on the scale of what it
+        // writes (a pace by its pace, a ride's speed as it is), the fastest in a brand color.
         const rows = splitRows(splits, SPLIT_LADDER_ROWS);
         if (rows.length === 0) {
           return null;
@@ -3761,7 +3766,14 @@ export function prepareActivityBlock(
           Math.max(...cells.map((cell) => cell.value.width));
         const tags = cells.map((cell, i) => {
           const share =
-            speeds[fastest] === slowest ? 1 : (speeds[i] - slowest) / (speeds[fastest] - slowest);
+            speeds[fastest] === slowest
+              ? 1
+              : lineLevel(
+                  speeds[i],
+                  { min: slowest, max: speeds[fastest] },
+                  speed === 'speed' ? 'linear' : 'pace',
+                  0,
+                );
           const width = narrowest * (1 + (sizes.stretch - 1) * share);
           const middle = (box: Box) => (sizes.rowHeight - box.height) / 2;
           return placed(width, sizes.rowHeight, [

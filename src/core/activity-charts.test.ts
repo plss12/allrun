@@ -3,6 +3,7 @@ import {
   activityChartSeries,
   availableActivityCharts,
   downsample,
+  lineLevel,
   LINE_POINTS,
   splitRows,
   withoutOutliers,
@@ -96,10 +97,10 @@ describe('activityChartSeries', () => {
 });
 
 describe('availableActivityCharts', () => {
-  it('offers the charts the activity recorded data for, the two of its pace first', () => {
+  it('offers the charts the activity recorded data for, the splits first, then the lines', () => {
     expect(availableActivityCharts(detail(), 'km')).toEqual([
-      'pace',
       'splits',
+      'pace',
       'elevation',
       'heartRate',
     ]);
@@ -175,5 +176,33 @@ describe('withoutOutliers', () => {
     expect(kept.slice(0, 2).every(Number.isNaN)).toBe(true);
     expect(Number.isNaN(kept[kept.length - 1])).toBe(true);
     expect(kept.filter((speed) => speed === 3)).toHaveLength(98);
+  });
+});
+
+describe('lineLevel', () => {
+  /** Meters per second of a pace of `minutes`:`seconds` per kilometer. */
+  const pace = (minutes: number, seconds = 0) => 1000 / (minutes * 60 + seconds);
+
+  it('puts the lowest value over the floor and the highest at the top', () => {
+    const range = { min: 10, max: 20 };
+    expect(lineLevel(20, range, 'linear', 0.15)).toBeCloseTo(1, 12);
+    expect(lineLevel(10, range, 'linear', 0.15)).toBeCloseTo(0.15 / 1.15, 12);
+    expect(lineLevel(15, range, 'linear', 0)).toBeCloseTo(0.5, 12);
+  });
+
+  it('places a pace by its time per kilometer, the faster higher, as Strava does', () => {
+    const range = { min: pace(7), max: pace(4) };
+    // A minute per kilometer is as tall at any pace: 5:00 and 6:00 split the range in thirds.
+    expect(lineLevel(pace(4), range, 'pace', 0)).toBeCloseTo(1, 12);
+    expect(lineLevel(pace(5), range, 'pace', 0)).toBeCloseTo(2 / 3, 12);
+    expect(lineLevel(pace(6), range, 'pace', 0)).toBeCloseTo(1 / 3, 12);
+    expect(lineLevel(pace(7), range, 'pace', 0)).toBeCloseTo(0, 12);
+    // By speed, 6:00 sits lower, closer to 7:00: the slow stretches look flatter.
+    expect(lineLevel(pace(6), range, 'linear', 0)).toBeCloseTo(2 / 9, 12);
+  });
+
+  it('sits a flat line halfway', () => {
+    expect(lineLevel(3, { min: 3, max: 3 }, 'pace', 0.15)).toBe(0.5);
+    expect(lineLevel(3, { min: 3, max: 3 }, 'linear', 0.15)).toBe(0.5);
   });
 });
