@@ -31,13 +31,44 @@ Targets on a Samsung M32: gestures at 16 ms a frame or less, scrolling at 20 ms 
 
 ## 5. Milestone 4: Strava for real
 
-How Strava is connected and cached: ADR 020.
+How Strava is connected and cached: ADR 020. The map: ADR 021.
+
+### Done
 
 - Done (2026-11-13): connecting Strava, its refresh token kept by the server; the activities read from Strava with a cache on the phone; streams, splits, laps and heart rate zones on demand; tested with the owner's real activities on both phones, which brought out the overlaid routes of a period done in several places (now grouped by place). Also the app's language in the profile.
-- Done: a real walk's raw JSON (recorded with the Strava app on the phone) has no steps, nor does the API reference mention them anywhere: no steps (the owner's decision: Strava's data only).
-- The map under routes (ADR 021, accepted): OpenFreeMap's vector tiles drawn with Skia, muted, no labels, the credit only in the profile. In order: tile math and style in `src/core/` with tests (done: `map-tiles.ts`, `map-style.ts`); tiles fetched and cached on the phone (`@mapbox/vector-tile`, `pbf`); the home's activity cards (measured on the M32: scroll at 20 ms or less); "Credits and licences" in the profile; then a "with map" variant of the route with a big datum in the editor.
 - Done: place names by province in Spain ("Andújar, Jaén"; a capital names its community, "Jaén, Andalucía"), the same on both phones, from the phone's geocoder and a table of the provinces; every permission asked for as the app opens.
-- Request Strava's API review once it works with the owner's account (10 athletes until then). Creating the API app needs a paid Strava subscription, which the owner accepts.
+- Done (2026-11-13, later; f6b9227..7c40153): the map's tile math and style in `src/core/` (`map-tiles.ts`, `map-style.ts`; the zoom follows the scale, tiles at least 512 px wide, at most zoom 14); the activity charts as Strava draws them (no moving average on any line, a pace placed by its pace, every bar that writes a pace by its pace, the splits first); the camera's last photo in the brand's two colors; the profile's tabs as wide as the cards; the profile opened from the athlete's Strava photo (or their initial); workouts and other sports led by time, calories and heart rate; the home's cards as Share Aura (header, a fixed square for the route, the data under it; where it started under the day; calories of activities without distance from their detail; bigger text); older activities loaded as the home's list nears its end (pages of 200 with Strava's `before`).
+
+### What the owner's Strava data has (checked on the M32, 2026-11-13)
+
+- Recorded with a COROS PACE 4. Runs have every stream but temperature: `cadence` (about 80 per leg: ×2 gives steps per minute, as the cadence datum already does for runs), `watts` (a real meter, `device_watts`), `moving`, `grade_smooth`, `latlng`, heart rate. A workout has only time, heart rate and `moving`. Runs have `best_efforts` (400 m to the half marathon) with `pr_rank` (1–3 for the athlete's records).
+- Strava's API has 11 streams; the app asks for 6 (`time,distance,altitude,velocity_smooth,heartrate,watts`). Left out for good: `temp` (only some devices; never in the owner's), `grade_smooth` (derivable from altitude), `latlng` (the polyline is enough). Segments are left out too.
+- `/athlete/zones` gives the owner only heart rate zones. Strava's power zones are for cycling only, with a bike power meter, and its training zones are for subscribers.
+- `GET /activities/{id}/zones` (a subscriber feature; it works for the owner) gives, per activity: heart rate (5 buckets, their bpm ranges and seconds in each), pace (6 buckets, their limits in m/s, the athlete's pace zones, and seconds in each) and power (on runs, a histogram in 50 W buckets, not zones). Splits and laps also carry `pace_zone` (1–6).
+- Probes go through the phone's development build (a temporary `[DEBUG-PROBE]` module, never committed): the access token only lives there.
+
+### To do, in this order
+
+**Block 1: the map (ADR 021)**
+
+1. Tiles: add `@mapbox/vector-tile` 3.x and `pbf` 5.x (ESM, `import { PbfReader } from 'pbf'`; pure JavaScript, fine on Hermes) with the package manager; read the tile URL from OpenFreeMap's TileJSON (`https://tiles.openfreemap.org/planet`, it names the data's version), as one setting so a self-hosted copy (Planetiler) can replace it; fetch, keep each tile in the app's cache directory with a size limit (the oldest go first), decode only `MAP_LAYERS`. Pure parts with tests.
+2. The map under the home's cards: the whole card, framed by the route's square (`fitViewport` on the square, widened to the card), the route projected with the same viewport (Web Mercator, not `projectRoutes`) so both line up; the current background until the tiles come, nothing moving. Consider an `SkPicture` per card and free native objects (`skia-memory` rule).
+3. "Credits and licences" in the profile: © OpenStreetMap contributors (ODbL, link to openstreetmap.org/copyright), © OpenMapTiles, OpenFreeMap. Nothing on maps, exports or the launch screen (the owner's decision).
+4. The editor: a "with map" variant of the route with a big datum, in vector for the export.
+
+**Block 2: Strava's data**
+
+1. Ask for the `cadence` and `moving` streams too; take stops out of the pace with `moving` (Strava's own criterion) instead of the 0.5 m/s threshold.
+2. Cadence: a line chart (no smoothing, linear) and the datum, in steps per minute also for walks and hikes (today they read "rpm").
+3. Steps ≈ average cadence × 2 × moving minutes, only with cadence (the list already has the average cadence, so cards need no request). Order: walks and hikes `distance, movingTime, steps, elevationGain, pace, averageHeartRate, calories…` (a walk's card: distance, time, steps; without cadence: distance, time, elevation, or pace when flat); runs and treadmill: steps last, after cadence. Update the `widgets` rule ("Strava no da los pasos").
+4. Zones, one widget for the three (the heart rate zones' views: the line colored by zone, the line and a table of time per zone, or the table): heart rate as today; pace zones on runs from `/activities/{id}/zones` (6 zones, ranges in min/km or min/mi, the faster up as the pace line); power zones on rides with a power meter, Strava's 7 zones when it gives them. Without a subscription the per-activity zones don't come: heart rate keeps the athlete's zones, pace and power aren't offered. Colors for 6 and 7 zones from the iOS palette the app uses (proposed: gray, blue, green, yellow, orange, red, purple).
+5. A records widget from `best_efforts`: a table of the efforts (400 m, 1 km, mile, 5K, 10K, half…) in the ladder's typewriter letters, the athlete's records marked in a brand color ("Record", "2nd", "3rd"), and a podium page with only the records when there are some. Runs only.
+
+**Block 3: closing the step**
+
+1. Measure on the M32 with the release build (ADR 014): the home's scroll (20 ms or less a frame), opening it (under 300 ms, no frame over 100 ms), the older pages coming, and memory (taller card canvases, map tiles); with the map, and without it if a target fails.
+2. Request Strava's API review once it works with the owner's account (10 athletes until then). Creating the API app needs a paid Strava subscription, which the owner accepts.
+3. ADRs, rules and this roadmap brought up to date; commits by block.
 
 ## 6. Milestone 5: native
 
