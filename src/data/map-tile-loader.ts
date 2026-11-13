@@ -1,4 +1,4 @@
-import { decodeMapTile, type MapTileFeatures } from '@/core/map-tile-decode';
+import { decodeMapTile, trimMapTile, type MapTileFeatures } from '@/core/map-tile-decode';
 import {
   parseTileJson,
   tileKey,
@@ -11,12 +11,13 @@ import type { Tile } from '@/core/map-tiles';
 
 /**
  * Loading the map's tiles (ADR 021): from the phone when it kept them, else from the tile server,
- * whose address is read once per run from its TileJSON index. Every tile asked for is kept, and
- * once they pass the size limit the oldest go. The same tile asked for twice at once is loaded
+ * whose address is read once per run from its TileJSON index. Every tile asked for is kept,
+ * trimmed to what the map draws (a tenth of it, or less, in a city), and once they pass the size
+ * limit the oldest go. The same tile asked for twice at once is loaded
  * once. Requests and files come in from outside: `data/map-tiles.ts` gives the phone's.
  */
 
-/** Where the phone keeps the tiles, uncompressed, by {@link tileKey}. */
+/** Where the phone keeps the tiles, trimmed and uncompressed, by {@link tileKey}. */
 export interface MapTileStore {
   /** The tile's bytes, or null if it isn't kept. */
   read(key: string): Promise<Uint8Array | null>;
@@ -100,9 +101,10 @@ export function createMapTileLoader(options: MapTileLoaderOptions): MapTileLoade
         throw new Error(`Kept map tile ${key} didn't decode, deleted`, { cause: error });
       }
     }
-    const bytes = await options.fetchBytes(tileUrl(await sourceOnce(), tile));
-    const features = decodeMapTile(bytes);
-    await keep(key, bytes);
+    const fetched = await options.fetchBytes(tileUrl(await sourceOnce(), tile));
+    const trimmed = trimMapTile(fetched);
+    const features = decodeMapTile(trimmed);
+    await keep(key, trimmed);
     return features;
   };
 

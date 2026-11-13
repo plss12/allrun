@@ -15,8 +15,8 @@ import { createMapTileLoader, type MapTileLoader, type MapTileStore } from './ma
 export const MAP_TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
 
 /**
- * Most the phone keeps of tiles: 64 MB, some 180 tiles of a city center at zoom 14 (one of Madrid
- * weighs 350 KB uncompressed) or 400 at zoom 13 (165 KB).
+ * Most the phone keeps of tiles: 64 MB, some 380 tiles of a city center (at zoom 13, one of
+ * central Madrid weighs 170 KB uncompressed), more of anywhere else.
  */
 export const MAP_CACHE_BYTES = 64 * 1024 * 1024;
 

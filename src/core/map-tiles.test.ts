@@ -1,10 +1,12 @@
 import type { LatLng } from './geo';
 import {
   fitViewport,
+  frameViewport,
   MAX_LATITUDE,
   MAX_TILE_ZOOM,
   MAX_VIEW_ZOOM,
   placeTile,
+  scaleViewport,
   TILE_PIXELS,
   tilesCovering,
   tileZoom,
@@ -133,7 +135,7 @@ describe('tileZoom', () => {
           1080,
         ),
       );
-    expect(zoomFor(3)).toBe(14);
+    expect(zoomFor(3)).toBe(MAX_TILE_ZOOM);
     expect(zoomFor(5)).toBe(13);
     expect(zoomFor(10)).toBe(12);
     expect(zoomFor(42)).toBe(10);
@@ -213,5 +215,61 @@ describe('placeTile', () => {
     const expected = toPixels(point, viewport);
     expect(placement.x + fx * placement.scale).toBeCloseTo(expected.x, 6);
     expect(placement.y + fy * placement.scale).toBeCloseTo(expected.y, 6);
+  });
+});
+
+describe('frameViewport', () => {
+  const route: LatLng[] = [
+    [40.41, -3.71],
+    [40.42, -3.69],
+  ];
+
+  it('fits the points in the frame as fitViewport fits them in a drawing of its size', () => {
+    const frame = { x: 16, y: 80, width: 360, height: 360 };
+    const inFrame = fitViewport(route, 360, 360);
+    const card = frameViewport(route, frame, 392, 640);
+    expect(card.scale).toBe(inFrame.scale);
+    expect(card.width).toBe(392);
+    expect(card.height).toBe(640);
+    for (const point of route) {
+      const a = toPixels(point, inFrame);
+      const b = toPixels(point, card);
+      expect(b.x).toBeCloseTo(a.x + frame.x, 9);
+      expect(b.y).toBeCloseTo(a.y + frame.y, 9);
+    }
+  });
+
+  it('refuses a drawing of no size', () => {
+    expect(() => frameViewport(route, { x: 0, y: 0, width: 10, height: 10 }, 0, 10)).toThrow(
+      RangeError,
+    );
+  });
+});
+
+describe('scaleViewport', () => {
+  it('shows the same in a bigger drawing, so a card gets the zoom of its image', () => {
+    const card = fitViewport(
+      [
+        [40.41, -3.71],
+        [40.45, -3.66],
+      ],
+      360,
+      360,
+    );
+    const image = scaleViewport(card, 3);
+    expect(image).toEqual({ ...card, scale: card.scale * 3, width: 1080, height: 1080 });
+    expect(tileZoom(image)).toBe(
+      tileZoom(
+        fitViewport(
+          [
+            [40.41, -3.71],
+            [40.45, -3.66],
+          ],
+          1080,
+          1080,
+        ),
+      ),
+    );
+    expect(tilesCovering(image, tileZoom(image))).toEqual(tilesCovering(card, tileZoom(image)));
   });
 });

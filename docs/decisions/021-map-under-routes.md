@@ -43,32 +43,55 @@ start, and findable later. The owner doesn't want it on any map, image or the la
   the app's style, vector at any export size, no native code (it runs in Expo Go), no key and so
   nothing to keep behind Supabase. Tiles are decoded with `@mapbox/vector-tile` and `pbf` (pure
   JavaScript, fine on Hermes).
-- **The style** (the owner's choice, "apagado"): the app's dark background, streets in grays by
-  their class (motorways widest, paths thinnest), parks and woods in a barely green gray, water in
-  a barely blue one; no labels, no buildings, no points of interest. The route on top as today.
+- **The style** (the owner's choice, "apagado", `core/map-style.ts`): the app's dark background,
+  streets in grays by their class (motorways widest; paths, tracks and piers thinnest and darker),
+  squares filled as paths, railways and trams thin and darker, under the streets. The ground barely
+  tinted: lawns (where city parks come from), sports grounds, athletics tracks, cemeteries and
+  recreation grounds in a green gray, woods a little darker, beaches warm, rock gray, glaciers cold,
+  wetlands between water and green, and farmland, under everything, almost not at all. Water, its
+  areas and its lines (rivers, canals, streams) in one blue gray, so a river's middle line and a
+  marina's sailing channels vanish into their water. Nothing underground; no labels, buildings,
+  points of interest, boundaries, built-up land (homes, industry, schools…), works or ferries; no
+  protected areas (the `park` layer: national parks and reserves by their legal bounds, not seen on
+  the ground, which covered Peñalara whole in one green). The owner chose each on 2026-11-13, from
+  sheets of five places (Retiro, Barceloneta, Peñalara, Andújar, Casa de Campo). The route on top
+  as today.
 - **Tiles on the phone**: the tile URLs come from OpenFreeMap's index (it names the data's
   version), and every tile is kept in the app's cache directory, so a card or an export asks for
   none twice; the oldest go past a size limit. OpenStreetMap's data has no time limit like
   Strava's. The address is one setting: if OpenFreeMap fails or closes, a self-hosted copy of the
   same tiles replaces it (Planetiler, the tool OpenFreeMap uses, builds the whole planet in a few
   hours on one machine). As built (`data/map-tiles.ts`, `data/map-tile-loader.ts`): the index is
-  read once per run; tiles are kept uncompressed, as the server sends them (any server of the
-  schema will do), under their zoom, column and row without the data's version (an older tile
-  shows the same streets), up to 64 MB, the oldest kept first to go; a tile asked for twice at
-  once loads once, and a kept one that doesn't decode is deleted and asked for again. Only the
-  map's layers are decoded (`core/map-tile-decode.ts`), their features gathered by paint, so a
-  tile draws in a dozen paths: central Madrid at zoom 14 is 350 KB and some 13,000 points.
+  read once per run; a tile is kept trimmed to what the map draws (`trimMapTile` in
+  `core/map-tile-decode.ts`: the features the style paints, with their class and subclass, still a
+  vector tile) and uncompressed, under its zoom, column and row without the data's version (an
+  older tile shows the same streets), up to 64 MB, the oldest kept first to go; a tile asked for
+  twice at once loads once, and a kept one that doesn't decode is deleted and asked for again. The
+  layers the map doesn't draw are skipped without being read, and the features are gathered by
+  paint, so a tile draws in a dozen paths. A zoom 14 tile of central Madrid comes as 600 KB
+  gzipped (1 MB uncompressed, mostly points of interest, buildings, house numbers and names) and
+  is kept as some 45 KB; the 26 tiles of the five places above, 4.7 MB, as 553 KB.
 - **The zoom follows the scale** (`core/map-tiles.ts`): the deepest zoom whose tiles are drawn at
-  least 512 px wide (MapLibre's and Mapbox's size), at most 14, from the size in the design's
-  units, so every phone and the exported image show the same detail. A 1,080 px square takes 4
-  to 16 tiles: zoom 14 for a 3 km route, 13 for 5 km, 12 for 10 km, 10 for a marathon. Always
-  zoom 14, as in the prototype, would take up to 20 tiles of up to 600 KB each in a city center
-  (gzipped; most of it points of interest and house numbers the map doesn't draw), where a zoom
-  13 one weighs some 100 KB.
-- **Credit**: a "Credits and licences" section in the profile: map data © OpenStreetMap
-  contributors (ODbL, with a link to openstreetmap.org/copyright), © OpenMapTiles, and
-  OpenFreeMap. Nothing on maps, exported images or the launch screen (the owner's decision,
-  knowing the guidelines ask for more).
+  least 512 px wide (MapLibre's and Mapbox's size), at most 14, at the scale of the same view in an
+  image 1,080 px wide (`planMap` in `core/map-drawing.ts`), so a home card shows the detail of its
+  exported image. A 1,080 px square takes 4 to 16 tiles: zoom 14 for a 3 km route, 13 for 5 km,
+  12 for 10 km, 10 for a marathon. Zoom 13 at most was tried and dropped (2026-11-13): its tiles
+  are much lighter to download (a fifth, in a city center), but lose the paths inside parks and
+  the small lawns and pools; trimmed, zoom 14 is kept in about the same room. Its cost is the
+  first download, some 2 MB for a card in central Madrid, far less elsewhere, and once: the
+  cards of one place share their tiles.
+- **Drawing** (`ui/map-picture.ts`, `ui/use-map-picture.ts`): each tile's groups made into Skia
+  paths once (one SVG string per group, a single call), kept for the 64 tiles last used; a card's
+  map recorded as one picture, clipped to the card, each tile clipped to its square without
+  antialiasing (neighbors share their edge pixels, no seam) and scaled into place, line widths
+  given for 1,080 px. It shows once all its tiles are in, never with holes; until then, the
+  card's gradient. The route is projected with the same viewport (`frameViewport`, Web
+  Mercator), so both line up, with or without the map.
+- **Credit**: at the end of the profile, under deleting the account, one line of small text as
+  Strava writes its maps' credits (the owner's choice, 2026-11-13: no section, no card, no
+  explanation): "© OpenStreetMap" (linking to openstreetmap.org/copyright, where the ODbL is),
+  "© OpenMapTiles" and "OpenFreeMap", each a link. Nothing on maps, exported images or the launch
+  screen (the owner's decision, knowing the guidelines ask for more).
 - **Where the map shows**: under the home's activity cards first, the whole card (as Share Aura:
   the route fitted in a square of its own between the header and the data, every card as tall);
   then, in the editor, a "with map" variant of the route with a big datum; other widgets once the
@@ -93,6 +116,9 @@ start, and findable later. The owner doesn't want it on any map, image or the la
 - **Apple Maps and Google Maps**: two different maps, Google's terms against exports, a billing
   account for Google's key.
 - **Labels**: the owner wants none; the map is a quiet background.
+- **Protected areas** (the `park` layer): bounds on paper, not on the ground.
+- **Keeping the tiles as they come**: up to 1 MB each in a city; a cache of 64 MB would hold a few
+  dozen cards.
 - **Always zoom 14**: as the prototype; up to 20 heavy tiles per image, and long routes buried
   under every street.
 - **Place names from the map's data**: no provinces in OpenMapTiles, and the phone's geocoder

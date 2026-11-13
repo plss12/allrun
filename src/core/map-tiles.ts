@@ -14,15 +14,18 @@ import type { Point } from './route-projection';
  * https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
  */
 
-/** Highest zoom the tiles have (OpenFreeMap's TileJSON, `maxzoom`): past it they are scaled up. */
+/**
+ * Deepest zoom of the tiles the map asks for (OpenFreeMap's `maxzoom`): past it they are scaled
+ * up. Zoom 14 has the paths inside parks and the small lawns and pools that zoom 13 leaves out;
+ * its tiles are heavy (up to 1 MB uncompressed in central Madrid, mostly points of interest,
+ * buildings and house numbers), so the phone keeps only what the map draws (`trimMapTile`).
+ */
 export const MAX_TILE_ZOOM = 14;
 
 /**
  * Pixels a tile is drawn at, at least, before the next zoom is used: the 512 of MapLibre's and
  * Mapbox's vector maps. A tile is so drawn between 512 and 1,024 pixels, so a 1,080 px square
- * needs from 4 to 16 tiles. Smaller would mean more tiles and more detail per image: a zoom 14
- * tile of central Madrid weighs some 600 KB (its points of interest and house numbers, which
- * the map doesn't draw), a zoom 13 one some 100 KB.
+ * needs from 4 to 16 tiles. Smaller would mean more tiles and more detail per image.
  */
 export const TILE_PIXELS = 512;
 
@@ -107,6 +110,55 @@ export function fitViewport(points: readonly LatLng[], width: number, height: nu
     scale,
     width,
     height,
+  };
+}
+
+/** A rectangle inside a drawing, in its pixels. */
+export interface Frame {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * The viewport of a `width` × `height` drawing whose `frame` fits these points as
+ * {@link fitViewport} fits them in a drawing of the frame's size: the map runs on past the frame
+ * to the drawing's edges (a card's map under its header and data, the route in its square).
+ * Time O(n) for n points, space O(n).
+ *
+ * @throws RangeError as {@link fitViewport}, or with a drawing of no size.
+ */
+export function frameViewport(
+  points: readonly LatLng[],
+  frame: Frame,
+  width: number,
+  height: number,
+): Viewport {
+  if (!(width > 0 && height > 0)) {
+    throw new RangeError(`The map needs a size, got ${width} × ${height}`);
+  }
+  const inner = fitViewport(points, frame.width, frame.height);
+  return {
+    left: inner.left - frame.x / inner.scale,
+    top: inner.top - frame.y / inner.scale,
+    scale: inner.scale,
+    width,
+    height,
+  };
+}
+
+/**
+ * The same view in a drawing `factor` times as big: as a card's map would be in an image of the
+ * design's width, to choose its zoom with {@link tileZoom}. Time and space O(1).
+ */
+export function scaleViewport(viewport: Viewport, factor: number): Viewport {
+  return {
+    left: viewport.left,
+    top: viewport.top,
+    scale: viewport.scale * factor,
+    width: viewport.width * factor,
+    height: viewport.height * factor,
   };
 }
 

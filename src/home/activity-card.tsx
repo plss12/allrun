@@ -1,4 +1,4 @@
-import { Path, Skia } from '@shopify/react-native-skia';
+import { Group, Path, Picture, Skia } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,20 +9,23 @@ import { sportIcon } from '@/core/activity-block';
 import type { LocalDate } from '@/core/dates';
 import { cardMetrics, metricValue, toDisplayMetric } from '@/core/metrics';
 import { formatPlace, startOf } from '@/core/place';
+import type { LatLng } from '@/core/geo';
+import { frameViewport, toPixels, type Viewport } from '@/core/map-tiles';
 import { decodePolyline } from '@/core/polyline';
-import { projectRoutes } from '@/core/route-projection';
 import type { DistanceUnit } from '@/core/units';
 import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
 import { lookUpPlace } from '@/data/place-lookup';
-import { cardSurface } from '@/theme/card-surface';
+import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
 import { CardGradient } from '@/ui/card-gradient';
 import { formatMetric, formatRelativeDay } from '@/ui/format';
 import { SportGlyph } from '@/ui/sport-glyph';
 import { INTERFACE_FACES, MAX_FONT_SCALE, Text } from '@/ui/text';
 import { useAsync } from '@/ui/use-async';
+import { useMapPicture } from '@/ui/use-map-picture';
 
 const PADDING = 16;
+const RADIUS = 20;
 /** Room around the route inside its square, so its line never touches the square's edge. */
 const ROUTE_INSET = 6;
 /** The day's size and letter, and the place's letter under it. */
@@ -66,7 +69,8 @@ function cardLayout(width: number, scale: number) {
  * started under the day ("Andújar, Jaén"; in a row of its own, never cut beside a long day), its
  * route (trimmed at both ends, as in the images) fitted in a square of its own, or, without one,
  * its sport's icon there, and its three main data under it (the owner's choices: every route in
- * the same room, as Share Aura; a map will lie under the card, ADR 021). The place's and the
+ * the same room, as Share Aura), all over its map (ADR 021) once it has loaded, the route
+ * projected with the map's viewport so that both line up. The place's and the
  * data's rows are kept on every card, so that all are as tall and nothing moves when the place
  * comes. A tap goes on to choose what to make with it, or does what `onPress` says (the editor
  * choosing another activity).
@@ -135,9 +139,26 @@ export function ActivityCard({
     lookup.status === 'success' && lookup.data.status === 'known'
       ? formatPlace(lookup.data.place, 'cityRegion')
       : null;
+  // The canvas lies inside the card's edge.
+  const canvasWidth = width - 2 * CARD_BORDER;
+  const canvasHeight = height - 2 * CARD_BORDER;
+  const viewport = useMemo(
+    () => routeViewport(activity.routePolyline, squareTop, side, canvasWidth, canvasHeight),
+    [activity.routePolyline, squareTop, side, canvasWidth, canvasHeight],
+  );
   const route = useMemo(
-    () => routePath(activity.routePolyline, PADDING, squareTop, side),
-    [activity.routePolyline, squareTop, side],
+    () => (viewport === null ? null : routePath(viewport.points, viewport.viewport)),
+    [viewport],
+  );
+  const map = useMapPicture(viewport?.viewport ?? null);
+  const corners = useMemo(
+    () =>
+      Skia.RRectXY(
+        Skia.XYWHRect(0, 0, canvasWidth, canvasHeight),
+        RADIUS - CARD_BORDER,
+        RADIUS - CARD_BORDER,
+      ),
+    [canvasWidth, canvasHeight],
   );
   return (
     <Pressable
@@ -158,13 +179,18 @@ export function ActivityCard({
           }))
       }
       style={({ pressed }) => ({
-        ...cardSurface(20),
+        ...cardSurface(RADIUS),
         width,
         height,
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <CardGradient width={width} height={height} radius={20}>
+      <CardGradient width={width} height={height} radius={RADIUS}>
+        {map === null ? null : (
+          <Group clip={corners}>
+            <Picture picture={map} />
+          </Group>
+        )}
         {route === null ? null : (
           <Path
             path={route}
@@ -199,7 +225,8 @@ export function ActivityCard({
           >
             {day}
           </Text>
-          <SportGlyph icon={sportIcon(activity)} size={GLYPH_SIZE} color={colors.secondaryLabel} />
+          {/* The day's color: a lighter gray got lost over the map. */}
+          <SportGlyph icon={sportIcon(activity)} size={GLYPH_SIZE} color={colors.label} />
         </View>
         <Text
           numberOfLines={1}
@@ -235,10 +262,17 @@ export function ActivityCard({
 }
 
 /**
- * The route as a Skia path, fitted whole and centered in the square `side` wide at (`left`,
- * `top`), with {@link ROUTE_INSET} of room inside it; `null` without one.
+ * The route's points and the viewport of the card's canvas that fits them whole and centered in
+ * the square `side` wide at (PADDING, `squareTop`), with {@link ROUTE_INSET} of room inside it:
+ * the map's, so that the route and the map line up. `null` without a route.
  */
-function routePath(polyline: string | null, left: number, top: number, side: number) {
+function routeViewport(
+  polyline: string | null,
+  squareTop: number,
+  side: number,
+  width: number,
+  height: number,
+): { readonly points: readonly LatLng[]; readonly viewport: Viewport } | null {
   if (polyline === null) {
     return null;
   }
@@ -247,14 +281,24 @@ function routePath(polyline: string | null, left: number, top: number, side: num
     return null;
   }
   const inner = side - 2 * ROUTE_INSET;
-  const [projected] = projectRoutes([points], inner, inner);
+  const frame = {
+    x: PADDING + ROUTE_INSET,
+    y: squareTop + ROUTE_INSET,
+    width: inner,
+    height: inner,
+  };
+  return { points, viewport: frameViewport(points, frame, width, height) };
+}
+
+/** The route as a Skia path in the viewport's drawing. */
+function routePath(points: readonly LatLng[], viewport: Viewport) {
   const builder = Skia.PathBuilder.Make();
-  projected.forEach(({ x, y }, i) => {
-    const at = { x: left + ROUTE_INSET + x, y: top + ROUTE_INSET + y };
+  points.forEach((point, i) => {
+    const { x, y } = toPixels(point, viewport);
     if (i === 0) {
-      builder.moveTo(at.x, at.y);
+      builder.moveTo(x, y);
     } else {
-      builder.lineTo(at.x, at.y);
+      builder.lineTo(x, y);
     }
   });
   return builder.detach();

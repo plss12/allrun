@@ -1,3 +1,4 @@
+import { decodeMapTile, trimMapTile } from '@/core/map-tile-decode';
 import type { KeptTile } from '@/core/map-tile-source';
 import { encodeTestTile } from '@/test-utils/vector-tile';
 
@@ -89,9 +90,27 @@ describe('createMapTileLoader', () => {
     const { loader, files, fetchBytes } = setup();
     const tile = await loader.load({ z: 14, x: 3, y: 7 });
     expect(fetchBytes).toHaveBeenCalledWith('https://tiles.test/planet/v1/14/3/7.pbf');
-    expect(files.get('14-3-7')?.bytes).toEqual(lakeTile(13));
+    expect(decodeMapTile(files.get('14-3-7')?.bytes ?? new Uint8Array())).toEqual(tile);
     expect(tile.groups).toHaveLength(1);
     expect(tile.groups[0].rings[0].slice(0, 4)).toEqual([0, 0, 13, 0]);
+  });
+
+  it('keeps the tile trimmed to what the map draws', async () => {
+    const { loader, files, fetchBytes } = setup();
+    const withBars = encodeTestTile([
+      {
+        name: 'poi',
+        features: Array.from({ length: 40 }, (_, i) => ({
+          type: 1 as const,
+          properties: { class: 'bar', name: `Bar ${i}` },
+          rings: [[[i, i] as [number, number]]],
+        })),
+      },
+    ]);
+    fetchBytes.mockResolvedValueOnce(withBars);
+    await loader.load({ z: 14, x: 3, y: 7 });
+    expect(files.get('14-3-7')?.bytes).toEqual(trimMapTile(withBars));
+    expect(files.get('14-3-7')?.bytes).toHaveLength(0);
   });
 
   it('reads a kept tile without asking the server', async () => {

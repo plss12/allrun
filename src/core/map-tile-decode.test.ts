@@ -1,6 +1,6 @@
 import { encodeTestTile } from '@/test-utils/vector-tile';
 
-import { decodeMapTile } from './map-tile-decode';
+import { decodeMapTile, trimMapTile } from './map-tile-decode';
 import { MAP_COLORS, paintFor } from './map-style';
 
 const square = (x: number, y: number, size: number): [number, number][] => [
@@ -63,15 +63,15 @@ describe('decodeMapTile', () => {
     const hole = [...square(25, 25, 50)].reverse();
     const bytes = encodeTestTile([
       {
-        name: 'park',
+        name: 'landuse',
         features: [
-          { type: 3, properties: { class: 'park' }, rings: [outer, hole] },
-          { type: 3, properties: { class: 'nature_reserve' }, rings: [square(200, 200, 10)] },
+          { type: 3, properties: { class: 'stadium' }, rings: [outer, hole] },
+          { type: 3, properties: { class: 'pitch' }, rings: [square(200, 200, 10)] },
         ],
       },
     ]);
     const [group] = decodeMapTile(bytes).groups;
-    expect(group.paint).toEqual({ kind: 'fill', color: MAP_COLORS.park, order: 1 });
+    expect(group.paint).toEqual(paintFor('landuse', { class: 'pitch' }, 'polygon'));
     expect(group.rings).toHaveLength(3);
     expect(group.rings[1]).toEqual([25, 25, 25, 75, 75, 75, 75, 25, 25, 25]);
     expect(group.rings[2].slice(0, 2)).toEqual([200, 200]);
@@ -103,11 +103,15 @@ describe('decodeMapTile', () => {
         features: [{ type: 3, rings: [square(0, 0, 10)] }],
       },
       {
+        name: 'park',
+        features: [{ type: 3, properties: { class: 'national_park' }, rings: [square(0, 0, 10)] }],
+      },
+      {
         name: 'transportation',
         features: [
           {
             type: 2,
-            properties: { class: 'rail' },
+            properties: { class: 'ferry' },
             rings: [
               [
                 [0, 0],
@@ -147,7 +151,7 @@ describe('decodeMapTile', () => {
     const lake = { type: 3 as const, properties: { class: 'lake' }, rings: [square(0, 0, 8)] };
     const bytes = encodeTestTile([
       { name: 'water', extent: 4096, features: [lake] },
-      { name: 'park', extent: 512, features: [lake] },
+      { name: 'landuse', extent: 512, features: [{ ...lake, properties: { class: 'pitch' } }] },
     ]);
     expect(() => decodeMapTile(bytes)).toThrow(/different extents/);
   });
@@ -155,5 +159,90 @@ describe('decodeMapTile', () => {
   it('reads an empty tile, and refuses bytes that are not a tile', () => {
     expect(decodeMapTile(new Uint8Array(0))).toEqual({ extent: 4096, groups: [] });
     expect(() => decodeMapTile(new Uint8Array([0x1a, 0xff, 0xff, 0xff, 0x0f]))).toThrow();
+  });
+});
+
+describe('trimMapTile', () => {
+  const road = (kind: string, points: [number, number][]) => ({
+    type: 2 as const,
+    properties: { class: kind, subclass: 'x', name: 'Calle Mayor', 'name:en': 'Main Street' },
+    rings: [points],
+  });
+  const whole = encodeTestTile([
+    {
+      name: 'poi',
+      features: Array.from({ length: 50 }, (_, i) => ({
+        type: 1 as const,
+        properties: { class: 'bar', name: `Bar ${i}` },
+        rings: [[[i, i] as [number, number]]],
+      })),
+    },
+    {
+      name: 'transportation',
+      features: [
+        road('minor', [
+          [0, 0],
+          [100, 50],
+          [120, 300],
+        ]),
+        road('ferry', [
+          [0, 0],
+          [9, 9],
+        ]),
+        road('rail', [
+          [5, 5],
+          [6, 6],
+        ]),
+      ],
+    },
+    {
+      name: 'water',
+      features: [
+        {
+          type: 3,
+          properties: { class: 'lake' },
+          rings: [square(0, 0, 100), [...square(25, 25, 50)].reverse()],
+        },
+      ],
+    },
+    {
+      name: 'landuse',
+      features: [{ type: 3, properties: { class: 'school' }, rings: [square(0, 0, 10)] }],
+    },
+  ]);
+
+  it('draws the same as the whole tile', () => {
+    expect(decodeMapTile(trimMapTile(whole))).toEqual(decodeMapTile(whole));
+  });
+
+  it('keeps only the drawn features and the properties the style reads', () => {
+    const trimmed = trimMapTile(whole);
+    expect(trimmed.length).toBeLessThan(whole.length / 3);
+    const text = new TextDecoder().decode(trimmed);
+    expect(text).not.toContain('Bar');
+    expect(text).not.toContain('Calle Mayor');
+    expect(text).not.toContain('school');
+    expect(text).not.toContain('ferry');
+    expect(text).toContain('minor');
+    expect(text).toContain('subclass');
+  });
+
+  it("keeps the layers' extent, and trims a tile with nothing drawn to nothing", () => {
+    const small = encodeTestTile([
+      {
+        name: 'water',
+        extent: 512,
+        features: [{ type: 3, properties: { class: 'ocean' }, rings: [square(0, 0, 512)] }],
+      },
+    ]);
+    expect(decodeMapTile(trimMapTile(small)).extent).toBe(512);
+    const empty = encodeTestTile([
+      { name: 'poi', features: [{ type: 1, properties: { class: 'bar' }, rings: [[[1, 1]]] }] },
+    ]);
+    expect(trimMapTile(empty)).toHaveLength(0);
+  });
+
+  it('refuses bytes that are not a tile', () => {
+    expect(() => trimMapTile(new Uint8Array([0x1a, 0xff, 0xff, 0xff, 0x0f]))).toThrow();
   });
 });
