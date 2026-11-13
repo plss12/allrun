@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { APP_LANGUAGE_CHOICES } from '@/core/profile';
@@ -17,6 +17,7 @@ import { disconnectStrava, useStrava } from '@/data/strava';
 import { RoundButton } from '@/editor/round-button';
 import { smallCardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
+import { logError } from '@/ui/log';
 import { Spinner } from '@/ui/spinner';
 import { Text } from '@/ui/text';
 import { Toggle } from '@/ui/toggle';
@@ -29,6 +30,18 @@ const PADDING = 16;
 /** Inside a card. */
 const CARD_PADDING = 16;
 
+/**
+ * The map's credits (ADR 021), as the licences ask: OpenStreetMap's data (ODbL), the
+ * OpenMapTiles schema its tiles follow, and OpenFreeMap, which serves them. Only at the end of
+ * the profile, as plain text as Strava writes its maps' (the owner's choice): nothing on the
+ * maps, the images or the launch screen.
+ */
+const MAP_CREDITS = [
+  { name: 'openStreetMap', url: 'https://www.openstreetmap.org/copyright' },
+  { name: 'openMapTiles', url: 'https://openmaptiles.org/' },
+  { name: 'openFreeMap', url: 'https://openfreemap.org/' },
+] as const;
+
 /** A distance as the profile offers it: "200 m", "1 km". */
 function distanceLabel(meters: RoutePrivacyChoice): string {
   return meters >= 1000 ? `${meters / 1000} km` : `${meters} m`;
@@ -37,7 +50,7 @@ function distanceLabel(meters: RoutePrivacyChoice): string {
 /**
  * The profile (ADR 019), from the button on the home's top bar: the account (its email, signing
  * out, deleting it), the Strava connected (ADR 020), hiding the start and end of routes, the
- * app's language and update emails. Every change shows at
+ * app's language and update emails, and under it all the map's credits. Every change shows at
  * once and is kept with the account; one it couldn't keep goes back, and says so.
  */
 export function ProfileScreen() {
@@ -243,6 +256,39 @@ export function ProfileScreen() {
             onPress={askDelete}
             disabled={leaving}
           />
+        </View>
+
+        {/* The map's credits: what they are, and a line of small text links, centered. */}
+        <Text
+          style={{ marginTop: 24, color: colors.tertiaryLabel, fontSize: 12, textAlign: 'center' }}
+        >
+          {t('account.profile.credits.title')}
+        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            columnGap: 12,
+          }}
+        >
+          {MAP_CREDITS.map(({ name, url }) => (
+            <Pressable
+              key={name}
+              accessibilityRole="link"
+              hitSlop={8}
+              onPress={() =>
+                void Linking.openURL(url).catch((error: unknown) =>
+                  logError(`Couldn't open ${url}`, error),
+                )
+              }
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Text style={{ color: colors.tertiaryLabel, fontSize: 12 }}>
+                {t(`account.profile.credits.${name}`)}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       </ScrollView>
       <TopBar

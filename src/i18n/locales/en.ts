@@ -560,6 +560,13 @@ export const en = {
       },
       emailsSection: 'Emails',
       updateEmails: 'News by email',
+      /** The map's sources (ADR 021): the credits their licences ask for, as Strava writes them. */
+      credits: {
+        title: 'Maps made with',
+        openStreetMap: '© OpenStreetMap',
+        openMapTiles: '© OpenMapTiles',
+        openFreeMap: '© OpenFreeMap',
+      },
       changeFailed: 'It couldn’t be saved. Check your connection and try again.',
       deleteAccount: 'Delete account',
       deleteTitle: 'Delete your account?',

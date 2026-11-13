@@ -529,6 +529,12 @@ export const es: Translations = {
       },
       emailsSection: 'Correos',
       updateEmails: 'Novedades por correo',
+      credits: {
+        title: 'Mapas hechos con',
+        openStreetMap: '© OpenStreetMap',
+        openMapTiles: '© OpenMapTiles',
+        openFreeMap: '© OpenFreeMap',
+      },
       changeFailed: 'No se ha podido guardar. Comprueba la conexión y vuelve a probar.',
       deleteAccount: 'Borrar cuenta',
       deleteTitle: '¿Borrar tu cuenta?',
