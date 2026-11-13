@@ -543,8 +543,19 @@ export const logoBox = (width: number, color?: string): Box => ({
   place: (x, y) => [{ kind: 'logo', x, y, width, ...(color === undefined ? {} : { color }) }],
 });
 
-/** Width of a block's route, before the layer's scale. */
+/** Width of a block's route, before the layer's scale, when nothing sets another. */
 const ROUTE_STROKE = 8;
+
+/**
+ * Width of the route of a widget around a big datum, as a share of the datum's width: 8 over the
+ * 759 of a marathon's in Unbounded, the bold wide letter it starts in. A narrower letter (a
+ * condensed or thin one) makes the widget and its route smaller, and the line with them: at a
+ * fixed width it looked twice as heavy as the letters.
+ */
+const ROUTE_STROKE_SHARE = 8 / 759;
+
+/** The route's line width for a widget whose big datum is `datumWidth` wide. */
+const routeStrokeFor = (datumWidth: number) => datumWidth * ROUTE_STROKE_SHARE;
 
 /**
  * The route of `polyline` (its private ends trimmed) as big as fits a `width` × `height` box,
@@ -3053,6 +3064,7 @@ export function prepareActivityBlock(
             activity.routePolyline,
             main.width * BIG_HEADER.routeWidth,
             main.width * BIG_HEADER.routeHeight,
+            { width: routeStrokeFor(main.width) },
           );
           return route === null
             ? stack
@@ -3076,6 +3088,7 @@ export function prepareActivityBlock(
                 activity.routePolyline,
                 main.width * BIG_HEADER.routeWidth,
                 main.width * BIG_HEADER.routeHeight,
+                { width: routeStrokeFor(main.width) },
               );
         return column(
           route === null ? [day, main] : [day, route, main],

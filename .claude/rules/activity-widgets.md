@@ -19,6 +19,8 @@ Se maquetan con cajas medidas (columnas, filas, reglas, icono), que reutilizan l
 - Cada línea se recorta a sus letras reales: a la altura de sus mayúsculas (`CAP_HEIGHTS`), o de sus minúsculas y tildes cuando las lleva, y bajando lo que bajen sus minúsculas (`lettersExtent` de `editor/fonts.ts`, medidas de los contornos), así que pasar a minúsculas no abre huecos; los textos estirados proyectan su sombra ya estirados, no dentro del párrafo.
 - El tiempo arriba no se ofrece (decisión de producto; los diseños guardados con él se siguen dibujando).
 
+- La línea de la ruta de los widgets con dato grande (con la ruta, con el mapa, día y ruta) es proporcional al ancho del dato grande (`ROUTE_STROKE_SHARE`: 8 sobre los 759 de un maratón en Unbounded): con un grosor fijo, una letra estrecha o fina achicaba el widget y la ruta, y la línea se veía el doble de gorda que las letras (fallo visto por el usuario; test en `map-widget-scene.test.tsx`). Las réplicas ponen el suyo.
+
 ## Réplicas
 
 Notas, Mensaje, Música, Cámara, Vueltas (las vueltas de la actividad, no los parciales), Gran Premio, Alarma, Ubicación, barras y escalera de parciales, Verificado, Frase (WhatsApp con frase de la lista o propia), Subrayado, Ticket, Tarjeta de embarque (con la ciudad de salida en la banda; «Tarjeta de embarque» mientras no se conoce), Información nutricional y Equivalencias (las dos últimas, en `widgets.md`). La hoja de tiempos usa letra monoespaciada.
