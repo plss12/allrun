@@ -15,13 +15,14 @@ import { bucketCount } from './periods';
 import type { SportFamily, SportModality } from './sports';
 import { type BucketSize, bucketize, familyTotals, type PeriodSummary } from './summary';
 import { FIRST_PHRASE } from './phrases';
-import { periodTotals, summaryHasDistance } from './summary-metrics';
+import { availableSummaryMetrics, periodTotals, summaryHasDistance } from './summary-metrics';
 import {
   APP_MODES,
   BRAND_COVERS,
   LAPS_LAYOUTS,
   type SummaryBlock,
   type SummaryBlockDesign,
+  type SummaryMetricId,
 } from './template';
 
 /**
@@ -101,6 +102,7 @@ const SUMMARY_DATA_WIDGETS: ReadonlySet<SummaryBlockDesign> = new Set([
   'periodIcons',
   'periodCards',
   'periodRoutes',
+  'periodRouteData',
 ]);
 
 /**
@@ -597,7 +599,10 @@ export function streakStrip(range: DateRange): StreakStrip {
  * `nutritionLabels`); and its boarding pass and its metro line, in each brand color. The gallery
  * lays them out by themes (see `creativeTheme`). None for a period without activities. Time O(1).
  */
-export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
+export function summaryBlocks(
+  summary: PeriodSummary,
+  places: readonly PeriodSummary[] = [],
+): SummaryBlock[] {
   if (summary.activityCount === 0) {
     return [];
   }
@@ -621,7 +626,7 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
     ...(days <= MAX_DAYS_LISTED ? [{ design: 'periodIcons', layout: 'days' } as const] : []),
     { design: 'periodCards' },
     ...(days <= MAX_ROUTES_DAYS ? [{ design: 'periodRoutes', layout: 'grid' } as const] : []),
-    { design: 'periodRoutes', layout: 'overlay' },
+    ...routeDataBlocks(summary, places),
     { design: 'quote', quote: FIRST_PHRASE.quote },
     { design: 'verse', verse: FIRST_PHRASE.verse },
     { design: 'periodSentence' },
@@ -663,6 +668,38 @@ export function summaryBlocks(summary: PeriodSummary): SummaryBlock[] {
 }
 
 /**
+ * The period's routes over its totals (`periodRouteData`), as an activity's route with a big
+ * datum: all of them overlaid, with its main total and two more under it, and three (the third
+ * its number of activities) when it has four totals; then each place's on its map (see
+ * `periodPlaces`, in their order), with two only (the owner's choice), in a tile of their own.
+ * Time O(p) for p places.
+ */
+function routeDataBlocks(summary: PeriodSummary, places: readonly PeriodSummary[]): SummaryBlock[] {
+  return [
+    { design: 'periodRouteData', count: 2 },
+    ...(routeDataTotals(summary, 3).length === 4
+      ? [{ design: 'periodRouteData', count: 3 } as const]
+      : []),
+    ...places.map((_, place): SummaryBlock => ({ design: 'periodRouteData', count: 2, place })),
+  ];
+}
+
+/**
+ * The totals of a `periodRouteData` with `count` under its main one: the period's main totals
+ * (see `periodTotals`), and with three under it, its distance, time and elevation gain and then
+ * its number of activities (the owner's choice), those it has. Time and space O(1).
+ */
+export function routeDataTotals(summary: PeriodSummary, count: 2 | 3): SummaryMetricId[] {
+  if (count === 2) {
+    return periodTotals(summary);
+  }
+  const offered = availableSummaryMetrics(summary);
+  return (['totalDistance', 'totalMovingTime', 'totalElevationGain', 'activityCount'] as const)
+    .filter((metric) => offered.includes(metric))
+    .slice(0, 4);
+}
+
+/**
  * The lettering each summary widget starts in, one its own among them, picked by drawing
  * candidates: the period's data in a wide, heavy letter (Unbounded, as the example it copies), its
  * table in a clean one that reads well in a column of numbers (Inter), its sports in a heavy one,
@@ -681,6 +718,7 @@ export function summaryBlockLettering(block: SummaryBlock): BlockLettering {
     case 'periodIcons':
       return { font: 'unbounded', bold: true, italic: false, uppercase: true };
     case 'periodRoutes':
+    case 'periodRouteData':
       return { font: 'unbounded', bold: true, italic: false, uppercase: true };
     case 'periodCards':
       return { font: 'unbounded', bold: false, italic: false, uppercase: false };

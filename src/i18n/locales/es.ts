@@ -233,6 +233,7 @@ export const es: Translations = {
       periodSports: 'Por deporte',
       periodIcons: 'Con iconos',
       periodRoutes: 'Actividades con ruta',
+      periodRouteData: 'Rutas y datos',
       periodCards: 'Tarjetas por deporte',
       quote: 'Cita',
       verse: 'Versículo',
@@ -661,6 +662,8 @@ export const es: Translations = {
     },
   },
   gallery: {
+    /** A period's place by its rank, most activities first. */
+    placeRank: 'Sitio',
     dataCounts: {
       one: 'Un dato',
       two: 'Dos datos',

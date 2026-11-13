@@ -114,6 +114,7 @@ import type { DistanceUnit } from '@/core/units';
 import { useUserTemplates } from '@/data/user-templates';
 import { ActionTile } from '@/editor/action-tile';
 import { galleryData } from '@/editor/gallery-place';
+import { loadPlaceMaps, loadPlaceNames } from '@/editor/load-place-maps';
 import { loadWidgetMap } from '@/editor/load-widget-map';
 import { ColorMenu } from '@/editor/color-menu';
 import { Eyedropper } from '@/editor/eyedropper';
@@ -136,7 +137,7 @@ import { alertNoPhotosPermission, ExportBar } from '@/editor/export-bar';
 import { loadPhoto } from '@/editor/export-image';
 import { type CellPhoto, type ExportDesign, sceneCollage, sceneFrame } from '@/editor/export-scene';
 import { lookUpPlace, type PlaceLookup, UNKNOWN_PLACE } from '@/data/place-lookup';
-import type { EditorData } from '@/editor/editor-data';
+import { type EditorData, periodPlacesOf } from '@/editor/editor-data';
 import { type LayerContext, type LayerImage, prepareLayers } from '@/editor/template-scene';
 import { type TextOrigin, TypingOverlay } from '@/editor/typing-overlay';
 import { Dock } from '@/editor/dock';
@@ -323,10 +324,30 @@ function EditorWorkspace({
       ? `map|${loaded.activity.id}|${loaded.activity.routePolyline ?? ''}`
       : 'map|summary',
   );
-  const withMap = (shown: EditorData): EditorData =>
-    shown.mode === 'activity' && routeMap.status === 'success'
-      ? { ...shown, map: routeMap.data }
-      : shown;
+  /** A period's places (see `periodPlacesOf`): their names and maps, also in the background. */
+  const placesKey =
+    loaded.mode === 'summary'
+      ? `places|${loaded.summary.range.start}|${loaded.summary.range.end}|${loaded.families.join(',')}|${loaded.activities.length}`
+      : 'places|activity';
+  const placeNames = useAsync(
+    () =>
+      loaded.mode === 'summary' ? loadPlaceNames(periodPlacesOf(loaded)) : Promise.resolve([]),
+    `names|${placesKey}`,
+  );
+  const placeMaps = useAsync(
+    () => (loaded.mode === 'summary' ? loadPlaceMaps(periodPlacesOf(loaded)) : Promise.resolve([])),
+    `maps|${placesKey}`,
+  );
+  const withMap = (shown: EditorData): EditorData => {
+    if (shown.mode === 'activity') {
+      return routeMap.status === 'success' ? { ...shown, map: routeMap.data } : shown;
+    }
+    return {
+      ...shown,
+      ...(placeNames.status === 'success' ? { placeNames: placeNames.data } : {}),
+      ...(placeMaps.status === 'success' ? { placeMaps: placeMaps.data } : {}),
+    };
+  };
   const data: EditorData = withMap(
     loaded.mode === 'activity' && placeLookup.status === 'known'
       ? { ...loaded, place: placeLookup.place }

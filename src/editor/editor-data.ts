@@ -1,4 +1,5 @@
 import type { Activity } from '@/core/activity';
+import { type PeriodPlace, periodPlaces } from '@/core/period-places';
 import { rangeLength } from '@/core/dates';
 import { bigMetrics, type SentenceClause, type SentenceLead } from '@/core/activity-block';
 import type { BarSeries, LineSeries, SplitRow } from '@/core/activity-charts';
@@ -70,6 +71,25 @@ export interface SummaryData {
   readonly families: readonly SportFamily[];
   /** Whether it is the week, month or year in progress (see `isCurrentPeriod`). */
   readonly current: boolean;
+  /** The names of its places (see `periodPlacesOf`), by rank; absent or `null` until named. */
+  readonly placeNames?: readonly (string | null)[];
+  /** The tiles of its places' maps (ADR 021), by rank; absent or `null` until loaded. */
+  readonly placeMaps?: readonly (WidgetMap | null)[];
+}
+
+const placesOfActivities = new WeakMap<readonly Activity[], readonly PeriodPlace[]>();
+
+/**
+ * The places of a period's activities (see `periodPlaces`), worked out once for its activities:
+ * the gallery, its labels and every widget of a place ask for them on every render.
+ */
+export function periodPlacesOf(data: SummaryData): readonly PeriodPlace[] {
+  let places = placesOfActivities.get(data.activities);
+  if (places === undefined) {
+    places = periodPlaces(data.activities, data.summary.range);
+    placesOfActivities.set(data.activities, places);
+  }
+  return places;
 }
 
 /** One activity to fill a template with. */

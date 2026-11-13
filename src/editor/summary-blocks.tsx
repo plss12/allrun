@@ -8,7 +8,7 @@ import { periodEquivalences } from '@/core/equivalences';
 import { phraseLanguage, phraseWords } from '@/core/phrases';
 import { BUILT_IN_PHRASES } from '@/core/phrases-built-in';
 import { familyTotals } from '@/core/summary';
-import { gridColumns, isSummaryReplica, mainFamily } from '@/core/summary-block';
+import { gridColumns, isSummaryReplica, mainFamily, routeDataTotals } from '@/core/summary-block';
 import { periodTotals, summaryMetricValue } from '@/core/summary-metrics';
 import type { Layer } from '@/core/template';
 import { formatActivityDate } from '@/ui/format';
@@ -31,6 +31,7 @@ import {
   type PreparedBlock,
   quotationBox,
   routeBox,
+  routesMapBox,
   row,
 } from './activity-blocks';
 import {
@@ -39,6 +40,7 @@ import {
   periodName,
   equivalenceLines,
   periodNutrition,
+  periodPlacesOf,
   periodTitle,
   plainMetricText,
   plainSummaryText,
@@ -155,6 +157,8 @@ const SIZES = {
     /** The period's name over the main total, as the period's data names it. */
     title: 0.34,
     titleGap: 0.14,
+    /** Between the period's name and the place's, over a place's map, a share of their size. */
+    headerGap: 0.3,
     minWidth: 5,
     height: 0.85,
     gap: 0.3,
@@ -251,6 +255,82 @@ export function prepareSummaryBlock(
   if (data.summary.activityCount === 0) {
     return null;
   }
+
+  /**
+   * The period's routes over its main total and `count` more small under it, spread to its width
+   * (see `routeDataTotals`), as an activity's route over its big datum: all of them overlaid,
+   * with the period's name between them and the totals (its main sport's icon without any route;
+   * the name tells it from an activity's route, the owner's choice); or those of its place of rank
+   * `rank` (see `periodPlacesOf`) on their map, the route alone until it loads, under the
+   * period's name and the place's and over the place's totals. `null` for a place it hasn't.
+   */
+  const routesOverTotals = (count: 2 | 3, rank: number | undefined): Box | null => {
+    const sizes = SIZES.periodOverlay;
+    const place = rank === undefined ? null : (periodPlacesOf(data)[rank] ?? null);
+    if (rank !== undefined && place === null) {
+      return null;
+    }
+    const summary = place?.summary ?? data.summary;
+    const totals = routeDataTotals(summary, count).map((metric) =>
+      summaryTotalText(metric, summaryMetricValue(summary, metric) ?? 0, compact, translate),
+    );
+    if (totals.length === 0) {
+      return null;
+    }
+    const [first, ...rest] = totals;
+    const main = line(first, sizes.value, sizes.value * BELOW);
+    const stack =
+      rest.length === 0
+        ? main
+        : column(
+            [
+              main,
+              justified(
+                rest.map((text) => line(text, sizes.data, sizes.data * BELOW, rest.join(' '))),
+                main.width,
+                sizes.data * sizes.minGap,
+              ),
+            ],
+            0,
+            'start',
+          );
+    const titleSize = sizes.value * sizes.title;
+    const width = Math.max(main.width, sizes.value * sizes.minWidth);
+    if (place === null || rank === undefined) {
+      const named = column(
+        [line(title, titleSize, sizes.value * sizes.titleGap), stack],
+        0,
+        'center',
+      );
+      // Without any route (a month of gym sessions), its main sport's icon in their place.
+      const art =
+        routesBox(data.summary.routes, width, width * sizes.height, sizes.stroke) ??
+        iconBox(mainFamily(data.activities), sizes.value * sizes.icon);
+      return column([art, named], sizes.value * sizes.gap, 'center');
+    }
+    const name = data.placeNames?.[rank] ?? null;
+    const header =
+      name === null
+        ? line(title, titleSize, 0)
+        : column(
+            [line(title, titleSize, titleSize * sizes.headerGap), line(name, titleSize, 0)],
+            0,
+            'center',
+          );
+    const map = data.placeMaps?.[rank] ?? null;
+    const polylines = place.activities.flatMap((activity) =>
+      activity.routePolyline === null ? [] : [activity.routePolyline],
+    );
+    const art =
+      map === null
+        ? routesBox(polylines, width, width * sizes.height, sizes.stroke)
+        : routesMapBox(place.routes, width, map, sizes.stroke);
+    return column(
+      art === null ? [header, stack] : [header, art, stack],
+      sizes.value * sizes.gap,
+      'center',
+    );
+  };
 
   const body = ((): Box | null => {
     switch (block.design) {
@@ -443,54 +523,12 @@ export function prepareSummaryBlock(
           'start',
         );
       }
+      case 'periodRouteData':
+        return routesOverTotals(block.count, block.place);
       case 'periodRoutes': {
         if (block.layout === 'overlay') {
-          // All the period's routes overlaid, as an activity's route over its big datum (or its
-          // main sport's icon, without any): over the period's name and its main total, and the
-          // other two small under it, spread to its width. The name tells it from an activity's
-          // route (the owner's choice), centered over the total.
-          const sizes = SIZES.periodOverlay;
-          const totals = periodTotals(data.summary).map((metric) =>
-            summaryTotalText(
-              metric,
-              summaryMetricValue(data.summary, metric) ?? 0,
-              compact,
-              translate,
-            ),
-          );
-          if (totals.length === 0) {
-            return null;
-          }
-          const [first, ...rest] = totals;
-          const main = line(first, sizes.value, sizes.value * BELOW);
-          const stack =
-            rest.length === 0
-              ? main
-              : column(
-                  [
-                    main,
-                    justified(
-                      rest.map((text) =>
-                        line(text, sizes.data, sizes.data * BELOW, rest.join(' ')),
-                      ),
-                      main.width,
-                      sizes.data * sizes.minGap,
-                    ),
-                  ],
-                  0,
-                  'start',
-                );
-          const named = column(
-            [line(title, sizes.value * sizes.title, sizes.value * sizes.titleGap), stack],
-            0,
-            'center',
-          );
-          const width = Math.max(main.width, sizes.value * sizes.minWidth);
-          // Without any route (a month of gym sessions), its main sport's icon in their place.
-          const art =
-            routesBox(data.summary.routes, width, width * sizes.height, sizes.stroke) ??
-            iconBox(mainFamily(data.activities), sizes.value * sizes.icon);
-          return column([art, named], sizes.value * sizes.gap, 'center');
+          // Saved before `periodRouteData`, which the gallery offers in its place: as its two.
+          return routesOverTotals(2, undefined);
         }
         // Each activity as the activities' route with a big datum, small: its route (its sport's
         // icon without one) over its main datum, its other two small under it; in a grid, by date.

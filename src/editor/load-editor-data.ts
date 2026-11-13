@@ -8,7 +8,7 @@ import type { ActivitySource } from '@/sources/activity-source';
 import { logError } from '@/ui/log';
 import { todayLocal } from '@/ui/today';
 
-import type { EditorData } from './editor-data';
+import { type EditorData, periodPlacesOf } from './editor-data';
 import type { EditorRequest } from './editor-params';
 
 /** The activity asked for isn't there. */
@@ -76,5 +76,9 @@ export function catalogFor(
         data.zones !== null,
         data.detail !== null && data.detail.laps.length > 1,
       )
-    : summaryCatalog(data.summary, data.bucketSize);
+    : summaryCatalog(
+        data.summary,
+        data.bucketSize,
+        periodPlacesOf(data).map((place) => place.summary),
+      );
 }

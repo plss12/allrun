@@ -19,6 +19,7 @@ import {
   type Layer,
   type LayerKind,
   PERIOD_FORMATS,
+  type SummaryBlock,
   type SummaryMetricId,
   TIME_NOTATIONS,
 } from './template';
@@ -237,7 +238,7 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
       // Designs alike share a tile (see `blockTile`).
       return `block-${blockTile(item.block)}`;
     case 'summaryBlock':
-      return `summaryBlock-${item.block.design}`;
+      return summaryBlockTile(item.block);
     case 'image':
       // The instant photos and each holder, a tile of their own; a chat and a margins' page with one
       // photo fewer, a page of the same tile (the user's choice).
@@ -251,6 +252,17 @@ export function catalogWidgetKey(item: CatalogItem | NewLayer): string {
     case 'summaryRoutes':
       return item.kind;
   }
+}
+
+/**
+ * The gallery tile a summary widget scrolls in: its design's, but the routes of each place on
+ * their map, in a tile of their own beside the period's routes over its totals (the owner's
+ * choice).
+ */
+function summaryBlockTile(block: SummaryBlock): string {
+  return block.design === 'periodRouteData' && block.place !== undefined
+    ? 'summaryBlock-periodPlaces'
+    : `summaryBlock-${block.design}`;
 }
 
 /**
@@ -327,6 +339,9 @@ export function catalogItemKey(item: CatalogItem | NewLayer): string {
           'cover' in item.block ? item.block.cover : undefined,
           'verse' in item.block ? item.block.verse : undefined,
           'quote' in item.block ? item.block.quote : undefined,
+          'place' in item.block && item.block.place !== undefined
+            ? `place${item.block.place}`
+            : undefined,
         ];
       case 'image':
         // As is, the default; an instant photo by its caption, where and how far the default; a
@@ -662,11 +677,15 @@ export function activityCatalog(
  * logo. Formats of the name that write a period the same (all of them, for a year) are one widget
  * for the user: the gallery drops the repeats. Time O(1).
  */
-export function summaryCatalog(summary: PeriodSummary, autoBucket: BucketSize): CatalogSection[] {
+export function summaryCatalog(
+  summary: PeriodSummary,
+  autoBucket: BucketSize,
+  places: readonly PeriodSummary[] = [],
+): CatalogSection[] {
   return sections([
-    ...summaryBlocks(summary).map((block): Entry => [
+    ...summaryBlocks(summary, places).map((block): Entry => [
       isSummaryDataWidget(block.design) ? 'data' : 'creative',
-      `summaryBlock-${block.design}`,
+      summaryBlockTile(block),
       { kind: 'summaryBlock', block },
     ]),
     ...availableSummaryMetrics(summary).flatMap((metric) =>

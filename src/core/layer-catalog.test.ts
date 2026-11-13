@@ -464,6 +464,8 @@ describe('summaryCatalog', () => {
       'summaryBlock-periodIcons',
       'summaryBlock-periodCards',
       'summaryBlock-periodRoutes',
+      // Its routes over its totals, in a tile of their own, as an activity's route over a big datum.
+      'summaryBlock-periodRouteData',
     ]);
     expect(variantKeys(catalog, 'summaryBlock-periodData')).toEqual([
       'summaryBlock-periodData-1',
@@ -652,5 +654,18 @@ describe('stickerCatalog', () => {
   it('keeps the charts, when there are some', () => {
     const withCharts = stickerCatalog(activityCatalog(makeActivity(), ['pace']));
     expect(withCharts.map((section) => section.id)).toContain('charts');
+  });
+});
+
+describe("a period's places", () => {
+  it('scroll in a tile of their own, apart from the routes over the totals', () => {
+    const block = (place?: number) =>
+      catalogWidgetKey({
+        kind: 'summaryBlock',
+        block: { design: 'periodRouteData', count: 2, ...(place === undefined ? {} : { place }) },
+      });
+    expect(block()).toBe('summaryBlock-periodRouteData');
+    expect(block(0)).toBe('summaryBlock-periodPlaces');
+    expect(block(3)).toBe('summaryBlock-periodPlaces');
   });
 });

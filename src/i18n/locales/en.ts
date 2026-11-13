@@ -239,6 +239,7 @@ export const en = {
       periodSports: 'By sport',
       periodIcons: 'With icons',
       periodRoutes: 'Activities with routes',
+      periodRouteData: 'Routes and data',
       periodCards: 'Cards by sport',
       quote: 'Quote',
       verse: 'Verse',
@@ -693,6 +694,8 @@ export const en = {
   },
   gallery: {
     /** How many data a version of a widget shows. */
+    /** A period's place by its rank, most activities first. */
+    placeRank: 'Place',
     dataCounts: {
       one: 'One datum',
       two: 'Two data',

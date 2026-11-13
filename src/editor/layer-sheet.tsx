@@ -135,6 +135,9 @@ export function galleryDataKey(data: LayerContext['data']): string {
         data.summary.activityCount,
         data.families.join(','),
         data.current ? 'current' : '',
+        // Its places' names and maps come after: their widgets are drawn again with them.
+        (data.placeNames ?? []).map((name) => name ?? '').join(','),
+        (data.placeMaps ?? []).map((map) => (map === null ? '' : 'map')).join(','),
       ].join(':');
 }
 
@@ -558,6 +561,18 @@ export function pageLabel(
             name,
             t(`gallery.blockLayouts.${block.layout}`),
             t(`gallery.noteRows.${block.rows}`),
+          ];
+        }
+        if (block.design === 'periodRouteData') {
+          return [
+            name,
+            // The place by its name once known, by its rank until then.
+            block.place === undefined
+              ? ''
+              : ((context.data.mode === 'summary'
+                  ? context.data.placeNames?.[block.place]
+                  : null) ?? `${t('gallery.placeRank')} ${block.place + 1}`),
+            t(`gallery.dataCounts.${block.count === 2 ? 'two' : 'three'}`),
           ];
         }
         return [

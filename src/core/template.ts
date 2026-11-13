@@ -477,7 +477,10 @@ export type ActivityBlock = z.infer<typeof activityBlockSchema>;
  * their distance or time, and the total; the period's name over each sport's total, written or
  * with the sport's icon (`sports`), or over each day's activities with their icons (`days`); its
  * activities in a grid, each with its route over its data (`grid`), or all its routes overlaid
- * over its totals (`overlay`); and a card per sport. And its creative ones (see
+ * over its totals (`overlay`, which the gallery no longer offers: designs saved with it still
+ * draw); its routes over its main total and `count` more under it (`periodRouteData`): all of
+ * them overlaid, or, with a `place`, those of its place of that rank (see `periodPlaces`) on
+ * their map, the period's name and the place's over it (ADR 021); and a card per sport. And its creative ones (see
  * `isSummaryDataWidget`), as an activity's: a quote and a Bible verse, in the user's lettering; and
  * replicas of apps and things (see `isSummaryReplica`): the period as a sentence typed on paper,
  * its totals highlighted (`periodSentence`); its activities as the songs of a playlist of the
@@ -505,6 +508,11 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('periodSports') }),
   z.object({ design: z.literal('periodIcons'), layout: z.enum(['sports', 'days']) }),
   z.object({ design: z.literal('periodRoutes'), layout: z.enum(['grid', 'overlay']) }),
+  z.object({
+    design: z.literal('periodRouteData'),
+    count: z.union([z.literal(2), z.literal(3)]),
+    place: z.number().int().min(0).max(9).optional(),
+  }),
   z.object({ design: z.literal('periodCards') }),
   z.object({ design: z.literal('quote'), quote: phraseIdSchema }),
   z.object({ design: z.literal('verse'), verse: phraseIdSchema }),

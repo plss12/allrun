@@ -29,6 +29,7 @@ import {
   periodWrapped,
   playlistSongs,
   WRAPPED_TOP,
+  routeDataTotals,
   summaryBlocks,
   tableBucket,
 } from './summary-block';
@@ -69,7 +70,10 @@ describe('summaryBlocks', () => {
       { design: 'periodIcons', layout: 'days' },
       { design: 'periodCards' },
       { design: 'periodRoutes', layout: 'grid' },
-      { design: 'periodRoutes', layout: 'overlay' },
+      // Its routes over its totals, in a tile of their own: two data, and three with the number of
+      // activities.
+      { design: 'periodRouteData', count: 2 },
+      { design: 'periodRouteData', count: 3 },
       { design: 'quote', quote: FIRST_PHRASE.quote },
       { design: 'verse', verse: FIRST_PHRASE.verse },
       { design: 'periodSentence' },
@@ -132,8 +136,8 @@ describe('summaryBlocks', () => {
     expect(october).toContainEqual({ design: 'periodRoutes', layout: 'grid' });
     const year = summaryBlocks(summarize([run], yearRange('2026-01-01')));
     expect(year).not.toContainEqual({ design: 'periodRoutes', layout: 'grid' });
-    // A year's routes, overlaid.
-    expect(year).toContainEqual({ design: 'periodRoutes', layout: 'overlay' });
+    // A year's routes, overlaid over its totals.
+    expect(year).toContainEqual({ design: 'periodRouteData', count: 2 });
     // The cards suit any period.
     expect(year).toContainEqual({ design: 'periodCards' });
   });
@@ -147,8 +151,9 @@ describe('summaryBlocks', () => {
       { design: 'periodIcons', layout: 'days' },
       { design: 'periodCards' },
       { design: 'periodRoutes', layout: 'grid' },
-      // Without any route, its sport's icon in their place: the page isn't lost.
-      { design: 'periodRoutes', layout: 'overlay' },
+      // Without any route, its sport's icon in their place: the page isn't lost; without its
+      // four totals, not with three data.
+      { design: 'periodRouteData', count: 2 },
       { design: 'quote', quote: FIRST_PHRASE.quote },
       { design: 'verse', verse: FIRST_PHRASE.verse },
       { design: 'periodSentence' },
@@ -614,5 +619,46 @@ describe('metroStations', () => {
   it("makes a station of each of a year's months", () => {
     const year = yearRange('2026-01-01');
     expect(metroStations(summarize([run], year), [run])).toHaveLength(12);
+  });
+});
+
+describe('the routes over their totals', () => {
+  const run = makeActivity({ sportType: 'Run', localDate: '2026-10-13' });
+  const flat = makeActivity({ sportType: 'Run', localDate: '2026-10-14', elevationGainMeters: 0 });
+
+  it('offers all the routes with two data and three, then each place on its map with two', () => {
+    const period = summarize([run, flat], week);
+    const hilly = summarize([run], week);
+    const level = summarize([flat], week);
+    const blocks = summaryBlocks(period, [hilly, level]).filter(
+      (block) => block.design === 'periodRouteData',
+    );
+    expect(blocks).toEqual([
+      { design: 'periodRouteData', count: 2 },
+      { design: 'periodRouteData', count: 3 },
+      // Each place on its map, with two data only.
+      { design: 'periodRouteData', count: 2, place: 0 },
+      { design: 'periodRouteData', count: 2, place: 1 },
+    ]);
+  });
+
+  it('writes two data under the main total, or three ending with the activities', () => {
+    const period = summarize([run], week);
+    expect(routeDataTotals(period, 2)).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'totalElevationGain',
+    ]);
+    expect(routeDataTotals(period, 3)).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'totalElevationGain',
+      'activityCount',
+    ]);
+    expect(routeDataTotals(summarize([flat], week), 3)).toEqual([
+      'totalDistance',
+      'totalMovingTime',
+      'activityCount',
+    ]);
   });
 });
