@@ -1309,13 +1309,14 @@ export interface CameraContent {
   readonly values: readonly string[];
   /** The mark on its f button, `size` big. */
   readonly lens: (size: number, color: string) => Box;
-  /** What its last photo's thumbnail shows, `size` big, or `null` for no thumbnail. */
+  /**
+   * What its last photo's thumbnail shows, `size` big, in {@link COVER_ROUTE}, or `null` for no
+   * thumbnail.
+   */
   readonly thumbnail: (size: number) => Box | null;
+  /** The last photo's color, as the song's cover: AllRun's red or night ink. */
+  readonly cover: (typeof BRAND_COVERS)[number];
 }
-
-/** The route on the camera's last photo, white over black: one camera, with no brand colors. */
-export const CAMERA_ROUTE = '#FFFFFF';
-const CAMERA_THUMBNAIL = '#000000';
 
 /**
  * The phone's camera framing the whole canvas: its dimmed bands, grid and buttons over the photo,
@@ -1326,7 +1327,7 @@ export function cameraBox(
   fonts: SkTypefaceFontProvider,
   translate: BlockContext['translate'],
   { width, height }: Size,
-  { values: written, lens: lensMark, thumbnail }: CameraContent,
+  { values: written, lens: lensMark, thumbnail, cover }: CameraContent,
 ): { readonly box: Box; readonly hole: HitHole } {
   const colors = CAMERA_COLORS;
   const unit = Math.min(1, height / CAMERA.storyHeight);
@@ -1369,7 +1370,7 @@ export function cameraBox(
   const controlSize = controls.size * unit;
   const controlsY = bottom + controls.y * unit;
   const shown = thumbnail(controlSize * 0.55);
-  const thumb = shown === null ? null : button(controlSize, CAMERA_THUMBNAIL, shown);
+  const thumb = shown === null ? null : button(controlSize, BRAND_COVER_COLORS[cover], shown);
   const modes = CAMERA.modes;
   const chosenWidth = (modes.chosenTo - modes.chosenFrom) * unit;
   const chosenHeight = controlSize - 2 * modes.inset * unit;
@@ -3457,7 +3458,8 @@ export function prepareActivityBlock(
           thumbnail: (size) =>
             activity.routePolyline === null
               ? null
-              : routeBox(activity.routePolyline, size, size, { color: CAMERA_ROUTE, width: 3 }),
+              : routeBox(activity.routePolyline, size, size, { color: COVER_ROUTE, width: 3 }),
+          cover: block.cover ?? 'red',
         });
         hole = camera.hole;
         return camera.box;

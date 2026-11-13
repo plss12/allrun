@@ -435,8 +435,8 @@ const activityBlockSchema = z.discriminatedUnion('design', [
     layout: z.enum(APP_MODES),
     cover: z.enum(BRAND_COVERS),
   }),
-  // Cameras saved while they came in brand colors still read: the field is dropped.
-  z.object({ design: z.literal('camera') }),
+  // The last photo's color, as the camera's holder (an image layer's `cover`); absent, Track Red.
+  z.object({ design: z.literal('camera'), cover: z.enum(BRAND_COVERS).optional() }),
   z.object({ design: z.literal('verse'), verse: phraseIdSchema }),
   z.object({ design: z.literal('quote'), quote: phraseIdSchema }),
   z.object({
@@ -542,7 +542,7 @@ const summaryBlockSchema = z.discriminatedUnion('design', [
   }),
   z.object({ design: z.literal('periodMetro'), cover: z.enum(BRAND_COVERS) }),
   z.object({ design: z.literal('periodMessage'), layout: z.enum(APP_MODES) }),
-  z.object({ design: z.literal('periodCamera') }),
+  z.object({ design: z.literal('periodCamera'), cover: z.enum(BRAND_COVERS).optional() }),
   z.object({ design: z.literal('periodEquivalences'), layout: z.enum(APP_MODES) }),
 ]);
 
@@ -809,7 +809,10 @@ export const layerSchema = z.discriminatedUnion('kind', [
      * `windowCount`): the first window's is `image`. Each a key as `image` is; empty, none chosen.
      */
     extraImages: z.array(z.string()).optional(),
-    /** The brand's color a holder is printed in (the calendar's sheet); absent, Track Red. */
+    /**
+     * The brand's color a holder is printed in (the calendar's sheet, the camera's last photo);
+     * absent, Track Red.
+     */
     cover: z.enum(BRAND_COVERS).optional(),
     frame: z.enum(IMAGE_FRAMES),
     /**

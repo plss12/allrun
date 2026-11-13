@@ -432,8 +432,9 @@ const IMAGE_ENTRIES: readonly Entry[] = [
   ...IMAGE_MOUNTS.flatMap((mount) =>
     tileEntries(
       'photos',
-      // The calendar's sheet in each of the brand's colors, as the brand's covers go in pairs.
-      mount === 'calendar'
+      // The calendar's sheet and the camera's last photo in each of the brand's colors, as the
+      // brand's covers go in pairs.
+      mount === 'calendar' || mount === 'camera'
         ? BRAND_COVERS.map((cover) => ({
             kind: 'image',
             image: SAMPLE_IMAGE,

@@ -661,7 +661,7 @@ export function prepareSummaryBlock(
       case 'periodMessage':
         return periodMessageBox(block, data, { fonts, textContext: compact, translate });
       case 'periodCamera': {
-        const camera = periodCameraBox(data, {
+        const camera = periodCameraBox(block, data, {
           fonts,
           textContext: compact,
           translate,

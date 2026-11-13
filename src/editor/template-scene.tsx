@@ -1243,12 +1243,20 @@ function prepareLayer(
         const view =
           data.mode === 'activity'
             ? prepareActivityBlock(
-                { ...common, kind: 'activityBlock', block: { design: 'camera' } },
+                {
+                  ...common,
+                  kind: 'activityBlock',
+                  block: { design: 'camera', cover: layer.cover },
+                },
                 data,
                 context,
               )
             : prepareSummaryBlock(
-                { ...common, kind: 'summaryBlock', block: { design: 'periodCamera' } },
+                {
+                  ...common,
+                  kind: 'summaryBlock',
+                  block: { design: 'periodCamera', cover: layer.cover },
+                },
                 data,
                 context,
               );

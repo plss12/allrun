@@ -43,7 +43,6 @@ import {
   type BlockContext,
   capitalsBox,
   boardingPassBox,
-  CAMERA_ROUTE,
   cameraBox,
   type Box,
   BRAND_COVER_COLORS,
@@ -1651,6 +1650,7 @@ function metroStationBox(active: boolean, terminal: boolean, line: string): Box 
  * overlaid as the last photo's thumbnail, or nothing without any. Time O(p) for p points.
  */
 export function periodCameraBox(
+  block: Extract<SummaryBlock, { design: 'periodCamera' }>,
   data: SummaryData,
   { fonts, textContext, translate, canvas }: BlockContext,
 ): { readonly box: Box; readonly hole: HitHole } {
@@ -1678,8 +1678,9 @@ export function periodCameraBox(
         size,
         size,
         3,
-        CAMERA_ROUTE,
+        COVER_ROUTE,
       ),
+    cover: block.cover ?? 'red',
   });
 }
 
