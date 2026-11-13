@@ -24,7 +24,7 @@ El detalle vive en `.claude/rules/`, y cada regla se carga sola al leer o editar
 Las carpetas que aún no existen se crean en su hito.
 
 - `src/app/`: solo pantallas y layouts (Expo Router).
-- `src/core/`: dominio puro y testeado (deportes, métricas, resúmenes, gráficas, widgets, plantillas, diseños, catálogo de la galería, exportación). Sin imports de React Native ni de E/S.
+- `src/core/`: dominio puro y testeado (deportes, métricas, resúmenes, gráficas, widgets, plantillas, diseños, catálogo de la galería, exportación, y las teselas y el estilo del mapa). Sin imports de React Native ni de E/S.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/strava-source.ts` es la fuente real (ADR 020: caché por meses de menos de 7 días, planificada en `core/strava-cache.ts`, y peticiones con `strava/api.ts`); `strava/schema.ts` valida con Zod y mapea al modelo `Activity`, y `strava/detail.ts` los _streams_, parciales y vueltas al `ActivityDetail`; `fixtures/` genera un historial sintético con el formato de Strava que pasa por esos mismos esquemas.
 - `src/data/`: proveedores de datos: fuente de actividades, cuenta y sesión, conexión con Strava, perfil, plantillas del usuario y su sincronización, colores favoritos, frases y nombre del lugar.
 - `src/account/`: pantallas de la cuenta: entrar, contraseña nueva, conectar Strava y perfil.
