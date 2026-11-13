@@ -44,8 +44,8 @@ describe('blockMetrics', () => {
     });
     expect(blockMetrics(gym, 6)).toEqual([
       'movingTime',
-      'averageHeartRate',
       'calories',
+      'averageHeartRate',
       'maxHeartRate',
       'elapsedTime',
     ]);
@@ -58,7 +58,7 @@ describe('blockMetrics', () => {
       distanceMeters: 0,
       averageSpeed: null,
     });
-    expect(blockMetrics(gym, 2)).toEqual(['movingTime', 'averageHeartRate']);
+    expect(blockMetrics(gym, 2)).toEqual(['movingTime', 'calories']);
   });
 
   it('gives fewer data when the activity has fewer', () => {
@@ -87,7 +87,7 @@ describe('bigMetrics', () => {
 
   it('leaves out the second readings of a measure, which nothing would tell from the first', () => {
     // The highest heart rate and the elapsed time would read as a second "ppm" and time.
-    expect(bigMetrics(gym, 'main', 4)).toEqual(['movingTime', 'averageHeartRate', 'calories']);
+    expect(bigMetrics(gym, 'main', 4)).toEqual(['movingTime', 'calories', 'averageHeartRate']);
     const ride = makeActivity({
       sportType: 'Ride',
       averagePowerWatts: 210,
@@ -205,7 +205,7 @@ describe('activityBlocks', () => {
       { design: 'dataLine', layout: 'two' },
       { design: 'card', layout: 'nameThree' },
       { design: 'card', layout: 'three' },
-      // Its time, heart rate and calories fill the date widgets of two data.
+      // Its time, calories and heart rate fill the date widgets of two data.
       { design: 'dayBetween', layout: 'two' },
       { design: 'dayOver', layout: 'narrow' },
       { design: 'dayColumns', layout: 'three' },

@@ -27,7 +27,7 @@ import { FIRST_PHRASE } from './phrases';
 /**
  * What the mixed widgets of an activity show (ADR 009). They pick their data by sport, as the
  * activity's card does: a run leads with its distance, pace and time; a gym session with its
- * time, heart rate and calories. Nothing is rounded: the widgets write each datum as its own
+ * time, calories and heart rate. Nothing is rounded: the widgets write each datum as its own
  * data widget does.
  */
 

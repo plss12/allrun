@@ -141,11 +141,12 @@ const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
     'elapsedTime',
   ],
   // Sessions measured in time and effort; a cardio machine's distance is rarely real.
-  workout: ['movingTime', 'averageHeartRate', 'calories', 'maxHeartRate', 'elapsedTime'],
+  // Calories before heart rate (the owner's choice): what a session burnt says more than its pulse.
+  workout: ['movingTime', 'calories', 'averageHeartRate', 'maxHeartRate', 'elapsedTime'],
   other: [
     'movingTime',
-    'averageHeartRate',
     'calories',
+    'averageHeartRate',
     'distance',
     'speed',
     'elevationGain',
@@ -204,14 +205,14 @@ export function availableMetrics(activity: Activity): MetricId[] {
   });
 }
 
-/** What a card says of an activity without distance: how long, how hard and how much it burnt. */
-const EFFORT_METRICS: readonly MetricId[] = ['movingTime', 'averageHeartRate', 'calories'];
+/** What a card says of an activity without distance: how long, how much it burnt and how hard. */
+const EFFORT_METRICS: readonly MetricId[] = ['movingTime', 'calories', 'averageHeartRate'];
 /** Second readings of a datum a card already shows, which would only repeat it. */
 const REPEATED_METRICS: readonly MetricId[] = ['elapsedTime', 'maxHeartRate'];
 
 /**
  * The three data an activity's card shows: the first three of its sport's order when it has a
- * distance (see `PROFILES`); otherwise its time, average heart rate and calories, the missing
+ * distance (see `PROFILES`); otherwise its time, calories and average heart rate, the missing
  * ones made up with other data of its sport that don't repeat these. Time and space O(1).
  */
 export function cardMetrics(activity: Activity): MetricId[] {

@@ -104,12 +104,12 @@ describe('availableMetrics', () => {
     routePolyline: null,
   };
 
-  it('orders a training session by time, heart rate and calories', () => {
+  it('orders a training session by time, calories and heart rate', () => {
     const gym = makeActivity({ sportType: 'WeightTraining', ...withoutDistance });
     expect(availableMetrics(gym)).toEqual([
       'movingTime',
-      'averageHeartRate',
       'calories',
+      'averageHeartRate',
       'maxHeartRate',
       'elapsedTime',
     ]);
@@ -119,16 +119,16 @@ describe('availableMetrics', () => {
     const climb = makeActivity({ sportType: 'RockClimbing', ...withoutDistance });
     expect(availableMetrics(climb)).toEqual([
       'movingTime',
-      'averageHeartRate',
       'calories',
+      'averageHeartRate',
       'maxHeartRate',
       'elapsedTime',
     ]);
     const kayak = makeActivity({ sportType: 'Kayaking' });
     expect(availableMetrics(kayak).slice(0, 4)).toEqual([
       'movingTime',
-      'averageHeartRate',
       'calories',
+      'averageHeartRate',
       'distance',
     ]);
   });
@@ -268,19 +268,19 @@ describe('cardMetrics', () => {
     ]);
     expect(cardMetrics(makeActivity({ sportType: 'Kayaking' }))).toEqual([
       'movingTime',
-      'averageHeartRate',
       'calories',
+      'averageHeartRate',
     ]);
   });
 
-  it('shows the time, heart rate and calories without a distance', () => {
+  it('shows the time, calories and heart rate without a distance', () => {
     const run = makeActivity({
       sportType: 'Run',
       distanceMeters: 0,
       averageSpeed: null,
       elevationGainMeters: 40,
     });
-    expect(cardMetrics(run)).toEqual(['movingTime', 'averageHeartRate', 'calories']);
+    expect(cardMetrics(run)).toEqual(['movingTime', 'calories', 'averageHeartRate']);
   });
 
   it('makes up missing data without repeating the time or the heart rate', () => {
