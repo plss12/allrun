@@ -445,3 +445,36 @@ describe('gallerySections', () => {
     expect(keysOf(summaryData('week')).length).toBeGreaterThan(1);
   });
 });
+
+describe("a period's data tiles", () => {
+  /** The widths of the rows of a period's data tiles, and how many tiles each row has. */
+  const dataRows = (data: SummaryData) => {
+    const section = gallery
+      .gallerySections(
+        summaryCatalog(data.summary, data.bucketSize),
+        'inter',
+        contextFor(data),
+        SCREEN,
+        'Text',
+      )
+      .find((candidate) => candidate.id === 'data');
+    return (section?.rows ?? []).map((row) => ({ width: row.width, count: row.widgets.length }));
+  };
+  it('lets its first, the period over its data, take the whole row when they are odd', () => {
+    const full = SCREEN - 2 * gallery.GALLERY_PADDING;
+    const half = Math.floor((full - gallery.GALLERY_GAP) / 2);
+    // A week of one run has 7 data tiles: the first takes the row, the rest go in pairs.
+    expect(dataRows(summaryData('week'))).toEqual([
+      { width: full, count: 1 },
+      { width: half, count: 2 },
+      { width: half, count: 2 },
+      { width: half, count: 2 },
+    ]);
+    // A year of it has 6 (no page of days): all in pairs.
+    expect(dataRows(summaryData('year'))).toEqual([
+      { width: half, count: 2 },
+      { width: half, count: 2 },
+      { width: half, count: 2 },
+    ]);
+  });
+});

@@ -123,6 +123,9 @@ function neededHeight(tile: GalleryWidget): number {
   return Math.ceil(tallest / (1 - 2 * TILE_INSET) + dots);
 }
 
+/** The tile of a period's name over its data, the first of a summary's data. */
+const PERIOD_DATA_TILE = 'summaryBlock-periodData';
+
 /** Tiles per row: charts take the whole width, so their texts read; the rest go two per row. */
 const columnsFor = (id: CatalogSectionId): 1 | 2 => (id === 'charts' ? 1 : 2);
 
@@ -359,6 +362,21 @@ export function gallerySections(
       measuredHeights.set(tile, needed);
       return [{ tile, wide }];
     });
+    // A period's data tiles in an odd number: its first, the period over its data, takes the
+    // whole row, so the rest go in pairs, none left alone at the end (the owner's choice).
+    if (
+      section.id === 'data' &&
+      columns > 1 &&
+      tiles.length % 2 === 1 &&
+      tiles[0]?.tile.key === PERIOD_DATA_TILE
+    ) {
+      const source = section.widgets.find((widget) => widget.key === PERIOD_DATA_TILE);
+      const wide = source === undefined ? null : measure(source, full, heightOf(source));
+      if (source !== undefined && wide !== null) {
+        measuredHeights.set(wide, heightOf(source));
+        tiles[0] = { tile: wide, wide: true };
+      }
+    }
     // The creative tiles go by themes: each theme starts a row, so a tile only shares one with
     // another of its theme (but a wildcard's, see below).
     const themed = section.id === 'creative' && columns > 1;
