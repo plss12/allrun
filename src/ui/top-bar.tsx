@@ -169,19 +169,25 @@ const CAPSULE_COLOR = 'rgba(0, 0, 0, 0.55)';
  * with Skia, on a canvas of its own: an animated view makes Reanimated commit the tree of the whole
  * screen on every frame of its spring, and under the Designs or Stickers gallery that took a
  * modest phone's UI thread most of the time the tab took to show (ADR 014).
+ *
+ * In the top bar they leave room for the round buttons beside them; with `fill`, alone in a row,
+ * they are as wide as asked, to line up with the cards above and below.
  */
 export function GlassTabs({
   values,
   selectedIndex,
   onChange,
   width: wanted,
+  fill = false,
 }: {
   readonly values: readonly string[];
   readonly selectedIndex: number;
   readonly onChange: (index: number) => void;
   readonly width: number;
+  readonly fill?: boolean;
 }) {
-  const width = tabsWidth(wanted, useWindowDimensions().width);
+  const screenWidth = useWindowDimensions().width;
+  const width = fill ? wanted : tabsWidth(wanted, screenWidth);
   const tabWidth = (width - 2 * CAPSULE_INSET) / values.length;
   const position = useSharedValue(selectedIndex * tabWidth);
   useEffect(() => {

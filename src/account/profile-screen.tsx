@@ -185,24 +185,22 @@ export function ProfileScreen() {
                   void change({ routePrivacyMeters: ROUTE_PRIVACY_CHOICES[index] })
                 }
                 width={width - 2 * PADDING - 2 * CARD_PADDING}
+                fill
               />
             </View>
           ) : null}
         </Section>
 
-        {/* The selector alone, centered: in a card it was a box around a box (the owner's
-            choice). */}
+        {/* The selector alone, as wide as the cards: in a card it was a box around a box, and
+            narrower it didn't line up with them (the owner's choices). */}
         <Section title={t('account.profile.languageSection')} bare>
-          <View style={{ alignItems: 'center' }}>
-            <GlassTabs
-              values={APP_LANGUAGE_CHOICES.map((choice) =>
-                t(`account.profile.languages.${choice}`),
-              )}
-              selectedIndex={APP_LANGUAGE_CHOICES.indexOf(profile.appLanguage)}
-              onChange={(index) => void change({ appLanguage: APP_LANGUAGE_CHOICES[index] })}
-              width={width - 2 * PADDING - 2 * CARD_PADDING}
-            />
-          </View>
+          <GlassTabs
+            values={APP_LANGUAGE_CHOICES.map((choice) => t(`account.profile.languages.${choice}`))}
+            selectedIndex={APP_LANGUAGE_CHOICES.indexOf(profile.appLanguage)}
+            onChange={(index) => void change({ appLanguage: APP_LANGUAGE_CHOICES[index] })}
+            width={width - 2 * PADDING}
+            fill
+          />
         </Section>
 
         <Section title={t('account.profile.emailsSection')}>
