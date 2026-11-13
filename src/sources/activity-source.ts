@@ -11,6 +11,11 @@ import type { HeartRateZones } from '@/core/heart-rate-zones';
 export interface ActivitySource {
   /** The `limit` most recent activities, newest first. */
   listRecent(limit: number): Promise<Activity[]>;
+  /**
+   * The `limit` activities that started before `startUtc` (an `Activity.startUtc`), newest first:
+   * the home's next page past those it shows. Fewer than `limit` means there are no more.
+   */
+  listBefore(startUtc: string, limit: number): Promise<Activity[]>;
   /** Every activity whose local start date falls within `range`, oldest first. */
   listInRange(range: DateRange): Promise<Activity[]>;
   /** The activity with this `Activity.id`, or `null` if the source has none. */

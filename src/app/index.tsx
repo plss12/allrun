@@ -15,10 +15,12 @@ import { ConnectStravaView } from '@/home/connect-strava-view';
 import { ProfileAvatar } from '@/home/profile-avatar';
 import { PeriodCard } from '@/home/period-card';
 import { type SportFilter, SportFilterMenu } from '@/home/sport-filter-menu';
+import { useOlderActivities } from '@/home/use-older-activities';
 import { colors } from '@/theme/colors';
 import { useCollectOnReturn } from '@/ui/collect-garbage';
 import { useDisplaySettings } from '@/ui/settings';
 import { AppIcon } from '@/ui/app-icon';
+import { Spinner } from '@/ui/spinner';
 import { SportGlyph } from '@/ui/sport-glyph';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
@@ -27,6 +29,8 @@ import { GlassButton, GlassTabs, TopBar, useTopBarRoom, useTopBarTop } from '@/u
 import { useAsync } from '@/ui/use-async';
 
 const RECENT_LIMIT = 50;
+/** No activities, the same array every render: before the newest come. */
+const NO_ACTIVITIES: readonly Activity[] = [];
 const TABS = ['activities', 'summaries'] as const;
 const PERIODS: readonly PeriodKind[] = ['week', 'month', 'year', 'custom'];
 const PADDING = 16;
@@ -110,6 +114,8 @@ function Activities({ active }: { readonly active: boolean }) {
   const source = useActivitySource();
   const sourceKey = useActivitySourceKey();
   const recent = useAsync(() => source.listRecent(RECENT_LIMIT), `recent|${sourceKey}`);
+  const newest = recent.status === 'success' ? recent.data : NO_ACTIVITIES;
+  const older = useOlderActivities(source, `recent|${sourceKey}`, newest, RECENT_LIMIT);
   const [sport, setSport] = useState<SportFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const barTop = useTopBarTop();
@@ -120,7 +126,8 @@ function Activities({ active }: { readonly active: boolean }) {
   if (recent.status === 'error') {
     return <ErrorView message={t('home.error')} onRetry={recent.retry} />;
   }
-  const families = familiesOf(recent.data);
+  const loaded = older.older.length === 0 ? newest : [...newest, ...older.older];
+  const families = familiesOf(loaded);
   // A sport chosen before the list changed may no longer be there: show them all.
   const shown = sport !== 'all' && families.includes(sport) ? sport : 'all';
   return (
@@ -134,10 +141,10 @@ function Activities({ active }: { readonly active: boolean }) {
       />
       <Gallery
         activities={
-          shown === 'all'
-            ? recent.data
-            : recent.data.filter((activity) => activity.sportFamily === shown)
+          shown === 'all' ? loaded : loaded.filter((activity) => activity.sportFamily === shown)
         }
+        older={older.status}
+        onNearEnd={older.loadMore}
       />
       {/* Beside the tabs, only with the activities on screen: the summaries have no use for it. */}
       {active ? (
@@ -161,8 +168,19 @@ function Activities({ active }: { readonly active: boolean }) {
   );
 }
 
-/** The activities, one per row, newest first. */
-function Gallery({ activities }: { readonly activities: readonly Activity[] }) {
+/**
+ * The activities, one per row, newest first; nearing the end, it asks for the older ones
+ * (`onNearEnd`), with a spinner under the last card while they come, or what failed and a retry.
+ */
+function Gallery({
+  activities,
+  older,
+  onNearEnd,
+}: {
+  readonly activities: readonly Activity[];
+  readonly older: 'idle' | 'loading' | 'error' | 'done';
+  readonly onNearEnd: () => void;
+}) {
   const { t } = useTranslation();
   const { unit, locale } = useDisplaySettings();
   const { width } = useWindowDimensions();
@@ -196,6 +214,18 @@ function Gallery({ activities }: { readonly activities: readonly Activity[] }) {
         )
       }
       ListEmptyComponent={<EmptyView message={t('home.empty')} />}
+      // A screen and a half ahead, so that the next page is mostly there before the end shows.
+      onEndReached={onNearEnd}
+      onEndReachedThreshold={1.5}
+      ListFooterComponent={
+        older === 'loading' ? (
+          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+            <Spinner />
+          </View>
+        ) : older === 'error' ? (
+          <ErrorView message={t('home.olderError')} onRetry={onNearEnd} />
+        ) : undefined
+      }
       renderItem={({ item }) => (
         <ActivityCard activity={item} width={cardWidth} today={today} unit={unit} locale={locale} />
       )}

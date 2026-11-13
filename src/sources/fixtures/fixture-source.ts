@@ -35,6 +35,14 @@ export class FixtureActivitySource implements ActivitySource {
     return this.activities.slice(Math.max(0, this.activities.length - limit)).reverse();
   }
 
+  async listBefore(startUtc: string, limit: number): Promise<Activity[]> {
+    if (!Number.isInteger(limit) || limit < 1) {
+      throw new RangeError(`Invalid limit: ${limit}`);
+    }
+    const older = this.activities.filter((activity) => activity.startUtc < startUtc);
+    return older.slice(Math.max(0, older.length - limit)).reverse();
+  }
+
   async listInRange(range: DateRange): Promise<Activity[]> {
     return selectActivities(this.activities, range);
   }

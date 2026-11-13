@@ -25,6 +25,10 @@ export class PrivateRoutesSource implements ActivitySource {
     return (await this.source.listRecent(limit)).map((activity) => this.hide(activity));
   }
 
+  async listBefore(startUtc: string, limit: number): Promise<Activity[]> {
+    return (await this.source.listBefore(startUtc, limit)).map((activity) => this.hide(activity));
+  }
+
   async listInRange(range: DateRange): Promise<Activity[]> {
     return (await this.source.listInRange(range)).map((activity) => this.hide(activity));
   }

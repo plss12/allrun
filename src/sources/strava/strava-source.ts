@@ -52,6 +52,7 @@ const ZONES_KEY = 'zones';
 const ATHLETE_KEY = 'athlete';
 const yearKey = (year: string) => `year-${year}`;
 const detailKey = (id: number) => `detail-${id}`;
+const olderKey = (before: number, limit: number) => `before-${before}-${limit}`;
 
 const activitiesSchema = z.array(stravaActivitySchema);
 const fetchedAtSchema = z.number().int().nonnegative();
@@ -62,6 +63,9 @@ const recentSchema = z.object({
   activities: activitiesSchema,
 });
 type KeptRecent = z.infer<typeof recentSchema>;
+
+/** A page of older activities (see `listBefore`). */
+const olderSchema = z.object({ fetchedAt: fetchedAtSchema, activities: activitiesSchema });
 
 const yearSchema = z.object({
   months: z.record(
@@ -114,6 +118,8 @@ function byStartDescending(a: StravaActivity, b: StravaActivity): number {
  * - A range (the summaries): by local month, asking only for the months missing or 7 days old,
  *   one paged query per run of consecutive months (`core/strava-cache.ts`). Months still to come
  *   are empty without asking.
+ * - Older activities (the home, past its newest): a page at a time, asked for with Strava's
+ *   `before` and kept a week under where it starts, as the rest.
  * - An activity's detail and streams, and the athlete's zones: when first needed.
  *
  * What fails to load from the cache is logged and asked again of Strava.
@@ -132,6 +138,8 @@ export class StravaActivitySource implements ActivitySource {
   private readonly pendingMonths = new Map<YearMonth, Promise<void>>();
   private refreshing: Promise<KeptRecent> | null = null;
   private readonly details = new Map<number, Promise<KeptDetail>>();
+  /** The older activities listed in this session, for `findListed`. */
+  private readonly older = new Map<number, StravaActivity>();
   private readonly listeners = new Set<() => void>();
 
   constructor(options: {
@@ -184,6 +192,38 @@ export class StravaActivitySource implements ActivitySource {
       void this.refreshInBackground(pageSize);
     }
     return recent.activities.slice(0, limit).map(stravaToActivity);
+  }
+
+  /**
+   * The `limit` activities that started before `startUtc`, newest first: one query to Strava
+   * (`before`, in whole seconds) unless the same page was kept less than a week ago.
+   *
+   * @throws RangeError for a `limit` outside 1..200 or a `startUtc` that isn't a date.
+   */
+  async listBefore(startUtc: string, limit: number): Promise<Activity[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > PAGE_SIZE) {
+      throw new RangeError(`Invalid limit: ${limit}`);
+    }
+    const before = Math.floor(Date.parse(startUtc) / 1000);
+    if (!Number.isFinite(before)) {
+      throw new RangeError(`Invalid start: ${startUtc}`);
+    }
+    await this.ready();
+    const key = olderKey(before, limit);
+    const kept = await this.readKept(key, olderSchema);
+    let activities = kept?.activities;
+    if (kept === null || !isCacheFresh(kept.fetchedAt, this.now())) {
+      const fetchedAt = this.now();
+      activities = (await this.fetchActivities({ before, per_page: limit, page: 1 })).sort(
+        byStartDescending,
+      );
+      await this.keep(key, { fetchedAt, activities });
+    }
+    const page = activities ?? [];
+    for (const activity of page) {
+      this.older.set(activity.id, activity);
+    }
+    return page.map(stravaToActivity);
   }
 
   async listInRange(range: DateRange): Promise<Activity[]> {
@@ -494,6 +534,10 @@ export class StravaActivitySource implements ActivitySource {
     const inRecent = this.recent?.activities.find((activity) => activity.id === id);
     if (inRecent !== undefined) {
       return inRecent;
+    }
+    const inOlder = this.older.get(id);
+    if (inOlder !== undefined) {
+      return inOlder;
     }
     for (const month of this.months.values()) {
       const found = month.activities.find((activity) => activity.id === id);

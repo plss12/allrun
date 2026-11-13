@@ -2,6 +2,7 @@ import type { StravaApi } from './api';
 import { RECENT_REFRESH_MS, type StravaCacheStore, StravaActivitySource } from './strava-source';
 
 const DAY = 86_400_000;
+const PHOTO = 'https://dgalywyr863hv.cloudfront.net/pictures/athletes/1/1/large.jpg';
 const START = Date.UTC(2026, 10, 13, 12);
 
 /** A Strava `SummaryActivity`, run at `local` (also its UTC time, for simplicity). */
@@ -77,6 +78,9 @@ function fakeStrava(initial: Run[]) {
       }
       if (path === '/athlete/zones') {
         return zones === 403 && absentOn.includes(403) ? null : zones;
+      }
+      if (path === '/athlete') {
+        return { id: 1, firstname: 'Ana', profile: PHOTO };
       }
       const detail = /^\/activities\/(\d+)(\/streams)?$/.exec(path);
       if (detail !== null) {
@@ -344,5 +348,59 @@ describe('StravaActivitySource, the zones', () => {
     strava.setZones(403);
     const { source: made } = source(strava, memoryStore(), { t: START });
     expect(await made.getHeartRateZones()).toBeNull();
+  });
+});
+
+describe("StravaActivitySource, the athlete's photo", () => {
+  it('keeps it for a week, then asks again', async () => {
+    const strava = fakeStrava(RUNS);
+    const clock = { t: START };
+    const { source: made } = source(strava, memoryStore(), clock);
+    expect(await made.getAthletePhoto()).toBe(PHOTO);
+    expect(await made.getAthletePhoto()).toBe(PHOTO);
+    expect(strava.calls).toEqual(['/athlete']);
+    clock.t += 7 * DAY;
+    expect(await made.getAthletePhoto()).toBe(PHOTO);
+    expect(strava.calls).toEqual(['/athlete', '/athlete']);
+  });
+});
+
+describe('StravaActivitySource, older activities', () => {
+  it('lists those before a start, newest first, and keeps the page for a week', async () => {
+    const strava = fakeStrava(RUNS);
+    const clock = { t: START };
+    const { source: made } = source(strava, memoryStore(), clock);
+    const page = await made.listBefore('2026-11-01T08:00:00Z', 2);
+    expect(page.map((activity) => activity.id)).toEqual(['strava:2', 'strava:1']);
+    await made.listBefore('2026-11-01T08:00:00Z', 2);
+    const before = Date.parse('2026-11-01T08:00:00Z') / 1000;
+    expect(strava.calls).toEqual([
+      `/athlete/activities ${JSON.stringify({ before, per_page: 2, page: 1 })}`,
+    ]);
+    clock.t += 7 * DAY;
+    await made.listBefore('2026-11-01T08:00:00Z', 2);
+    expect(strava.calls).toHaveLength(2);
+  });
+
+  it('gives fewer than asked at the first activity, and none past it', async () => {
+    const strava = fakeStrava(RUNS);
+    const { source: made } = source(strava, memoryStore(), { t: START });
+    expect(await made.listBefore('2026-10-02T08:00:00Z', 50)).toHaveLength(1);
+    expect(await made.listBefore('2026-09-10T08:00:00Z', 50)).toEqual([]);
+  });
+
+  it('opens an older activity as listed when its detail fails', async () => {
+    const strava = fakeStrava(RUNS);
+    const { source: made } = source(strava, memoryStore(), { t: START });
+    await made.listBefore('2026-10-02T08:00:00Z', 50);
+    strava.fail(true);
+    expect((await made.getActivity('strava:1'))?.name).toBe('Run 1');
+  });
+
+  it('refuses a limit out of 1..200 and a start that is no date', async () => {
+    const { source: made } = source(fakeStrava(RUNS), memoryStore(), { t: START });
+    await expect(made.listBefore('2026-11-01T08:00:00Z', 0)).rejects.toThrow(RangeError);
+    await expect(made.listBefore('2026-11-01T08:00:00Z', 201)).rejects.toThrow(RangeError);
+    await expect(made.listBefore('yesterday', 50)).rejects.toThrow(RangeError);
   });
 });

@@ -26,6 +26,7 @@ export const es: Translations = {
     sampleData: 'Datos de ejemplo hasta conectar Strava',
     empty: 'Aún no hay actividades',
     error: 'No se han podido cargar tus actividades',
+    olderError: 'No se han podido cargar las actividades anteriores',
   },
   summary: {
     from: 'Desde',

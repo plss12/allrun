@@ -27,6 +27,7 @@ export const en = {
     sampleData: 'Sample data until Strava is connected',
     empty: 'No activities yet',
     error: 'Could not load your activities',
+    olderError: 'Could not load your earlier activities',
   },
   summary: {
     from: 'From',
