@@ -559,6 +559,13 @@ export const en = {
         es: 'Español',
         en: 'English',
       },
+      unitsSection: 'Units',
+      /** The phone's region's, or one of the two. */
+      units: {
+        system: 'System',
+        km: 'Kilometers',
+        mi: 'Miles',
+      },
       emailsSection: 'Emails',
       updateEmails: 'News by email',
       /** The map's sources (ADR 021): the credits their licences ask for, as Strava writes them. */

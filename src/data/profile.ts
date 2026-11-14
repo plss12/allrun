@@ -90,7 +90,7 @@ export function followProfile(owner: string | null): void {
   void (async () => {
     const { data, error } = await client
       .from('profiles')
-      .select('route_privacy_meters, update_emails, app_language')
+      .select('route_privacy_meters, update_emails, app_language, distance_units')
       .eq('id', owner)
       .single();
     if (userId !== owner) {
@@ -108,6 +108,11 @@ export function followProfile(owner: string | null): void {
       logError('The profile the account sent is not valid', invalid);
     }
   })();
+}
+
+/** The profile as it is now, outside a component. */
+export function currentProfile(): Profile {
+  return profile;
 }
 
 /** The profile as it is now, and again whenever it changes. */

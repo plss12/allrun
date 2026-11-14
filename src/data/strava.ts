@@ -13,9 +13,12 @@ import {
   stravaAuthorizeUrl,
   stravaRedirectUri,
 } from '@/core/strava-connection';
+import { stravaApi } from '@/sources/strava/api';
+import { stravaAthleteSchema, stravaUnits } from '@/sources/strava/athlete';
 import { logError } from '@/ui/log';
 
 import { appScheme } from './auth';
+import { changeProfile, currentProfile } from './profile';
 import { forgetNamedPlaces } from './place-lookup';
 import { clearStravaCache } from './strava-cache-store';
 import { supabase } from './supabase';
@@ -288,7 +291,11 @@ export function completeStravaLink(url: string): Promise<ConnectResult> {
       if (asked === generation) {
         await keep(owner, answer);
       }
-      return answer === null ? 'failed' : 'connected';
+      if (answer === null) {
+        return 'failed';
+      }
+      void adoptStravaUnits();
+      return 'connected';
     } catch (error) {
       if (answeredWith(error, 422)) {
         return 'missingActivityScope';
@@ -299,6 +306,26 @@ export function completeStravaLink(url: string): Promise<ConnectResult> {
   })();
   started.completing = completing;
   return completing;
+}
+
+/**
+ * On connecting Strava, takes the units the athlete chose there for the app's, if the profile
+ * still follows the phone ("System"): a request, once. A failure leaves the profile as it was.
+ */
+async function adoptStravaUnits(): Promise<void> {
+  if (currentProfile().distanceUnits !== 'system') {
+    return;
+  }
+  try {
+    const units = stravaUnits(
+      stravaAthleteSchema.parse(await stravaApi(stravaAccessToken).get('/athlete')),
+    );
+    if (units !== null && currentProfile().distanceUnits === 'system') {
+      await changeProfile({ distanceUnits: units });
+    }
+  } catch (error) {
+    logError("Could not take the units chosen on Strava for the app's", error);
+  }
 }
 
 /**

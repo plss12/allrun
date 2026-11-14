@@ -528,6 +528,12 @@ export const es: Translations = {
         es: 'Español',
         en: 'English',
       },
+      unitsSection: 'Unidades',
+      units: {
+        system: 'Sistema',
+        km: 'Kilómetros',
+        mi: 'Millas',
+      },
       emailsSection: 'Correos',
       updateEmails: 'Novedades por correo',
       credits: {

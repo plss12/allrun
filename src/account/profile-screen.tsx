@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Linking, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { APP_LANGUAGE_CHOICES } from '@/core/profile';
+import { APP_LANGUAGE_CHOICES, DISTANCE_UNIT_CHOICES } from '@/core/profile';
 import {
   ROUTE_PRIVACY_CHOICES,
   type RoutePrivacyChoice,
@@ -211,6 +211,17 @@ export function ProfileScreen() {
             values={APP_LANGUAGE_CHOICES.map((choice) => t(`account.profile.languages.${choice}`))}
             selectedIndex={APP_LANGUAGE_CHOICES.indexOf(profile.appLanguage)}
             onChange={(index) => void change({ appLanguage: APP_LANGUAGE_CHOICES[index] })}
+            width={width - 2 * PADDING}
+            fill
+          />
+        </Section>
+
+        {/* As the language: the app's unit of distance, each design can still write its own. */}
+        <Section title={t('account.profile.unitsSection')} bare>
+          <GlassTabs
+            values={DISTANCE_UNIT_CHOICES.map((choice) => t(`account.profile.units.${choice}`))}
+            selectedIndex={DISTANCE_UNIT_CHOICES.indexOf(profile.distanceUnits)}
+            onChange={(index) => void change({ distanceUnits: DISTANCE_UNIT_CHOICES[index] })}
             width={width - 2 * PADDING}
             fill
           />

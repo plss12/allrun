@@ -1,4 +1,4 @@
-import { athletePhoto, stravaAthleteSchema } from './athlete';
+import { athletePhoto, stravaAthleteSchema, stravaUnits } from './athlete';
 
 describe('athletePhoto', () => {
   it("takes the athlete's own photo", () => {
@@ -14,5 +14,14 @@ describe('athletePhoto', () => {
 
   it('refuses an address that is not secure', () => {
     expect(athletePhoto({ profile: 'http://example.com/large.jpg' })).toBeNull();
+  });
+});
+
+describe('stravaUnits', () => {
+  it("takes the units the athlete chose on Strava, and none it doesn't know", () => {
+    expect(stravaUnits({ measurement_preference: 'meters' })).toBe('km');
+    expect(stravaUnits({ measurement_preference: 'feet' })).toBe('mi');
+    expect(stravaUnits({ measurement_preference: 'parsecs' })).toBeNull();
+    expect(stravaUnits(stravaAthleteSchema.parse({ id: 1 }))).toBeNull();
   });
 });
