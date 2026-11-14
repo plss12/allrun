@@ -143,6 +143,13 @@ export function galleryDataKey(data: LayerContext['data']): string {
 
 /** How long a step of laying out a gallery keeps the JavaScript thread, in milliseconds. */
 const STEP_MS = 8;
+/**
+ * A step's length while someone is looking at the gallery still being laid out: the steps of
+ * 8 ms came some 40 ms apart, and "+" tapped as the editor opened showed an empty sheet for over
+ * a second before its first section. Well under a long frame, and the sheet slides on the native
+ * thread meanwhile.
+ */
+const WAITED_STEP_MS = 40;
 /** How long after the editor opens its gallery starts to be laid out: once it has settled. */
 const LAY_OUT_AHEAD_AFTER_MS = 600;
 
@@ -151,14 +158,20 @@ const LAY_OUT_AHEAD_AFTER_MS = 600;
  * time so that the screen keeps responding, section by section the first time; and nothing while
  * closed. A gallery holds hundreds of native paragraphs: the one replaced, or the one shown when it
  * closes, is freed once the screen stops drawing it (see `disposeLater`), so opening it again and
- * again doesn't pile them up.
+ * again doesn't pile them up. While `waited` (shown, and not done), in longer steps.
  */
 export function useGallery(
   open: boolean,
   key: string,
   start: () => GalleryBuild,
+  waited = false,
 ): readonly GallerySection[] {
   const [sections, setSections] = useState<readonly GallerySection[]>([]);
+  /** Whether the gallery is waited for now, read by the steps under way. */
+  const waitedNow = useRef(waited);
+  useEffect(() => {
+    waitedNow.current = waited;
+  }, [waited]);
   /** The gallery the screen shows, which is freed only once another replaces it or it closes. */
   const shown = useRef<GalleryBuild | null>(null);
   const wanted = open ? key : null;
@@ -178,7 +191,11 @@ export function useGallery(
     const previous = shown.current;
     let timer: ReturnType<typeof setTimeout>;
     const stepOn = () => {
-      const { sections: built, grew, done } = build.step(STEP_MS);
+      const {
+        sections: built,
+        grew,
+        done,
+      } = build.step(waitedNow.current ? WAITED_STEP_MS : STEP_MS);
       // The first time, section by section as they are ready. A change of look stays on the gallery
       // shown until it can go whole: a list that grows again would lose its place.
       if (done ? previous !== null || grew : grew && previous === null) {
@@ -315,6 +332,7 @@ export function LayerSheet({
         window.width,
         textSample,
       ),
+    visible,
   );
   // The gallery stays under a verse's or a quote's list, so that going back shows it at once.
   const content = (
