@@ -40,12 +40,14 @@ jest.mock('@shopify/react-native-skia', () => {
 const util = jest.requireActual<{ TextDecoder: typeof TextDecoder }>('util');
 
 let scene: typeof import('./template-scene');
+let lines: typeof import('./scene/chart-lines');
 
 beforeAll(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
   globalThis.TextDecoder = util.TextDecoder;
   (globalThis as { CanvasKit?: unknown }).CanvasKit = await CanvasKitInit({});
   scene = jest.requireActual<typeof import('./template-scene')>('./template-scene');
+  lines = jest.requireActual<typeof import('./scene/chart-lines')>('./scene/chart-lines');
 });
 
 /** Spanish labels, the longest of the app's languages. */
@@ -245,9 +247,9 @@ describe('charts', () => {
 
 describe('zones', () => {
   it('paints five, six and seven zones from grey to red, the seventh in purple', () => {
-    const five = scene.zoneColors(5);
-    const six = scene.zoneColors(6);
-    const seven = scene.zoneColors(7);
+    const five = lines.zoneColors(5);
+    const six = lines.zoneColors(6);
+    const seven = lines.zoneColors(7);
     expect(new Set(five).size).toBe(5);
     expect(new Set(six).size).toBe(6);
     expect(new Set(seven).size).toBe(7);
@@ -284,7 +286,7 @@ describe('zoneBands', () => {
   const yOf = (value: number) => 240 - ((value - 100) / 100) * 240;
 
   it("cuts the chart across at each zone's edge, the outer bands past it by the stroke", () => {
-    expect(scene.zoneBands(zones, yOf, 240, 8)).toEqual([
+    expect(lines.zoneBands(zones, yOf, 240, 8)).toEqual([
       { zone: 0, top: yOf(120.5), bottom: 248 },
       { zone: 1, top: yOf(150.5), bottom: yOf(120.5) },
       { zone: 2, top: -8, bottom: yOf(150.5) },
@@ -294,7 +296,7 @@ describe('zoneBands', () => {
   it("leaves out the bands of zones the chart doesn't reach", () => {
     // A chart from 130 to 170 bpm: zone 1 (up to 120) is under it.
     const high = (value: number) => 240 - ((value - 130) / 40) * 240;
-    expect(scene.zoneBands(zones, high, 240, 8).map((band) => band.zone)).toEqual([1, 2]);
+    expect(lines.zoneBands(zones, high, 240, 8).map((band) => band.zone)).toEqual([1, 2]);
   });
 
   it("places a pace's edges as its chart places them, the faster up", () => {
@@ -304,7 +306,7 @@ describe('zoneBands', () => {
       { min: 3.1, max: null },
     ];
     const paceY = (speed: number) => 240 - (1 - 1 / speed) * 300;
-    expect(scene.zoneBands(pace, paceY, 240, 8)).toEqual([
+    expect(lines.zoneBands(pace, paceY, 240, 8)).toEqual([
       { zone: 0, top: paceY(2.6), bottom: 248 },
       { zone: 1, top: paceY(3.1), bottom: paceY(2.6) },
       { zone: 2, top: -8, bottom: paceY(3.1) },

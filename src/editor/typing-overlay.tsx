@@ -26,7 +26,7 @@ import { colors } from '@/theme/colors';
 import { Text } from '@/ui/text';
 
 import { hasItalic, previewFamily, usePreviewFonts } from './fonts';
-import { TEXT_SIZE } from './template-scene';
+import { TEXT_SIZE } from './scene/paragraphs';
 
 /** Where the text sits on the canvas, in the editor's coordinates (screen points). */
 export interface TextOrigin {

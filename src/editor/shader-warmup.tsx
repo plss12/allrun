@@ -23,7 +23,7 @@ import { useMemo } from 'react';
 import type { PhotoFilterId } from '@/core/photo-filter';
 
 import { DropShadow, textShadows } from './scene-text';
-import { FilteredPhoto } from './template-scene';
+import { FilteredPhoto } from './scene/photo';
 
 /** A look of each kind the photo's filters draw with: a color matrix and the two blurs. */
 const WARMED_FILTERS: readonly PhotoFilterId[] = ['mono', 'motionBlur', 'zoomBlur'];

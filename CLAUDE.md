@@ -28,7 +28,7 @@ Las carpetas que aún no existen se crean en su hito.
 - `src/sources/`: implementaciones de `ActivitySource`. `strava/strava-source.ts` es la fuente real (ADR 020: caché por meses de menos de 7 días, planificada en `core/strava-cache.ts`, y peticiones con `strava/api.ts`); `strava/schema.ts` valida con Zod y mapea al modelo `Activity`, y `strava/detail.ts` los _streams_, parciales y vueltas al `ActivityDetail`; `fixtures/` genera un historial sintético con el formato de Strava que pasa por esos mismos esquemas.
 - `src/data/`: proveedores de datos: fuente de actividades, cuenta y sesión, conexión con Strava, perfil, plantillas del usuario y su sincronización, colores favoritos, frases, nombre del lugar y teselas del mapa.
 - `src/account/`: pantallas de la cuenta: entrar, contraseña nueva, conectar Strava y perfil.
-- `src/editor/`: lienzo Skia, widgets, galerías, gestos y exportación.
+- `src/editor/`: lienzo Skia, widgets, galerías, gestos y exportación. La escena (`template-scene.tsx`: qué se dibuja y dónde) tiene sus piezas en `scene/`: fotos, soportes, textos, rutas y gráficas.
 - `src/home/`: inicio. `src/photos/`: la cuadrícula propia de fotos.
 - `src/ui/`: piezas comunes de interfaz: iconos, texto, barra superior, hojas, formato de datos y estados de carga y error.
 - `src/i18n/`: i18next con textos en `locales/en.ts` (fuente de las claves) y `locales/es.ts`, que el compilador obliga a tener las mismas claves; las claves de `t()` están tipadas.

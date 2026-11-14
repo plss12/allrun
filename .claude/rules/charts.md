@@ -2,6 +2,7 @@
 paths:
   - 'src/core/{activity-charts,line-chart,summary-chart}*'
   - 'src/editor/{charts-scene,template-scene}*'
+  - 'src/editor/scene/chart*'
   - 'src/home/period-line-chart*'
 ---
 

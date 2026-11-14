@@ -41,7 +41,7 @@ Chrome in its place from a sheet of candidates.
   contrast. Being matrices, the color they give anything is worked out in
   `core` (`filteredColor`): the `auto` background is the photo's dominant color through its filter,
   grey behind a black and white photo.
-- **The blurs are shaders** (SkSL, `FilteredPhoto` in `template-scene.tsx`) that read the photo 24
+- **The blurs are shaders** (SkSL, `FilteredPhoto` in `scene/photo.tsx`) that read the photo 24
   times along their way: Motion Blur sideways along the photo, 4.5 % of the canvas's width when the
   photo covers it; Zoom Blur out from the photo's middle, the edges up to 8 % of the way. They work
   in the coordinates of the photo's group, canvas pixels around its middle at the size that covers

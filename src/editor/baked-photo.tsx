@@ -9,7 +9,8 @@ import { logError } from '@/ui/log';
 
 import { drawTexture } from './gesture-textures';
 import { disposeLater } from './paragraph-arena';
-import { FilteredPhoto, photoRect } from './template-scene';
+import { FilteredPhoto } from './scene/photo';
+import { photoRect } from './template-scene';
 
 /** The blur a texture holds, and for which photo. */
 interface Baked {

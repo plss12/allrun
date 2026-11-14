@@ -4,13 +4,8 @@ import { backgroundColor } from '@/core/design-background';
 import { CANVAS_FORMATS, type Template } from '@/core/template';
 
 import { sceneCollage, sceneFrame, scenePhoto } from './export-scene';
-import {
-  checkerSquare,
-  EmptyHintScale,
-  emptyHintScale,
-  type PreparedLayer,
-  TemplateScene,
-} from './template-scene';
+import { checkerSquare, EmptyHintScale, emptyHintScale } from './scene/photo';
+import { type PreparedLayer, TemplateScene } from './template-scene';
 
 /** Where a thumbnail's photo goes while it is decoded: as a picture's while it is. */
 const LOADING_PHOTO = '#3A3A3C';

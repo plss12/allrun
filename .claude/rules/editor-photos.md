@@ -1,6 +1,7 @@
 ---
 paths:
   - 'src/editor/{use-pictures,prepare-photo,photo-plan,export-*,mount-*,ready-design,instant-caption,stock-photos,designs-scene,sticker-image}*'
+  - 'src/editor/scene/{mounts,mount-replicas,paragraphs}*'
   - 'src/core/{image-layer,designs,default-layout}*'
   - 'src/photos/**'
 ---
@@ -24,7 +25,7 @@ Capa `image`, `core/image-layer.ts`.
 
 ## Foto instantánea
 
-`caption` en la capa: una «Polaroid» de 88 × 107 mm (`instantBox`) con la foto recortada al cuadrado por el centro (sin moverla dentro, decisión del usuario), marco blanco o negro envejecidos, de copia antigua (`INSTANT_COLORS`: crema `#EDE8DC` y carbón `#262321`, no los puros del marco de «Tu foto»; decisión del usuario), nunca sin marco (`instantFrame`), un pie a mano en Permanent Marker y en mayúsculas, en tinta negra o blanca (`captionParagraphs` en `template-scene.tsx`), y recta (el giro, si lo quiere, lo pone el usuario; decisión del usuario).
+`caption` en la capa: una «Polaroid» de 88 × 107 mm (`instantBox`) con la foto recortada al cuadrado por el centro (sin moverla dentro, decisión del usuario), marco blanco o negro envejecidos, de copia antigua (`INSTANT_COLORS`: crema `#EDE8DC` y carbón `#262321`, no los puros del marco de «Tu foto»; decisión del usuario), nunca sin marco (`instantFrame`), un pie a mano en Permanent Marker y en mayúsculas, en tinta negra o blanca (`captionParagraphs` en `scene/paragraphs.tsx`), y recta (el giro, si lo quiere, lo pone el usuario; decisión del usuario).
 
 - Las líneas centradas encogen cada una por su cuenta (un lugar largo no encoge su distancia), y si el lugar quedara por debajo del 70 % se escribe solo la ciudad (`shorterFirst`); las dos columnas de «Fecha y datos» encogen juntas.
 - Dos pies (`instantCaption` en `editor/instant-caption.ts`): `place`, centrado, el lugar (ciudad y región; sin él, la fecha) sobre la distancia en palabras con un decimal («11,3 kilómetros», con la coma o el punto del idioma, decisión del usuario; sin distancia, el tiempo), y `data`, la fecha y la hora a la izquierda y los dos primeros datos de su tarjeta a la derecha (`cardMetrics`: «11,3 km», «5:54/km»); en un resumen, el nombre del periodo sobre su distancia total en palabras, y sus fechas y actividades a la izquierda y la distancia y el tiempo totales a la derecha.
