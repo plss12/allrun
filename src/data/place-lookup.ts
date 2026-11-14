@@ -11,6 +11,7 @@ import { type Place, placeOfAddress } from '@/core/place';
 import { logError } from '@/ui/log';
 
 import { stravaCacheDirectory } from './strava-cache-store';
+import { writeWhole } from './write-whole';
 
 /**
  * Where an activity was done, named by the device's geocoder (Apple's on iOS, Google's on
@@ -112,8 +113,7 @@ function placeAt(point: LatLng): Promise<Place | null> {
     try {
       const file = placesFile();
       file.parentDirectory.create({ intermediates: true, idempotent: true });
-      file.create({ overwrite: true });
-      await file.write(JSON.stringify(Object.fromEntries(places)));
+      await writeWhole(file, JSON.stringify(Object.fromEntries(places)));
     } catch (error) {
       logError('Could not keep the places on the phone', error);
     }

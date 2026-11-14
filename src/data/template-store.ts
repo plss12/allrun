@@ -3,6 +3,8 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { parseSavedTemplate, type SavedTemplate } from '@/core/user-templates';
 import { logError } from '@/ui/log';
 
+import { writeWhole } from './write-whole';
+
 /**
  * Where the phone keeps the user's templates, which `data/design-sync.ts` syncs with their account
  * (ADR 019) without the editor knowing.
@@ -55,9 +57,7 @@ export class FileTemplateStore implements TemplateStore {
 
   async save(saved: SavedTemplate): Promise<void> {
     this.directory.create({ idempotent: true, intermediates: true });
-    const file = this.fileOf(saved.template.id);
-    file.create({ overwrite: true });
-    file.write(JSON.stringify(saved));
+    await writeWhole(this.fileOf(saved.template.id), JSON.stringify(saved));
   }
 
   async remove(id: string): Promise<void> {

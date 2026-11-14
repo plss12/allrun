@@ -64,10 +64,14 @@ export function encodeBase64(image: SkImage, encoding: ExportEncoding): string {
   return image.encodeToBase64(FORMATS[encoding.format], encoding.quality);
 }
 
-/** Writes the image, encoded, to a file `name` in the cache; returns its URI. */
-export function writeImage(image: SkImage, encoding: ExportEncoding, name: string): string {
+/** Writes the image, encoded, to a file `name` in the cache; resolves to its URI once written. */
+export async function writeImage(
+  image: SkImage,
+  encoding: ExportEncoding,
+  name: string,
+): Promise<string> {
   const file = new File(Paths.cache, name);
   file.create({ overwrite: true });
-  file.write(image.encodeToBytes(FORMATS[encoding.format], encoding.quality));
+  await file.write(image.encodeToBytes(FORMATS[encoding.format], encoding.quality));
   return file.uri;
 }

@@ -227,7 +227,7 @@ export function StickerGallery({
   const save = (item: Parameters<typeof prepareItem>[0]) =>
     withSticker(item, async (image) => {
       const name = exportFileName(STICKER_ENCODING, toLocalTimestamp(new Date()));
-      const saved = await saveToPhotos(writeImage(image, STICKER_ENCODING, name));
+      const saved = await saveToPhotos(await writeImage(image, STICKER_ENCODING, name));
       if (saved === 'saved') {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notice.show(t('stickers.saved'));

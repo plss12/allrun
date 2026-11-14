@@ -35,7 +35,7 @@ const mapTileStore: MapTileStore = {
     const part = new File(directory(), `${key}.part`);
     part.create({ overwrite: true });
     await part.write(bytes);
-    part.move(fileOf(key), { overwrite: true });
+    await part.move(fileOf(key), { overwrite: true });
   },
   async remove(key) {
     const file = fileOf(key);

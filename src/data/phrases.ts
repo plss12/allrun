@@ -14,6 +14,7 @@ import {
   readSupabaseConfig,
   refreshedCopy,
 } from './phrases-table';
+import { writeWhole } from './write-whole';
 
 /**
  * The verses, quotes and chat phrases of the widgets (ADR 012): always read from the phone, so a
@@ -101,9 +102,7 @@ export async function syncPhrases(): Promise<void> {
     logRejected(refreshed.rejected);
     const changed = refreshed.copy.fingerprint !== copy?.fingerprint;
     copy = refreshed.copy;
-    const file = new File(Paths.document, FILE_NAME);
-    file.create({ overwrite: true });
-    file.write(JSON.stringify(refreshed.copy));
+    await writeWhole(new File(Paths.document, FILE_NAME), JSON.stringify(refreshed.copy));
     if (changed) {
       phrases = phrasesOf(refreshed.copy).phrases;
       for (const listener of listeners) {

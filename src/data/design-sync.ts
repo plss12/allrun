@@ -17,6 +17,7 @@ import { logError } from '@/ui/log';
 import { supabase } from './supabase';
 import type { TemplateStore } from './template-store';
 import type { TemplatesList } from './templates-list';
+import { writeWhole } from './write-whole';
 
 /**
  * The user's designs kept with their account (ADR 019), around the store on the phone: every save
@@ -47,10 +48,8 @@ function readJournal(): SyncJournal | null {
   }
 }
 
-function writeJournal(journal: SyncJournal): void {
-  const file = journalFile();
-  file.create({ overwrite: true });
-  file.write(JSON.stringify(journal));
+function writeJournal(journal: SyncJournal): Promise<void> {
+  return writeWhole(journalFile(), JSON.stringify(journal));
 }
 
 /** The account the designs belong to, once signed in. */
@@ -82,7 +81,7 @@ async function journalFor(account: string, store: TemplateStore): Promise<SyncJo
     account,
     (await store.list()).map(({ template }) => template.id),
   );
-  writeJournal(journal);
+  await writeJournal(journal);
   return journal;
 }
 
@@ -92,7 +91,7 @@ async function note(id: string, change: 'save' | 'delete'): Promise<void> {
   if (account === null || local === null) {
     return;
   }
-  writeJournal(withChange(await journalFor(account, local), id, change));
+  await writeJournal(withChange(await journalFor(account, local), id, change));
   requestSync();
 }
 
@@ -112,7 +111,7 @@ async function syncOnce(account: string, store: TemplateStore): Promise<void> {
     }
     // Read again: a change made while sending has its own, later revision.
     journal = afterPush(readJournal() ?? journal, push);
-    writeJournal(journal);
+    await writeJournal(journal);
   }
   let changed = false;
   for (;;) {
@@ -140,7 +139,7 @@ async function syncOnce(account: string, store: TemplateStore): Promise<void> {
     }
     changed ||= pulled.save.length > 0 || pulled.remove.length > 0;
     journal = pulled.journal;
-    writeJournal(journal);
+    await writeJournal(journal);
     if ((data as unknown[]).length < PAGE) {
       break;
     }

@@ -36,7 +36,11 @@ export async function produceImage(design: ExportDesign): Promise<ExportedImage>
     ),
   );
   const image = await renderDesign(design, exportColorSpace(encoding));
-  const uri = writeImage(image, encoding, exportFileName(encoding, toLocalTimestamp(new Date())));
+  const uri = await writeImage(
+    image,
+    encoding,
+    exportFileName(encoding, toLocalTimestamp(new Date())),
+  );
   return { image, uri, encoding };
 }
 

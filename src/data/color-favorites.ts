@@ -4,6 +4,8 @@ import { useSyncExternalStore } from 'react';
 import { addFavorite, parseFavorites, removeFavorite } from '@/core/color-menu';
 import { logError } from '@/ui/log';
 
+import { writeWhole } from './write-whole';
+
 /**
  * The user's favorite colors (ADR 009), kept on the phone in one small JSON file until real login
  * arrives, read once per session and shared by every color menu. The brand's colors are not
@@ -37,14 +39,10 @@ function store(next: readonly string[]): void {
     return;
   }
   favorites = next;
-  try {
-    const file = new File(Paths.document, FILE_NAME);
-    file.create({ overwrite: true });
-    file.write(JSON.stringify(next));
-  } catch (error) {
+  writeWhole(new File(Paths.document, FILE_NAME), JSON.stringify(next)).catch((error: unknown) =>
     // Still kept for this session.
-    logError('Could not save the favorite colors', error);
-  }
+    logError('Could not save the favorite colors', error),
+  );
   for (const listener of listeners) {
     listener();
   }

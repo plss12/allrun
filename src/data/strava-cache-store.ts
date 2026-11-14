@@ -2,6 +2,8 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import type { StravaCacheStore } from '@/sources/strava/strava-source';
 
+import { writeWhole } from './write-whole';
+
 /**
  * Where the phone keeps what Strava gave (ADR 020): one JSON file per key, in the app's cache
  * directory, which the system may empty when the phone runs out of space (then Strava is asked
@@ -21,9 +23,7 @@ export const stravaCacheStore: StravaCacheStore = {
   },
   async write(key, value) {
     directory().create({ intermediates: true, idempotent: true });
-    const file = fileOf(key);
-    file.create({ overwrite: true });
-    await file.write(JSON.stringify(value));
+    await writeWhole(fileOf(key), JSON.stringify(value));
   },
   async remove(key) {
     const file = fileOf(key);

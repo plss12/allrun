@@ -12,6 +12,7 @@ import { applyAppLanguage } from '@/i18n';
 import { logError } from '@/ui/log';
 
 import { supabase } from './supabase';
+import { writeWhole } from './write-whole';
 
 /**
  * The signed-in user's profile (ADR 019), for the whole app: kept on the phone, to have it at once
@@ -35,14 +36,10 @@ function set(next: Profile): void {
 }
 
 function keep(owner: string, kept: Profile): void {
-  try {
-    const target = file();
-    target.create({ overwrite: true });
-    target.write(JSON.stringify({ userId: owner, ...kept }));
-  } catch (error) {
+  writeWhole(file(), JSON.stringify({ userId: owner, ...kept })).catch((error: unknown) =>
     // The account still has it: only the next launch waits for it.
-    logError('Could not keep the profile on the phone', error);
-  }
+    logError('Could not keep the profile on the phone', error),
+  );
 }
 
 /** What the phone kept for `owner`, or `null` (another user's, none, or damaged). */
