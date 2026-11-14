@@ -22,7 +22,8 @@ const SPOKES = 8;
 const TURN_MS = 800;
 
 export function Spinner({
-  size = 20,
+  // As big as the owner asked (2026-11-14): at 20 it was too small.
+  size = 28,
   color = colors.secondaryLabel,
   accessibilityLabel,
   style,

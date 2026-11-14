@@ -1,13 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { FlatList, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Activity } from '@/core/activity';
 import type { PeriodKind } from '@/core/periods';
 import { familiesOf } from '@/core/summary';
-import { useActivitySource, useActivitySourceKey, usesStrava } from '@/data/activity-source';
+import {
+  useActivitySource,
+  useActivitySourceKey,
+  usePullToRefresh,
+  usesStrava,
+} from '@/data/activity-source';
 import { useStrava } from '@/data/strava';
 import { FLOATING_INK, KeptMounted } from '@/editor/round-button';
 import { ActivityCard } from '@/home/activity-card';
@@ -25,7 +37,14 @@ import { SportGlyph } from '@/ui/sport-glyph';
 import { EmptyView, ErrorView, LoadingView } from '@/ui/state-views';
 import { Text } from '@/ui/text';
 import { todayLocal } from '@/ui/today';
-import { GlassButton, GlassTabs, TopBar, useTopBarRoom, useTopBarTop } from '@/ui/top-bar';
+import {
+  GlassButton,
+  GlassTabs,
+  TopBar,
+  useTopBarBottom,
+  useTopBarRoom,
+  useTopBarTop,
+} from '@/ui/top-bar';
 import { useAsync } from '@/ui/use-async';
 
 const RECENT_LIMIT = 50;
@@ -168,6 +187,48 @@ function Activities({ active }: { readonly active: boolean }) {
   );
 }
 
+/** Where Android's own spinner of a pull to refresh goes, out of sight (see `Gallery`). */
+const HIDDEN_SYSTEM_SPINNER = -500;
+/**
+ * The room a pull to refresh opens over the first card, which moves down (on the iPhone, with the
+ * finger too: its lists bounce past their top, Android's stretch). Its spinner stays still, under
+ * the bar, as far from it as from the card at rest (the owner's choices): the bar's 4 pt, the
+ * list's margin of 16, this room and the list's gap of 12, around a spinner of 28.
+ */
+const PULLED_ROOM = 44;
+const PULLED_SPINNER_SIZE = 28;
+const PULLED_SPINNER_TOP = (4 + 16 + PULLED_ROOM + 12 - PULLED_SPINNER_SIZE) / 2;
+/** Least time the spinner of a pull shows: one that asked nothing would only flash. */
+const PULLED_SPINNER_MS = 600;
+
+/**
+ * A list pulled to refresh: `start` asks the source again (see `usePullToRefresh`) and
+ * `refreshing` holds while it does, for {@link PULLED_SPINNER_MS} at least.
+ */
+function usePulled(): { readonly refreshing: boolean; readonly start: () => void } {
+  const pull = usePullToRefresh();
+  const [refreshing, setRefreshing] = useState(false);
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
+  const start = () => {
+    setRefreshing(true);
+    void Promise.all([
+      pull(),
+      new Promise((resolve) => setTimeout(resolve, PULLED_SPINNER_MS)),
+    ]).finally(() => {
+      if (mounted.current) {
+        setRefreshing(false);
+      }
+    });
+  };
+  return { refreshing, start };
+}
+
 /**
  * The activities, one per row, newest first; nearing the end, it asks for the older ones
  * (`onNearEnd`), with a spinner under the last card while they come, or what failed and a retry.
@@ -187,49 +248,92 @@ function Gallery({
   const cardWidth = width - 2 * PADDING;
   const today = todayLocal();
   const room = useListRoom();
+  const pulled = usePulled();
+  const barBottom = useTopBarBottom();
   return (
-    <FlatList
-      scrollIndicatorInsets={room.scrollIndicatorInsets}
-      data={activities}
-      keyExtractor={(activity) => activity.id}
-      // Each card holds a canvas, megabytes of GPU memory: those that fill the screen first, then
-      // a couple at a time, and those over two screens away are let go. Nearer ones stay on screen:
-      // on Android, a canvas taken off it destroys its surface, and has to draw again on coming back.
-      initialNumToRender={3}
-      maxToRenderPerBatch={2}
-      windowSize={5}
-      removeClippedSubviews={false}
-      contentContainerStyle={{
-        ...room.contentContainerStyle,
-        paddingHorizontal: PADDING,
-        gap: GAP,
-        flexGrow: 1,
-      }}
-      ListHeaderComponent={
-        // Only the synthetic history of a development build says it is.
-        usesStrava() ? undefined : (
-          <Text style={{ color: colors.secondaryLabel, fontSize: 13, paddingBottom: 4 }}>
-            {t('home.sampleData')}
-          </Text>
-        )
-      }
-      ListEmptyComponent={<EmptyView message={t('home.empty')} />}
-      // A screen and a half ahead, so that the next page is mostly there before the end shows.
-      onEndReached={onNearEnd}
-      onEndReachedThreshold={1.5}
-      ListFooterComponent={
-        older === 'loading' ? (
-          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <Spinner />
-          </View>
-        ) : older === 'error' ? (
-          <ErrorView message={t('home.olderError')} onRetry={onNearEnd} />
-        ) : undefined
-      }
-      renderItem={({ item }) => (
-        <ActivityCard activity={item} width={cardWidth} today={today} unit={unit} locale={locale} />
-      )}
-    />
+    <>
+      <FlatList
+        scrollIndicatorInsets={room.scrollIndicatorInsets}
+        // Pulled down, Strava is asked again; the system's indicator is hidden for the app's own,
+        // the same on every phone (ADR 013), in the room it opens over the first card.
+        refreshControl={
+          <RefreshControl
+            refreshing={pulled.refreshing}
+            onRefresh={pulled.start}
+            tintColor="transparent"
+            colors={['transparent']}
+            progressBackgroundColor="transparent"
+            // Android's circle, even see-through, keeps its disc and shadow: it is left above the
+            // screen, where its pull never brings it (a pull moves it 128 dp at most); the iPhone's
+            // spinner has no disc, and no such offset.
+            progressViewOffset={HIDDEN_SYSTEM_SPINNER}
+          />
+        }
+        data={activities}
+        keyExtractor={(activity) => activity.id}
+        // Each card holds a canvas, megabytes of GPU memory: those that fill the screen first, then
+        // a couple at a time, and those over two screens away are let go. Nearer ones stay on screen:
+        // on Android, a canvas taken off it destroys its surface, and has to draw again on coming back.
+        initialNumToRender={3}
+        maxToRenderPerBatch={2}
+        windowSize={5}
+        removeClippedSubviews={false}
+        contentContainerStyle={{
+          ...room.contentContainerStyle,
+          paddingHorizontal: PADDING,
+          gap: GAP,
+          flexGrow: 1,
+        }}
+        ListHeaderComponent={
+          pulled.refreshing || !usesStrava() ? (
+            <>
+              {pulled.refreshing ? <View style={{ height: PULLED_ROOM }} /> : null}
+              {/* Only the synthetic history of a development build says it is. */}
+              {usesStrava() ? null : (
+                <Text style={{ color: colors.secondaryLabel, fontSize: 13, paddingBottom: 4 }}>
+                  {t('home.sampleData')}
+                </Text>
+              )}
+            </>
+          ) : undefined
+        }
+        ListEmptyComponent={<EmptyView message={t('home.empty')} />}
+        // A screen and a half ahead, so that the next page is mostly there before the end shows.
+        onEndReached={onNearEnd}
+        onEndReachedThreshold={1.5}
+        ListFooterComponent={
+          older === 'loading' ? (
+            <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+              <Spinner />
+            </View>
+          ) : older === 'error' ? (
+            <ErrorView message={t('home.olderError')} onRetry={onNearEnd} />
+          ) : undefined
+        }
+        renderItem={({ item }) => (
+          <ActivityCard
+            activity={item}
+            width={cardWidth}
+            today={today}
+            unit={unit}
+            locale={locale}
+          />
+        )}
+      />
+      {pulled.refreshing ? (
+        <Spinner
+          size={PULLED_SPINNER_SIZE}
+          accessibilityLabel={t('home.refreshing')}
+          style={{
+            position: 'absolute',
+            top: barBottom + PULLED_SPINNER_TOP,
+            left: 0,
+            right: 0,
+            height: PULLED_SPINNER_SIZE,
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 

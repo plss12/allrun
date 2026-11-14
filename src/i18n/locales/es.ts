@@ -23,6 +23,7 @@ export const es: Translations = {
       year: 'Este año',
       custom: 'Personalizado',
     },
+    refreshing: 'Actualizando',
     sampleData: 'Datos de ejemplo hasta conectar Strava',
     empty: 'Aún no hay actividades',
     error: 'No se han podido cargar tus actividades',

@@ -43,6 +43,11 @@ export function useTopBarRoom(): number {
   return insets.top + ABOVE_BAR + TOP_BAR_HEIGHT + BELOW_BAR;
 }
 
+/** Where the bar ends, from the top of the screen. */
+export function useTopBarBottom(): number {
+  return useSafeAreaInsets().top + ABOVE_BAR + TOP_BAR_HEIGHT;
+}
+
 /** Where something beside the bar's tabs starts, from the top of the screen. */
 export function useTopBarTop(): number {
   return useSafeAreaInsets().top + ABOVE_BAR;

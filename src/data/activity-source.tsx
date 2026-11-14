@@ -27,6 +27,8 @@ export function usesStrava(): boolean {
 interface ProvidedSource {
   readonly source: ActivitySource;
   readonly key: string;
+  /** Pulled to refresh: asks the source again (see `usePullToRefresh`). */
+  readonly pull: () => Promise<void>;
 }
 
 const ActivitySourceContext = createContext<ProvidedSource | null>(null);
@@ -80,6 +82,8 @@ export function ActivitySourceProvider({ children }: { readonly children: ReactN
     (): ProvidedSource => ({
       source: routePrivacyMeters === 0 ? base : new PrivateRoutesSource(base, routePrivacyMeters),
       key: `${owner}-${revision}-routes-${routePrivacyMeters}`,
+      // The synthetic history has nothing to ask again.
+      pull: base instanceof StravaActivitySource ? () => base.pull() : () => Promise.resolve(),
     }),
     [owner, base, revision, routePrivacyMeters],
   );
@@ -97,6 +101,15 @@ function useProvided(): ProvidedSource {
 /** The activity source provided by {@link ActivitySourceProvider}. */
 export function useActivitySource(): ActivitySource {
   return useProvided().source;
+}
+
+/**
+ * What pulling a list to refresh does: asks Strava again for the newest activities and the
+ * athlete's profile and zones, not sooner than a while after the last time (see
+ * `StravaActivitySource.pull`); resolves once done, and what changed loads again by itself.
+ */
+export function usePullToRefresh(): () => Promise<void> {
+  return useProvided().pull;
 }
 
 /**
