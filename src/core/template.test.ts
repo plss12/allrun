@@ -258,7 +258,7 @@ describe('parseTemplate', () => {
       /activityChart.*not allowed in summary/,
     );
     expect(() =>
-      parseTemplate({ ...activityTemplate, layers: [{ ...chart, series: 'cadence' }] }),
+      parseTemplate({ ...activityTemplate, layers: [{ ...chart, series: 'temperature' }] }),
     ).toThrow(/series/);
     const rows = { ...chart, splitElevation: true, maxLabel: true };
     const read = parseTemplate({ ...activityTemplate, layers: [rows] }).layers[0];

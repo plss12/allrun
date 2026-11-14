@@ -11,12 +11,16 @@ import { parseStravaZones } from '@/sources/strava/zones';
 import { generateStravaDetail } from './detail';
 
 import { type FixtureOptions, generateStravaFixtures } from './generate';
-import { generateStravaZones } from './zones';
+import { generateStravaActivityZones, generateStravaZones } from './zones';
+
+/** An activity as a list gives it: without its calories. */
+const listed = (activity: Activity): Activity => ({ ...activity, calories: null });
 
 /**
  * {@link ActivitySource} backed by synthetic Strava-shaped data. The data goes through the same
  * validation and mapping as real Strava responses, so swapping in the Strava source later
- * changes nothing downstream.
+ * changes nothing downstream. As Strava's, its lists have no calories: only an activity asked for
+ * alone (its detail, `getActivity`) has them, so that nothing works here that can't with Strava.
  */
 export class FixtureActivitySource implements ActivitySource {
   private readonly activities: readonly Activity[];
@@ -32,7 +36,10 @@ export class FixtureActivitySource implements ActivitySource {
     if (!Number.isInteger(limit) || limit < 0) {
       throw new RangeError(`Invalid limit: ${limit}`);
     }
-    return this.activities.slice(Math.max(0, this.activities.length - limit)).reverse();
+    return this.activities
+      .slice(Math.max(0, this.activities.length - limit))
+      .reverse()
+      .map(listed);
   }
 
   async listBefore(startUtc: string, limit: number): Promise<Activity[]> {
@@ -40,11 +47,14 @@ export class FixtureActivitySource implements ActivitySource {
       throw new RangeError(`Invalid limit: ${limit}`);
     }
     const older = this.activities.filter((activity) => activity.startUtc < startUtc);
-    return older.slice(Math.max(0, older.length - limit)).reverse();
+    return older
+      .slice(Math.max(0, older.length - limit))
+      .reverse()
+      .map(listed);
   }
 
   async listInRange(range: DateRange): Promise<Activity[]> {
-    return selectActivities(this.activities, range);
+    return selectActivities(this.activities, range).map(listed);
   }
 
   async getActivity(id: string): Promise<Activity | null> {
@@ -59,7 +69,11 @@ export class FixtureActivitySource implements ActivitySource {
     }
     // Through the same validation and mapping as Strava's responses.
     const { streams, detailed } = generateStravaDetail(activity, seedOf(id));
-    return parseStravaDetail(JSON.parse(JSON.stringify(streams)), detailed);
+    return parseStravaDetail(
+      JSON.parse(JSON.stringify(streams)),
+      detailed,
+      generateStravaActivityZones(activity, streams),
+    );
   }
 
   /** The synthetic athlete's zones, through the same validation as Strava's. */

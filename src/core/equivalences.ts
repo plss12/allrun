@@ -119,17 +119,15 @@ export function activityEquivalences(activity: Activity): Equivalence[] {
 }
 
 /**
- * A period's equivalences (see `equivalences`): its totals, and the calories of its `activities`
- * that have them. Time O(n) for n activities.
+ * A period's equivalences (see `equivalences`): its distance, climb and time. Never its calories:
+ * Strava's lists, which a period is made of, have none (only an activity's detail has them, a
+ * request each: the owner's choice, 2026-11-14). Time O(r) for r references.
  */
-export function periodEquivalences(
-  summary: PeriodSummary,
-  activities: readonly Activity[],
-): Equivalence[] {
+export function periodEquivalences(summary: PeriodSummary): Equivalence[] {
   return equivalences({
     distance: summary.totalDistanceMeters,
     elevation: summary.totalElevationGainMeters,
     time: summary.totalMovingTimeSeconds,
-    calories: activities.reduce((sum, activity) => sum + (activity.calories ?? 0), 0),
+    calories: null,
   });
 }

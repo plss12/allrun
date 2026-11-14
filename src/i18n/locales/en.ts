@@ -230,6 +230,7 @@ export const en = {
       averagePower: 'Power',
       weightedAveragePower: 'W power',
       averageCadence: 'Cadence',
+      steps: 'Steps',
       calories: 'Cal',
     },
     /** The data widgets of a period summary. */
@@ -284,6 +285,7 @@ export const en = {
       location: 'Location',
       splitBars: 'Split bars',
       splitLadder: 'Split ladder',
+      records: 'Records',
       verified: 'Verified',
       chat: 'Phrase',
       sentence: 'Highlighted',
@@ -310,7 +312,7 @@ export const en = {
       title: 'Laps',
       lap: 'Lap',
       distance: 'Dist',
-      calories: 'Kcal',
+      heartRate: 'HR',
       time: 'Time',
       pace: 'Pace',
       speed: 'Speed',
@@ -325,6 +327,29 @@ export const en = {
     /** The names over the splits' bars: the unit each split covers. */
     splitBars: { km: 'Kilometer', mi: 'Mile' },
     splitLadder: { title: 'Splits' },
+    /** A run's best efforts (Strava's), and its records among them. */
+    records: {
+      all: 'Best times',
+      podium: 'Records',
+      ranks: { first: 'Record', second: '2nd', third: '3rd' },
+      /** Each distance Strava finds best efforts over. */
+      distances: {
+        m400: '400 m',
+        halfMile: '½ mile',
+        k1: '1 km',
+        mile: '1 mile',
+        twoMiles: '2 miles',
+        k5: '5K',
+        k10: '10K',
+        k15: '15K',
+        tenMiles: '10 miles',
+        k20: '20K',
+        half: 'Half marathon',
+        k30: '30K',
+        marathon: 'Marathon',
+        k50: '50K',
+      },
+    },
     /** The main datum in words, by its unit, next to the verified badge. */
     verified: { km: '{{value}} kilometers', mi: '{{value}} miles' },
     /** Phrases of the chat message: funny ones about how training leaves you. The first is short. */
@@ -780,6 +805,8 @@ export const en = {
       sheet: 'Timing sheet',
       withData: 'With data',
       plain: 'Alone',
+      all: 'All',
+      podium: 'Podium',
     },
     /** What a period's note lists: its activities, or its days, weeks or months. */
     noteRows: { activities: 'By activity', buckets: 'By day, week or month' },
@@ -807,6 +834,7 @@ export const en = {
     averagePower: 'Avg power',
     weightedAveragePower: 'Weighted power',
     averageCadence: 'Cadence',
+    steps: 'Steps',
     calories: 'Calories',
   },
   summaryMetrics: {
@@ -898,6 +926,7 @@ export const en = {
     heartRate: 'Heart rate chart',
     power: 'Power chart',
     splits: 'Splits',
+    cadence: 'Cadence chart',
   },
   /** A period's chart's name, over its bars when it has no header; `{{unit}}` is "km" or "mi". */
   chartCaptions: {
@@ -907,6 +936,7 @@ export const en = {
       heartRate: 'Heart rate',
       power: 'Power',
       splits: 'Splits per {{unit}}',
+      cadence: 'Cadence',
     },
     distance: {
       day: '{{unit}} per day',
@@ -940,6 +970,8 @@ export const en = {
     maxHeartRate: 'Max HR',
     averagePower: 'Avg power',
     maxPower: 'Max power',
+    averageCadence: 'Avg cadence',
+    maxCadence: 'Max cadence',
     fastestSplit: 'Fastest split',
     total: 'Total',
     averagePer: {
@@ -987,6 +1019,7 @@ export const en = {
     W: 'W',
     spm: 'spm',
     rpm: 'rpm',
+    steps: 'steps',
     kcal: 'kcal',
     h: 'h',
   } satisfies Record<MetricUnit, string>,

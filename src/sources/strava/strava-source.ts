@@ -22,7 +22,8 @@ import type { StravaApi } from './api';
 import { athletePhoto, stravaAthleteSchema } from './athlete';
 import { parseStravaDetail, stravaDetailedActivitySchema, stravaStreamsSchema } from './detail';
 import { type StravaActivity, stravaActivitySchema, stravaToActivity } from './schema';
-import { parseStravaZones, stravaZonesSchema } from './zones';
+import { parseStravaZones, type StravaZones, stravaZonesSchema } from './zones';
+import { stravaActivityZonesSchema } from './activity-zones';
 
 /**
  * Where the source keeps what Strava gave: JSON by key, on the phone in the app, in memory in
@@ -45,13 +46,32 @@ const PAGE_SIZE = 200;
 /** The newest activities are asked for in one page at least this long. */
 const RECENT_PAGE = 50;
 /** What the charts read of an activity's streams. */
-const STREAM_KEYS = 'time,distance,altitude,velocity_smooth,heartrate,watts';
+const STREAM_KEYS = 'time,distance,altitude,velocity_smooth,heartrate,watts,cadence,moving';
 
 const RECENT_KEY = 'recent';
 const ZONES_KEY = 'zones';
 const ATHLETE_KEY = 'athlete';
+/**
+ * How long the athlete's profile (photo, subscription) and zones are kept: a day, so that a change
+ * on Strava shows the day after; a request a day each, of the app's quota.
+ */
+const PROFILE_KEPT_MS = 24 * 60 * 60 * 1000;
+/**
+ * How long after asking for them a pull to refresh asks again for the newest activities, and for
+ * the athlete's profile and zones: pulling again sooner asks nothing, so that pulling over and over
+ * can't spend the app's quota, which every user shares.
+ */
+const PULLED_LIST_MS = 2 * 60 * 1000;
+const PULLED_PROFILE_MS = 15 * 60 * 1000;
 const yearKey = (year: string) => `year-${year}`;
-const detailKey = (id: number) => `detail-${id}`;
+/**
+ * An activity is kept in two parts, each asked for only when needed: its detail (one request: a
+ * home card asks for it for the calories the lists lack) and, for its charts, its streams and
+ * zones (two more). Kept under keys of their own: the `detail-` and `detail2-` of earlier versions,
+ * which kept the three together, go as they get old.
+ */
+const activityKey = (id: number) => `activity-${id}`;
+const streamsKey = (id: number) => `streams-${id}`;
 const olderKey = (before: number, limit: number) => `before-${before}-${limit}`;
 
 const activitiesSchema = z.array(stravaActivitySchema);
@@ -74,14 +94,22 @@ const yearSchema = z.object({
   ),
 });
 
-/** An activity's detail as kept: the fields AllRun reads of it, its streams if it has them. */
+/** An activity's detail as kept: the fields AllRun reads of it; `null` if Strava hasn't it. */
 const detailedSchema = stravaActivitySchema.extend(stravaDetailedActivitySchema.shape);
-const keptDetailSchema = z.object({
+const keptActivitySchema = z.object({
   fetchedAt: fetchedAtSchema,
   activity: detailedSchema.nullable(),
-  streams: stravaStreamsSchema.nullable(),
 });
-type KeptDetail = z.infer<typeof keptDetailSchema>;
+type KeptActivity = z.infer<typeof keptActivitySchema>;
+
+/** What an activity's charts read, as kept: its streams if it has them, and its zones. */
+const keptStreamsSchema = z.object({
+  fetchedAt: fetchedAtSchema,
+  streams: stravaStreamsSchema.nullable(),
+  /** Its time in zones; `null` without them (Strava gives them only to its subscribers). */
+  zones: stravaActivityZonesSchema.nullable(),
+});
+type KeptStreams = z.infer<typeof keptStreamsSchema>;
 
 const keptZonesSchema = z.object({
   fetchedAt: fetchedAtSchema,
@@ -91,7 +119,18 @@ const keptZonesSchema = z.object({
 const keptAthleteSchema = z.object({
   fetchedAt: fetchedAtSchema,
   photo: z.string().nullable(),
+  /**
+   * Whether they pay Strava, `null` if Strava didn't say; set to `false` when Strava refuses an
+   * activity's zones, until the profile is asked for again. Absent in what earlier versions kept.
+   */
+  summit: z.boolean().nullable().optional(),
 });
+type KeptAthlete = z.infer<typeof keptAthleteSchema>;
+
+/** Whether what was kept at `fetchedAt` is still the profile's, a day at most. */
+function isProfileFresh(fetchedAt: number, now: number): boolean {
+  return now - fetchedAt < PROFILE_KEPT_MS && fetchedAt <= now;
+}
 
 /** The numeric Strava id of an `Activity.id` (`strava:123`), or `null` if it isn't one. */
 function stravaIdOf(id: string): number | null {
@@ -120,7 +159,8 @@ function byStartDescending(a: StravaActivity, b: StravaActivity): number {
  *   are empty without asking.
  * - Older activities (the home, past its newest): a page at a time, asked for with Strava's
  *   `before` and kept a week under where it starts, as the rest.
- * - An activity's detail and streams, and the athlete's zones: when first needed.
+ * - An activity's detail (one request) and, apart, its streams and zones (two), and the
+ *   athlete's zones: each when first needed.
  *
  * What fails to load from the cache is logged and asked again of Strava.
  */
@@ -137,7 +177,11 @@ export class StravaActivitySource implements ActivitySource {
   private readonly loadedYears = new Map<string, Promise<void>>();
   private readonly pendingMonths = new Map<YearMonth, Promise<void>>();
   private refreshing: Promise<KeptRecent> | null = null;
-  private readonly details = new Map<number, Promise<KeptDetail>>();
+  /** The athlete's profile being read or asked for (see `athlete`). */
+  private profile: Promise<KeptAthlete> | null = null;
+  /** Activities' details and streams being asked for or read, by id (see `once`). */
+  private readonly activities = new Map<number, Promise<KeptActivity>>();
+  private readonly streams = new Map<number, Promise<KeptStreams>>();
   /** The older activities listed in this session, for `findListed`. */
   private readonly older = new Map<number, StravaActivity>();
   private readonly listeners = new Set<() => void>();
@@ -214,9 +258,7 @@ export class StravaActivitySource implements ActivitySource {
     let activities = kept?.activities;
     if (kept === null || !isCacheFresh(kept.fetchedAt, this.now())) {
       const fetchedAt = this.now();
-      activities = (await this.fetchActivities({ before, per_page: limit, page: 1 })).sort(
-        byStartDescending,
-      );
+      activities = (await this.fetchFullPage(before, limit)).sort(byStartDescending);
       await this.keep(key, { fetchedAt, activities });
     }
     const page = activities ?? [];
@@ -242,7 +284,7 @@ export class StravaActivitySource implements ActivitySource {
     }
     await this.ready();
     try {
-      const { activity } = await this.detail(stravaId);
+      const { activity } = await this.activityOf(stravaId);
       return activity === null ? null : stravaToActivity(activity);
     } catch (error) {
       // Without its detail (no connection), the activity as the lists gave it still opens.
@@ -261,33 +303,128 @@ export class StravaActivitySource implements ActivitySource {
       return null;
     }
     await this.ready();
-    const { activity, streams } = await this.detail(stravaId);
-    return activity === null ? null : parseStravaDetail(streams, activity);
+    const [{ activity }, { streams, zones }] = await Promise.all([
+      this.activityOf(stravaId),
+      this.streamsOf(stravaId),
+    ]);
+    return activity === null ? null : parseStravaDetail(streams, activity, zones);
   }
 
-  /** `null` when Strava has none, or the athlete didn't grant `profile:read_all`. */
+  /**
+   * `null` when Strava has none, or the athlete didn't grant `profile:read_all`. Kept a day, as
+   * the profile.
+   */
   async getHeartRateZones(): Promise<HeartRateZones | null> {
     await this.ready();
     const kept = await this.readKept(ZONES_KEY, keptZonesSchema);
-    if (kept !== null && isCacheFresh(kept.fetchedAt, this.now())) {
+    if (kept !== null && isProfileFresh(kept.fetchedAt, this.now())) {
       return kept.zones === null ? null : parseStravaZones(kept.zones);
     }
-    const answer = await this.api.get('/athlete/zones', {}, { absentOn: [403, 404] });
-    const zones = answer === null ? null : stravaZonesSchema.parse(answer);
-    await this.keep(ZONES_KEY, { fetchedAt: this.now(), zones });
+    const zones = await this.fetchHeartRateZones();
     return zones === null ? null : parseStravaZones(zones);
   }
 
-  /** The athlete's photo, kept as the zones are: asked for again once a week. */
+  /**
+   * Pulled to refresh: asks again for the newest activities, if last asked over
+   * {@link PULLED_LIST_MS} ago, and for the athlete's profile and zones, over
+   * {@link PULLED_PROFILE_MS} ago (one changed on Strava shows at once); sooner, nothing. Resolves
+   * once done; what changed is told by `onChange`, and failures are logged.
+   */
+  async pull(): Promise<void> {
+    await this.ready();
+    const now = this.now();
+    const [recent, athlete, zones] = await Promise.all([
+      this.loadRecent(),
+      this.readKept(ATHLETE_KEY, keptAthleteSchema),
+      this.readKept(ZONES_KEY, keptZonesSchema),
+    ]);
+    const due = (kept: { readonly fetchedAt: number } | null, after: number) =>
+      kept === null || now - kept.fetchedAt >= after || kept.fetchedAt > now;
+    const asked: Promise<unknown>[] = [];
+    if (due(recent, PULLED_LIST_MS)) {
+      asked.push(this.refreshInBackground(recent?.pageSize ?? RECENT_PAGE));
+    }
+    if (due(athlete, PULLED_PROFILE_MS)) {
+      asked.push(
+        this.athlete(true).then((fresh) => {
+          if (fresh.photo !== athlete?.photo) {
+            this.listeners.forEach((listener) => listener());
+          }
+        }),
+      );
+    }
+    if (due(zones, PULLED_PROFILE_MS)) {
+      asked.push(this.fetchHeartRateZones());
+    }
+    for (const result of await Promise.allSettled(asked)) {
+      if (result.status === 'rejected') {
+        this.onError('Could not refresh from Strava', result.reason);
+      }
+    }
+  }
+
+  /** The athlete's heart rate zones, asked of Strava and kept. */
+  private async fetchHeartRateZones(): Promise<StravaZones | null> {
+    const answer = await this.api.get('/athlete/zones', {}, { absentOn: [403, 404] });
+    const zones = answer === null ? null : stravaZonesSchema.parse(answer);
+    await this.keep(ZONES_KEY, { fetchedAt: this.now(), zones });
+    return zones;
+  }
+
+  /** The athlete's photo, from their profile (see `athlete`). */
   async getAthletePhoto(): Promise<string | null> {
     await this.ready();
-    const kept = await this.readKept(ATHLETE_KEY, keptAthleteSchema);
-    if (kept !== null && isCacheFresh(kept.fetchedAt, this.now())) {
-      return kept.photo;
+    return (await this.athlete()).photo;
+  }
+
+  /**
+   * The athlete's profile: their photo and whether they pay Strava, kept a day (or asked for again
+   * when `fresh`); asked for once however many ask at the same time.
+   */
+  private athlete(fresh = false): Promise<KeptAthlete> {
+    this.profile ??= (async () => {
+      const kept = fresh ? null : await this.readKept(ATHLETE_KEY, keptAthleteSchema);
+      if (
+        kept !== null &&
+        kept.summit !== undefined &&
+        isProfileFresh(kept.fetchedAt, this.now())
+      ) {
+        return kept;
+      }
+      const athlete = stravaAthleteSchema.parse(await this.api.get('/athlete'));
+      const asked: KeptAthlete = {
+        fetchedAt: this.now(),
+        photo: athletePhoto(athlete),
+        summit: athlete.summit ?? null,
+      };
+      await this.keep(ATHLETE_KEY, asked);
+      return asked;
+    })().finally(() => {
+      this.profile = null;
+    });
+    return this.profile;
+  }
+
+  /**
+   * Whether to ask for an activity's zones: unless the athlete is known not to pay Strava, who
+   * alone has them (a refused request counts against the app's quota too). Asked anyway when the
+   * profile can't be had.
+   */
+  private async mayHaveZones(): Promise<boolean> {
+    try {
+      return (await this.athlete()).summit !== false;
+    } catch (error) {
+      this.onError("Could not read the athlete's profile: asking for the zones anyway", error);
+      return true;
     }
-    const photo = athletePhoto(stravaAthleteSchema.parse(await this.api.get('/athlete')));
-    await this.keep(ATHLETE_KEY, { fetchedAt: this.now(), photo });
-    return photo;
+  }
+
+  /** Notes, until the profile is asked for again, that Strava refused an activity's zones. */
+  private async zonesRefused(): Promise<void> {
+    const kept = await this.readKept(ATHLETE_KEY, keptAthleteSchema);
+    if (kept !== null) {
+      await this.keep(ATHLETE_KEY, { ...kept, summit: false });
+    }
   }
 
   // The cache ------------------------------------------------------------------------------------
@@ -303,7 +440,15 @@ export class StravaActivitySource implements ActivitySource {
   private async prune(): Promise<void> {
     const now = this.now();
     for (const key of await this.store.keys()) {
-      const kept = await this.store.read(key);
+      let kept: unknown;
+      try {
+        kept = await this.store.read(key);
+      } catch (error) {
+        // Cut short or unreadable: gone, as an invalid one is, and asked for again when needed.
+        this.onError(`The Strava cache "${key}" is damaged`, error);
+        await this.store.remove(key);
+        continue;
+      }
       if (key.startsWith('year-')) {
         const year = yearSchema.safeParse(kept);
         if (!year.success) {
@@ -329,7 +474,15 @@ export class StravaActivitySource implements ActivitySource {
 
   /** What was kept under `key`, if it is still valid; damaged, it is logged and asked again. */
   private async readKept<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {
-    const kept = await this.store.read(key);
+    let kept: unknown;
+    try {
+      kept = await this.store.read(key);
+    } catch (error) {
+      // Cut short or unreadable (the app closed while writing it): asked for again and rewritten,
+      // as a damaged one is; left as it is, it would fail every time.
+      this.onError(`The Strava cache "${key}" is damaged`, error);
+      return null;
+    }
     if (kept === null) {
       return null;
     }
@@ -388,17 +541,52 @@ export class StravaActivitySource implements ActivitySource {
 
   // Strava ---------------------------------------------------------------------------------------
 
-  private async fetchActivities(query: Record<string, number>): Promise<StravaActivity[]> {
-    return activitiesSchema.parse(await this.api.get('/athlete/activities', query));
+  /**
+   * A page of Strava's activities, each validated alone: one it can't read is left out and logged,
+   * and the rest still listed. `sent` is how many Strava sent, which says whether more follow.
+   */
+  private async fetchActivities(
+    query: Record<string, number>,
+  ): Promise<{ readonly activities: StravaActivity[]; readonly sent: number }> {
+    const page = z.array(z.unknown()).parse(await this.api.get('/athlete/activities', query));
+    const activities = page.flatMap((json) => {
+      const parsed = stravaActivitySchema.safeParse(json);
+      if (parsed.success) {
+        return [parsed.data];
+      }
+      const id = z.object({ id: z.number() }).safeParse(json);
+      this.onError(
+        `Leaving out activity ${id.success ? id.data.id : '?'}, which Strava sent unreadable`,
+        parsed.error,
+      );
+      return [];
+    });
+    return { activities, sent: page.length };
+  }
+
+  /**
+   * `limit` activities before `before` (seconds), fewer only at the athlete's first: a page with
+   * one left out (see `fetchActivities`) is filled from the next, so that a short page still
+   * means there are no more. Time O(p) requests for p pages, one but for activities left out.
+   */
+  private async fetchFullPage(before: number, limit: number): Promise<StravaActivity[]> {
+    const found: StravaActivity[] = [];
+    for (let page = 1; found.length < limit; page++) {
+      const { activities, sent } = await this.fetchActivities({ before, per_page: limit, page });
+      found.push(...activities);
+      if (sent < limit) {
+        break;
+      }
+    }
+    return found.slice(0, limit);
   }
 
   private fetchRecent(pageSize: number): Promise<KeptRecent> {
     this.refreshing ??= (async () => {
       try {
         const fetchedAt = this.now();
-        const activities = (await this.fetchActivities({ per_page: pageSize, page: 1 })).sort(
-          byStartDescending,
-        );
+        const { activities } = await this.fetchActivities({ per_page: pageSize, page: 1 });
+        activities.sort(byStartDescending);
         const recent: KeptRecent = { fetchedAt, pageSize, activities };
         this.recent = recent;
         await this.keep(RECENT_KEY, recent);
@@ -479,14 +667,14 @@ export class StravaActivitySource implements ActivitySource {
     const fetchedAt = this.now();
     const activities: StravaActivity[] = [];
     for (let page = 1; ; page++) {
-      const found = await this.fetchActivities({
+      const { activities: found, sent } = await this.fetchActivities({
         after: window.after,
         before: window.before,
         per_page: PAGE_SIZE,
         page,
       });
       activities.push(...found);
-      if (found.length < PAGE_SIZE) {
+      if (sent < PAGE_SIZE) {
         break;
       }
     }
@@ -497,36 +685,81 @@ export class StravaActivitySource implements ActivitySource {
   }
 
   /** An activity's detail: kept, or asked for once however many ask at the same time. */
-  private detail(id: number): Promise<KeptDetail> {
-    let loading = this.details.get(id);
-    if (loading === undefined) {
-      loading = (async () => {
-        const kept = await this.readKept(detailKey(id), keptDetailSchema);
-        if (kept !== null && isCacheFresh(kept.fetchedAt, this.now())) {
-          return kept;
-        }
-        const fetchedAt = this.now();
-        const [activity, streams] = await Promise.all([
-          this.api.get(`/activities/${id}`),
-          this.api.get(`/activities/${id}/streams`, { keys: STREAM_KEYS, key_by_type: 'true' }),
-        ]);
-        const fresh: KeptDetail = {
-          fetchedAt,
-          activity: activity === null ? null : detailedSchema.parse(activity),
-          streams: hasStreams(streams) ? stravaStreamsSchema.parse(streams) : null,
-        };
-        await this.keep(detailKey(id), fresh);
-        return fresh;
-      })();
-      this.details.set(id, loading);
-      // A failure is asked again next time.
-      loading.catch(() => {
-        if (this.details.get(id) === loading) {
-          this.details.delete(id);
+  private activityOf(id: number): Promise<KeptActivity> {
+    return this.once(this.activities, id, async () => {
+      const kept = await this.readKept(activityKey(id), keptActivitySchema);
+      if (kept !== null && isCacheFresh(kept.fetchedAt, this.now())) {
+        return kept;
+      }
+      const fetchedAt = this.now();
+      const activity = await this.api.get(`/activities/${id}`);
+      const fresh: KeptActivity = {
+        fetchedAt,
+        activity: activity === null ? null : detailedSchema.parse(activity),
+      };
+      await this.keep(activityKey(id), fresh);
+      return fresh;
+    });
+  }
+
+  /** An activity's streams and zones, for its charts: kept, or asked for once, as its detail. */
+  private streamsOf(id: number): Promise<KeptStreams> {
+    return this.once(this.streams, id, async () => {
+      const kept = await this.readKept(streamsKey(id), keptStreamsSchema);
+      if (kept !== null && isCacheFresh(kept.fetchedAt, this.now())) {
+        return kept;
+      }
+      const fetchedAt = this.now();
+      const [streams, zones] = await Promise.all([
+        this.api.get(`/activities/${id}/streams`, { keys: STREAM_KEYS, key_by_type: 'true' }),
+        // A subscriber's: anyone else is refused (402 or 403), and has no zones.
+        (async () => {
+          if (!(await this.mayHaveZones())) {
+            return null;
+          }
+          const answer = await this.api.get(
+            `/activities/${id}/zones`,
+            {},
+            {
+              absentOn: [402, 403, 404],
+            },
+          );
+          if (answer === null) {
+            await this.zonesRefused();
+          }
+          return answer;
+        })(),
+      ]);
+      const fresh: KeptStreams = {
+        fetchedAt,
+        streams: hasStreams(streams) ? stravaStreamsSchema.parse(streams) : null,
+        zones: zones === null ? null : stravaActivityZonesSchema.parse(zones),
+      };
+      await this.keep(streamsKey(id), fresh);
+      return fresh;
+    });
+  }
+
+  /**
+   * What `load` gives for `id`, loaded once however many ask for it at the same time, and asked
+   * again after a failure.
+   */
+  private once<T>(
+    loading: Map<number, Promise<T>>,
+    id: number,
+    load: () => Promise<T>,
+  ): Promise<T> {
+    let pending = loading.get(id);
+    if (pending === undefined) {
+      pending = load();
+      loading.set(id, pending);
+      pending.catch(() => {
+        if (loading.get(id) === pending) {
+          loading.delete(id);
         }
       });
     }
-    return loading;
+    return pending;
   }
 
   /** The activity as a list gave it, if the source has it in memory. */

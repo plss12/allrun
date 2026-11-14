@@ -2,6 +2,7 @@ import { makeActivity } from '@/test-utils/make-activity';
 
 import {
   activityBlocks,
+  recordRows,
   bigMetrics,
   blockDataCount,
   blockLettering,
@@ -646,5 +647,47 @@ describe('tyreCompounds', () => {
     expect(tyreCompounds([3, 3, 3])).toEqual(['soft', 'medium', 'hard']);
     expect(tyreCompounds([3])).toEqual(['soft']);
     expect(tyreCompounds([])).toEqual([]);
+  });
+});
+
+describe("a run's records", () => {
+  const effort = (distanceMeters: number, prRank: 1 | 2 | 3 | null = null) => ({
+    distance: null,
+    distanceMeters,
+    elapsedTimeSeconds: distanceMeters / 3.5,
+    prRank,
+  });
+  const efforts = [
+    effort(400),
+    effort(804.672),
+    effort(1000, 2),
+    effort(1609.344),
+    effort(3218.688),
+    effort(5000, 1),
+    effort(10_000),
+    effort(15_000, 3),
+  ];
+
+  it('shows every best effort the run has; the podium, the records alone', () => {
+    const rows = recordRows(efforts);
+    expect(rows.all).toEqual(efforts);
+    expect(rows.podium.map((row) => row.prRank)).toEqual([2, 1, 3]);
+  });
+
+  it('offers both in each brand color; without records, all of them once, in one color', () => {
+    const run = makeActivity({ sportType: 'Run' });
+    const records = (bestEfforts: readonly ReturnType<typeof effort>[]) =>
+      activityBlocks(run, true, false, false, bestEfforts).filter(
+        (block) => block.design === 'records',
+      );
+    expect(records(efforts)).toEqual([
+      { design: 'records', layout: 'all', cover: 'red' },
+      { design: 'records', layout: 'all', cover: 'ink' },
+      { design: 'records', layout: 'podium', cover: 'red' },
+      { design: 'records', layout: 'podium', cover: 'ink' },
+    ]);
+    // Only records wear the brand color: without any, both colors would be the same table.
+    expect(records([effort(5000)])).toEqual([{ design: 'records', layout: 'all', cover: 'red' }]);
+    expect(records([])).toEqual([]);
   });
 });

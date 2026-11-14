@@ -4,6 +4,8 @@ const streams = {
   time: { data: [0, 1, 2] },
   distance: { data: [0, 3.1, 6.3] },
   heartrate: { data: [120, null, 124] },
+  cadence: { data: [84, 86.5, null] },
+  moving: { data: [true, false, null] },
 };
 const splits = {
   splits_metric: [
@@ -23,6 +25,38 @@ const splits = {
   ],
 };
 
+describe('best efforts', () => {
+  const efforts = (bestEfforts: unknown[]) =>
+    parseStravaDetail(null, { ...splits, best_efforts: bestEfforts }).bestEfforts;
+
+  it("knows each distance by Strava's name, however long it measured, shortest first", () => {
+    expect(
+      efforts([
+        { name: '10 mile', distance: 16_090, elapsed_time: 4800, pr_rank: 1 },
+        { name: 'Half-Marathon', distance: 21_100, elapsed_time: 6400, pr_rank: null },
+        { name: '1/2 mile', distance: 805, elapsed_time: 190 },
+        { name: 'Marathon', distance: 42_195, elapsed_time: 14_000, pr_rank: 4 },
+      ]),
+    ).toEqual([
+      { distance: 'halfMile', distanceMeters: 805, elapsedTimeSeconds: 190, prRank: null },
+      { distance: 'tenMiles', distanceMeters: 16_090, elapsedTimeSeconds: 4800, prRank: 1 },
+      { distance: 'half', distanceMeters: 21_100, elapsedTimeSeconds: 6400, prRank: null },
+      // Only the athlete's first three count as records.
+      { distance: 'marathon', distanceMeters: 42_195, elapsedTimeSeconds: 14_000, prRank: null },
+    ]);
+  });
+
+  it('knows one without a name by its length, within 1 %, and none that is no standard one', () => {
+    expect(
+      efforts([
+        { distance: 5020, elapsed_time: 1300 },
+        { distance: 12_000, elapsed_time: 3300 },
+      ])?.map((effort) => effort.distance),
+    ).toEqual(['k5', null]);
+    expect(efforts([])).toEqual([]);
+  });
+});
+
 describe('parseStravaDetail', () => {
   it('maps streams, splits and laps, a missed sample or heart rate becoming NaN or null', () => {
     const detail = parseStravaDetail(streams, splits);
@@ -33,6 +67,9 @@ describe('parseStravaDetail', () => {
       speed: null,
       heartRate: [120, Number.NaN, 124],
       power: null,
+      cadence: [84, 86.5, Number.NaN],
+      // A sample without the flag counts as moving.
+      moving: [true, false, true],
     });
     expect(detail.splits).toEqual({
       metric: [

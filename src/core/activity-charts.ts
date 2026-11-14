@@ -17,17 +17,18 @@ import type { DistanceUnit } from './units';
  * every line shows its changes as Strava draws them (the owner's choice, the same for all).
  */
 
-/** Points of a line chart: enough for a smooth curve at any size on the canvas. */
-export const LINE_POINTS = 150;
-
-/** Below this speed (m/s) the athlete is stopped, and a pace means nothing. */
-const MIN_MOVING_SPEED = 0.5;
+/**
+ * Points of a line chart: a stretch of some 25 m in a 7.7 km run, so that a 15 s stride still
+ * shows its pace (with 150, the owner's strides peaked at 2'49" against Strava's 2'36"); as cheap
+ * to draw as 150 (the owner's choice: detail over smoothing).
+ */
+export const LINE_POINTS = 300;
 
 /**
- * Share of the pace samples left out at each end, before averaging: GPS jumps and the last
- * steps of a stop make spikes that would flatten the rest of the line.
+ * Below this speed (m/s) the athlete is stopped, and a pace means nothing: for streams without
+ * Strava's own flag of when the athlete moved (`moving`).
  */
-const PACE_OUTLIERS = 0.02;
+const MIN_MOVING_SPEED = 0.5;
 
 /** A split shorter than this share of a kilometer or mile is too short to compare. */
 const MIN_SPLIT_SHARE = 0.3;
@@ -80,6 +81,11 @@ export interface LineSeries {
   readonly points: readonly ChartPoint[];
   readonly min: number;
   readonly max: number;
+  /**
+   * The highest sample of the stream as drawn, before averaging (stops left out): a value the
+   * activity really reached, for the chart's header when the source gives no maximum.
+   */
+  readonly peak: number;
   readonly average: number;
   readonly axis: ChartAxis;
   /** How far the axis runs: meters or seconds. */
@@ -154,8 +160,9 @@ export function splitRows(
 
 /**
  * The data of one chart of an activity, or `null` when the activity didn't record what it needs
- * (no heart rate monitor, no altitude on a treadmill, no splits without distance). Time O(n log n)
- * for n samples (the pace sorts its samples to drop outliers), space O(n).
+ * (no heart rate monitor, no altitude on a treadmill, no splits without distance). A heart rate
+ * runs along the time moving; the others along the distance, or the time without one. Time and
+ * space O(n) for n samples.
  */
 export function activityChartSeries(
   detail: ActivityDetail,
@@ -177,25 +184,62 @@ export function activityChartSeries(
     }
     case 'pace': {
       const speed = streams.speed;
-      return speed === null ? null : lineSeries(streams, withoutOutliers(speed), 'distance');
+      return speed === null
+        ? null
+        : lineSeries(streams, withoutStops(speed, streams.moving), 'distance');
     }
     case 'heartRate':
-      return lineSeries(streams, streams.heartRate, axisOf(streams));
+      // Along the time moving, as Strava counts its time in zones: each zone's stretch of the
+      // line is as wide as the time spent in it.
+      return streams.heartRate === null
+        ? null
+        : lineSeries(
+            { ...streams, time: movingTime(streams.time, streams.moving) },
+            whileMoving(streams.heartRate, streams.moving),
+            'time',
+          );
     case 'power':
       return lineSeries(streams, streams.power, axisOf(streams));
+    case 'cadence':
+      return lineSeries(streams, cadenceWhileMoving(streams), axisOf(streams));
   }
 }
 
 /**
+ * The cadence where the athlete moved: stops (Strava's `moving`, when it has it) and samples
+ * without a cadence (0: standing, coasting on a bike) are left out (`NaN`), so they don't drag
+ * the line down. `null` without a cadence, or with none above 0. Time and space O(n).
+ */
+function cadenceWhileMoving(streams: ActivityStreams): number[] | null {
+  const { cadence, moving } = streams;
+  if (cadence === null) {
+    return null;
+  }
+  const kept = cadence.map((value, i) =>
+    value > 0 && (moving === null || moving.length !== cadence.length || moving[i])
+      ? value
+      : Number.NaN,
+  );
+  return kept.some((value) => !Number.isNaN(value)) ? kept : null;
+}
+
+/**
  * The charts an activity can show, in the order the editor offers them: the splits' bars first,
- * then the lines together, its pace, elevation, heart rate and power (the owner's choice). Time
- * O(n log n).
+ * then the lines together, its pace, elevation, heart rate, power and cadence (the owner's
+ * choice). Time O(n) for n samples.
  */
 export function availableActivityCharts(
   detail: ActivityDetail,
   unit: DistanceUnit,
 ): ActivityChartSeries[] {
-  const all: readonly ActivityChartSeries[] = ['splits', 'pace', 'elevation', 'heartRate', 'power'];
+  const all: readonly ActivityChartSeries[] = [
+    'splits',
+    'pace',
+    'elevation',
+    'heartRate',
+    'power',
+    'cadence',
+  ];
   return all.filter((series) => activityChartSeries(detail, series, unit) !== null);
 }
 
@@ -230,11 +274,18 @@ function lineSeries(
     return null;
   }
   const ys = points.map((point) => point.y);
+  let peak = -Infinity;
+  for (const value of values) {
+    if (value > peak) {
+      peak = value;
+    }
+  }
   return {
     kind: 'line',
     points,
     min: Math.min(...ys),
     max: Math.max(...ys),
+    peak,
     average: ys.reduce((sum, y) => sum + y, 0) / ys.length,
     axis,
     axisEnd: end - start,
@@ -278,19 +329,56 @@ export function downsample(
 }
 
 /**
- * Speeds with stops and the extreme {@link PACE_OUTLIERS} at each end marked `NaN`, so they
- * neither break the line nor squash it. Time O(n log n), space O(n).
+ * Speeds with the stops marked `NaN`, so they don't break the line; nothing else is left out, so
+ * every change of pace keeps its zone's color (the owner's choice: the stream as it is). Stops
+ * are where Strava says the athlete wasn't moving (`moving`, its own criterion, as its pace
+ * leaves them out), or, without it, under {@link MIN_MOVING_SPEED}. Time and space O(n).
+ *
+ * @throws RangeError when `moving` and `speeds` differ in length.
  */
-export function withoutOutliers(speeds: readonly number[]): number[] {
-  const moving = speeds.filter((speed) => speed >= MIN_MOVING_SPEED).sort((a, b) => a - b);
-  if (moving.length === 0) {
-    return speeds.map(() => Number.NaN);
+export function withoutStops(
+  speeds: readonly number[],
+  moving: readonly boolean[] | null = null,
+): number[] {
+  if (moving !== null && moving.length !== speeds.length) {
+    throw new RangeError(
+      `Expected as many moving flags as speeds, got ${moving.length} and ${speeds.length}`,
+    );
   }
-  const low = moving[Math.floor(PACE_OUTLIERS * (moving.length - 1))];
-  const high = moving[Math.ceil((1 - PACE_OUTLIERS) * (moving.length - 1))];
-  return speeds.map((speed) =>
-    speed >= MIN_MOVING_SPEED && speed >= low && speed <= high ? speed : Number.NaN,
+  return speeds.map((speed, i) =>
+    (moving === null ? speed >= MIN_MOVING_SPEED : moving[i] && speed > 0) ? speed : Number.NaN,
   );
+}
+
+/**
+ * Seconds moving up to each sample: each sample adds the time since the one before it when
+ * Strava says the athlete moved then (`moving`), as Strava counts its time in zones; `time` as
+ * it is without that flag. Time and space O(n).
+ *
+ * @throws RangeError when `moving` and `time` differ in length.
+ */
+export function movingTime(
+  time: readonly number[],
+  moving: readonly boolean[] | null,
+): readonly number[] {
+  if (moving === null) {
+    return time;
+  }
+  if (moving.length !== time.length) {
+    throw new RangeError(
+      `Expected as many moving flags as times, got ${moving.length} and ${time.length}`,
+    );
+  }
+  const along = [0];
+  for (let i = 1; i < time.length; i++) {
+    along.push(along[i - 1] + (moving[i] ? time[i] - time[i - 1] : 0));
+  }
+  return along;
+}
+
+/** `values` with the samples where Strava says the athlete stopped marked `NaN`. Time O(n). */
+function whileMoving(values: readonly number[], moving: readonly boolean[] | null): number[] {
+  return values.map((value, i) => (moving === null || moving[i] ? value : Number.NaN));
 }
 
 /**

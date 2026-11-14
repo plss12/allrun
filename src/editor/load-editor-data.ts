@@ -1,6 +1,7 @@
 import { availableActivityCharts } from '@/core/activity-charts';
 import { customRange } from '@/core/dates';
 import { activityCatalog, type CatalogSection, summaryCatalog } from '@/core/layer-catalog';
+import type { ActivityChartSeries } from '@/core/template';
 import { bucketForPeriod, isCurrentPeriod } from '@/core/periods';
 import { selectActivities, summarize } from '@/core/summary';
 import type { DistanceUnit } from '@/core/units';
@@ -59,6 +60,22 @@ export async function loadEditorData(
 }
 
 /**
+ * The charts of an activity that have zones: its heart rate with those Strava gave the activity
+ * (a subscriber's) or the athlete's, its pace and power with those Strava gave the activity.
+ */
+export function zonedCharts(
+  data: Extract<EditorData, { mode: 'activity' }>,
+): ActivityChartSeries[] {
+  return [
+    ...(data.zones !== null || (data.detail?.zones?.heartRate ?? null) !== null
+      ? (['heartRate'] as const)
+      : []),
+    ...((data.detail?.zones?.pace ?? null) !== null ? (['pace'] as const) : []),
+    ...((data.detail?.zones?.power ?? null) !== null ? (['power'] as const) : []),
+  ];
+}
+
+/**
  * The widgets on offer for `data`, in the catalog's sections.
  *
  * @param withPlace - Whether the place widgets are offered: its name is known, or can be asked for.
@@ -73,8 +90,9 @@ export function catalogFor(
         data.activity,
         data.detail === null ? [] : availableActivityCharts(data.detail, unit),
         withPlace,
-        data.zones !== null,
+        zonedCharts(data),
         data.detail !== null && data.detail.laps.length > 1,
+        data.detail?.bestEfforts ?? [],
       )
     : summaryCatalog(
         data.summary,

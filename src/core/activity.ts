@@ -35,6 +35,8 @@ export interface Activity {
   readonly averageHeartRate: number | null;
   readonly maxHeartRate: number | null;
   readonly averagePowerWatts: number | null;
+  /** The highest power the meter recorded, as the source gives it. */
+  readonly maxPowerWatts: number | null;
   readonly weightedAveragePowerWatts: number | null;
   /** As reported by the source: revolutions per minute (one leg for running on Strava). */
   readonly averageCadence: number | null;

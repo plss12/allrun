@@ -49,6 +49,7 @@ describe('parseStravaActivities', () => {
       averageHeartRate: 152.3,
       maxHeartRate: 176,
       averagePowerWatts: null,
+      maxPowerWatts: null,
       weightedAveragePowerWatts: null,
       averageCadence: 85.6,
       calories: null,

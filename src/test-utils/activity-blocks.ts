@@ -72,7 +72,13 @@ function detailOf(activity: Activity): ActivityDetail {
 /** Every block of `activity`, its splits and laps too when it has them, and its place. */
 export const blocksOf = (activity: Activity) => {
   const detail = detailOf(activity);
-  return activityBlocks(activity, detail.splits.metric.length > 0, true, detail.laps.length > 1);
+  return activityBlocks(
+    activity,
+    detail.splits.metric.length > 0,
+    true,
+    detail.laps.length > 1,
+    detail.bestEfforts ?? [],
+  );
 };
 
 /**

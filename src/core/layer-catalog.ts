@@ -1,4 +1,5 @@
 import type { Activity } from './activity';
+import type { BestEffort } from './activity-detail';
 import { activityBlocks, blockTile, isDataWidget } from './activity-block';
 import { availableMetrics, type MetricId } from './metrics';
 import { bucketCount, chartBucketOptions } from './periods';
@@ -130,7 +131,9 @@ const CREATIVE_THEMES: Readonly<
       ['block-verified', 'block-location'],
       ['block-music', 'block-alarm'],
     ],
-    [['block-laps', 'block-grandPrix'], ['block-splits'], ['block-notes']],
+    // The karting's laps beside the records, the splits' ladder beside the Grand Prix (the
+    // owner's choice).
+    [['block-laps', 'block-records'], ['block-splits', 'block-grandPrix'], ['block-notes']],
     [['block-receipt', 'block-nutrition'], ['block-boardingPass']],
   ],
   summary: [
@@ -390,6 +393,7 @@ const WRITINGS: Readonly<Record<MetricId | SummaryMetricId, Writing>> = {
   averagePower: 'plain',
   weightedAveragePower: 'plain',
   averageCadence: 'plain',
+  steps: 'plain',
   calories: 'plain',
   activityCount: 'plain',
 };
@@ -478,8 +482,9 @@ function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {
 
 /**
  * An activity chart's variants. A line, under its header: plain or with its average; a heart
- * rate, when the athlete's zones are known (`withZones`), also colored by zone, with a table of
- * the time in each, or the table alone; and last the line under its name only. Splits: with each
+ * rate, a pace or a power with zones (`zoned`: the athlete's heart rate zones, Strava's pace and
+ * power zones of the activity), also colored by zone, with a table of the time in each, or the
+ * table alone; and last the line under its name only. Splits: with each
  * split's pace (their default), with its change in altitude, and, for an activity with a heart
  * rate, with it too; and last without values, under the header that the paces would repeat
  * otherwise. Each row already reads against the others, so splits have no average.
@@ -487,7 +492,7 @@ function lineEntries(kind: 'route' | 'summaryRoutes'): Entry[] {
 function chartEntries(
   series: ActivityChartSeries,
   withHeartRate: boolean,
-  withZones: boolean,
+  zoned: boolean,
 ): Entry[] {
   const items: CatalogItem[] =
     series === 'splits'
@@ -505,7 +510,7 @@ function chartEntries(
       : [
           { kind: 'activityChart', series },
           { kind: 'activityChart', series, averageLine: true },
-          ...(series === 'heartRate' && withZones
+          ...(zoned
             ? HEART_RATE_ZONE_VIEWS.map(
                 (zones) => ({ kind: 'activityChart', series, zones }) as const,
               )
@@ -630,11 +635,18 @@ export function activityCatalog(
   activity: Activity,
   charts: readonly ActivityChartSeries[] = [],
   withPlace = false,
-  withZones = false,
+  zoned: readonly ActivityChartSeries[] = [],
   withLaps = false,
+  bestEfforts: readonly BestEffort[] = [],
 ): CatalogSection[] {
   return sections([
-    ...activityBlocks(activity, charts.includes('splits'), withPlace, withLaps).flatMap((block) =>
+    ...activityBlocks(
+      activity,
+      charts.includes('splits'),
+      withPlace,
+      withLaps,
+      bestEfforts,
+    ).flatMap((block) =>
       tileEntries(isDataWidget(block.design) ? 'data' : 'creative', [
         { kind: 'activityBlock', block },
       ]),
@@ -662,7 +674,7 @@ export function activityCatalog(
         )
       : []),
     ...charts.flatMap((series) =>
-      chartEntries(series, activity.averageHeartRate !== null, withZones),
+      chartEntries(series, activity.averageHeartRate !== null, zoned.includes(series)),
     ),
     ...IMAGE_ENTRIES,
     ...BRAND,

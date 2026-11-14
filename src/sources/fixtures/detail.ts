@@ -77,6 +77,12 @@ export function generateStravaDetail(
     activity.averagePowerWatts === null
       ? null
       : powers(rawSpeed, activity.averagePowerWatts, random);
+  // The cadence follows the effort a little, around the activity's average; without a draw of
+  // its own, so every other stream stays as it was.
+  const cadence =
+    activity.averageCadence === null
+      ? null
+      : rawSpeed.map((value) => round((activity.averageCadence ?? 0) * (0.94 + 0.06 * value), 1));
 
   const stream = (data: readonly number[] | null) =>
     data === null ? undefined : { data: [...data] };
@@ -88,6 +94,9 @@ export function generateStravaDetail(
       velocity_smooth: stream(speed),
       heartrate: stream(heartRate),
       watts: stream(power),
+      cadence: stream(cadence),
+      // Never stopped: the synthetic speed doesn't stop.
+      moving: { data: time.map(() => true) },
     },
     detailed:
       distance === null
@@ -100,6 +109,7 @@ export function generateStravaDetail(
             splits_metric: splits(distance, time, altitude, heartRate, 1000),
             splits_standard: splits(distance, time, altitude, heartRate, METERS_PER_MILE),
             laps: laps(plan, distance, time, altitude, heartRate),
+            best_efforts: activity.sportFamily === 'run' ? bestEfforts(distance, time, seed) : null,
           },
   };
 }
@@ -167,6 +177,53 @@ function lapEffort(plan: LapPlan, along: number): number {
   }
   const index = plan.ends.findIndex((end) => along <= end);
   return plan.efforts[index === -1 ? plan.efforts.length - 1 : index];
+}
+
+/** The distances Strava finds a run's best efforts over, by the names it gives them. */
+const BEST_EFFORTS: readonly (readonly [string, number])[] = [
+  ['400m', 400],
+  ['1/2 mile', 804.672],
+  ['1k', 1000],
+  ['1 mile', 1609.344],
+  ['2 mile', 3218.688],
+  ['5k', 5000],
+  ['10k', 10_000],
+  ['15k', 15_000],
+  ['10 mile', 16_093.44],
+  ['20k', 20_000],
+  ['Half-Marathon', 21_097.5],
+  ['30k', 30_000],
+  ['Marathon', 42_195],
+  ['50k', 50_000],
+];
+
+/**
+ * A run's best efforts, as Strava finds them: for each standard distance it covered, its fastest
+ * stretch that long (the shortest time between two samples that far apart, two pointers over the
+ * samples), and a rank among the athlete's own for a few, from the seed (without a draw, so every
+ * other stream stays as it was). Time O(n · d) for n samples and d distances.
+ */
+function bestEfforts(distance: readonly number[], time: readonly number[], seed: number) {
+  const covered = distance[distance.length - 1] - distance[0];
+  return BEST_EFFORTS.filter(([, meters]) => meters <= covered).map(([name, meters], k) => {
+    let best = Number.POSITIVE_INFINITY;
+    let start = 0;
+    for (let end = 0; end < distance.length; end++) {
+      while (start < end && distance[end] - distance[start + 1] >= meters) {
+        start++;
+      }
+      if (distance[end] - distance[start] >= meters) {
+        best = Math.min(best, time[end] - time[start]);
+      }
+    }
+    const draw = (Math.abs(seed) >> k) % 7;
+    return {
+      name,
+      distance: meters,
+      elapsed_time: Math.round(best),
+      pr_rank: draw < 3 ? draw + 1 : null,
+    };
+  });
 }
 
 /** The laps of `plan`, measured on the streams as Strava measures them. */

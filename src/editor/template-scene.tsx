@@ -40,7 +40,7 @@ import {
 } from '@/core/activity-charts';
 import { castsShadow, contrastingInk } from '@/core/layer-style';
 import type { Activity } from '@/core/activity';
-import { type HeartRateZones, timeInZones, zoneIndex, zoneRange } from '@/core/heart-rate-zones';
+import { type HeartRateZones, zoneEdges } from '@/core/heart-rate-zones';
 import {
   CAPTION_INK,
   type CropFrame,
@@ -93,6 +93,7 @@ import { formatActivityDate, formatBucketLabels } from '@/ui/format';
 
 import {
   activityChartHeader,
+  type ActivityData,
   chartBuckets,
   type EditorData,
   type HeaderDatum,
@@ -106,6 +107,8 @@ import {
   speedMeasure,
   splitRowTexts,
   type TextContext,
+  zoneRangeTexts,
+  heartRateZonesOf,
   textRuns,
   type TitledHeader,
 } from './editor-data';
@@ -996,36 +999,25 @@ function prepareLayer(
           />,
         );
       }
-      // The zones need the athlete's zones and the heart rate along the way.
-      const streams = data.detail.streams;
-      const zones =
-        layer.series === 'heartRate' &&
-        layer.zones !== undefined &&
-        data.zones !== null &&
-        streams !== null &&
-        streams.heartRate !== null
-          ? {
-              view: layer.zones,
-              zones: data.zones,
-              time: streams.time,
-              heartRate: streams.heartRate,
-            }
-          : null;
+      const zones = layer.zones === undefined ? null : chartZones(layer.series, data);
+      const colors = zones === null ? [] : zoneColors(zones.zones.length);
+      const ranges = zones === null ? [] : zoneRangeTexts(zones.measure, zones.zones, textContext);
       const table =
-        zones === null || zones.view === 'line'
+        zones === null || layer.zones === 'line'
           ? null
-          : timeInZones(zones.time, zones.heartRate, zones.zones).map((seconds, i) => ({
+          : zones.seconds.map((seconds, i) => ({
               seconds,
+              color: colors[i],
               // Each zone's name in its color.
               name: buildParagraph(
                 fonts,
-                { ...chartText, color: zoneColor(i) },
+                { ...chartText, color: colors[i] },
                 { label: null, value: `Z${i + 1}`, unit: null, valueSize: ZONE_TEXT_SIZE },
               ),
               time: paragraph(formatDuration(seconds), false, ZONE_TEXT_SIZE),
-              range: paragraph(zoneRange(i, zones.zones), false, ZONE_RANGE_SIZE),
+              range: paragraph(ranges[i], false, ZONE_RANGE_SIZE),
             }));
-      const line = zones === null || zones.view !== 'table';
+      const line = zones === null || layer.zones !== 'table';
       const lineHeight = line ? CHART_HEIGHT : 0;
       const tableTop = line && table !== null ? lineHeight + ZONE_TABLE_GAP : lineHeight;
       return frame(
@@ -1042,7 +1034,7 @@ function prepareLayer(
                   ? lineAverage(layer.series, data.activity, series.average)
                   : null
               }
-              zones={zones === null ? null : zones.zones}
+              zones={zones === null ? null : { zones: zones.zones, colors }}
             />
           ) : null}
           {table === null ? null : (
@@ -3479,12 +3471,53 @@ function DashedLine({ y, color }: { readonly y: number; readonly color: string }
 }
 
 /**
- * Colors of the heart rate zones, Z1 to Z5, as sports apps paint them: grey, blue, green, orange
- * and red. Zones past the fifth take the red.
+ * Colors of a chart's zones, lowest first, as sports apps paint them, from the iOS palette the app
+ * uses: five (a heart rate's) grey, blue, green, orange and red; six (a pace's) with a yellow
+ * before the orange; seven (a ride's power) with a purple after the red. Zones past them take the
+ * last color. Time O(z).
  */
-const ZONE_COLORS = ['#A1A1A6', '#3D8BFD', '#34C759', '#FF9F0A', '#FF453A'] as const;
+export function zoneColors(count: number): string[] {
+  const palette =
+    count <= 5
+      ? ['#A1A1A6', '#3D8BFD', '#34C759', '#FF9F0A', '#FF453A']
+      : count === 6
+        ? ['#A1A1A6', '#3D8BFD', '#34C759', '#FFD60A', '#FF9F0A', '#FF453A']
+        : ['#A1A1A6', '#3D8BFD', '#34C759', '#FFD60A', '#FF9F0A', '#FF453A', '#BF5AF2'];
+  return Array.from({ length: count }, (_, i) => palette[Math.min(i, palette.length - 1)]);
+}
 
-const zoneColor = (index: number): string => ZONE_COLORS[Math.min(index, ZONE_COLORS.length - 1)];
+/**
+ * The zones a chart of `series` can show, with the time spent in each: Strava's own for the
+ * activity (a subscriber's), or a heart rate's counted on its stream in the athlete's zones
+ * (`heartRateZonesOf`). `null` when the activity hasn't them (no heart rate, no zones from
+ * Strava). Time O(n · z) for a heart rate of n samples counted.
+ */
+function chartZones(
+  series: ActivityChartSeries,
+  data: ActivityData,
+): {
+  readonly measure: 'heartRate' | 'pace' | 'power';
+  readonly zones: HeartRateZones;
+  readonly seconds: readonly number[];
+} | null {
+  switch (series) {
+    case 'heartRate': {
+      const distribution = heartRateZonesOf(data);
+      return distribution === null
+        ? null
+        : { measure: 'heartRate', zones: distribution.zones, seconds: distribution.seconds };
+    }
+    case 'pace':
+    case 'power': {
+      const distribution = data.detail?.zones?.[series] ?? null;
+      return distribution === null
+        ? null
+        : { measure: series, zones: distribution.zones, seconds: distribution.seconds };
+    }
+    default:
+      return null;
+  }
+}
 
 /**
  * A datum of a chart's header laid out: its name (none for a chart's name alone) over its value,
@@ -3709,8 +3742,8 @@ function LineBody({
   readonly color: string;
   /** Where the dashed average line goes, in the series' units; `null` for none. */
   readonly average: number | null;
-  /** The athlete's zones, to paint each stretch of the line in its zone's color. */
-  readonly zones: HeartRateZones | null;
+  /** The zones, to paint each stretch of the line in its zone's color. */
+  readonly zones: { readonly zones: HeartRateZones; readonly colors: readonly string[] } | null;
 }) {
   const yOf = (value: number) =>
     CHART_HEIGHT - lineLevel(value, series, scale, LINE_FLOOR) * CHART_HEIGHT;
@@ -3735,6 +3768,8 @@ function LineBody({
     strokeCap: 'round',
     strokeJoin: 'round',
   } as const;
+  const line = pathOf(points).detach();
+  const bands = zones === null ? null : zoneBands(zones.zones, yOf, CHART_HEIGHT, LINE_WIDTH);
   return (
     <Group>
       <Path path={area.detach()}>
@@ -3753,16 +3788,23 @@ function LineBody({
           ) : undefined
         }
       >
-        {zones === null ? (
-          <Path path={pathOf(points).detach()} color={color} {...stroke} />
+        {zones === null || bands === null ? (
+          <Path path={line} color={color} {...stroke} />
         ) : (
-          zoneStretches(series.points, zones).map(({ zone, from, to }) => (
-            <Path
-              key={from}
-              path={pathOf(points.slice(from, to + 1)).detach()}
-              color={zoneColor(zone)}
-              {...stroke}
-            />
+          // The line once per zone, each cut to its zone's band of the chart: every bit of it in
+          // the color of the zone it is in (the owner's choice, 2026-11-14).
+          bands.map((band) => (
+            <Group
+              key={band.zone}
+              clip={{
+                x: -LINE_WIDTH,
+                y: band.top,
+                width: CHART_WIDTH + 2 * LINE_WIDTH,
+                height: band.bottom - band.top,
+              }}
+            >
+              <Path path={line} color={zones.colors[band.zone]} {...stroke} />
+            </Group>
           ))
         )}
       </Group>
@@ -3772,25 +3814,33 @@ function LineBody({
 }
 
 /**
- * The stretches of a heart rate line in one zone: from point `from` to point `to`, both included,
- * so they join. Each step between two points takes the zone of its middle. Time O(n · z) for n
- * points and z zones.
+ * Each zone's band of a chart `height` tall, top to bottom, where its stretch of the line is
+ * drawn in its color: between the heights (`yOf`, the line's own placing) of the edges it has
+ * with the zones under and over it (`zoneEdges`), the lowest zone down past the bottom and the
+ * highest up past the top by the line's `stroke`, so the whole stroke is in some band. Only the
+ * bands that reach the chart, as zone indices into `zones`. Time and space O(z) for z zones.
  */
-function zoneStretches(
-  points: readonly Point[],
+export function zoneBands(
   zones: HeartRateZones,
-): { readonly zone: number; readonly from: number; readonly to: number }[] {
-  const stretches: { zone: number; from: number; to: number }[] = [];
-  for (let i = 1; i < points.length; i++) {
-    const zone = zoneIndex((points[i - 1].y + points[i].y) / 2, zones);
-    const last = stretches[stretches.length - 1];
-    if (last !== undefined && last.zone === zone) {
-      last.to = i;
-    } else {
-      stretches.push({ zone, from: i - 1, to: i });
-    }
-  }
-  return stretches;
+  yOf: (value: number) => number,
+  height: number,
+  stroke: number,
+): { readonly zone: number; readonly top: number; readonly bottom: number }[] {
+  const edges = zoneEdges(zones).map(yOf);
+  const low = height + stroke;
+  const high = -stroke;
+  return zones
+    .map((_, zone) => {
+      // A value higher up has a smaller y: a zone's top is its upper edge.
+      const under = zone === 0 ? low : edges[zone - 1];
+      const over = zone === zones.length - 1 ? high : edges[zone];
+      return {
+        zone,
+        top: Math.max(high, Math.min(under, over)),
+        bottom: Math.min(low, Math.max(under, over)),
+      };
+    })
+    .filter((band) => band.bottom > band.top);
 }
 
 /** Sizes of the texts of the zones table, its rows, its bars and the room around it. */
@@ -3804,10 +3854,12 @@ const ZONE_TABLE_GAP = 30;
 /** One zone of the table: its time and its texts, laid out. */
 interface ZoneRow {
   readonly seconds: number;
+  /** Its bar's color, the zone's. */
+  readonly color: string;
   /** "Z1"… in the zone's color. */
   readonly name: SkParagraph;
   readonly time: SkParagraph;
-  /** The beats per minute it spans: "<112", "112–130", "168+". */
+  /** What it spans: "<112", "112–130", "168+" beats a minute; a pace's "5:22–6:24". */
   readonly range: SkParagraph;
 }
 
@@ -3861,7 +3913,7 @@ function ZonesTable({
               width={Math.max(ZONE_BAR, (trackWidth * row.seconds) / most)}
               height={ZONE_BAR}
               r={ZONE_BAR / 2}
-              color={zoneColor(i)}
+              color={row.color}
             />
           ) : null}
           {at(row.time, timeRight - widthOf(row.time), i)}
@@ -3886,7 +3938,9 @@ function lineAverage(series: ActivityChartSeries, activity: Activity, ofLine: nu
         ? activity.averageHeartRate
         : series === 'power'
           ? activity.averagePowerWatts
-          : null;
+          : series === 'cadence'
+            ? activity.averageCadence
+            : null;
   return own !== null && own > 0 ? own : ofLine;
 }
 

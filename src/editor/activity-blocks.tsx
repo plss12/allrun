@@ -22,6 +22,7 @@ import {
   blockMetrics,
   dataWidgetMetrics,
   fastestIndex,
+  recordRows,
   isAppReplica,
   isDataWidget,
   sentencePlan,
@@ -53,7 +54,7 @@ import type {
   NUTRITION_LABELS,
 } from '@/core/template';
 import { writesInCapitals } from '@/core/template';
-import { durationParts } from '@/core/units';
+import { durationParts, formatDuration } from '@/core/units';
 import { formatActivityDate, formatShortWeekday, formatTimeAfter } from '@/ui/format';
 import { mapPicture } from '@/ui/map-picture';
 
@@ -72,6 +73,7 @@ import {
   speedMeasure,
   splitGapText,
   splitRowTexts,
+  bestEffortName,
   type TextContext,
 } from './editor-data';
 import { CAP_HEIGHTS, drawsBold, fontFamiliesOf, lettersExtent } from './fonts';
@@ -3897,6 +3899,72 @@ export function prepareActivityBlock(
           [{ text: translate('widgets.splitLadder.title'), size: sizes.title, bold: false }],
           colors.title,
           { font: 'spaceMono', shadow: true },
+        );
+        return column([title, column(tags, sizes.rowGap, 'start')], sizes.titleGap, 'start');
+      }
+      case 'records': {
+        // A run's best efforts as the ladder's tags, all as wide (and as its title): each its
+        // distance and its time, and the athlete's records (first, second, third best) in a brand
+        // color, their rank at the end; all of them, or the records alone on their podium.
+        const efforts = recordRows(data.detail?.bestEfforts ?? [])[block.layout];
+        if (efforts.length === 0) {
+          return null;
+        }
+        const sizes = SPLIT_LADDER;
+        const { colors } = sizes;
+        const mono = (content: string, color: string) =>
+          appText([{ text: content, size: sizes.text, bold: false }], color, { font: 'spaceMono' });
+        const RANKS = { 1: 'first', 2: 'second', 3: 'third' } as const;
+        const cells = efforts.map((effort) => {
+          const ink = effort.prRank === null ? colors.ink : colors.chosen;
+          return {
+            ranked: effort.prRank !== null,
+            name: mono(bestEffortName(effort, textContext, translate), ink),
+            time: mono(formatDuration(effort.elapsedTimeSeconds), ink),
+            rank:
+              effort.prRank === null
+                ? null
+                : mono(translate(`widgets.records.ranks.${RANKS[effort.prRank]}`), ink),
+          };
+        });
+        const widest = (boxes: readonly (Box | null)[]) =>
+          Math.max(0, ...boxes.map((box) => box?.width ?? 0));
+        const nameWidth = widest(cells.map((cell) => cell.name));
+        const timeWidth = widest(cells.map((cell) => cell.time));
+        const rankWidth = widest(cells.map((cell) => cell.rank));
+        // The times right-aligned in their column, so their digits line up.
+        const timeRight = sizes.padX + nameWidth + sizes.gap + timeWidth;
+        const title = appText(
+          [{ text: translate(`widgets.records.${block.layout}`), size: sizes.title, bold: false }],
+          colors.title,
+          { font: 'spaceMono', shadow: true },
+        );
+        // Never narrower than its title: a short table under a long title looked cut off.
+        const width = Math.max(
+          timeRight + (rankWidth > 0 ? sizes.gap + rankWidth : 0) + sizes.padX,
+          title.width,
+        );
+        const middle = (box: Box) => (sizes.rowHeight - box.height) / 2;
+        const tags = cells.map((cell) =>
+          placed(width, sizes.rowHeight, [
+            {
+              box: fillBox(
+                width,
+                sizes.rowHeight,
+                sizes.radius,
+                cell.ranked ? BRAND_COVER_COLORS[block.cover] : colors.tag,
+              ),
+              x: 0,
+              y: 0,
+            },
+            { box: cell.name, x: sizes.padX, y: middle(cell.name) },
+            { box: cell.time, x: timeRight - cell.time.width, y: middle(cell.time) },
+            ...(cell.rank === null
+              ? []
+              : [
+                  { box: cell.rank, x: width - sizes.padX - cell.rank.width, y: middle(cell.rank) },
+                ]),
+          ]),
         );
         return column([title, column(tags, sizes.rowGap, 'start')], sizes.titleGap, 'start');
       }

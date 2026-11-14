@@ -99,3 +99,37 @@ describe('FixtureActivitySource.getActivityDetail', () => {
     expect(await source.getActivityDetail('strava:0')).toBeNull();
   });
 });
+
+describe('the synthetic zones and best efforts', () => {
+  it("gives a run its pace zones and best efforts, and its power only as Strava's histogram", async () => {
+    const runs = (await source.listRecent(200)).filter(
+      (activity) => activity.sportFamily === 'run',
+    );
+    const detail = await detailOf(runs[0]);
+    expect(detail.zones?.pace?.zones).toHaveLength(6);
+    expect(detail.zones?.power ?? null).toBeNull();
+    const efforts = detail.bestEfforts ?? [];
+    expect(efforts.length).toBeGreaterThan(0);
+    // Shortest first, each longer and so slower than the one before it.
+    for (let i = 1; i < efforts.length; i++) {
+      expect(efforts[i].distanceMeters).toBeGreaterThan(efforts[i - 1].distanceMeters);
+      expect(efforts[i].elapsedTimeSeconds).toBeGreaterThan(efforts[i - 1].elapsedTimeSeconds);
+    }
+    expect(last(efforts.map((effort) => effort.distanceMeters))).toBeLessThanOrEqual(
+      runs[0].distanceMeters,
+    );
+  });
+
+  it('gives a ride with a power meter its seven power zones, and no best efforts', async () => {
+    const ride = (await source.listRecent(200)).find(
+      (activity) => activity.sportFamily === 'ride' && activity.averagePowerWatts !== null,
+    );
+    if (ride === undefined) {
+      throw new Error('No ride with power in the fixtures');
+    }
+    const detail = await detailOf(ride);
+    expect(detail.zones?.power?.zones).toHaveLength(7);
+    expect(detail.zones?.pace ?? null).toBeNull();
+    expect(detail.bestEfforts).toEqual([]);
+  });
+});

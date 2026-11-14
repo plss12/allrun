@@ -630,9 +630,8 @@ export function summaryBlocks(
     { design: 'quote', quote: FIRST_PHRASE.quote },
     { design: 'verse', verse: FIRST_PHRASE.verse },
     { design: 'periodSentence' },
-    // Its totals as things anyone pictures, beside the sentence that tells them (offered by its
-    // totals: its calories only add a line).
-    ...(periodEquivalences(summary, []).length === 0
+    // Its totals as things anyone pictures, beside the sentence that tells them.
+    ...(periodEquivalences(summary).length === 0
       ? []
       : APP_MODES.map((layout): SummaryBlock => ({ design: 'periodEquivalences', layout }))),
     ...(['periodPlaylist', 'periodWrapped'] as const).flatMap((design) =>

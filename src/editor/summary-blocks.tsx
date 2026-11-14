@@ -686,11 +686,7 @@ export function prepareSummaryBlock(
       case 'periodEquivalences':
         return equivalencesBox(
           fonts,
-          equivalenceLines(
-            periodEquivalences(data.summary, data.activities),
-            textContext,
-            translate,
-          ),
+          equivalenceLines(periodEquivalences(data.summary), textContext, translate),
           block.layout,
           translate,
         );

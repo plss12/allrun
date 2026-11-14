@@ -26,8 +26,11 @@ export const stravaZonesSchema = z.object({
 export type StravaZones = z.infer<typeof stravaZonesSchema>;
 
 /**
- * Validates the athlete's zones and maps the heart rate ones, lowest first; `null` when Strava
- * has none (an athlete who never recorded a heart rate).
+ * Validates the athlete's zones and maps the heart rate ones, lowest first, as Strava writes an
+ * activity's time in them: the profile's zones share their edges (143–162, 162–171), and Strava
+ * counts a heart rate on an edge in the lower zone, so a zone starts a beat over the one before
+ * ("144–162", "163–171"; checked against Strava's own time in zones of the owner's runs). `null`
+ * when Strava has none (an athlete who never recorded a heart rate).
  *
  * @throws Error naming each invalid field when the JSON doesn't match the schema, or when the
  *   zones don't rise one after another.
@@ -48,5 +51,8 @@ export function parseStravaZones(json: unknown): HeartRateZones | null {
       throw new Error(`Invalid Strava zones: zone ${i + 1} starts at or under zone ${i}`);
     }
   });
-  return zones.map((zone) => ({ min: zone.min, max: zone.max < 0 ? null : zone.max }));
+  return zones.map((zone, i) => ({
+    min: i > 0 && zone.min === zones[i - 1].max ? zone.min + 1 : zone.min,
+    max: zone.max < 0 ? null : zone.max,
+  }));
 }

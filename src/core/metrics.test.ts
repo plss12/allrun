@@ -4,6 +4,7 @@ import {
   availableMetrics,
   cardMetrics,
   metricValue,
+  stepsOf,
   toDisplayMetric,
   withPaceMarks,
 } from './metrics';
@@ -11,7 +12,7 @@ import {
 describe('availableMetrics', () => {
   // Every sport leads with what matters most for it, the same in every widget: the rest follows
   // in a common tail, and the second readings of a datum (highest, weighted, elapsed) close it.
-  it('orders runs by distance, pace, time, elevation and heart rate', () => {
+  it('orders runs by distance, pace, time, elevation and heart rate, the steps after the cadence', () => {
     for (const sportType of ['Run', 'TrailRun']) {
       expect(availableMetrics(makeActivity({ sportType }))).toEqual([
         'distance',
@@ -21,6 +22,7 @@ describe('availableMetrics', () => {
         'averageHeartRate',
         'calories',
         'averageCadence',
+        'steps',
         'maxElevation',
         'maxHeartRate',
         'elapsedTime',
@@ -67,14 +69,14 @@ describe('availableMetrics', () => {
     expect(indoor).not.toContain('pace');
   });
 
-  it('orders walks by distance, time and elevation, with the pace after them', () => {
+  it('orders walks by distance, time, steps and elevation, with the pace after them', () => {
     for (const sportType of ['Walk', 'Hike']) {
       expect(availableMetrics(makeActivity({ sportType })).slice(0, 5)).toEqual([
         'distance',
         'movingTime',
+        'steps',
         'elevationGain',
         'pace',
-        'averageHeartRate',
       ]);
     }
   });
@@ -188,11 +190,14 @@ describe('toDisplayMetric', () => {
     expect(toDisplayMetric('elevationGain', 100, imperial)).toMatchObject({ unit: 'ft' });
   });
 
-  it('shows running cadence in steps per minute and cycling cadence in rpm', () => {
+  it('shows cadence on foot in steps per minute, a walk too, and cycling cadence in rpm', () => {
     expect(toDisplayMetric('averageCadence', 86, metric)).toMatchObject({
       amount: 172,
       unit: 'spm',
     });
+    expect(
+      toDisplayMetric('averageCadence', 56, { unit: 'km', sportFamily: 'walk' }),
+    ).toMatchObject({ amount: 112, unit: 'spm' });
     expect(
       toDisplayMetric('averageCadence', 88, { unit: 'km', sportFamily: 'ride' }),
     ).toMatchObject({
@@ -254,7 +259,7 @@ describe('cardMetrics', () => {
     expect(cardMetrics(makeActivity({ sportType: 'Hike' }))).toEqual([
       'distance',
       'movingTime',
-      'elevationGain',
+      'steps',
     ]);
     expect(cardMetrics(makeActivity({ sportType: 'Ride' }))).toEqual([
       'distance',
@@ -302,5 +307,41 @@ describe('cardMetrics', () => {
       'movingTime',
       'elevationGain',
     ]);
+  });
+});
+
+describe('stepsOf', () => {
+  it("reckons an activity on foot's steps from its leg's cadence over its moving minutes", () => {
+    // 86 a leg is 172 steps a minute, over 50 minutes.
+    const run = makeActivity({ sportType: 'Run', averageCadence: 86, movingTimeSeconds: 3000 });
+    expect(stepsOf(run)).toBe(8600);
+    const walk = makeActivity({ sportType: 'Walk', averageCadence: 55.5, movingTimeSeconds: 3600 });
+    expect(stepsOf(walk)).toBe(6660);
+    expect(metricValue(walk, 'steps')).toBe(6660);
+  });
+
+  it('has none without a cadence, or on a bike, whose cadence is the cranks', () => {
+    expect(stepsOf(makeActivity({ sportType: 'Walk', averageCadence: null }))).toBeNull();
+    expect(stepsOf(makeActivity({ sportType: 'Run', averageCadence: 0 }))).toBeNull();
+    expect(stepsOf(makeActivity({ sportType: 'Ride', averageCadence: 88 }))).toBeNull();
+  });
+
+  it("puts a walk's steps after its time, and a run's after its cadence", () => {
+    const walk = makeActivity({ sportType: 'Walk', averageCadence: 55 });
+    expect(cardMetrics(walk)).toEqual(['distance', 'movingTime', 'steps']);
+    // Without a cadence, the card reads its elevation (or its pace, when flat).
+    expect(cardMetrics(makeActivity({ sportType: 'Walk', averageCadence: null }))).toEqual([
+      'distance',
+      'movingTime',
+      'elevationGain',
+    ]);
+    const run = availableMetrics(makeActivity({ sportType: 'Run', averageCadence: 86 }));
+    expect(run.indexOf('steps')).toBe(run.indexOf('averageCadence') + 1);
+    expect(toDisplayMetric('steps', 8600, { unit: 'km', sportFamily: 'run' })).toEqual({
+      kind: 'number',
+      amount: 8600,
+      fractionDigits: 0,
+      unit: 'steps',
+    });
   });
 });

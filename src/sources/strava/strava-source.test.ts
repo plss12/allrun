@@ -2,6 +2,7 @@ import type { StravaApi } from './api';
 import { RECENT_REFRESH_MS, type StravaCacheStore, StravaActivitySource } from './strava-source';
 
 const DAY = 86_400_000;
+const MINUTE = 60_000;
 const PHOTO = 'https://dgalywyr863hv.cloudfront.net/pictures/athletes/1/1/large.jpg';
 const START = Date.UTC(2026, 10, 13, 12);
 
@@ -48,7 +49,11 @@ function fakeStrava(initial: Run[]) {
   const calls: string[] = [];
   const detailed = new Map<number, unknown>();
   const streams = new Map<number, unknown>();
+  /** Each activity's zones; without them, Strava refuses as it does anyone but a subscriber. */
+  const activityZones = new Map<number, unknown>();
   let failing = false;
+  /** Whether the athlete pays Strava (`summit`); `undefined` leaves it out, as an older answer. */
+  let summit: boolean | undefined = true;
   let zones: unknown = {
     heart_rate: {
       zones: [
@@ -80,7 +85,15 @@ function fakeStrava(initial: Run[]) {
         return zones === 403 && absentOn.includes(403) ? null : zones;
       }
       if (path === '/athlete') {
-        return { id: 1, firstname: 'Ana', profile: PHOTO };
+        return { id: 1, firstname: 'Ana', profile: PHOTO, summit };
+      }
+      const zonesOf = /^\/activities\/(\d+)\/zones$/.exec(path);
+      if (zonesOf !== null) {
+        const kept = activityZones.get(Number(zonesOf[1]));
+        if (kept === undefined && absentOn.includes(402)) {
+          return null;
+        }
+        return kept ?? [];
       }
       const detail = /^\/activities\/(\d+)(\/streams)?$/.exec(path);
       if (detail !== null) {
@@ -103,11 +116,15 @@ function fakeStrava(initial: Run[]) {
       runs = next;
     },
     setStreams: (id: number, value: unknown) => streams.set(id, value),
+    setActivityZones: (id: number, value: unknown) => activityZones.set(id, value),
     fail: (on: boolean) => {
       failing = on;
     },
     setZones: (value: unknown) => {
       zones = value;
+    },
+    setSummit: (value: boolean | undefined) => {
+      summit = value;
     },
   };
 }
@@ -151,6 +168,28 @@ describe('StravaActivitySource, the newest activities', () => {
     expect(recent.map((activity) => activity.id)).toEqual(['strava:4', 'strava:3', 'strava:2']);
     await made.listRecent(3);
     expect(strava.calls).toEqual(['/athlete/activities {"per_page":50,"page":1}']);
+  });
+
+  it('asks Strava again when what it kept was cut short, and writes it anew', async () => {
+    const strava = fakeStrava(RUNS);
+    const store = memoryStore();
+    // A write the app was closed in the middle of.
+    store.data.set('recent', '{"fetchedAt":17');
+    const { source: made, errors } = source(strava, store, { t: START });
+    const recent = await made.listRecent(3);
+    expect(recent.map((activity) => activity.id)).toEqual(['strava:4', 'strava:3', 'strava:2']);
+    expect(errors).toEqual(['The Strava cache "recent" is damaged']);
+    expect(() => JSON.parse(store.data.get('recent') ?? '') as unknown).not.toThrow();
+  });
+
+  it('asks again for what was cut short while the app was open', async () => {
+    const strava = fakeStrava(RUNS);
+    const store = memoryStore();
+    const { source: made, errors } = source(strava, store, { t: START });
+    const zones = await made.getHeartRateZones();
+    store.data.set('zones', '{"fetchedAt":17');
+    expect(await made.getHeartRateZones()).toEqual(zones);
+    expect(errors).toEqual(['The Strava cache "zones" is damaged']);
   });
 
   it('shows what it kept at once and asks again in the background, telling of a change', async () => {
@@ -307,10 +346,60 @@ describe('StravaActivitySource, an activity', () => {
     expect(strava.calls).toEqual([
       '/activities/4',
       `/activities/4/streams ${JSON.stringify({
-        keys: 'time,distance,altitude,velocity_smooth,heartrate,watts',
+        keys: 'time,distance,altitude,velocity_smooth,heartrate,watts,cadence,moving',
         key_by_type: 'true',
       })}`,
+      // Whether the athlete pays, before asking for the zones only they have.
+      '/athlete',
+      '/activities/4/zones',
     ]);
+    // Refused: no zones.
+    expect(detail?.zones).toBeNull();
+  });
+
+  it('asks only for the activity when that is all it needs, and its streams when opened', async () => {
+    const strava = fakeStrava(RUNS);
+    const store = memoryStore();
+    const { source: made } = source(strava, store, { t: START });
+    expect((await made.getActivity('strava:4'))?.calories).toBe(700);
+    expect(strava.calls).toEqual(['/activities/4']);
+    // Opened later, its detail asks only for what it lacks.
+    expect(await made.getActivityDetail('strava:4')).not.toBeNull();
+    expect(strava.calls.filter((call) => call === '/activities/4')).toHaveLength(1);
+    // Its streams, the profile and its zones.
+    expect(strava.calls).toHaveLength(4);
+    // Both kept: a new source asks nothing.
+    const again = source(strava, store, { t: START + 1000 }).source;
+    await again.getActivity('strava:4');
+    await again.getActivityDetail('strava:4');
+    expect(strava.calls).toHaveLength(4);
+  });
+
+  it("gives a subscriber's pace zones with its detail", async () => {
+    const strava = fakeStrava(RUNS);
+    strava.setActivityZones(4, [
+      { type: 'heartrate', distribution_buckets: [{ min: 0, max: 120, time: 60 }] },
+      {
+        type: 'pace',
+        distribution_buckets: [
+          { min: 0, max: 3, time: 100 },
+          { min: 3, max: -1, time: 200 },
+        ],
+      },
+    ]);
+    const { source: made } = source(strava, memoryStore(), { t: START });
+    const detail = await made.getActivityDetail('strava:4');
+    expect(detail?.zones).toEqual({
+      heartRate: null,
+      pace: {
+        zones: [
+          { min: 0, max: 3 },
+          { min: 3, max: null },
+        ],
+        seconds: [100, 200],
+      },
+      power: null,
+    });
   });
 
   it('opens an activity without streams', async () => {
@@ -335,12 +424,37 @@ describe('StravaActivitySource, an activity', () => {
 });
 
 describe('StravaActivitySource, the zones', () => {
-  it('keeps the athlete zones', async () => {
+  it('keeps the athlete zones a day, so that a change in them shows the day after', async () => {
     const strava = fakeStrava(RUNS);
-    const { source: made } = source(strava, memoryStore(), { t: START });
+    const clock = { t: START };
+    const { source: made } = source(strava, memoryStore(), clock);
     expect(await made.getHeartRateZones()).not.toBeNull();
     await made.getHeartRateZones();
     expect(strava.calls).toEqual(['/athlete/zones']);
+    clock.t += DAY;
+    await made.getHeartRateZones();
+    expect(strava.calls).toEqual(['/athlete/zones', '/athlete/zones']);
+  });
+
+  it("asks for an activity's zones only of an athlete who pays Strava, who alone has them", async () => {
+    const strava = fakeStrava(RUNS);
+    strava.setSummit(false);
+    const { source: made } = source(strava, memoryStore(), { t: START });
+    expect((await made.getActivityDetail('strava:4'))?.zones).toBeNull();
+    expect(strava.calls.some((call) => call.endsWith('/zones'))).toBe(false);
+  });
+
+  it('remembers until the next day that Strava refused the zones, though it said it pays', async () => {
+    const strava = fakeStrava(RUNS);
+    const clock = { t: START };
+    const { source: made } = source(strava, memoryStore(), clock);
+    // No zones of activity 4: Strava refuses them, as to anyone who doesn't pay.
+    await made.getActivityDetail('strava:4');
+    await made.getActivityDetail('strava:3');
+    expect(strava.calls.filter((call) => call.endsWith('/zones'))).toEqual(['/activities/4/zones']);
+    clock.t += DAY;
+    await made.getActivityDetail('strava:2');
+    expect(strava.calls.filter((call) => call.endsWith('/zones'))).toHaveLength(2);
   });
 
   it('is null without the permission to read them', async () => {
@@ -351,15 +465,53 @@ describe('StravaActivitySource, the zones', () => {
   });
 });
 
+describe('StravaActivitySource, pulled to refresh', () => {
+  it('asks again for the newest activities, the profile and the zones, and tells of a change', async () => {
+    const strava = fakeStrava(RUNS);
+    const clock = { t: START };
+    const { source: made } = source(strava, memoryStore(), clock);
+    await made.listRecent(3);
+    await made.getAthletePhoto();
+    await made.getHeartRateZones();
+    const changes: number[] = [];
+    made.onChange(() => changes.push(clock.t));
+    strava.setRuns([...RUNS, stravaRun(5, '2026-11-13T08:00:00')]);
+    clock.t += 15 * MINUTE;
+    await made.pull();
+    expect(strava.calls.slice(3)).toEqual([
+      '/athlete/activities {"per_page":50,"page":1}',
+      '/athlete',
+      '/athlete/zones',
+    ]);
+    expect(changes).toHaveLength(1);
+  });
+
+  it('asks nothing pulled again soon: the list at most every 2 minutes, the profile every 15', async () => {
+    const strava = fakeStrava(RUNS);
+    const clock = { t: START };
+    const { source: made } = source(strava, memoryStore(), clock);
+    await made.listRecent(3);
+    await made.getAthletePhoto();
+    await made.getHeartRateZones();
+    const asked = strava.calls.length;
+    clock.t += MINUTE;
+    await made.pull();
+    expect(strava.calls).toHaveLength(asked);
+    clock.t += 2 * MINUTE;
+    await made.pull();
+    expect(strava.calls.slice(asked)).toEqual(['/athlete/activities {"per_page":50,"page":1}']);
+  });
+});
+
 describe("StravaActivitySource, the athlete's photo", () => {
-  it('keeps it for a week, then asks again', async () => {
+  it('keeps it a day, then asks again', async () => {
     const strava = fakeStrava(RUNS);
     const clock = { t: START };
     const { source: made } = source(strava, memoryStore(), clock);
     expect(await made.getAthletePhoto()).toBe(PHOTO);
     expect(await made.getAthletePhoto()).toBe(PHOTO);
     expect(strava.calls).toEqual(['/athlete']);
-    clock.t += 7 * DAY;
+    clock.t += DAY;
     expect(await made.getAthletePhoto()).toBe(PHOTO);
     expect(strava.calls).toEqual(['/athlete', '/athlete']);
   });
@@ -380,6 +532,25 @@ describe('StravaActivitySource, older activities', () => {
     clock.t += 7 * DAY;
     await made.listBefore('2026-11-01T08:00:00Z', 2);
     expect(strava.calls).toHaveLength(2);
+  });
+
+  it('leaves out an activity it cannot read, and fills the page from the next', async () => {
+    // Run 3 comes with a heart rate of 0, which isn't one: left out, the rest still listed.
+    const broken = { ...stravaRun(3, '2026-11-01T08:00:00'), average_heartrate: 0 };
+    const strava = fakeStrava([...RUNS.filter((run) => run.id !== 3), broken]);
+    const { source: made, errors } = source(strava, memoryStore(), { t: START });
+    expect((await made.listRecent(50)).map((activity) => activity.id)).toEqual([
+      'strava:4',
+      'strava:2',
+      'strava:1',
+    ]);
+    expect(errors).toEqual(['Leaving out activity 3, which Strava sent unreadable']);
+    // A full page with it left out is filled from the next, so it isn't taken for the last one.
+    const page = await made.listBefore('2026-11-13T08:00:00Z', 2);
+    expect(page.map((activity) => activity.id)).toEqual(['strava:4', 'strava:2']);
+    // The months of a summary go on past it too.
+    const month = await made.listInRange({ start: '2026-11-01', end: '2026-11-30' });
+    expect(month.map((activity) => activity.id)).toEqual(['strava:4']);
   });
 
   it('gives fewer than asked at the first activity, and none past it', async () => {

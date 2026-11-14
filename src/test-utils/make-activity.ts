@@ -29,6 +29,7 @@ export function makeActivity(overrides: Partial<Activity> = {}): Activity {
     averageHeartRate: 150,
     maxHeartRate: 172,
     averagePowerWatts: null,
+    maxPowerWatts: null,
     weightedAveragePowerWatts: null,
     averageCadence: 86,
     calories: 650,

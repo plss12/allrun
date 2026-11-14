@@ -127,8 +127,9 @@ describe('gallerySections', () => {
           activity,
           withDetail ? ['splits'] : [],
           withPlace,
-          false,
+          [],
           withDetail && parsed.laps.length > 1,
+          withDetail ? (parsed.bestEfforts ?? []) : [],
         ),
         'inter',
         contextFor(data),
@@ -194,10 +195,13 @@ describe('gallerySections', () => {
     expect(activityRows(false, false)).toContainEqual(['block-verified', 'block-boardingPass']);
     // With it, with no one alone, the pass stays alone.
     expect(activityRows(true, false)).toContainEqual(['block-boardingPass']);
-    // With its splits, the note goes beside them, both from the same data.
+    // With its splits, the ladder beside the Grand Prix, and the records beside the laps (the
+    // owner's choice).
     const full = activityRows(true, true);
-    expect(full).toContainEqual(['block-splits', 'block-notes']);
-    expect(full).toContainEqual(['block-boardingPass']);
+    expect(full).toContainEqual(['block-laps', 'block-records']);
+    expect(full).toContainEqual(['block-splits', 'block-grandPrix']);
+    // The note, left alone, takes the pass up beside it.
+    expect(full).toContainEqual(['block-notes', 'block-boardingPass']);
   }, 60_000);
 
   it('leaves alone only the boarding pass, if any, whatever the activity has', () => {
@@ -245,7 +249,7 @@ describe('gallerySections', () => {
     const { streams, detailed } = generateStravaDetail(activity, 1);
     const detail = parseStravaDetail(JSON.parse(JSON.stringify(streams)), detailed);
     const sections = gallery.gallerySections(
-      activityCatalog(activity, ['splits'], false, false, true),
+      activityCatalog(activity, ['splits'], false, [], true),
       'inter',
       contextFor({ ...activityData, detail }),
       SCREEN,

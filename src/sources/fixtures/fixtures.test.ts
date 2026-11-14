@@ -69,9 +69,12 @@ describe('FixtureActivitySource', () => {
     await expect(small.listRecent(-1)).rejects.toThrow(RangeError);
   });
 
-  it('finds an activity by id, or null', async () => {
+  it('finds an activity by id, or null, with the calories its lists lack, as Strava', async () => {
     const [latest] = await source.listRecent(1);
-    expect(await source.getActivity(latest.id)).toEqual(latest);
+    expect(latest.calories).toBeNull();
+    const found = await source.getActivity(latest.id);
+    expect(found).toEqual({ ...latest, calories: found?.calories });
+    expect(found?.calories).toBeGreaterThan(0);
     expect(await source.getActivity('strava:0')).toBeNull();
   });
 

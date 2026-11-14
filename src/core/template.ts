@@ -118,6 +118,7 @@ const METRIC_IDS = [
   'averagePower',
   'weightedAveragePower',
   'averageCadence',
+  'steps',
   'calories',
 ] as const satisfies readonly MetricId[];
 
@@ -167,7 +168,14 @@ export type TimeNotation = (typeof TIME_NOTATIONS)[number];
  * What an activity chart draws: its elevation profile, pace, heart rate or power along the way
  * (an area under a line), or its splits (a bar per kilometer or mile).
  */
-export const ACTIVITY_CHART_SERIES = ['elevation', 'pace', 'heartRate', 'power', 'splits'] as const;
+export const ACTIVITY_CHART_SERIES = [
+  'elevation',
+  'pace',
+  'heartRate',
+  'power',
+  'splits',
+  'cadence',
+] as const;
 
 export type ActivityChartSeries = (typeof ACTIVITY_CHART_SERIES)[number];
 
@@ -191,8 +199,9 @@ export const BACKDROPS = ['none', 'soft', 'solid'] as const;
 export const LETTER_SPACINGS = ['normal', 'wide', 'wider'] as const;
 
 /**
- * How a heart rate chart shows the athlete's zones: its line colored by zone, the line and a
- * table of the time spent in each zone, or the table alone.
+ * How a chart shows its zones (a heart rate's, the athlete's; a pace's or a ride's power, those
+ * Strava gives the activity): its line colored by zone, the line and a table of the time spent in
+ * each zone, or the table alone.
  */
 export const HEART_RATE_ZONE_VIEWS = ['line', 'lineAndTable', 'table'] as const;
 
@@ -309,6 +318,9 @@ export const LINE_STYLES = ['solid', 'dashed', 'dotted'] as const;
  *   the distance and the time; only for activities with splits;
  * - `splitLadder` (replica): the splits as white tags in a typewriter's letters, each as wide as
  *   it was fast, the fastest in a brand color (`cover`); only for activities with splits;
+ * - `records` (replica): a run's best efforts as the ladder's tags, the athlete's records (first,
+ *   second and third best) in a brand color (`cover`) and marked: all of them (`all`), or only
+ *   the records (`podium`); only for runs with best efforts, and records for the podium;
  * - `verified` (replica): the main datum in words with Instagram's verified badge, its text white
  *   (`dark`) or black (`light`);
  * - `chat` (replica): a phrase as a sent chat message, chosen from a list (`phrase`) or written
@@ -349,6 +361,7 @@ export const ACTIVITY_BLOCK_DESIGNS = [
   'location',
   'splitBars',
   'splitLadder',
+  'records',
   'verified',
   'chat',
   'sentence',
@@ -359,6 +372,9 @@ export const ACTIVITY_BLOCK_DESIGNS = [
 ] as const;
 
 export type ActivityBlockDesign = (typeof ACTIVITY_BLOCK_DESIGNS)[number];
+
+/** A run's best efforts: all of them, or only the athlete's records among them. */
+export const RECORDS_LAYOUTS = ['all', 'podium'] as const;
 
 /** The two looks of an app replica, as the app shows them in dark and light mode. */
 export const APP_MODES = ['dark', 'light'] as const;
@@ -449,6 +465,11 @@ const activityBlockSchema = z.discriminatedUnion('design', [
   z.object({ design: z.literal('location'), layout: z.enum(APP_MODES) }),
   z.object({ design: z.literal('splitBars') }),
   z.object({ design: z.literal('splitLadder'), cover: z.enum(BRAND_COVERS) }),
+  z.object({
+    design: z.literal('records'),
+    layout: z.enum(RECORDS_LAYOUTS),
+    cover: z.enum(BRAND_COVERS),
+  }),
   z.object({ design: z.literal('verified'), layout: z.enum(APP_MODES) }),
   z.object({
     design: z.literal('chat'),
@@ -780,8 +801,9 @@ export const layerSchema = z.discriminatedUnion('kind', [
     /** A dashed line across the chart at the average (written in the header). Splits ignore it. */
     averageLine: z.boolean().optional(),
     /**
-     * The heart rate zones (see `HEART_RATE_ZONE_VIEWS`): the line colored by zone, the line and
-     * a table of the time in each, or the table alone. Other series ignore it.
+     * The zones of a heart rate, a pace or a power (see `HEART_RATE_ZONE_VIEWS`): the line colored
+     * by zone, the line and a table of the time in each, or the table alone. Other series, and an
+     * activity without zones, ignore it.
      */
     zones: z.enum(HEART_RATE_ZONE_VIEWS).optional(),
     // Splits are a table, as on Strava: the number and pace of each split, its bar, then its

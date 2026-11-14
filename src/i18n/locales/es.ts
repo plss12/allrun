@@ -225,6 +225,7 @@ export const es: Translations = {
       averagePower: 'Potencia',
       weightedAveragePower: 'Pot pond',
       averageCadence: 'Cadencia',
+      steps: 'Pasos',
       calories: 'Cal',
     },
     summaryBlocks: {
@@ -278,6 +279,7 @@ export const es: Translations = {
       location: 'Ubicación',
       splitBars: 'Barras de parciales',
       splitLadder: 'Escalera de parciales',
+      records: 'Récords',
       verified: 'Verificado',
       chat: 'Frase',
       sentence: 'Subrayado',
@@ -297,7 +299,7 @@ export const es: Translations = {
       title: 'Vueltas',
       lap: 'Vuelta',
       distance: 'Dist.',
-      calories: 'Kcal',
+      heartRate: 'FC',
       time: 'Tiempo',
       pace: 'Ritmo',
       speed: 'Vel.',
@@ -308,6 +310,27 @@ export const es: Translations = {
     locationLine: '{{place}}, {{datum}}',
     splitBars: { km: 'Kilómetro', mi: 'Milla' },
     splitLadder: { title: 'Parciales' },
+    records: {
+      all: 'Mejores tiempos',
+      podium: 'Récords',
+      ranks: { first: 'Récord', second: '2.º', third: '3.º' },
+      distances: {
+        m400: '400 m',
+        halfMile: '½ milla',
+        k1: '1 km',
+        mile: '1 milla',
+        twoMiles: '2 millas',
+        k5: '5K',
+        k10: '10K',
+        k15: '15K',
+        tenMiles: '10 millas',
+        k20: '20K',
+        half: 'Media maratón',
+        k30: '30K',
+        marathon: 'Maratón',
+        k50: '50K',
+      },
+    },
     verified: { km: '{{value}} kilómetros', mi: '{{value}} millas' },
     sentence: {
       leads: {
@@ -747,6 +770,8 @@ export const es: Translations = {
       sheet: 'Hoja de tiempos',
       withData: 'Con datos',
       plain: 'Sola',
+      all: 'Todos',
+      podium: 'Podio',
     },
     noteRows: { activities: 'Por actividad', buckets: 'Por días, semanas o meses' },
     timeOnTop: 'Tiempo arriba',
@@ -771,6 +796,7 @@ export const es: Translations = {
     averagePower: 'Potencia media',
     weightedAveragePower: 'Potencia normalizada',
     averageCadence: 'Cadencia',
+    steps: 'Pasos',
     calories: 'Calorías',
   },
   summaryMetrics: {
@@ -860,6 +886,7 @@ export const es: Translations = {
     heartRate: 'Gráfica de pulso',
     power: 'Gráfica de potencia',
     splits: 'Parciales',
+    cadence: 'Gráfica de cadencia',
   },
   chartCaptions: {
     activity: {
@@ -868,6 +895,7 @@ export const es: Translations = {
       heartRate: 'Frecuencia cardiaca',
       power: 'Potencia',
       splits: 'Parciales por {{unit}}',
+      cadence: 'Cadencia',
     },
     distance: {
       day: '{{unit}} por día',
@@ -897,6 +925,8 @@ export const es: Translations = {
     maxHeartRate: 'FC máxima',
     averagePower: 'Potencia media',
     maxPower: 'Potencia máxima',
+    averageCadence: 'Cadencia media',
+    maxCadence: 'Cadencia máxima',
     fastestSplit: 'Parcial más rápido',
     total: 'Total',
     averagePer: {
@@ -939,6 +969,7 @@ export const es: Translations = {
     W: 'W',
     spm: 'ppm',
     rpm: 'rpm',
+    steps: 'pasos',
     kcal: 'kcal',
     h: 'h',
   },

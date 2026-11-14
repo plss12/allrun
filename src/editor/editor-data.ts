@@ -3,9 +3,14 @@ import { type PeriodPlace, periodPlaces } from '@/core/period-places';
 import { rangeLength } from '@/core/dates';
 import { bigMetrics, type SentenceClause, type SentenceLead } from '@/core/activity-block';
 import type { BarSeries, LineSeries, SplitRow } from '@/core/activity-charts';
-import type { ActivityDetail } from '@/core/activity-detail';
+import type {
+  ActivityDetail,
+  BestEffort,
+  BestEffortDistance,
+  ZoneDistribution,
+} from '@/core/activity-detail';
 import type { Equivalence, EquivalenceId, EquivalenceMeasure } from '@/core/equivalences';
-import { type HeartRateZones, timeInZones } from '@/core/heart-rate-zones';
+import { type HeartRateZones, timeInZones, zoneRange } from '@/core/heart-rate-zones';
 import {
   type DisplayMetric,
   isPace,
@@ -113,6 +118,27 @@ export interface ActivityData {
 export type EditorData = ActivityData | SummaryData;
 
 /**
+ * An activity's time in heart rate zones: Strava's own, as its app shows it (a subscriber's), or,
+ * without it, the athlete's zones counted on the heart rate as Strava counts them (only while
+ * moving, a heart rate on an edge in the lower zone). `null` without zones or a heart rate. Time
+ * O(n · z) for n samples and z zones when counted.
+ */
+export function heartRateZonesOf(data: ActivityData): ZoneDistribution | null {
+  const fromSource = data.detail?.zones?.heartRate ?? null;
+  if (fromSource !== null) {
+    return fromSource;
+  }
+  const streams = data.detail?.streams ?? null;
+  if (data.zones === null || streams === null || streams.heartRate === null) {
+    return null;
+  }
+  return {
+    zones: data.zones,
+    seconds: timeInZones(streams.time, streams.heartRate, data.zones, streams.moving),
+  };
+}
+
+/**
  * Bars of a summary chart and their size: the chart's own size, or the period's for `auto`.
  * Time O(b + n) for b bars and n activities, space O(b).
  */
@@ -134,6 +160,8 @@ export type ChartHeaderName =
   | 'maxHeartRate'
   | 'averagePower'
   | 'maxPower'
+  | 'averageCadence'
+  | 'maxCadence'
   | 'fastestSplit'
   | 'total'
   | `averagePer.${BucketSize}`;
@@ -161,6 +189,28 @@ type NutritionText =
   | 'extras'
   | 'traces';
 
+/**
+ * The name of a best effort's distance, as the records widget writes it ("5K", "Media
+ * maratón"): one of Strava's standard distances by its name, any other in the user's unit
+ * ("12,00 km").
+ */
+export function bestEffortName(
+  effort: BestEffort,
+  context: TextContext,
+  translate: (key: LabelKey) => string,
+): string {
+  if (effort.distance !== null) {
+    return translate(`widgets.records.distances.${effort.distance}`);
+  }
+  const written = formatMetric(
+    toDisplayMetric('distance', effort.distanceMeters, { unit: context.unit, sportFamily: 'run' }),
+    context.locale,
+  );
+  return written.unit === null
+    ? written.value
+    : `${written.value} ${context.unitLabel(written.unit)}`;
+}
+
 /** Translation key of a label the canvas draws. */
 export type LabelKey =
   | `metrics.${MetricId}`
@@ -185,10 +235,13 @@ export type LabelKey =
   | 'widgets.sessionOne'
   | 'widgets.activities'
   | 'widgets.sessions'
-  | `widgets.laps.${'title' | 'lap' | 'distance' | 'calories' | 'time' | 'pace' | 'speed' | 'activities'}`
+  | `widgets.laps.${'title' | 'lap' | 'distance' | 'heartRate' | 'time' | 'pace' | 'speed' | 'activities'}`
   | 'widgets.grandPrix.leader'
   | `widgets.splitBars.${DistanceUnit}`
   | 'widgets.splitLadder.title'
+  | `widgets.records.${'all' | 'podium'}`
+  | `widgets.records.ranks.${'first' | 'second' | 'third'}`
+  | `widgets.records.distances.${BestEffortDistance}`
   | `widgets.verified.${DistanceUnit}`
   | `widgets.sentence.leads.${SentenceLead}`
   | `widgets.sentence.units.${DistanceUnit}`
@@ -743,11 +796,42 @@ const own = (value: number | null, ofChart: number): number =>
   value !== null && value > 0 ? value : ofChart;
 
 /**
+ * The span of each zone of a chart, as its table writes it, lowest zone first. A heart rate's in
+ * beats a minute and a power's in watts, as `zoneRange` ("<112", "112–130", "168+"); a pace's
+ * in time per kilometer or mile, the faster first, from the slowest zone's ">6:24" through
+ * "5:22–6:24" to the fastest's "<4:13", as the pace's zones are speeds. Time O(z) for z zones.
+ */
+export function zoneRangeTexts(
+  measure: 'heartRate' | 'pace' | 'power',
+  zones: HeartRateZones,
+  context: TextContext,
+): string[] {
+  if (measure !== 'pace') {
+    return zones.map((_, i) => zoneRange(i, zones));
+  }
+  const pace = (speed: number) =>
+    formatMetric(
+      withPaceMarks(toDisplayMetric('pace', speed, { unit: context.unit, sportFamily: 'run' })),
+      context.locale,
+    ).value;
+  return zones.map((zone, i) => {
+    const next = zones[i + 1];
+    if (next === undefined) {
+      return `<${pace(zone.min)}`;
+    }
+    return zone.min > 0 ? `${pace(next.min)}–${pace(zone.min)}` : `>${pace(next.min)}`;
+  });
+}
+
+/**
  * The two data over an activity's chart (AURA's style): its distance and elevation gain over its
  * elevation; its average and fastest pace (or speed, as its sport writes it) over its pace; its
  * average and highest heart rate or power over those; its average pace and fastest split over
- * its splits. Averages are the activity's own, as its data widgets write them; highest values
- * are the activity's when it has them, or else the chart's. Time O(s) for s splits.
+ * its splits; its average and highest cadence over it, in steps a minute on foot. Every datum is
+ * one the activity really reached, never the chart's line, which averages stretches: averages
+ * and highest values are the source's (Strava's `max_speed`, `max_heartrate`, `max_watts`),
+ * or else the stream's own highest sample (a cadence's always: Strava gives none). Time O(s) for
+ * s splits.
  */
 export function activityChartHeader(
   series: ActivityChartSeries,
@@ -785,7 +869,7 @@ export function activityChartHeader(
         headerDatum(
           label(speed === 'speed' ? 'maxSpeed' : 'fastestPace'),
           speed,
-          chart.max,
+          own(activity.maxSpeed, chart.peak),
           context,
         ),
       ];
@@ -800,7 +884,7 @@ export function activityChartHeader(
         headerDatum(
           label('maxHeartRate'),
           'heartRate',
-          own(activity.maxHeartRate, chart.max),
+          own(activity.maxHeartRate, chart.peak),
           context,
         ),
       ];
@@ -812,8 +896,29 @@ export function activityChartHeader(
           own(activity.averagePowerWatts, chart.average),
           context,
         ),
-        headerDatum(label('maxPower'), 'power', chart.max, context),
+        headerDatum(label('maxPower'), 'power', own(activity.maxPowerWatts, chart.peak), context),
       ];
+    case 'cadence': {
+      // In steps a minute on foot, turns a minute on a bike, as the sport's cadence datum.
+      const datum = (name: ChartHeaderName, value: number): HeaderDatum => {
+        const written = formatMetric(
+          toDisplayMetric('averageCadence', value, {
+            unit: context.unit,
+            sportFamily: activity.sportFamily,
+          }),
+          context.locale,
+        );
+        return {
+          label: label(name),
+          value: written.value,
+          unit: written.unit === null ? null : context.unitLabel(written.unit),
+        };
+      };
+      return [
+        datum('averageCadence', own(activity.averageCadence, chart.average)),
+        datum('maxCadence', chart.peak),
+      ];
+    }
   }
 }
 
@@ -961,14 +1066,14 @@ export interface FamilyCard {
   readonly name: string;
   /** Its distance, or its time when it has none ("34.35 km", "1h 50min"). */
   readonly total: string;
-  /** Under it, small: its time and its pace or speed, or its sessions and calories. */
+  /** Under it, small: its time and its pace or speed, or its sessions. */
   readonly detail: string;
 }
 
 /**
  * A sport's card: its name, its total and, under it, its time and its average pace or speed as
  * the sport writes it ("3h 25min · 5:58/km", an average over one sport means something), or,
- * without distance, its sessions and the calories when any ("4 sesiones · 1250 kcal"). Times in
+ * without distance, its sessions ("4 sesiones"; never calories, which Strava's lists lack). Times in
  * the context's units. Time and space O(1).
  */
 export function familyCard(
@@ -994,22 +1099,7 @@ export function familyCard(
     totals.activityCount === 1
       ? translate('widgets.sessionOne')
       : translate('widgets.sessions', { number: String(totals.activityCount) });
-  const calories =
-    totals.calories === null
-      ? null
-      : plainDisplayText(
-          toDisplayMetric('calories', totals.calories, {
-            unit: context.unit,
-            sportFamily: totals.family,
-          }),
-          'short',
-          context,
-        );
-  return {
-    name,
-    total: time,
-    detail: calories === null ? sessions : `${sessions} · ${calories}`,
-  };
+  return { name, total: time, detail: sessions };
 }
 
 /**
@@ -1322,8 +1412,8 @@ function caloriesText(calories: number | null, context: TextContext): string | n
  * An activity as a food's nutrition label: one activity per pack, its day as a serving, its
  * calories as its energy and its data as its nutrients, in the sport's order (never a second
  * reading of one, as the data widgets: see `bigMetrics`), its time in units, and under it the
- * time in each of the athlete's heart rate zones and its share, when both are known (only
- * the zones it reached); and its sport as the first ingredient. Time O(m + s · z) for m metrics,
+ * time in each heart rate zone and its share, when known (`heartRateZonesOf`; only the zones it
+ * reached); and its sport as the first ingredient. Time O(m + s · z) for m metrics,
  * s heart rate samples and z zones.
  */
 export function activityNutrition(
@@ -1332,11 +1422,7 @@ export function activityNutrition(
   translate: (key: LabelKey, values?: Readonly<Record<string, string>>) => string,
 ): NutritionLabel {
   const { activity } = data;
-  const streams = data.detail?.streams ?? null;
-  const zones =
-    data.zones === null || streams === null || streams.heartRate === null
-      ? []
-      : timeInZones(streams.time, streams.heartRate, data.zones);
+  const zones = heartRateZonesOf(data)?.seconds ?? [];
   const zoned = zones.reduce((sum, seconds) => sum + seconds, 0);
   const rows = bigMetrics(activity, 'main', Number.MAX_SAFE_INTEGER)
     .filter((metric) => metric !== 'calories')
@@ -1384,7 +1470,7 @@ export function activityNutrition(
 
 /**
  * A period as a food's nutrition label: its activities as servings per pack, its name as a
- * serving, the calories of those that have them as its energy, and its distance, time (each sport
+ * serving, no energy (Strava's lists, a period's, have no calories), and its distance, time (each sport
  * under it with its share, when it mixes them), elevation gain, activities and active days (and
  * their share of its days) as its nutrients; its sports as its ingredients. Time O(n log n) for n
  * activities.
@@ -1404,7 +1490,6 @@ export function periodNutrition(
   const sports = familyTotals(data.activities)
     .filter((sport) => sport.movingTimeSeconds > 0)
     .sort((a, b) => b.movingTimeSeconds - a.movingTimeSeconds);
-  const burned = data.activities.filter((activity) => activity.calories !== null);
   const streak = periodStreak(summary, data.activities);
   const rows: NutritionRow[] = [
     ...(summaryHasDistance(summary)
@@ -1461,13 +1546,7 @@ export function periodNutrition(
   return {
     servings: servingsText(summary.activityCount, translate),
     serving: periodName(data, context, translate),
-    calories:
-      burned.length === 0
-        ? null
-        : caloriesText(
-            burned.reduce((sum, activity) => sum + (activity.calories ?? 0), 0),
-            context,
-          ),
+    calories: null,
     rows,
     ingredients: ingredientTexts(data.activities, context, translate),
   };
@@ -1563,12 +1642,13 @@ export interface PeriodLaps {
 
 /**
  * A period's laps: its days, weeks or months with activities (see `tableBucket`), each named short
- * ("MIÉ", "6–12 OCT", "OCT"), with its distance, or its calories when it went none (a gym day's
- * "0 km" says nothing; a dash without them), its time and, for a period of one sport with a
- * distance, its pace or speed as the sport writes it, or else its number of activities (an average
- * over different sports means little); the longest lap in the brand color (in time, without any
- * distance), the period's name as the sheet's title. A period without any distance names the
- * column after the calories. Time O(b · n) for b days, weeks or months and n activities.
+ * ("MIÉ", "6–12 OCT", "OCT"), with its distance (a dash for a gym day's: "0 km" says nothing),
+ * its time and, for a period of one sport with a distance, its pace or speed as the sport writes
+ * it, or else its number of activities (an average over different sports means little). A period
+ * without any distance (only workouts) has its time first, then its average heart rate over the
+ * time (a dash without one), and its count: no calories, which Strava's lists lack (the owner's
+ * choice, 2026-11-14). The longest lap in the brand color (in time, without any distance), the
+ * period's name as the sheet's title. Time O(b · n) for b days, weeks or months and n activities.
  */
 export function periodLaps(
   data: SummaryData,
@@ -1583,7 +1663,6 @@ export function periodLaps(
   const [family] = data.summary.families;
   const measure = data.summary.families.length === 1 && withDistance ? speedMeasure(family) : null;
   const unit = context.unitLabel(context.unit);
-  const kcal = context.unitLabel('kcal');
   const imperial = context.unit === 'mi';
   const length = (lap: SummaryBucket) =>
     withDistance ? lap.distanceMeters : lap.movingTimeSeconds;
@@ -1591,32 +1670,33 @@ export function periodLaps(
     (best, lap, i) => (best === -1 || length(lap) > length(laps[best]) ? i : best),
     -1,
   );
-  /** A lap's calories, a dash when none of its activities has them. */
-  const calories = (lap: SummaryBucket): string => {
-    const burned = data.activities
-      .filter(
-        (activity) =>
-          activity.localDate >= lap.range.start &&
-          activity.localDate <= lap.range.end &&
-          activity.calories !== null,
-      )
-      .map((activity) => activity.calories ?? 0);
-    return burned.length === 0
+  /** A lap's average heart rate over its time, of its activities with one; a dash without. */
+  const heartRate = (lap: SummaryBucket): string => {
+    const measured = data.activities.filter(
+      (activity) =>
+        activity.localDate >= lap.range.start &&
+        activity.localDate <= lap.range.end &&
+        activity.averageHeartRate !== null &&
+        activity.movingTimeSeconds > 0,
+    );
+    const seconds = measured.reduce((sum, activity) => sum + activity.movingTimeSeconds, 0);
+    return seconds <= 0
       ? MISSING_VALUE
-      : formatMetric(
-          toDisplayMetric(
-            'calories',
-            burned.reduce((sum, value) => sum + value, 0),
-            { unit: context.unit, sportFamily: 'training' },
+      : String(
+          Math.round(
+            measured.reduce(
+              (sum, activity) =>
+                sum + (activity.averageHeartRate ?? 0) * activity.movingTimeSeconds,
+              0,
+            ) / seconds,
           ),
-          context.locale,
-        ).value;
+        );
   };
   return {
     names: [
       translate('widgets.laps.lap'),
-      translate(withDistance ? 'widgets.laps.distance' : 'widgets.laps.calories'),
-      translate('widgets.laps.time'),
+      translate(withDistance ? 'widgets.laps.distance' : 'widgets.laps.time'),
+      translate(withDistance ? 'widgets.laps.time' : 'widgets.laps.heartRate'),
       translate(
         measure === null
           ? 'widgets.laps.activities'
@@ -1627,12 +1707,22 @@ export function periodLaps(
     ],
     rows: laps.map((lap) => {
       const burned = lap.distanceMeters <= 0;
+      const number = formatShortBucketName(lap.range, size, context.locale).toLocaleUpperCase(
+        context.locale,
+      );
+      if (!withDistance) {
+        return {
+          number,
+          distance: formatDuration(lap.movingTimeSeconds),
+          unit: '',
+          time: heartRate(lap),
+          value: String(lap.activityCount),
+        };
+      }
       return {
-        number: formatShortBucketName(lap.range, size, context.locale).toLocaleUpperCase(
-          context.locale,
-        ),
+        number,
         distance: burned
-          ? calories(lap)
+          ? MISSING_VALUE
           : formatMetric(
               toDisplayMetric('distance', lap.distanceMeters, {
                 unit: context.unit,
@@ -1640,7 +1730,7 @@ export function periodLaps(
               }),
               context.locale,
             ).value,
-        unit: burned ? kcal : unit,
+        unit: burned ? '' : unit,
         time: formatDuration(lap.movingTimeSeconds),
         value:
           measure === null
@@ -1657,7 +1747,7 @@ export function periodLaps(
       };
     }),
     fastest,
-    unit: withDistance ? unit : kcal,
+    unit: withDistance ? unit : '',
     after:
       measure === null
         ? ''

@@ -213,15 +213,8 @@ describe('familyTotals', () => {
     ]);
   });
 
-  it('adds up the calories of those that have them, and has none when no one does', () => {
-    const [run] = familyTotals([
-      makeActivity({ sportType: 'Run', calories: 700 }),
-      makeActivity({ sportType: 'Run', calories: null }),
-      makeActivity({ sportType: 'Run', calories: 500 }),
-    ]);
-    expect(run.calories).toBe(1200);
-    expect(familyTotals([makeActivity({ sportType: 'Run', calories: null })])[0].calories).toBe(
-      null,
-    );
+  it('adds up no calories: Strava lists, of which a period is made, have none', () => {
+    const [run] = familyTotals([makeActivity({ sportType: 'Run', calories: 700 })]);
+    expect(run).not.toHaveProperty('calories');
   });
 });

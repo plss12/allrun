@@ -5,8 +5,9 @@ import {
   downsample,
   lineLevel,
   LINE_POINTS,
+  movingTime,
   splitRows,
-  withoutOutliers,
+  withoutStops,
 } from './activity-charts';
 
 /** A steady 10 km run in 3000 samples: a hill in the middle, a stop at 5 km, a GPS spike. */
@@ -21,6 +22,8 @@ function streams(overrides: Partial<ActivityStreams> = {}): ActivityStreams {
     speed: time.map((t) => (t === 1500 ? 30 : t >= 1490 && t < 1500 ? 0 : 3.3)),
     heartRate: time.map(() => 150),
     power: null,
+    cadence: null,
+    moving: null,
     ...overrides,
   };
 }
@@ -63,13 +66,28 @@ describe('activityChartSeries', () => {
     expect(series.max).toBeCloseTo(50, 0);
   });
 
-  it('leaves stops and spikes out of the pace', () => {
+  it('leaves the stops out of the pace, and keeps the rest as it is, a spike too', () => {
     const series = activityChartSeries(detail(), 'pace', 'km');
     if (series?.kind !== 'line') {
       throw new Error('Expected a line');
     }
-    expect(series.max).toBeCloseTo(3.3, 5);
     expect(series.min).toBeCloseTo(3.3, 5);
+    // The spike of 30 m/s, averaged with the 9 other samples of its stretch; the stream's own
+    // highest sample is the spike itself.
+    expect(series.max).toBeCloseTo((9 * 3.3 + 30) / 10, 5);
+    expect(series.peak).toBe(30);
+  });
+
+  it('runs heart rate along the time moving, without the stops', () => {
+    // Ten seconds stopped at 5 km, at 100 bpm, Strava's `moving` false.
+    const moving = Array.from({ length: 3000 }, (_, t) => t < 1490 || t >= 1500);
+    const heartRate = Array.from({ length: 3000 }, (_, t) => (moving[t] ? 150 : 100));
+    const series = activityChartSeries(
+      detail({ streams: streams({ moving, heartRate }) }),
+      'heartRate',
+      'km',
+    );
+    expect(series).toMatchObject({ kind: 'line', axis: 'time', axisEnd: 2989, min: 150 });
   });
 
   it('runs heart rate along the time when there is no distance', () => {
@@ -105,6 +123,45 @@ describe('availableActivityCharts', () => {
       'heartRate',
     ]);
     expect(availableActivityCharts(detail({ streams: null }), 'mi')).toEqual([]);
+  });
+
+  it('offers the cadence last, when the activity recorded one', () => {
+    const cadence = Array.from({ length: 3000 }, () => 86);
+    expect(availableActivityCharts(detail({ streams: streams({ cadence }) }), 'km')).toEqual([
+      'splits',
+      'pace',
+      'elevation',
+      'heartRate',
+      'cadence',
+    ]);
+  });
+});
+
+describe('the cadence chart', () => {
+  it('leaves out the stops and the samples without a cadence, which would drag it down', () => {
+    const cadence = Array.from({ length: 3000 }, (_, t) => (t >= 1490 && t < 1500 ? 0 : 86));
+    const moving = Array.from({ length: 3000 }, (_, t) => t < 1000 || t >= 1100);
+    const strided = Array.from({ length: 3000 }, (_, t) => (t >= 1000 && t < 1100 ? 40 : 86));
+    for (const series of [
+      activityChartSeries(detail({ streams: streams({ cadence }) }), 'cadence', 'km'),
+      activityChartSeries(
+        detail({ streams: streams({ cadence: strided, moving }) }),
+        'cadence',
+        'km',
+      ),
+    ]) {
+      expect(series?.kind).toBe('line');
+      expect(series?.kind === 'line' ? series.min : 0).toBeCloseTo(86, 6);
+      expect(series?.kind === 'line' ? series.axis : null).toBe('distance');
+    }
+  });
+
+  it('has nothing to draw without a cadence, or with none above 0', () => {
+    expect(activityChartSeries(detail(), 'cadence', 'km')).toBeNull();
+    const still = Array.from({ length: 3000 }, () => 0);
+    expect(
+      activityChartSeries(detail({ streams: streams({ cadence: still }) }), 'cadence', 'km'),
+    ).toBeNull();
   });
 });
 
@@ -169,13 +226,47 @@ describe('downsample', () => {
   });
 });
 
-describe('withoutOutliers', () => {
-  it('marks stops and the extremes as left out', () => {
+describe('withoutStops', () => {
+  it('marks the stops as left out, and nothing else', () => {
     const speeds = [0, 0.2, ...Array.from({ length: 98 }, () => 3), 40];
-    const kept = withoutOutliers(speeds);
+    const kept = withoutStops(speeds);
     expect(kept.slice(0, 2).every(Number.isNaN)).toBe(true);
-    expect(Number.isNaN(kept[kept.length - 1])).toBe(true);
-    expect(kept.filter((speed) => speed === 3)).toHaveLength(98);
+    expect(kept.slice(2)).toEqual(speeds.slice(2));
+  });
+
+  it("leaves out the stops Strava marks, whatever the speed, and walks it doesn't", () => {
+    const speeds = [0.3, 0.4, ...Array.from({ length: 96 }, () => 3), 2.9, 3.1];
+    // A slow walk up a steep climb is moving; a GPS drift while stopped is not.
+    const moving = speeds.map((_, i) => i !== 50);
+    const kept = withoutStops(speeds, moving);
+    expect(kept[0]).toBe(0.3);
+    expect(kept[1]).toBe(0.4);
+    expect(Number.isNaN(kept[50])).toBe(true);
+    expect(kept.filter((speed) => speed === 3)).toHaveLength(95);
+    expect(() => withoutStops(speeds, [true])).toThrow(RangeError);
+  });
+
+  it("uses Strava's stops for the pace chart when it has them", () => {
+    // The test run stops at 5 km (speed 0); Strava flags those ten seconds and two more after.
+    const moving = Array.from({ length: 3000 }, (_, t) => t < 1490 || t >= 1502);
+    const flagged = activityChartSeries(detail({ streams: streams({ moving }) }), 'pace', 'km');
+    const unflagged = activityChartSeries(detail(), 'pace', 'km');
+    expect(flagged?.kind).toBe('line');
+    expect(unflagged?.kind).toBe('line');
+    // Both leave the stop out: the slowest point is as fast as the steady pace.
+    expect(flagged?.kind === 'line' ? flagged.min : 0).toBeCloseTo(3.3, 6);
+  });
+});
+
+describe('movingTime', () => {
+  it('adds the time since the sample before only while moving', () => {
+    expect(movingTime([0, 1, 2, 5, 6], [true, true, false, false, true])).toEqual([0, 1, 1, 1, 2]);
+  });
+
+  it('keeps the time as it is without the flag, and rejects one of another length', () => {
+    const time = [0, 1, 2];
+    expect(movingTime(time, null)).toBe(time);
+    expect(() => movingTime(time, [true])).toThrow(RangeError);
   });
 });
 

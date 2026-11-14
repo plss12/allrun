@@ -196,13 +196,12 @@ describe('activityCatalog', () => {
       'block-nutrition-table-light',
       'block-nutrition-table-dark',
     ]);
-    // The splits' tables come with the activity's splits: the note with the phone's apps, after the
-    // camera; then the bars and the ladder together and the race on TV apart; the laps' two, with
-    // its laps.
+    // The splits' tables come with the activity's splits: the bars and the ladder together, beside
+    // the race on TV (the owner's choice), then the note; the laps' two, with its laps.
     const withSplits = activityCatalog(makeActivity(), ['splits']);
     expect(tileKeys(withSplits, 'creative').slice(-6)).toEqual([
-      'block-grandPrix',
       'block-splits',
+      'block-grandPrix',
       'block-notes',
       'block-receipt',
       'block-nutrition',
@@ -214,7 +213,7 @@ describe('activityCatalog', () => {
       'block-splits-splitLadder-ink',
     ]);
     expect(tileKeys(withSplits, 'creative')).not.toContain('block-laps');
-    const withLaps = activityCatalog(makeActivity(), [], false, false, true);
+    const withLaps = activityCatalog(makeActivity(), [], false, [], true);
     expect(variantKeys(withLaps, 'block-laps')).toEqual([
       'block-laps-board-red',
       'block-laps-board-ink',
@@ -246,6 +245,7 @@ describe('activityCatalog', () => {
       'metric-averageHeartRate',
       'metric-calories',
       'metric-averageCadence',
+      'metric-steps',
       'metric-maxElevation',
       'metric-maxHeartRate',
       'metric-elapsedTime',
@@ -298,7 +298,9 @@ describe('activityCatalog', () => {
   });
 
   it("offers a heart rate's zones as a colored line, with their table, or the table alone", () => {
-    const catalog = activityCatalog(makeActivity(), ['elevation', 'heartRate'], false, true);
+    const catalog = activityCatalog(makeActivity(), ['elevation', 'heartRate'], false, [
+      'heartRate',
+    ]);
     expect(variantKeys(catalog, 'chart-heartRate')).toEqual([
       'chart-heartRate',
       'chart-heartRate-average',
@@ -590,7 +592,7 @@ describe('creativeTheme and rowPartner', () => {
   // week (its activities listed, its calendar) and a year, of every sport and of one.
   const run = makeActivity({ localDate: '2026-10-13' });
   const catalogs = [
-    activityCatalog(makeActivity(), ['splits'], true, false, true),
+    activityCatalog(makeActivity(), ['splits'], true, [], true),
     summaryCatalog(summarize([run], weekRange('2026-10-14')), 'day'),
     summaryCatalog(summarize([run], monthRange('2026-10-01')), 'week'),
     summaryCatalog(

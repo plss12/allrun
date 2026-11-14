@@ -17,6 +17,7 @@ export type MetricId =
   | 'averagePower'
   | 'weightedAveragePower'
   | 'averageCadence'
+  | 'steps'
   | 'calories';
 
 /** Every outdoor ride, on the road, on a mountain bike or on gravel. */
@@ -41,12 +42,13 @@ const RIDE: readonly MetricId[] = [
  *
  * - runs: distance, pace, time, elevation, average heart rate;
  * - rides: distance, speed, time, elevation, power, average heart rate;
- * - walks: distance, time, elevation, then their pace (sources don't report steps);
+ * - walks: distance, time, steps, elevation, then their pace;
  * - swims: distance, pace per 100 m, time, average heart rate;
  * - training and any other sport: time, average heart rate, calories, then what else it has.
  *
- * After them come calories, cadence and the highest altitude, and last the second readings of a
- * datum already shown (weighted power, highest heart rate, elapsed time). Indoor modalities skip
+ * After them come calories, cadence (and on a run its steps) and the highest altitude, and last
+ * the second readings of a datum already shown (weighted power, highest heart rate, elapsed time).
+ * Steps are reckoned from the cadence (see {@link metricValue}): Strava doesn't give them. Indoor modalities skip
  * what they can't measure. `other` is the generic profile and only shows what the activity has.
  */
 const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
@@ -58,6 +60,7 @@ const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
     'averageHeartRate',
     'calories',
     'averageCadence',
+    'steps',
     'maxElevation',
     'maxHeartRate',
     'elapsedTime',
@@ -70,6 +73,7 @@ const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
     'averageHeartRate',
     'calories',
     'averageCadence',
+    'steps',
     'maxElevation',
     'maxHeartRate',
     'elapsedTime',
@@ -81,25 +85,30 @@ const PROFILES: Readonly<Record<SportModality, readonly MetricId[]>> = {
     'averageHeartRate',
     'calories',
     'averageCadence',
+    'steps',
     'maxHeartRate',
   ],
   walk: [
     'distance',
     'movingTime',
+    'steps',
     'elevationGain',
     'pace',
     'averageHeartRate',
     'calories',
+    'averageCadence',
     'maxHeartRate',
     'elapsedTime',
   ],
   hike: [
     'distance',
     'movingTime',
+    'steps',
     'elevationGain',
     'pace',
     'averageHeartRate',
     'calories',
+    'averageCadence',
     'maxElevation',
     'maxHeartRate',
     'elapsedTime',
@@ -188,9 +197,29 @@ export function metricValue(activity: Activity, metric: MetricId): number | null
       return activity.weightedAveragePowerWatts;
     case 'averageCadence':
       return activity.averageCadence;
+    case 'steps':
+      return stepsOf(activity);
     case 'calories':
       return activity.calories;
   }
+}
+
+/** The sport families walked or run: the only ones whose cadence counts steps. */
+const ON_FOOT: readonly SportFamily[] = ['run', 'walk'];
+
+/**
+ * The steps of an activity on foot, reckoned from its average cadence, which is a leg's (Strava's
+ * running cadence): twice it is the steps a minute, over its moving minutes, as a whole number.
+ * `null` for any other sport, or without a cadence: Strava doesn't give the steps, and its own
+ * app counts them with the phone's pedometer (the owner's choice: an estimate from its data).
+ * Time and space O(1).
+ */
+export function stepsOf(activity: Activity): number | null {
+  const cadence = activity.averageCadence;
+  if (!ON_FOOT.includes(activity.sportFamily) || cadence === null || !(cadence > 0)) {
+    return null;
+  }
+  return Math.round((cadence * 2 * activity.movingTimeSeconds) / 60);
 }
 
 /**
@@ -248,6 +277,7 @@ export const METRIC_UNITS = [
   'W',
   'spm',
   'rpm',
+  'steps',
   'kcal',
   'h',
 ] as const;
@@ -331,10 +361,13 @@ export function toDisplayMetric(
     case 'weightedAveragePower':
       return { kind: 'number', amount: value, fractionDigits: 0, unit: 'W' };
     case 'averageCadence':
-      // Strava reports running cadence for one leg; runners think in steps per minute.
-      return context.sportFamily === 'run'
+      // Strava reports a cadence on foot for one leg; runners and walkers think in steps per
+      // minute.
+      return context.sportFamily === 'run' || context.sportFamily === 'walk'
         ? { kind: 'number', amount: value * 2, fractionDigits: 0, unit: 'spm' }
         : { kind: 'number', amount: value, fractionDigits: 0, unit: 'rpm' };
+    case 'steps':
+      return { kind: 'number', amount: value, fractionDigits: 0, unit: 'steps' };
     case 'calories':
       return { kind: 'number', amount: value, fractionDigits: 0, unit: 'kcal' };
   }

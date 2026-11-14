@@ -1,7 +1,7 @@
 import { parseStravaZones } from './zones';
 
 describe('parseStravaZones', () => {
-  it('maps the heart rate zones, the last one without a top', () => {
+  it('maps the heart rate zones as Strava counts them, an edge in the lower zone', () => {
     const json = {
       heart_rate: {
         custom_zones: false,
@@ -13,10 +13,11 @@ describe('parseStravaZones', () => {
       },
       power: { zones: [] },
     };
+    // As Strava writes an activity's time in them: 0–115, 116–152, 153 and over.
     expect(parseStravaZones(json)).toEqual([
       { min: 0, max: 115 },
-      { min: 115, max: 152 },
-      { min: 152, max: null },
+      { min: 116, max: 152 },
+      { min: 153, max: null },
     ]);
   });
 

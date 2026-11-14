@@ -56,7 +56,7 @@ How Strava is connected and cached: ADR 020. The map: ADR 021.
 3. Done (2026-11-13): the credits at the end of the profile, a line of small text links as Strava's maps have (ADR 021). The plan was: "Credits and licences" in the profile: © OpenStreetMap contributors (ODbL, link to openstreetmap.org/copyright), © OpenMapTiles, OpenFreeMap. Nothing on maps, exports or the launch screen (the owner's decision).
 4. Built (2026-11-13; to try on the phones): the editor's big datum with its route on the map, in a rounded square over it (ADR 021). The plan was: a "with map" variant of the route with a big datum, in vector for the export.
 
-**Block 2: Strava's data**
+**Block 2: Strava's data** (built 2026-11-14, ADR 022; to judge on the phones)
 
 1. Ask for the `cadence` and `moving` streams too; take stops out of the pace with `moving` (Strava's own criterion) instead of the 0.5 m/s threshold.
 2. Cadence: a line chart (no smoothing, linear) and the datum, in steps per minute also for walks and hikes (today they read "rpm").

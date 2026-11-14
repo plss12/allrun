@@ -231,13 +231,19 @@ function buildActivity(
     average_heartrate: averageHeartRate,
     max_heartrate: Math.round(averageHeartRate + between(random, 15, 25)),
     average_watts: averageWatts,
+    // Strava's highest power of the meter; without a draw, so every activity after it stays as it was.
+    max_watts: averageWatts === null ? null : Math.round(averageWatts * 2.2),
     weighted_average_watts:
       averageWatts === null ? null : averageWatts + Math.round(between(random, 5, 15)),
     average_cadence: plan.sportType.endsWith('Run')
       ? round(between(random, 82, 90), 1)
       : isRide
         ? round(between(random, 80, 95), 1)
-        : null,
+        : // Walks with a watch have a cadence too: steps of one leg, slower than a run's. Without
+          // a draw, so every activity after it stays as it was.
+          plan.sportType === 'Walk' || plan.sportType === 'Hike'
+          ? round(52 + (movingTime % 80) / 10, 1)
+          : null,
     calories: Math.round(movingTime * caloriesPerSecond(plan.sportType)),
     map: {
       summary_polyline: plan.hasRoute

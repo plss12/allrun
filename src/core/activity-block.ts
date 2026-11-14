@@ -1,4 +1,5 @@
 import type { Activity } from './activity';
+import type { BestEffort } from './activity-detail';
 import { activityEquivalences } from './equivalences';
 import { availableMetrics, cardMetrics, type MetricId } from './metrics';
 import type { SportFamily } from './sports';
@@ -20,6 +21,7 @@ import {
   DATA_LINE_LAYOUTS,
   LAPS_LAYOUTS,
   NUTRITION_LABELS,
+  RECORDS_LAYOUTS,
   type SummaryBlock,
 } from './template';
 import { FIRST_PHRASE } from './phrases';
@@ -105,6 +107,7 @@ export function blockDataCount(block: ActivityBlock): number {
     case 'location':
     case 'splitBars':
     case 'splitLadder':
+    case 'records':
     case 'verified':
       return 1;
     case 'message':
@@ -267,7 +270,9 @@ export function activityBlocks(
   withSplits = false,
   withPlace = false,
   withLaps = false,
+  bestEfforts: readonly BestEffort[] = [],
 ): ActivityBlock[] {
+  const records = recordRows(bestEfforts);
   if (blockMetrics(activity, 1).length === 0) {
     return [];
   }
@@ -304,11 +309,32 @@ export function activityBlocks(
           ...BRAND_COVERS.map((cover) => ({ design: 'splitLadder', cover }) as const),
         ]
       : []),
+    // A run's best efforts as the ladder's tags, and its records alone on their podium: in each
+    // brand color, which only its records wear; without any, all of them once.
+    ...RECORDS_LAYOUTS.filter((layout) => records[layout].length > 0).flatMap((layout) =>
+      (records.podium.length > 0 ? BRAND_COVERS : BRAND_COVERS.slice(0, 1)).map(
+        (cover) => ({ design: 'records', layout, cover }) as const,
+      ),
+    ),
     // Things of paper.
     { design: 'receipt' } as const,
     ...nutritionLabels().map((labels) => ({ design: 'nutrition', ...labels }) as const),
     ...BRAND_COVERS.map((cover) => ({ design: 'boardingPass', cover }) as const),
   ];
+}
+
+/**
+ * The best efforts a records widget shows, shortest first: all of them (`all`, every standard
+ * distance the run covered, as Strava gives them: the owner's choice), or the athlete's records
+ * alone (`podium`). Time O(e) for e efforts.
+ */
+export function recordRows(
+  efforts: readonly BestEffort[],
+): Readonly<Record<(typeof RECORDS_LAYOUTS)[number], BestEffort[]>> {
+  return {
+    all: [...efforts],
+    podium: efforts.filter((effort) => effort.prRank !== null),
+  };
 }
 
 /**
@@ -473,6 +499,7 @@ const APP_REPLICAS: ReadonlySet<ActivityBlockDesign> = new Set([
   'location',
   'splitBars',
   'splitLadder',
+  'records',
   'verified',
   'chat',
   'sentence',
@@ -591,6 +618,7 @@ export function blockLettering(block: ActivityBlock): BlockLettering {
     case 'location':
     case 'splitBars':
     case 'splitLadder':
+    case 'records':
     case 'verified':
     case 'chat':
     case 'sentence':

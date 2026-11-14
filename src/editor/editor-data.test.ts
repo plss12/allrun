@@ -39,6 +39,8 @@ import {
   splitRowTexts,
   type SummaryData,
   textRuns,
+  zoneRangeTexts,
+  bestEffortName,
 } from './editor-data';
 
 const context = {
@@ -346,18 +348,48 @@ describe('textRuns', () => {
 });
 
 describe('activityChartHeader', () => {
-  /** A line whose highest value is `max`; its points don't matter to the header. */
-  const line = (max: number, average = max / 2) =>
+  /**
+   * A line whose stream's highest sample is `peak`, and whose averaged line tops out lower, as a
+   * line does; its points don't matter to the header.
+   */
+  const line = (peak: number, average = peak / 2) =>
     ({
       kind: 'line',
       points: [],
       min: 0,
-      max,
+      max: peak * 0.9,
+      peak,
       average,
       axis: 'distance',
       axisEnd: 10_000,
     }) as const;
   const run = makeActivity({ sportType: 'Run' });
+
+  it('writes a cadence in steps a minute on foot and in turns a minute on a bike', () => {
+    expect(
+      activityChartHeader(
+        'cadence',
+        makeActivity({ sportType: 'Run', averageCadence: 86 }),
+        line(92),
+        context,
+      ),
+    ).toEqual([
+      // Steps a minute, "ppm" in Spanish.
+      { label: 'chartHeaders.averageCadence', value: '172', unit: 'ppm' },
+      { label: 'chartHeaders.maxCadence', value: '184', unit: 'ppm' },
+    ]);
+    expect(
+      activityChartHeader(
+        'cadence',
+        makeActivity({ sportType: 'Ride', averageCadence: 88 }),
+        line(110),
+        context,
+      ),
+    ).toEqual([
+      { label: 'chartHeaders.averageCadence', value: '88', unit: 'rpm' },
+      { label: 'chartHeaders.maxCadence', value: '110', unit: 'rpm' },
+    ]);
+  });
 
   it("writes an elevation's distance and climb as their data widgets do", () => {
     expect(activityChartHeader('elevation', run, line(30), context)).toEqual([
@@ -366,16 +398,28 @@ describe('activityChartHeader', () => {
     ]);
   });
 
-  it("writes a pace's average (the activity's own) and fastest with marks, or a ride's speeds", () => {
+  it("writes a pace's average and fastest, the activity's own, with marks, or a ride's speeds", () => {
+    // Strava's fastest, 5 m/s, not the line's.
     expect(activityChartHeader('pace', run, line(4, 3), context)).toEqual([
       { label: 'chartHeaders.averagePace', value: `5'00"`, unit: null },
-      { label: 'chartHeaders.fastestPace', value: `4'10"`, unit: null },
+      { label: 'chartHeaders.fastestPace', value: `3'20"`, unit: null },
     ]);
-    const ride = makeActivity({ sportType: 'Ride', averageSpeed: 30 / 3.6 });
-    expect(activityChartHeader('pace', ride, line(50 / 3.6), context)).toEqual([
+    const ride = makeActivity({ sportType: 'Ride', averageSpeed: 30 / 3.6, maxSpeed: 50 / 3.6 });
+    expect(activityChartHeader('pace', ride, line(40 / 3.6), context)).toEqual([
       { label: 'chartHeaders.averageSpeed', value: '30,0', unit: 'km/h' },
       { label: 'chartHeaders.maxSpeed', value: '50,0', unit: 'km/h' },
     ]);
+  });
+
+  it("writes the stream's highest sample when the activity has no highest, never the line's", () => {
+    const unmeasured = makeActivity({ sportType: 'Run', maxSpeed: null });
+    expect(activityChartHeader('pace', unmeasured, line(4), context)[1].value).toBe(`4'10"`);
+    const powered = makeActivity({ sportType: 'Ride', averagePowerWatts: 200, maxPowerWatts: 650 });
+    expect(activityChartHeader('power', powered, line(500), context)[1].value).toBe('650');
+    expect(
+      activityChartHeader('power', { ...powered, maxPowerWatts: null }, line(500), context)[1]
+        .value,
+    ).toBe('500');
   });
 
   it("writes a heart rate's average and highest, the chart's when the activity has none", () => {
@@ -546,7 +590,6 @@ describe('familyCard', () => {
         activityCount: 3,
         distanceMeters: 34_350,
         movingTimeSeconds: 12_300,
-        calories: 2000,
       },
       context,
       translate,
@@ -558,20 +601,15 @@ describe('familyCard', () => {
     });
   });
 
-  it('writes a sport without distance by its time, its sessions and its calories', () => {
+  it('writes a sport without distance by its time and its sessions', () => {
     const gym = {
       family: 'training',
       activityCount: 2,
       distanceMeters: 0,
       movingTimeSeconds: 7_620,
-      calories: 686,
     } as const;
-    expect(familyCard(gym, context, translate).detail).toBe(
-      `2 sesiones · 686 ${testUnitLabel('kcal')}`,
-    );
-    expect(
-      familyCard({ ...gym, activityCount: 1, calories: null }, context, translate).detail,
-    ).toBe('1 sesión');
+    expect(familyCard(gym, context, translate).detail).toBe('2 sesiones');
+    expect(familyCard({ ...gym, activityCount: 1 }, context, translate).detail).toBe('1 sesión');
   });
 });
 
@@ -723,7 +761,7 @@ describe('periodLaps', () => {
     ({
       'widgets.laps.lap': 'Vuelta',
       'widgets.laps.distance': 'Dist.',
-      'widgets.laps.calories': 'Kcal',
+      'widgets.laps.heartRate': 'FC',
       'widgets.laps.time': 'Tiempo',
       'widgets.laps.pace': 'Ritmo',
       'widgets.laps.speed': 'Vel.',
@@ -772,36 +810,41 @@ describe('periodLaps', () => {
     expect(laps.value).toBe('count');
   });
 
-  it("writes a day without distance by its calories, and a gym's laps after them", () => {
-    const gym = (localDate: string, calories: number | null) =>
+  it("writes a gym day's distance as a dash, and a gym's laps by their time and heart rate", () => {
+    const gym = (localDate: string, averageHeartRate: number | null, minutes = 60) =>
       makeActivity({
         sportType: 'WeightTraining',
         localDate,
         distanceMeters: 0,
         elevationGainMeters: 0,
         routePolyline: null,
-        movingTimeSeconds: 3_600,
-        calories,
+        movingTimeSeconds: minutes * 60,
+        averageHeartRate,
+        // Never read: a period has no calories, Strava's lists lack them.
+        calories: 512,
       });
-    const kcal = testUnitLabel('kcal');
-    // A gym day among runs: its calories instead of "0 km".
-    const mixed = periodLaps(week([...runs, gym('2026-10-14', 512)]), context, translate);
+    // A gym day among runs: a dash instead of "0 km", never its calories.
+    const mixed = periodLaps(week([...runs, gym('2026-10-14', 120)]), context, translate);
     expect(mixed.names[1]).toBe('Dist.');
     expect(mixed.rows[1]).toEqual({
       number: 'MIÉ',
-      distance: '512',
-      unit: kcal,
+      distance: MISSING_VALUE,
+      unit: '',
       time: '1:00:00',
       value: '1',
     });
-    // Only gym sessions: the column is the calories', a dash where none were recorded.
+    // Only gym sessions: their time first, then their heart rate over the time, a dash without.
     const sessions = periodLaps(
-      week([gym('2026-10-13', 400), gym('2026-10-16', null)]),
+      week([gym('2026-10-13', 100, 30), gym('2026-10-13', 130, 60), gym('2026-10-16', null)]),
       context,
       translate,
     );
-    expect(sessions.names[1]).toBe('Kcal');
-    expect(sessions.rows.map((row) => row.distance)).toEqual(['400', MISSING_VALUE]);
+    expect(sessions.names).toEqual(['Vuelta', 'Tiempo', 'FC', 'Act.']);
+    expect(sessions.rows.map((row) => [row.distance, row.time, row.value])).toEqual([
+      ['1:30:00', '120', '2'],
+      ['1:00:00', MISSING_VALUE, '1'],
+    ]);
+    expect(sessions.unit).toBe('');
     expect(sessions.value).toBe('count');
   });
 });
@@ -1080,12 +1123,12 @@ describe('activityNutrition and periodNutrition', () => {
     current: true,
   });
 
-  it("writes a period's calories, totals and sports, each sport's share of the time under it", () => {
+  it("writes a period's totals and sports, each sport's share of the time under it", () => {
     const label = periodNutrition(summaryOf([run, ride]), context, translate);
     expect(label.servings).toBe('widgets.nutrition.servings.other(2)');
     expect(label.serving).toBe('thisWeek');
-    // Only the run has calories: they are the period's.
-    expect(label.calories).toBe('700');
+    // Never calories, though the run has some: Strava's lists, a period's, have none.
+    expect(label.calories).toBeNull();
     expect(label.rows.map((row) => [row.name, row.part, plain(row.share)])).toEqual([
       ['widgets.nutrition.distance', false, null],
       ['widgets.nutrition.time', false, null],
@@ -1102,7 +1145,7 @@ describe('activityNutrition and periodNutrition', () => {
     ]);
   });
 
-  it('has no calories when none of its activities has any, and one sport without its share', () => {
+  it('lists one sport without its share', () => {
     const label = periodNutrition(summaryOf([ride]), context, translate);
     expect(label.calories).toBeNull();
     expect(label.rows.some((row) => row.part)).toBe(false);
@@ -1134,6 +1177,8 @@ describe('activityNutrition and periodNutrition', () => {
       altitude: null,
       speed: null,
       power: null,
+      cadence: null,
+      moving: null,
     };
     const label = activityNutrition(
       {
@@ -1188,5 +1233,49 @@ describe('equivalenceLines', () => {
       'widgets.equivalences.sources.time(3h)',
       `widgets.equivalences.sources.calories(561 ${testUnitLabel('kcal')})`,
     ]);
+  });
+});
+
+describe('zoneRangeTexts', () => {
+  const zones = [
+    { min: 0, max: 2.6 },
+    { min: 2.6, max: 3.1 },
+    { min: 3.1, max: null },
+  ];
+
+  it("writes a pace's zones as paces, the faster first: slower than, between, faster than", () => {
+    // 2.6 m/s is 6:25/km, 3.1 m/s 5:23/km.
+    expect(zoneRangeTexts('pace', zones, context)).toEqual([`>6'25"`, `5'23"–6'25"`, `<5'23"`]);
+  });
+
+  it("writes a heart rate's and a power's as their numbers", () => {
+    const power = [
+      { min: 0, max: 138 },
+      { min: 138, max: 188 },
+      { min: 188, max: null },
+    ];
+    expect(zoneRangeTexts('power', power, context)).toEqual(['<138', '138–187', '188+']);
+  });
+});
+
+describe('bestEffortName', () => {
+  const translate = (key: string) => key;
+
+  const effort = (distance: 'half' | 'tenMiles' | null, distanceMeters: number) => ({
+    distance,
+    distanceMeters,
+    elapsedTimeSeconds: 3600,
+    prRank: null,
+  });
+
+  it("names Strava's distances by which they are, and writes any other in the user's unit", () => {
+    expect(bestEffortName(effort('half', 21_097.5), context, translate)).toBe(
+      'widgets.records.distances.half',
+    );
+    // However long it measured.
+    expect(bestEffortName(effort('tenMiles', 16_090), context, translate)).toBe(
+      'widgets.records.distances.tenMiles',
+    );
+    expect(bestEffortName(effort(null, 12_000), context, translate)).toBe('12,00 km');
   });
 });

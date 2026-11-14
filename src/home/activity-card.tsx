@@ -13,7 +13,6 @@ import type { LatLng } from '@/core/geo';
 import { frameViewport, toPixels, type Viewport } from '@/core/map-tiles';
 import { decodePolyline } from '@/core/polyline';
 import type { DistanceUnit } from '@/core/units';
-import { useActivitySource, useActivitySourceKey } from '@/data/activity-source';
 import { lookUpPlace } from '@/data/place-lookup';
 import { CARD_BORDER, cardSurface } from '@/theme/card-surface';
 import { colors } from '@/theme/colors';
@@ -73,7 +72,9 @@ function cardLayout(width: number, scale: number) {
  * projected with the map's viewport so that both line up. The place's and the
  * data's rows are kept on every card, so that all are as tall and nothing moves when the place
  * comes. A tap goes on to choose what to make with it, or does what `onPress` says (the editor
- * choosing another activity).
+ * choosing another activity). It shows only what the list gives, asking nothing more: Strava's
+ * lists have no calories, so a workout's card says its time and average heart rate (the owner's
+ * choice: a request a card, from the app's Strava quota, doesn't scale).
  */
 export function ActivityCard({
   activity,
@@ -100,26 +101,8 @@ export function ActivityCard({
     today: t('home.today'),
     yesterday: t('home.yesterday'),
   });
-  // Strava's list has no calories: a card without a distance, which shows them, asks for the
-  // activity's detail (kept a week, as when it is opened in the editor). Their row is kept meanwhile.
-  const source = useActivitySource();
-  const sourceKey = useActivitySourceKey();
-  const needsCalories = !(activity.distanceMeters > 0) && activity.calories === null;
-  const detailed = useAsync(
-    () => (needsCalories ? source.getActivity(activity.id) : Promise.resolve(null)),
-    `card-calories|${sourceKey}|${activity.id}|${needsCalories ? 'ask' : 'no'}`,
-  );
-  const shown =
-    detailed.status === 'success' && detailed.data !== null
-      ? { ...activity, calories: detailed.data.calories }
-      : activity;
-  // Until they come, the calories keep their line, empty, so that the data under it don't move.
-  const pending = needsCalories && detailed.status === 'loading';
-  const data = cardMetrics(pending ? { ...activity, calories: 1 } : shown).flatMap((metric) => {
-    if (pending && metric === 'calories') {
-      return [''];
-    }
-    const value = metricValue(shown, metric);
+  const data = cardMetrics(activity).flatMap((metric) => {
+    const value = metricValue(activity, metric);
     if (value === null) {
       return [];
     }
