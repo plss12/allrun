@@ -13,27 +13,20 @@ import { periodTotals, summaryMetricValue } from '@/core/summary-metrics';
 import type { Layer } from '@/core/template';
 import { formatActivityDate } from '@/ui/format';
 
+import type { BlockContext, PreparedBlock } from './activity-blocks';
+import { type Box, column, justified, overlay, placed, row } from './blocks/layout';
 import {
-  type BlockContext,
-  type Box,
   capitalsBox,
-  column,
   FADED_ALPHA,
   fillBox,
-  finishBlock,
   hairlineBox,
   iconBox,
-  justified,
-  equivalencesBox,
-  nutritionLabelBox,
-  overlay,
-  placed,
-  type PreparedBlock,
   quotationBox,
   routeBox,
   routesMapBox,
-  row,
-} from './activity-blocks';
+} from './blocks/pieces';
+import { finishBlock } from './blocks/art';
+import { equivalencesBox, nutritionLabelBox } from './blocks/paper';
 import {
   familyCard,
   periodTable,

@@ -3,6 +3,7 @@ paths:
   - 'src/core/{activity,summary}-block*.ts'
   - 'src/core/{metrics,equivalences}.ts'
   - 'src/editor/{activity-blocks,summary-blocks,summary-creatives,editor-data,fonts,font-change}*.{ts,tsx}'
+  - 'src/editor/blocks/**'
 ---
 
 # Widgets: reglas comunes (actividades y resúmenes)

@@ -2,6 +2,7 @@
 paths:
   - 'src/core/activity-block*.ts'
   - 'src/editor/activity-blocks*.tsx'
+  - 'src/editor/blocks/**'
   - 'src/test-utils/activity-blocks.ts'
 ---
 
