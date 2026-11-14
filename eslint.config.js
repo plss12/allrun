@@ -10,6 +10,16 @@ module.exports = defineConfig([
     // Edge Functions run on Deno, with its own imports: Supabase checks them on deploying.
     ignores: ['dist/*', '.claude/skills/*', 'supabase/functions/*'],
   },
+  // A promise nobody awaits loses its errors and its order: un-awaited file writes left the designs
+  // journal half-written. eslint-config-expo registers the @typescript-eslint plugin and parser.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: __dirname } },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: false }],
+    },
+  },
   // The app looks the same on every phone (ADR 013): its own icons and letter, never the system's.
   {
     files: ['src/**/*.{ts,tsx}'],
